@@ -16,8 +16,8 @@
       "emoji": "⛏️",
       "color": "#b07a3c",
       "tagline": "Shovel, drill, laser. Dig straight down through fossils and a T. rex to the middle of the Earth.",
-      "status": "building",
-      "note": "Playable end to end; underground art round 3 done; third critic review in progress"
+      "status": "first-playable",
+      "note": "Critic: almost. Polish pass next (rock textures, headlamp pool, set pieces, HUD vs tool, ending, lift ride)"
     },
     {
       "slug": "burn-a-cardboard-city",

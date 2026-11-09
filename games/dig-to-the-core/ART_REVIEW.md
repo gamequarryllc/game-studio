@@ -75,3 +75,29 @@ Status: all 9 items fixed in art round 3 (notes under each). Next: a third fresh
 - The UI's look: brass and iron plates, Rye with Zilla Slab, the crooked enamel offer tag, ticket-stub ad buttons, ledger-paper rows.
 - The finds: their writing and the odd, specific find models (cassette, subway car, satellite, mosquito in amber, mole, robo-mole).
 - The surface layout: shack left, headframe right, rope fences leading the eye, a low warm sun with long shadows; the shack and headframe models.
+
+---
+
+# Art review 3: third fresh-eyes critic, 2026-11-09 (after the underground round)
+
+**Verdict: Almost.** The UI, shop and surface would pass as a skilled small studio's work; the underground, where nearly all play happens, still reads as procedural noise and primitive set pieces. **Phone readability:** numbers, the Dig button and banners read well; small text ("hold", "+11 a minute", the grey-green line on the tool plate), in-world signs and the offer tag are too small or low-contrast; the three overlapping right-thumb buttons are cramped. This review is the polish list toward "ready to play".
+
+## Problems, worst first
+
+1. **Underground rock looks like procedural noise and the layers look alike**: camo/leopard blotches, polka-dot ellipses, green-orange cell noise, blurry gold blobs, tree-ring bands; ghostly see-through doubled walls in some shots; topsoil through the graveyard all tan-orange; bedrock not grey. Fix: one hand-painted tiling texture per layer with flat bedding lines and hard-edged stones (lit top, contact shadow), one main colour per layer, near-neutral lamp light so each layer's colour shows, remove the doubled fog surfaces.
+2. **No visible headlamp**: tunnels evenly lit edge to edge. Fix: a warm pool that falls off fast to near-black, cool light only on edges, ore glints that pop inside the pool.
+3. **Big moments use primitive models**: the skeleton reads as a centipede or sea urchin (tubes, no skull, no taper); the fossil slab is a cardboard disc with stamped spirals; mantle rocks are stacked dumplings with orange rings; the lava is a flat orange plane with poker-chip stepping stones and no glow on the walls. Fix: a half-dug skeleton set in the rock with a skull and paired curved ribs; ammonites carved into the wall; folded mantle rock with glowing seams; lava with a cooled crust, bright cracks, light thrown up the walls, embers.
+4. **HUD covers the tool and the focal point**: right-hand buttons hide the held tool underground (the jackhammer is a few stripes); the layer banner covers a timber beam; the hint covers the headframe wheel; the T. rex card is still up three layers later. Fix: frame the tool left of the buttons and shrink Jump; layer titles as a stamp lower down that fades after ~2 s; find cards time out.
+5. **About a third of the models are white untextured blobs**: pebble like marshmallows, shell like a cinnamon roll, root two sticks, bone a tube with a loose knob; rubble, nugget and crystal_small the same; timber_post like an obelisk; birch as round blobs on a stick and maple as a lollipop (banned in the studio lessons). Fix: each model its own material with a colour gradient, baked shading and edge wear; taper and branching, bark, leaf canopies.
+6. **The ending is a stock dark centred popup** over live gameplay with the HUD visible (a known lesson). Fix: hide the HUD; its own scene (camera on the core plus an assay certificate with the stats stamped on).
+7. **The lift ride is a grey box with nothing moving.** Fix: timbers and lamps sliding past, the cable, cage shake, a dial.
+8. **Surface dig is a blurry dark smudge; clods are brown blobs that read as dung; the spoil heap is one lump; the "Open shaft" sign is pale pink on white; the shack windows glow at noon.** Fix: a crisp turf edge with roots and soil bands, chunky clods with grass on top, dark lettering on cream, windows dark by day.
+9. **Held tools look cheap**: flat grey shovel blade, a pickaxe handle like yellow plastic, a glove like a rubber mitten. Fix: a bright worn edge and darker pitted centre on metal, rivets, wood grain, a stitched leather glove.
+10. **A flat grey rock icon with a red flag floats near the crosshair** (a 2D icon in a 3D scene that reads as debug output). Fix: make it part of the world or remove it.
+11. **Shop details**: the ledger strip and a "For sale" row are cut off; a few stock-looking icons (four-arrow move icon, plain red X, "?" drawers).
+
+## Keep
+
+- The shop as real objects: the pegboard with drawn tool shapes, the ledger book, the finds cabinet drawers, the price stamps.
+- The brass-and-enamel HUD: Rye and Zilla Slab, the crooked enamel hint sign, the depth gauge with find marks, the dry in-world lines.
+- The props with character: headframe with its red wheel, shack, mine cart, the mole in a hard hat, the robo-mole, the laser drill; the surface's low sun and long fence shadows.

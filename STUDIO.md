@@ -153,6 +153,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: Dig to the Core third critic: **Almost** → first playable. Review 3 is its polish list; the polish pass starts in the next free slot.
 - 2026-11-09: Dig to the Core underground round 3 done (per-layer hand-painted rock and mood, soft headlamp, lava crust, glowing crystals, molten core, rebuilt underground props, gloves and sleeves, the shop as the shack counter, one brass depth tube, phone-first text >= 11 px). Smoke 75, boosted and keen (25:15) pass. Next: third critic. Started Drain an Ocean fixes + QA.
 - 2026-11-09: Drain an Ocean first build handed back (one falling water level, 11 cut-off pools drained by barges, rescues into an idle-earning aquarium, salvage, 5 pump tiers, pelicans and crabs, sea seepage at depth for pacing, nautical-chart UI with signal-flag buttons; 71 smoke checks; browser check passes). Held at `building` until the critic and a QA playthrough. Started the Cardboard City polish pass.
 - 2026-11-09: Burn a Cardboard City second critic: **Almost** → first playable. Review 2 is its polish list; the polish pass starts in the next free slot.
