@@ -98,6 +98,16 @@ The owner wants every game played start to finish so the quirks are worked out b
 
 ## Making money (the point of the studio)
 
+### North star
+
+The studio's goal is to cover its $200/month running cost from App Store proceeds as fast as possible (net of Apple's commission and the developer fee). Everything above that is a bonus.
+
+- **Finishing and shipping beats starting.** A game earns nothing until it is live on the App Store with real ads and purchases.
+- **New work is ranked by expected dollars per month and how soon it can ship.** Before picking work, ask: does this get real money in sooner?
+- **Market research lives in `research/market.md`** and is refreshed weekly (markets, real monetization numbers, how to get found with no ad budget, and the math for the target). The queue order follows it.
+- **Honest money only.** No fake reviews or review-gating, no misleading ads, screenshots or store text, no dark patterns, nothing aimed at kids, no copying other apps. Stay inside Apple's App Review Guidelines and AdMob's policies: a rejected app or a banned account earns nothing.
+- Only the owner can see real proceeds. Estimates are always labelled as estimates, and earned amounts are never written in this repo.
+
 The goal is revenue. Every game is designed around its monetization from the first build, not bolted on at the end. Reference implementation: Melt a Glacier's `scripts/monetization/` (provider interface + stub), `scripts/ad_offers.gd` and `Balance.AD_REWARDS` (copy the architecture, not the look).
 
 **Rewarded ads (main earner).** Every game has at least these, themed to the game:
@@ -151,6 +161,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 - 2026-11-09: Keep personal information (names and anything like it) out of the public repo, and keep checking. → Added the Privacy section and `tools/privacy_check.py`.
 - 2026-11-09: Screenshots "look pretty sweet so far". Strain to make the UI and game NOT look AI-generated; put in the leg work. Models must look very good too: use Blender or custom-build them as needed. → Added "Look and feel" (art bible, Blender pipeline, custom icons, fresh-eyes critic). Next free slot: a full art pass on Burn Down a Forest before starting a new game.
 - 2026-11-09: Play every game end to end to work out the quirks; use temporary dev boosts (time speed-up, 10x income) for speed. → Added "Playtesting" (dev boosts, playthrough bot, chaos, visual and browser runs, `tools/browser_check.py`, CI playthrough). Each game gets a QA block after first playable and after its art pass.
+- 2026-11-09: The heart of the goal: earn at least $200/month to cover the studio's running cost; find the markets and methods that get there. → Added 'North star', research/market.md and money-first priorities.
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
