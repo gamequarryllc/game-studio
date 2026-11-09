@@ -229,7 +229,9 @@ func _run() -> void:
 	world.skip_to_zone(4)
 	await _frames(5)
 	world.ride_lift(false)
-	await _frames(14)
+	# Mid-ride, as the layer's set piece slides past.
+	while world.is_riding() and float(world._ride.get("t", 0.0)) < float(world._ride.get("dur", 2.0)) * 0.42:
+		await process_frame
 	await _shot("10_lift_ride")
 	await _frames(200)
 	await _shot("11_back_at_top")

@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 from kit import (box, cyl, sphere, torus, from_profile, join, wobble, export, reset, mat,  # noqa: E402
-                 twist, bend, subdivide, bar, lathe, place, strut, glove, ao, smooth)
+                 twist, bend, subdivide, bar, lathe, place, strut, glove, ao, smooth, tube)
 
 R90 = math.radians(90)
 
@@ -114,8 +114,8 @@ def shovel():
     for s in (-1, 1):
         parts.append(sphere(0.006, tuple(collar - d * 0.05 + side * 0.026 * s), mat("brass", metal=0.8, rough=0.35), segs=6, rings=4))
     # The blade: a cupped, pointed spade, oversized, with a worn bright edge.
-    outline = [(-0.12, 0.0), (-0.03, 0.0), (0.0, 0.022), (0.03, 0.0), (0.12, 0.0), (0.125, 0.17),
-               (0.085, 0.27), (0.0, 0.32), (-0.085, 0.27), (-0.125, 0.17)]
+    outline = [(-0.14, 0.0), (-0.035, 0.0), (0.0, 0.026), (0.035, 0.0), (0.14, 0.0), (0.146, 0.2),
+               (0.1, 0.315), (0.0, 0.375), (-0.1, 0.315), (-0.146, 0.2)]
     blade = from_profile(outline, 0.008, steel, bevel=0.003, name="blade")
     subdivide(blade, 2)
     bend(blade, math.radians(-35), "Z")
@@ -149,26 +149,26 @@ def pickaxe():
         parts.append(along(torus(0.025, 0.006, (0, 0, 0), leather, (R90, 0, 0), 12, 4), hand + d * (0.015 + i * 0.025), hand + d * (0.03 + i * 0.025)))
     side = d.cross(Vector((0, 0, 1))).normalized()
     fwd = side.cross(d).normalized()        # the way the head points (forward/up)
-    # Double-ended head: a curved pick each way, thick at the eye.
+    # Double-ended head, oversized: one forged piece, thick at the eye and
+    # curving down to a point at each end (a sharp pick and a chisel end).
     pts = []
-    for i in range(13):
-        t = -1.0 + 2.0 * i / 12
-        x = t * 0.36
-        z = 0.06 * (1.0 - t * t) - 0.03 * t * t
-        w = 0.042 * (1.0 - 0.82 * abs(t)) + 0.006
-        pts.append((x, z, w))
-    head_parts = []
-    for i in range(len(pts) - 1):
-        a = pts[i]
-        b = pts[i + 1]
-        seg = strut((a[0], 0, a[1]), (b[0], 0, b[1]), (a[2] + b[2]) * 0.5, steel, sides=6, name="headseg")
-        head_parts.append(seg)
-    head_parts.append(sphere(0.05, (0, 0, 0.05), steel, scale=(1.1, 0.9, 1.0), segs=10, rings=6))
-    head_parts.append(cyl(0.008, 0.02, (0.36, 0, -0.03), steel, (0, R90, 0), 6, r2=0.0))
-    head_parts.append(cyl(0.008, 0.02, (-0.36, 0, -0.03), steel, (0, -R90, 0), 6, r2=0.0))
+    rad = []
+    for i in range(17):
+        t = -1.0 + 2.0 * i / 16
+        pts.append(Vector((t * 0.4, 0.0, 0.075 * (1.0 - t * t) - 0.035 * t * t)))
+        rad.append(0.05 * (1.0 - 0.86 * abs(t) ** 0.9) + 0.005)
+    head_parts = [tube(pts, rad, steel, sides=8, flat=0.72, name="pickhead")]
+    # The eye: a thick collar the handle goes through.
+    head_parts.append(cyl(0.046, 0.075, (0, 0, 0.035), steel, (0, 0, 0), 10, bevel=0.01))
+    # Chisel end flattened into a blade.
+    for v in head_parts[0].data.vertices:
+        if v.co.x < -0.2:
+            v.co.y *= 0.55
+            v.co.z = v.co.z * 1.25 - 0.004
     for hp_ in head_parts:
         bake(hp_)
     hh = join(head_parts, "head")
+    smooth(hh, 55)
     # Turned a little about the handle so both points read from the eye.
     a = math.radians(38)
     pick = (fwd * math.cos(a) + side * math.sin(a)).normalized()
@@ -182,14 +182,13 @@ def pickaxe():
     wobble(o, 0.0012, 12)
     ao(o, 0.1)
     gr = glove_on(hand + d * 0.06, d, (0.35, -0.3, -1.0), 1, "GloveR", 0.22)
-    gl = glove_on(hand + d * 0.3, d, (-0.2, -0.6, -1.0), -1, "GloveL", 0.55)
+    gl = glove_on(hand + d * 0.17, d, (-0.55, -0.45, -1.0), -1, "GloveL", 0.7)
     parent_keep(gr, o)
     parent_keep(gl, o)
     return o
 
 
 def jackhammer():
-    amber = mat("amber", rough=0.5)
     iron = mat("iron", metal=0.7, rough=0.5)
     steel = mat("bright_steel", metal=0.9, rough=0.35)
     soot = mat("rubber", rough=0.9)
@@ -199,14 +198,20 @@ def jackhammer():
     d = (tip - top).normalized()
     side = d.cross(Vector((0, 0, 1))).normalized()
     parts = []
-    # Body: an enamelled cylinder with cooling fins, built along +Y then laid on the axis.
-    body = [cyl(0.075, 0.36, (0, 0.18, 0), amber, (-R90, 0, 0), 16, bevel=0.012)]
-    for i in range(5):
-        body.append(torus(0.077, 0.008, (0, 0.05 + i * 0.045, 0), iron, (R90, 0, 0), 16, 4))
+    # Body: a blackened iron cylinder (an old pneumatic rock drill), with two
+    # brass bands, close-set cooling ribs the same iron as the body, and a red
+    # enamel maker's plate. Built along +Y then laid on the axis.
+    red = mat("red", rough=0.5)
+    body = [cyl(0.078, 0.36, (0, 0.18, 0), iron, (-R90, 0, 0), 16, bevel=0.012)]
+    for i in range(7):
+        body.append(torus(0.08, 0.006, (0, 0.13 + i * 0.026, 0), mat("dark_steel", metal=0.6, rough=0.55), (R90, 0, 0), 16, 4))
+    for y in (0.03, 0.33):
+        body.append(torus(0.081, 0.01, (0, y, 0), brass, (R90, 0, 0), 16, 4))
+    body.append(place(box((0.075, 0.07, 0.012), (0, 0, 0), red, bevel=0.004), (0, 0.075, 0.074)))
     body.append(cyl(0.07, 0.1, (0, 0.41, 0), iron, (-R90, 0, 0), 16, r2=0.035))
     body.append(cyl(0.05, 0.05, (0, -0.02, 0), iron, (-R90, 0, 0), 12))
-    body.append(cyl(0.02, 0.32, (0, 0.6, 0), steel, (-R90, 0, 0), 6))
-    body.append(cyl(0.02, 0.08, (0, 0.8, 0), steel, (-R90, 0, 0), 6, r2=0.003))
+    body.append(cyl(0.022, 0.32, (0, 0.6, 0), steel, (-R90, 0, 0), 6))
+    body.append(cyl(0.022, 0.08, (0, 0.8, 0), steel, (-R90, 0, 0), 6, r2=0.003))
     # Air fitting with a brass coupling and a stub of hose.
     body.append(cyl(0.016, 0.07, (0.085, 0.08, 0.0), brass, (0, R90, 0), 8))
     body.append(torus(0.022, 0.007, (0.12, 0.08, 0.0), brass, (0, R90, 0), 10, 4))

@@ -80,7 +80,11 @@ func watch_for_reward(kind: String, on_done: Callable) -> void:
 	## the end, grant it. on_done(ok: bool, text: String) says what you got.
 	var placement: String = Balance.AD_REWARDS[kind].placement
 	show_rewarded(placement, func(ok: bool):
-		on_done.call(ok, GameState.grant_ad_reward(kind) if ok else ""))
+		# The reward is granted even if whoever asked is gone (the world was
+		# reloaded while the ad played); they're only told if still there.
+		var text: String = GameState.grant_ad_reward(kind) if ok else ""
+		if on_done.is_valid():
+			on_done.call(ok, text))
 
 
 func is_watching() -> bool:

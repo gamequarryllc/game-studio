@@ -26,15 +26,15 @@ const ZONES = [
 		"fog": Color(0.17, 0.135, 0.09), "band": Color(0.8, 0.68, 0.46)},
 	{"name": "Dinosaur Graveyard", "hp": 900.0, "worth": 1.0, "mats": [8, 9], "ores": [[11, 0.1], [5, 0.06]], "caves": 2,
 		"fog": Color(0.15, 0.1, 0.05), "band": Color(0.62, 0.46, 0.25)},
-	{"name": "Crystal Caves", "hp": 3600.0, "worth": 1.05, "mats": [10, 11], "ores": [[6, 0.1], [7, 0.07]], "caves": 5,
+	{"name": "Crystal Caves", "hp": 4800.0, "worth": 1.05, "mats": [10, 11], "ores": [[6, 0.1], [7, 0.07]], "caves": 5,
 		"fog": Color(0.08, 0.05, 0.14), "band": Color(0.42, 0.3, 0.62)},
-	{"name": "Lava Lakes", "hp": 14000.0, "worth": 1.05, "mats": [12, 13], "ores": [[8, 0.08], [5, 0.05]], "caves": 3,
+	{"name": "Lava Lakes", "hp": 40000.0, "worth": 1.05, "mats": [12, 13], "ores": [[8, 0.08], [5, 0.05]], "caves": 3,
 		"fog": Color(0.18, 0.04, 0.015), "band": Color(0.55, 0.16, 0.06)},
-	{"name": "Mantle", "hp": 55000.0, "worth": 1.05, "mats": [14, 15], "ores": [[9, 0.08], [8, 0.05]], "caves": 2,
+	{"name": "Mantle", "hp": 170000.0, "worth": 1.05, "mats": [14, 15], "ores": [[9, 0.08], [8, 0.05]], "caves": 2,
 		"fog": Color(0.2, 0.07, 0.025), "band": Color(0.78, 0.32, 0.1)},
-	{"name": "Outer Core", "hp": 210000.0, "worth": 1.05, "mats": [16, 17], "ores": [[10, 0.07], [5, 0.06]], "caves": 1,
+	{"name": "Outer Core", "hp": 600000.0, "worth": 1.05, "mats": [16, 17], "ores": [[10, 0.07], [5, 0.06]], "caves": 1,
 		"fog": Color(0.24, 0.12, 0.03), "band": Color(0.93, 0.58, 0.18)},
-	{"name": "Inner Core", "hp": 800000.0, "worth": 1.1, "mats": [18, 19], "ores": [[10, 0.1]], "caves": 0,
+	{"name": "Inner Core", "hp": 3400000.0, "worth": 1.1, "mats": [18, 19], "ores": [[10, 0.1]], "caves": 0,
 		"fog": Color(0.26, 0.21, 0.12), "band": Color(1.0, 0.92, 0.66)},
 ]
 
@@ -43,8 +43,8 @@ const ZONES = [
 const MATERIALS = [
 	{"name": "Dirt", "color": Color(0.43, 0.29, 0.17), "hp_mult": 1.0},
 	{"name": "Loam", "color": Color(0.3, 0.2, 0.12), "hp_mult": 1.2},
-	{"name": "Clay", "color": Color(0.7, 0.4, 0.22), "hp_mult": 1.0},
-	{"name": "Red Clay", "color": Color(0.6, 0.26, 0.16), "hp_mult": 1.2},
+	{"name": "Clay", "color": Color(0.64, 0.39, 0.25), "hp_mult": 1.0},
+	{"name": "Red Clay", "color": Color(0.56, 0.27, 0.19), "hp_mult": 1.2},
 	{"name": "Bedrock", "color": Color(0.44, 0.43, 0.43), "hp_mult": 1.0},
 	{"name": "Granite", "color": Color(0.58, 0.53, 0.52), "hp_mult": 1.25},
 	{"name": "Sandstone", "color": Color(0.68, 0.55, 0.42), "hp_mult": 1.0},
@@ -87,7 +87,7 @@ const JUMP_VELOCITY := 6.4      # about 1.15 m up: enough to climb out of a shal
 const LOOK_SENSITIVITY_TOUCH := 0.0034
 const LOOK_SENSITIVITY_MOUSE := 0.0025
 const HEADLAMP_RANGE := 11.0     # metres (Headlamp Range upgrade adds to it)
-const HEADLAMP_ANGLE := 38.0     # degrees, half-angle of the beam
+const HEADLAMP_ANGLE := 46.0     # degrees, half-angle of the beam
 
 # --- Tools (bought in order at the shack) -------------------------------------------------
 # damage: per strike, at the centre of the dig zone (see the header).
@@ -98,15 +98,15 @@ const TOOLS = [
 		"desc": "Grandpa's old shovel. Good for dirt, hopeless on rock."},
 	{"name": "Pickaxe", "icon": "pickaxe", "kind": "pickaxe", "damage": 4.4, "rate": 2.4, "radius": 0.72, "reach": 3.0, "cost": 120.0,
 		"desc": "Bites into clay. Sparks on stone."},
-	{"name": "Jackhammer", "icon": "jackhammer", "kind": "jackhammer", "damage": 2.6, "rate": 16.0, "radius": 0.85, "reach": 2.7, "cost": 3000.0,
+	{"name": "Jackhammer", "icon": "jackhammer", "kind": "jackhammer", "damage": 2.6, "rate": 16.0, "radius": 0.85, "reach": 2.7, "cost": 3600.0,
 		"desc": "Shakes bedrock to bits, and your teeth with it."},
-	{"name": "Drill", "icon": "drill", "kind": "drill", "damage": 9.0, "rate": 20.0, "radius": 1.0, "reach": 3.3, "cost": 45000.0,
+	{"name": "Drill", "icon": "drill", "kind": "drill", "damage": 9.0, "rate": 20.0, "radius": 1.0, "reach": 3.3, "cost": 55000.0,
 		"desc": "A spinning diamond-tipped bit. Fossils don't stand a chance."},
 	{"name": "Dynamite", "icon": "dynamite", "kind": "dynamite", "damage": 900.0, "rate": 0.9, "radius": 1.9, "reach": 9.0, "cost": 700000.0,
 		"desc": "Toss it, step back, enjoy. Blasts big craters."},
-	{"name": "Laser Drill", "icon": "laser", "kind": "laser", "damage": 160.0, "rate": 20.0, "radius": 1.15, "reach": 10.0, "cost": 1.1e7,
+	{"name": "Laser Drill", "icon": "laser", "kind": "laser", "damage": 160.0, "rate": 20.0, "radius": 1.15, "reach": 10.0, "cost": 1.3e7,
 		"desc": "Melts crystal and basalt alike from ten metres away."},
-	{"name": "Earth-Borer", "icon": "borer", "kind": "borer", "damage": 900.0, "rate": 20.0, "radius": 1.7, "reach": 3.6, "cost": 2.2e8,
+	{"name": "Earth-Borer", "icon": "borer", "kind": "borer", "damage": 900.0, "rate": 20.0, "radius": 1.7, "reach": 3.6, "cost": 2.0e8,
 		"desc": "A tunnelling machine you can somehow hold."},
 ]
 

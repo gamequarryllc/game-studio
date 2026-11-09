@@ -87,23 +87,73 @@ Bundle id: `com.gamequarry.digtothecore`.
 - First-run hints, layer-reached banners, depth gauge with finds, a metal-detector ping near finds.
 - Generated sound effects and two ambience loops (`art/audio/make_sfx.py`), mute in the shop.
 - Art pass: art bible, Rye + Zilla Slab, custom SVG icons, worn riveted plates, no emoji, Blender models for tools, helpers, the shack, headframe, cage, lift stop, trees, fence posts, crates and barrel.
+- Art pass 2 (all 12 items of ART_REVIEW.md): headlamp-led lighting with zone-tinted depth fog, painted rock texture and strata, 3D pebbles and ore nuggets, a lit landmark per layer with lava and crystal shaders, late-afternoon surface with a composed spawn, timber-post fence and enamel sign, rebuilt mole, robo-mole, trees, headframe, jackhammer and pick, smooth gloved hands on every tool, all 16 finds as Blender models, UI materials by role, HUD overlap fixes, a dressed lift shaft for the ride.
 - Phone render scale and frame-rate watcher (from the reference game).
-- Tests: `tests/smoke_test.gd` (52 checks), `tests/screenshots.gd`, `tests/pacing.gd`, `tests/field_bench.gd`.
+- Tests: `tests/smoke_test.gd` (67 checks, incl. one per QA bug), `tests/playthrough.gd` (keen / casual / boosted, the visual run), `tests/chaos.gd`, `tests/screenshots.gd`, `tests/look.gd` (quick art renders), `tests/pacing.gd`, `tests/field_bench.gd`. Each run can have its own save: `DIG_SAVE=<name>` in the environment uses `user://dig_save_<name>.json`, so bots and tests can run side by side.
 
 ## Dev menu and bot hooks
 
 Playtest builds only (`playtest` feature tag, or the editor; hidden in release): the shop's Bonus tab ends with time scale 1x/5x/10x/50x (`Engine.time_scale`), income x1/x10/x100 (`GameState.income_mult`), dig speed x10, +cash, unlock everything, reset save, skip to any layer 1 to 10, and ad/purchase counters.
 
+Bot runs: `godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- keen|casual|boosted [ads]`; the visual run adds `--shots DIR --every SECONDS --limit MINUTES --size 844x390 --touch` and runs under xvfb (`xvfb-run -a godot --headless -s res://tests/playthrough.gd -- boosted --shots ...`): the bot starts a rendering child at that size and writes `contact_sheet.png`. Chaos: `godot --headless --fixed-fps 20 -s res://tests/chaos.gd -- 6` (game-minutes).
+
 Actions a bot can call: `World.move_player(pos, yaw, pitch)`, `World.dig_at(pos, radius, damage)` (or `Player.strike(damage)` at the crosshair, `World.force_dig`), `World.ride_lift(down)` / `World.use_context()`, `World.skip_to_zone(z)`, `GameState.buy(id)` (tool icon name like `"pickaxe"`, upgrade key like `"power"`, helper key like `"mole"`), `GameState.unlock_everything()`, `Hud.open_shop(tab)`, `Hud.watch_ad(kind)`, `Monetization.buy(product_id)`; the stub's `instant = true` skips the fake ad screens.
 
-## QA still to do (the "Playtesting" section)
+## QA
 
-Not done in this block: `tests/playthrough.gd` (keen / casual / boosted profiles, stall and stuck detection, mid-run save/reload checks), the chaos run, the visual run contact sheet at phone and tablet sizes, and `tools/browser_check.py` on a local web export. `tests/pacing.gd` is a simplified bot (it calls the field directly) and can seed the playthrough bot.
+Done in the art pass 2 block (2026-11-09), per STUDIO.md "Playtesting". All runs on a shared 2-CPU machine, so real times are slow.
+
+**Runs**
+- Smoke test: passes, 72 checks (20 new, one or more per bug below).
+- Playthrough bot, fresh save to the core through the real systems (walking, the lift, the shop's own buttons, keys for E/Space/B): **keen** passes (25:47, all 16 finds, 9 save/reload checks, interstitials shown and closed); **casual** passes (79:32); **boosted** passes (11:20 of play, about 6 minutes real time even with the machine at load 20+, so well inside CI's 15; every rewarded ad, the offer tag, double-this-find, the starter pack, all three cash packs, golden tools, Remove Ads + 2x and Restore checked). No errors printed in any run.
+- Chaos run (6 game-minutes: 900 random keys, touches, clicks, button presses including every dev tool and a dev reset, shop open/close, touch mode flips, backgrounding): passes after the fixes below (it found three bugs).
+- Visual run (the boosted bot rendered with the phone HUD, a shot every 20 game-seconds): 844x390, 932x430, 1024x768; contact sheets checked for clipping, overlap and overflow. The HUD fits at all three sizes (gauge, money plate, ticket, tool plate, stick, Dig, Jump and the context button never overlap; the find card and offer tag share the right column); it found bugs 8 to 10 below. Software GL here renders about 1 frame a second, so each size covers the first 5 to 7 minutes of play; the deep layers are covered by `tests/screenshots.gd`.
+- Browser run (`tools/browser_check.py`, local web export, headless Chromium as an iPhone in landscape): passes at 844x390, 932x430 and 1024x768, touch works, no console or page errors. The first attempt timed out taking a screenshot (software GL on a loaded machine), not a game fault; a retry with a longer timeout passed.
+
+**Bugs found and fixed** (each has a smoke-test check)
+1. The headlamp didn't make a pool: the fill light and the lift-stop lantern washed everything orange, and exponential fog was already 70% dark at 4 m. Now the lamp is the main light with a flat falloff and depth fog runs from 1.6 m to the lamp's reach.
+2. On the surface the tool in your hands was lit only by the cool ambient (its camera doesn't draw the world's sun), so it looked black. A shadowless twin sun now lights the viewmodel layer.
+3. On phones the right-hand column (boost ticket, offer tag) ran off the right edge when the offer tag swung in. It now grows leftward.
+4. Touch controls showed for a frame over a popup, the shop, an ad or the lift ride as it opened (chaos). They now hide the same frame.
+5. Closing a fake rewarded ad early and opening another at once left the first countdown writing to freed buttons (chaos, script errors). Each ad screen now checks it's still the current one.
+6. A dev reset while an ad played made the reward call back into a freed HUD (chaos, script error). The reward is still granted; the callback is skipped if its owner is gone.
+7. The lava pool, the crystals and the core spires rendered as flat pale paper. They now get the lava, crystal and white-hot materials.
+8. Floating money numbers and the lift stop's floating "Lift" tag ballooned into smeared text filling the view at the lens (visual run). The numbers are now a fixed size on screen; the tag hides within 2.4 m.
+9. A mole could pop up and dig right in front of your face in a narrow shaft, filling the screen (visual run). Moles now duck when you come within about a metre and surface further from you.
+10. Pale things right at the lens (the lift-stop sign, rock) blew out to flat colour under the strong lamp (visual run). Flatter lamp falloff and the rock shader damps rock within 2 m.
+11. The lift down could drop you from high above when the lift stop had fallen into a pit since you last stood there (keen run: it landed you back on the surface and the ride never finished). It now sets you down on open floor beside the stop, loading that layer first.
+12. Tests and bots shared one save file, so running two at once corrupted both. `DIG_SAVE=<name>` gives each its own.
+
+Bot-side fixes (not game bugs): it dug a ring round its shaft and stood on the pillar left in the middle; it stood on the lip of a pit the crew had dug and aimed into it beyond reach; it hunted finds that were just out of reach without moving; it stood above a lift stop that had dropped into a pit; its "stuck in rock" check fired on steep pit floors (now it must also be unable to move at all).
+
+**Pacing** (game time, no ads; boosted = income x10 and every ad taken)
+
+| | keen | casual | boosted (x10, every ad) |
+|---|---|---|---|
+| Pickaxe | 0:54 | 1:47 | 0:26 |
+| Topsoil done | 1:26 | 3:14 | 1:15 |
+| Clay done | 3:00 | 7:55 | 2:04 |
+| Jackhammer | 3:45 | 20:57 | 1:37 |
+| Bedrock done | 4:27 | 16:53 | 3:05 |
+| Drill | 5:02 | 30:51 | 2:44 |
+| Fossil Bed done | 5:31 | 24:45 | 3:41 |
+| Dinosaur Graveyard done | 7:08 | 32:15 | 5:33 |
+| Dynamite | 7:59 | 39:23 | 4:36 |
+| Laser Drill | 8:57 | 41:44 | 5:19 |
+| Crystal Caves done | 9:12 | 39:56 | 5:42 |
+| Lava Lakes done | 11:02 | 43:42 | 6:32 |
+| Mantle done | 14:14 | 51:50 | 6:42 |
+| Earth-Borer | 17:59 | 63:19 | 6:15 |
+| Outer Core done | 20:09 | 64:54 | 7:51 |
+| **The core** | **25:47** | **79:32** | **11:20** |
+| Finds | 16 of 16 | 5 of 16 | 16 of 16 |
+
+Keen lands a little under its ~30-minute target (22 to 26 across this block's runs); casual over its ~60 (63 to 92 across runs, the spread from its random pauses and which finds it stumbles on). The casual bot digs about 40% as much as the keen one (it digs 60% of the time, stops to look round, shops less often and skips most finds, which are a big share of early money), so one balance can't put both exactly on target; worth checking against a real casual player before tuning further. Before this block, Crystal Caves to the core took about 7 minutes for keen (Mantle in 6 seconds once the Earth-Borer was in hand); the last five layers now take about 16.
 
 ## Next steps (toward the polish bar)
 
-1. **Pacing for a full run.** The first ten minutes are tuned (see below); layers 6 to 10 with Dynamite, Laser Drill and Earth-Borer still go too fast once you have them. Tune with `tests/pacing.gd` until a keen run is ~30 min and casual ~60, and add the run's stats screen polish.
-2. **Art, what's left** (the fresh-eyes critic should drive this): Blender models for the finds (they're the SVG icons on billboards for now) and for the deeper layers' set pieces (crystal clusters in Crystal Caves, lava pools in Lava Lakes); the oak canopy is still blobby; the ride cut-scene's rock tube is a plain textured cylinder; a splash screen; switch cream-on-verdigris lettering to soot; motion polish (eased staggered reveals in the shop, squash on the find pop).
+1. **Pacing.** Keen and casual both reach the core with no stalls (see "QA"); casual still runs long (63 to 92 minutes for the bot). Check with a real casual player, then nudge the early tool prices if it holds. Polish the run's stats screen.
+2. **Art, what's left**: a second fresh-eyes critic review of art pass 2; a splash screen; switch cream-on-verdigris lettering to soot; motion polish (eased staggered reveals in the shop, squash on the find pop); the pick head reads a little gold under the warm lamp.
 3. **Music.** Generated tunes for the surface and for the deep (only SFX and ambience so far), and separate music/effects volume sliders.
 4. **Deeper layers' identity.** Crystal Caves and Lava Lakes need their caves to read (glowing crystal props, lava you can't stand in), and per-layer ambience.
 5. **Real-phone check** of the web build: touch feel, frame rate while the jackhammer is running (chunk re-meshing is ~0.5 ms per chunk on desktop, 0.08 s per-chunk throttle), memory after a long session.
@@ -113,24 +163,16 @@ Not done in this block: `tests/playthrough.gd` (keen / casual / boosted profiles
 - The 2x boost doubles strikes exactly; income follows the rock you hit, so the smoke test accepts 1.5x to 2.5x.
 - A lift stop can end up in an awkward pit if you stand there; it drops to the floor when dug out from under, but it never moves sideways.
 - Unloaded layers above you are treated as open (so you can see sky up the shaft); a layer that's been dug sideways far above can show a missing ceiling for a moment while it streams back.
-- Dust from the drill can haze the view on light rock (Fossil Bed).
-- Finds still use 2D icons in the world.
+- The headlamp is strong (it has to light a pool metres away); the rock shader damps rock within 2 m of the lens so close walls don't blow out.
 
 ## Balance notes
 
-All numbers in `scripts/balance.gd`. A rock point pays hp x worth x m³; hp grows about 4x per layer from Bedrock on and worth stays near 1, so value per m³ climbs with depth (2.5, 10.5, 50, 220, 900, 3.8K...). Ore pays its rock times 3 to 14. Tools are roughly 4x apart in damage per second; each is meant to carry you through about two layers.
-
-Pacing bot (`godot --headless -s res://tests/pacing.gd [-- casual | ads]`), simulated time:
-
-| | Pickaxe | Clay | Bedrock | Jackhammer | Fossil Bed | Drill | Crystal Caves |
-|---|---|---|---|---|---|---|---|
-| keen | 1:34 | 1:38 | 3:06 | 5:05 | 5:13 | 9:33 | 9:54 |
-| casual | 2:39 | 2:43 | 4:43 | 8:07 | 8:21 | 14:01 | 14:31 |
-| keen, always boosted | 0:53 | 0:42 | 1:23 | 2:46 | 2:50 | 4:51 | 5:02 |
+All numbers in `scripts/balance.gd`. A rock point pays hp x worth x m³, so value per m³ climbs with depth (2.5, 10.5, 51, 220, 900, 5K, 42K, 179K, 630K, 3.7M from Topsoil to Inner Core). Income per second follows the tool (damage x rate x upgrades x worth), not the rock's hardness, so hardness sets how long a layer takes to cross without starving the player. Ore pays its rock times 3 to 14. Tools are roughly 4x apart in damage per second and cost 120, 3.6K, 55K, 700K, 13M and 200M. The first five layers grow about 4x in hardness each; Crystal Caves to Inner Core were stretched in the QA block (4.8K, 40K, 170K, 600K, 3.4M) because once the Earth-Borer was in hand they went by in seconds, and the Earth-Borer came down from 300M to 200M so the end is digging, not waiting for money. Pacing: see "QA".
 
 ## Rebuilding assets
 
-- Models: `python3 art/blender/tools.py` and `python3 art/blender/world_models.py` (Blender 5.2 as a Python module), then `python3 art/blender/contact_sheet.py out.png` to review.
+- Models: `python3 art/blender/tools.py`, `world_models.py`, `props.py` and `finds.py` (Blender 5.2 as a Python module, each takes model names to build only some), then `python3 art/blender/contact_sheet.py out.png [names]` to review and `python3 art/blender/viewmodel_preview.py out.png` to check the tools against the phone buttons.
+- Textures: `python3 art/textures/make_textures.py` (painted rock, strata bands).
 - Icons: `python3 art/icons/make_icons.py`.
 - Sounds: `python3 art/audio/make_sfx.py` (needs numpy, scipy, ffmpeg).
 

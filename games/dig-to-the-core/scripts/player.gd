@@ -17,7 +17,7 @@ const WORLD_LAYER := 1       # the field, the shack, the lift
 const ROCK_LAYER := 2        # the dig site
 const MAX_STRIKES_PER_FRAME := 3
 const VIEWMODEL_LAYER := 1 << 10   # the tool and hands: drawn only by the viewmodel camera
-const LAMP_COLOR := Color(1.0, 0.78, 0.47)   # lamp amber, a little whiter in the middle of the beam
+const LAMP_COLOR := Color(1.0, 0.83, 0.58)   # lamp amber, a little whiter in the middle of the beam
 
 var field: DigField
 var bounds_min := Vector3(-36.0, -300.0, -36.0)
@@ -89,17 +89,17 @@ func _ready() -> void:
 	lamp.light_energy = 1.5
 	lamp.spot_range = Balance.HEADLAMP_RANGE
 	lamp.spot_angle = Balance.HEADLAMP_ANGLE
-	lamp.spot_angle_attenuation = 1.3
-	lamp.spot_attenuation = 1.25
+	lamp.spot_angle_attenuation = 0.6   # a soft edge to the pool, not a torch circle
+	lamp.spot_attenuation = 0.55  # a flat falloff (no blow-out at the lens): the zone-tinted fog takes it the rest of the way to black
 	lamp.light_specular = 0.6
 	lamp.position = Vector3(0.0, 0.12, 0.0)
 	lamp.layers = 1 | VIEWMODEL_LAYER   # lights only reach cameras whose cull mask includes their layers
 	camera.add_child(lamp)
 	fill = OmniLight3D.new()
 	fill.light_color = Color(1.0, 0.72, 0.42)
-	fill.light_energy = 0.3
-	fill.omni_range = 3.4
-	fill.omni_attenuation = 1.6
+	fill.light_energy = 0.1
+	fill.omni_range = 2.6
+	fill.omni_attenuation = 2.0
 	fill.light_specular = 0.0
 	fill.layers = 1 | VIEWMODEL_LAYER
 	camera.add_child(fill)
@@ -356,9 +356,9 @@ func _update_tool(delta: float) -> void:
 	rig.update(delta, active, _strike_acc, target)
 	# Headlamp: brighter underground, reach from the upgrade.
 	var under := clampf(-position.y / 6.0, 0.0, 1.0)
-	lamp.spot_range = GameState.lamp_range()
-	lamp.light_energy = lerpf(0.4, 1.7, under)
-	fill.light_energy = lerpf(0.0, 0.35, under)
+	lamp.spot_range = GameState.lamp_range() * 0.86
+	lamp.light_energy = lerpf(0.4, 2.8, under)
+	fill.light_energy = lerpf(0.0, 0.1, under)
 	if field != null and field.material != null:
 		field.material.set_shader_parameter("lamp_pos", eye_pos())
 		field.material.set_shader_parameter("lamp_range", lamp.spot_range)

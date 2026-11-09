@@ -29,7 +29,7 @@ extends SceneTree
 const PROFILES := {
 	"keen": {"dig_share": 1.0, "turn": 1.8, "shop_every": 75.0, "shop_secs": 5.0, "upgrade_cap": 0.35, "hunt": 1.0,
 		"limit": 95.0 * 60.0, "income": 1.0, "pause_every": 0.0, "pause_secs": 0.0, "walk": 1.0},
-	"casual": {"dig_share": 0.6, "turn": 1.3, "shop_every": 140.0, "shop_secs": 12.0, "upgrade_cap": 0.55, "hunt": 0.6,
+	"casual": {"dig_share": 0.6, "turn": 1.3, "shop_every": 140.0, "shop_secs": 12.0, "upgrade_cap": 0.4, "hunt": 0.6,
 		"limit": 170.0 * 60.0, "income": 1.0, "pause_every": 28.0, "pause_secs": 11.0, "walk": 0.75},
 	"boosted": {"dig_share": 1.0, "turn": 1.8, "shop_every": 60.0, "shop_secs": 3.0, "upgrade_cap": 0.35, "hunt": 1.0,
 		"limit": 45.0 * 60.0, "income": 10.0, "pause_every": 0.0, "pause_secs": 0.0, "walk": 1.0},
@@ -80,6 +80,9 @@ var _ads_checked := {}
 var _won_at := -1.0
 var _next_status := 60.0
 var _purchases_checked := false
+var _capped := false
+var _no_aim_t := 0.0
+var _hunt_reported := -1
 
 
 func _initialize() -> void:
@@ -98,7 +101,12 @@ func _initialize() -> void:
 	i = args.find("--every")
 	if i >= 0 and i + 1 < args.size():
 		_shot_every = float(args[i + 1])
-	p = PROFILES[profile]
+	p = PROFILES[profile].duplicate()
+	# A capped stretch of play (the visual run renders a few minutes at each size).
+	i = args.find("--limit")
+	if i >= 0 and i + 1 < args.size():
+		p.limit = float(args[i + 1]) * 60.0
+		_capped = true
 	_play.call_deferred()
 
 
@@ -108,6 +116,15 @@ func _initialize() -> void:
 func _run_as_parent(args: Array) -> void:
 	var child_args := ["--headless", "--fixed-fps", "20", "--path", ProjectSettings.globalize_path("res://"),
 		"-s", "res://tests/playthrough.gd", "--"]
+	var shots := args.find("--shots")
+	if shots >= 0:
+		# The visual run: a real renderer (run the parent under xvfb), at the size asked for.
+		var res := "1280x720"
+		var ri := args.find("--size")
+		if ri >= 0 and ri + 1 < args.size():
+			res = str(args[ri + 1])
+		child_args = ["--rendering-driver", "opengl3", "--resolution", res, "--fixed-fps", "10", "--path",
+			ProjectSettings.globalize_path("res://"), "-s", "res://tests/playthrough.gd", "--"]
 	child_args.append_array(args)
 	child_args.append("--child")
 	var out: Array = []
@@ -180,7 +197,7 @@ func _play() -> void:
 		if state == "finish":
 			await _finish()
 			state = "done"
-	if _won_at < 0.0:
+	if _won_at < 0.0 and not _capped:
 		fail("didn't reach the core in %s of play (deepest %.0f m)" % [_clock(gs.play_time), gs.deepest])
 	_report()
 	if _shots_dir != "":
@@ -206,6 +223,8 @@ func _spawn_world() -> void:
 	field = world.field
 	hud = world.hud
 	_yaw = player.yaw
+	if OS.get_cmdline_user_args().has("--touch"):
+		hud.set_touch_mode(true)   # the visual run on phone sizes: the phone HUD
 
 
 # =====================================================================================
@@ -241,7 +260,7 @@ func _step() -> void:
 		"to_lift_stop":
 			if world.is_riding():
 				state = "ride_up"
-			elif _walk_to(gs.lift_stop, 0.9) or world.near() == "lift_stop":
+			elif _walk_to(gs.lift_stop, _stop_tol()) or world.near() == "lift_stop":
 				if world.near() == "lift_stop":
 					_key(KEY_E)
 					state = "ride_up"
@@ -287,13 +306,49 @@ func _step() -> void:
 				state = "finish"
 
 
+func _stop_tol() -> float:
+	## How close to walk to the lift stop: close enough to drop down to it
+	## when it has fallen into a pit below you.
+	return 0.9 if absf(gs.lift_stop.y - player.position.y) < 1.5 else 0.12
+
+
+func _boxed_in() -> bool:
+	## Stuck means the body can't move at all: not up, not any way sideways.
+	## (Resting against a steep pit wall overlaps the probe but isn't stuck.)
+	var xf: Transform3D = player.global_transform
+	for m in [Vector3(0, 0.3, 0), Vector3(0.25, 0.05, 0), Vector3(-0.25, 0.05, 0), Vector3(0, 0.05, 0.25), Vector3(0, 0.05, -0.25)]:
+		if not player.test_move(xf, m):
+			return false
+	return true
+
+
+func _diag() -> String:
+	## What's under and around the player, for a stall or stuck report.
+	var pp: Vector3 = player.position
+	var down: Dictionary = field.raycast(player.eye_pos(), Vector3.DOWN, 30.0)
+	var q := PhysicsRayQueryParameters3D.create(pp + Vector3(0, 0.5, 0), pp + Vector3(0, -2.0, 0))
+	q.exclude = [player.get_rid()]
+	var hit: Dictionary = player.get_world_3d().direct_space_state.intersect_ray(q)
+	var under := "nothing"
+	if not hit.is_empty():
+		under = "%s at %.2f" % [str(hit.collider.get_path()) if hit.collider != null else "?", float(hit.position.y)]
+	var loaded: Array = []
+	for z in field.nzones:
+		if field.is_loaded(z):
+			loaded.append(z)
+	return "[pos %s floor %s, lift stop %s, lift spot %s, field ray down %s %.1f m, physics under: %s, zones loaded %s, density below %.2f]" % [
+		pp.snapped(Vector3.ONE * 0.01), player.on_floor, gs.lift_stop.snapped(Vector3.ONE * 0.01) if gs.lift_stop.is_finite() else "none",
+		gs.lift_spot.snapped(Vector3.ONE * 0.01) if gs.lift_spot.is_finite() else "none", down.get("hit", false), float(down.get("dist", 0.0)),
+		under, loaded, field.density_at(pp + Vector3(0, -0.2, 0))]
+
+
 func _watch_world(t: float) -> void:
 	# Progress: depth records, purchases and finds all count.
 	if gs.deepest > _deepest_seen + 0.5:
 		_deepest_seen = gs.deepest
 		_last_progress = t
 	if t - _last_progress > STALL_SECONDS and _won_at < 0.0:
-		fail("progress stalled for %d s (state %s, depth %.1f m, tool %s)" % [int(t - _last_progress), state, gs.deepest, gs.tool_def().name])
+		fail("progress stalled for %d s (state %s, depth %.1f m, tool %s) %s" % [int(t - _last_progress), state, gs.deepest, gs.tool_def().name, _diag()])
 		_last_progress = t
 	var z: int = int(floor(gs.deepest / Balance.ZONE_DEPTH))
 	while _zone_done < mini(z, Balance.zone_count()):
@@ -308,7 +363,7 @@ func _watch_world(t: float) -> void:
 		var pp: Vector3 = player.position
 		if absf(pp.x) > 39.0 or absf(pp.z) > 39.0 or pp.y > 30.0 or pp.y < field.bottom_y - 1.5:
 			fail("the player left the world at %s" % pp)
-		if not world.is_riding() and player.collides(pp + Vector3(0, 0.08, 0)):
+		if not world.is_riding() and player.collides(pp + Vector3(0, 0.08, 0)) and _boxed_in():
 			_stuck_count += 1
 			if _stuck_count >= 6:
 				var dens := []
@@ -345,7 +400,7 @@ func _dig(t: float) -> void:
 		if gs.found[_hunt]:
 			_last_progress = t
 			_hunt = -1
-		elif t - _hunt_start > 120.0:
+		elif t - _hunt_start > (120.0 if float(p.hunt) >= 1.0 else 60.0):
 			if float(p.hunt) >= 1.0:
 				fail("couldn't dig out the %s at %s" % [Balance.FINDS[_hunt].name, field.find_spot(_hunt)])
 			_gave_up.append(_hunt)
@@ -358,23 +413,53 @@ func _dig(t: float) -> void:
 	# when it's more than a couple of metres off.
 	_yaw += 0.05 * float(p.turn)
 	var off := Vector2(player.position.x - COLUMN.x, player.position.z - COLUMN.z)
-	var aim := Vector3(COLUMN.x + cos(_yaw) * 0.55, player.position.y - 0.35, COLUMN.z + sin(_yaw) * 0.55)
+	# A tight circle: wide enough to keep the shaft round, tight enough that
+	# it never leaves a pillar in the middle to stand on.
+	var rr := 0.18 + 0.32 * absf(sin(_yaw * 1.7))   # sweeps the whole disc: no pillar, no hole narrower than you
+	var aim := Vector3(COLUMN.x + cos(_yaw) * rr, player.position.y - 0.35, COLUMN.z + sin(_yaw) * rr)
 	if off.length() > 2.0:
 		_walk_to(Vector3(COLUMN.x, player.position.y, COLUMN.z), 0.5)
 		aim = Vector3(COLUMN.x, player.position.y - 0.2, COLUMN.z)
 	player.look_at_point(aim)
 	world.force_dig = true
+	# Nothing in reach (standing on the lip of a pit the crew dug out under
+	# the shaft)? Step in, the way a player would.
+	if not bool(player.target.get("hit", false)):
+		_no_aim_t += 0.05
+		if _no_aim_t > 1.0:
+			# Nothing in reach: dig the rim at your feet (you may be standing
+			# across a hole narrower than you), and step forward.
+			player.look_at_point(player.position + Vector3(cos(_yaw * 3.0) * 0.45, -0.15, sin(_yaw * 3.0) * 0.45))
+			world.bot_move = Vector2(0, float(p.walk))
+	else:
+		_no_aim_t = 0.0
 
 
 func _dig_towards(spot: Vector3) -> void:
-	player.look_at_point(spot)
-	world.force_dig = true
+	## Goes for a buried find the way a player would: in reach along the line
+	## to it? Dig at it. If not, walk towards it (dropping into holes, hopping
+	## ledges, digging whatever blocks the way), and once right above it, dig
+	## straight down.
+	var to: Vector3 = (spot - player.eye_pos()).normalized()
 	var flat := Vector2(spot.x - player.position.x, spot.z - player.position.z)
-	var tgt: Dictionary = player.target
-	if flat.length() > 1.1 and (not tgt.get("hit", false) or float(tgt.get("dist", 0.0)) > 1.4):
-		world.bot_move = Vector2(0, float(p.walk))
+	world.force_dig = true
+	if bool(field.raycast(player.eye_pos(), to, gs.tool_reach()).get("hit", false)):
+		player.look_at_point(spot)
+		_no_aim_t = 0.0
+		return
+	_no_aim_t += 0.05
+	if flat.length() > 0.35:
+		_walk_to(spot, 0.3)
+		# Look a little down the way you're walking, so a wall in the way gets dug.
+		player.set_view(player.yaw, -0.35)
+	else:
+		player.look_at_point(Vector3(spot.x, player.position.y - 1.0, spot.z))
 	if spot.y > player.position.y + 1.4 and player.on_floor:
 		_key(KEY_SPACE)
+	if _no_aim_t > 3.0 and _hunt_reported != _hunt:
+		_hunt_reported = _hunt
+		print("    hunt %d: out of reach for 3 s, heading over; ray to the find %s %s" % [_hunt,
+			field.raycast(player.eye_pos(), to, 6.0), _diag()])
 
 
 func _pick_find() -> int:
@@ -706,6 +791,8 @@ func _reload_check() -> void:
 	player = world.player
 	field = world.field
 	hud = world.hud
+	if OS.get_cmdline_user_args().has("--touch"):
+		hud.set_touch_mode(true)
 	var b := _snapshot()
 	var bad: Array = []
 	if absf(float(saved.money) - float(b.money)) > 0.01:
@@ -764,7 +851,7 @@ func _finish() -> void:
 			"to_lift_stop":
 				if world.is_riding():
 					state = "ride_up"
-				elif _walk_to(gs.lift_stop, 0.9) or world.near() == "lift_stop":
+				elif _walk_to(gs.lift_stop, _stop_tol()) or world.near() == "lift_stop":
 					if world.near() == "lift_stop":
 						_key(KEY_E)
 						state = "ride_up"
@@ -851,6 +938,9 @@ func _report() -> void:
 	print("Finds %d of %d · tool %s · upgrades %s · crew %s · ads %d · purchases %d · interstitials %d · reloads %d" % [
 		gs.finds_count(), Balance.FINDS.size(), gs.tool_def().name, gs.upgrade_levels, gs.helper_counts, gs.ads_watched,
 		gs.purchases_made, mon.interstitials_shown, _reloads])
+	if _capped:
+		print("Real time %.0f s for %s of play (capped run: only the per-moment checks apply)" % [real, _clock(gs.play_time)])
+		return
 	if not take_ads:
 		# Without rewarded ads in the way, the light interstitials must have shown (and closed).
 		if mon.interstitials_shown < 1:

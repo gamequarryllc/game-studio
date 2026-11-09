@@ -16,7 +16,7 @@ func check(cond: bool, what: String) -> void:
 
 
 func _initialize() -> void:
-	create_timer(280.0).timeout.connect(func():
+	create_timer(480.0).timeout.connect(func():
 		print("SMOKE TEST TIMED OUT")
 		quit(2))
 	_run.call_deferred()
@@ -328,7 +328,175 @@ func _run() -> void:
 	check(world2.player.position.distance_to(Vector3(2.5, -13.0, 2.5)) < 1.5, "you're back where you saved (%s)" % world2.player.position)
 	check(not world2.player.collides(world2.player.position + Vector3(0, 0.05, 0)), "and not stuck in the rock")
 
+	await _regressions(world2)
+
 	gs.reset_state(false)   # purchases too: nothing from a test may leak into the next run
 	gs.save_game()
 	print("SMOKE TEST " + ("PASSED" if ok else "FAILED"))
 	quit(0 if ok else 1)
+
+
+func _regressions(world) -> void:
+	## One check per bug the QA runs found (NOTES.md, "QA"), so none comes back.
+	var gs = root.get_node("GameState")
+	var mon = root.get_node("Monetization")
+	var hud = world.hud
+	var player = world.player
+	print("  -- regressions --")
+	# Bots and tests each get their own save (they used to overwrite one another).
+	var slot := OS.get_environment("DIG_SAVE")
+	if slot != "":
+		check(str(gs.SAVE_PATH).contains(slot), "DIG_SAVE=%s gives this run its own save file (%s)" % [slot, gs.SAVE_PATH])
+	# Underground the headlamp is the main light and the dark closes in by its reach.
+	await _frames(3)
+	var env: Environment = world._env
+	check(env.fog_mode == Environment.FOG_MODE_DEPTH and env.fog_depth_end < 12.0 and env.fog_depth_begin < 3.0,
+		"underground: zone-tinted depth fog from %.1f to %.1f m" % [env.fog_depth_begin, env.fog_depth_end])
+	check(player.lamp.light_energy > 3.0 * world._lift_stop_light.light_energy and player.lamp.light_energy > 10.0 * player.fill.light_energy,
+		"the headlamp outshines the lantern and the fill (%.1f vs %.1f, %.2f)" % [player.lamp.light_energy, world._lift_stop_light.light_energy, player.fill.light_energy])
+	# The floating "Lift" tag hides when you're right next to the lamp post
+	# (it filled the phone screen as smeared yellow text).
+	var keep_at: Vector3 = world.player.position
+	world.player.position = world._lift_stop.global_position + Vector3(0.7, 0.05, 0.0)
+	world._update_lift_tag()
+	var hid_near: bool = not world._lift_stop_tag.visible
+	world.player.position = world._lift_stop.global_position + Vector3(4.0, 0.05, 0.0)
+	world._update_lift_tag()
+	check(not world._lift_stop.visible or (hid_near and world._lift_stop_tag.visible), "the lift stop's floating tag hides up close and shows from a few metres")
+	world.player.position = keep_at
+	# A mole right in front of your face ducks away (one filled the phone screen).
+	var crew = world.helpers
+	var near_mole := false
+	for m in crew._crew:
+		if m.node.visible and str(m.state) == "dig" and world.player.eye_pos().distance_to(m.node.global_position + Vector3(0, 0.3, 0)) < 1.0:
+			near_mole = true
+	check(not near_mole, "no digging mole sits within a metre of your eyes")
+	# The lift sets you down beside the lift stop even when the stop has fallen
+	# far down the shaft since you last stood there (it dropped you from 30 m up).
+	if gs.lift_stop.is_finite():
+		var spot0: Vector3 = gs.lift_spot
+		gs.lift_spot = gs.lift_stop + Vector3(0.0, 40.0, 0.0)
+		var arr: Vector3 = world.lift_arrival()
+		check(absf(arr.y - gs.lift_stop.y) < 2.0 and Vector2(arr.x - gs.lift_stop.x, arr.z - gs.lift_stop.z).length() < 1.5
+			and not world.player.collides(arr + Vector3(0, 0.05, 0)),
+			"the lift sets you down in the open beside its stop, even with a stale arrival spot (%.1f vs %.1f m)" % [-arr.y, -gs.lift_stop.y])
+		gs.lift_spot = spot0
+	# Floating money numbers keep one size on screen (they ballooned at the lens).
+	var floats_fixed := true
+	for f in world._floats:
+		floats_fixed = floats_fixed and (f.node as Label3D).fixed_size
+	check(floats_fixed, "floating money numbers are a fixed size on screen")
+	# The tool in your hands is lit by the sun too (its camera doesn't draw the world's sun).
+	check(world._vm_sun != null and (world._vm_sun.layers & player.VIEWMODEL_LAYER) != 0 and not world._vm_sun.shadow_enabled,
+		"a shadowless sun lights the viewmodel layer")
+	# The set pieces have their own materials (they rendered as pale paper before).
+	var lava = load("res://scripts/models.gd").instance("lava_pool")
+	load("res://scripts/dig_field.gd").dress_landmark(lava, "lava")
+	var dressed := 0
+	for mi in lava.find_children("*", "MeshInstance3D", true, false):
+		for si in (mi as MeshInstance3D).mesh.get_surface_count():
+			var om = (mi as MeshInstance3D).get_surface_override_material(si)
+			if om is ShaderMaterial and str((om as ShaderMaterial).shader.resource_path).ends_with("lava.gdshader"):
+				dressed += 1
+	lava.free()
+	check(dressed > 0, "the lava pool's melt gets the lava shader (%d surfaces)" % dressed)
+	# Phone controls never show over a menu or the lift ride, not even for a frame.
+	hud.set_touch_mode(true)
+	await _frames(1)
+	var pop = hud.popup("Test", "A popup.", [["OK", Color(0.75, 0.54, 0.24), Callable()]])
+	check(not hud.touch.visible, "the touch controls hide the moment a popup opens")
+	pop.queue_free()
+	hud.popups.remove_child(pop)
+	await _frames(1)
+	hud.riding = true
+	check(not hud.touch.visible, "...and the moment a lift ride starts")
+	hud.riding = false
+	await _frames(1)
+	check(hud.touch.visible, "...and come back after")
+	# The right-hand column (boost ticket, offer tag) stays on screen in touch mode.
+	hud.offers.current = "cash"
+	hud._offer_title.text = load("res://scripts/ad_offers.gd").headline("cash")
+	hud._offer_tag.visible = true
+	await _frames(3)
+	var vw: float = hud.root.get_viewport_rect().size.x
+	var rr: Rect2 = hud._offer_tag.get_global_rect()
+	var br: Rect2 = hud._boost.get_global_rect()
+	check(rr.end.x <= vw + 0.5 and br.end.x <= vw + 0.5, "the offer tag and the boost ticket stay on screen (%.0f, %.0f of %.0f)" % [rr.end.x, br.end.x, vw])
+	hud.offers.current = ""
+	hud._offer_tag.visible = false
+	hud.set_touch_mode(false)
+	# A reward still lands if whoever asked for it is gone (the dev reset mid-ad).
+	var asker := _listener()
+	var l0: float = gs.lifetime_money
+	mon.provider.instant = false
+	mon.watch_for_reward("cash", Callable(asker, "told"))
+	asker.free()
+	await _frames(2)
+	var close_btn: Button = null
+	for b in mon.find_children("*", "Button", true, false):
+		if (b as Button).text.begins_with("Close early"):
+			close_btn = b
+	check(close_btn != null, "the fake rewarded ad has a close-early button")
+	# Close it early and open another at once: the first countdown must stop.
+	if close_btn != null:
+		close_btn.pressed.emit()
+	mon.watch_for_reward("cash", func(_ok, _t): pass)
+	await _seconds(1.3)
+	var counting := ""
+	var layers := 0
+	for c in mon.provider.get_children():
+		if c is CanvasLayer:
+			layers += 1
+	for b in mon.find_children("*", "Button", true, false):
+		if (b as Button).text.begins_with("Close in"):
+			counting = (b as Button).text
+	check(layers == 1 and counting != "", "an ad closed early and another opened at once: one ad screen, counting down (%s)" % counting)
+	mon.provider.instant = true
+	mon.provider._close()
+	mon._reward_callbacks.clear()
+	mon.watch_for_reward("cash", func(_ok, _t): pass)
+	await _frames(3)
+	check(gs.lifetime_money > l0, "rewards pay out (instant cash +%s)" % str(int(gs.lifetime_money - l0)))
+	var orphan := _listener()
+	var l1: float = gs.lifetime_money
+	mon.provider.instant = false
+	mon.watch_for_reward("cash", Callable(orphan, "told"))
+	orphan.free()
+	await _frames(2)
+	mon.provider.instant = true
+	for b in mon.find_children("*", "Button", true, false):
+		if (b as Button).text.begins_with("Close"):
+			(b as Button).disabled = false
+	# Sit the ad out: press "Close ad" once its countdown ends.
+	var end := Time.get_ticks_msec() + 9000
+	while mon.is_watching() and Time.get_ticks_msec() < end:
+		for b in mon.find_children("*", "Button", true, false):
+			if (b as Button).text == "Close ad":
+				(b as Button).pressed.emit()
+		await process_frame
+	await _frames(3)
+	check(gs.lifetime_money > l1, "...even when the one who asked was freed mid-ad")
+	# The lift ride has something to see: each layer's walls, sets, signs and set pieces.
+	if gs.lift_stop.is_finite():
+		player.teleport(gs.lift_stop + Vector3(0.6, 0.05, 0.0), 0.0)
+		await _frames(2)
+		world.ride_lift(false)
+		var guard := 0
+		while world.is_riding() and int(world._ride.get("stage", 0)) < 1 and guard < 600:
+			guard += 1
+			await process_frame
+		check(world._ride_props.get_child_count() >= 4, "the lift shaft is dressed for the ride (%d pieces)" % world._ride_props.get_child_count())
+		await _ride(world)
+		await _frames(3)
+		check(world._vm_sun.visible and world._vm_sun.light_energy > 0.5, "back on top, the sun lights the tool in your hands")
+
+
+func _listener() -> Node:
+	## A node whose method stands in for the HUD's reward callback.
+	var sc := GDScript.new()
+	sc.source_code = "extends Node\nfunc told(_ok, _text):\n\tname = \"told\"\n"
+	sc.reload()
+	var n := Node.new()
+	n.set_script(sc)
+	root.add_child(n)
+	return n

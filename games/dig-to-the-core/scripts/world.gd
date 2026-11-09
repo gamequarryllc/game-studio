@@ -23,8 +23,10 @@ var bot_move := Vector2.ZERO   # the playthrough bot's walk stick (added to the 
 
 var _env: Environment
 var _sun: DirectionalLight3D
+var _vm_sun: DirectionalLight3D   # the same sun for the tool in your hands (its camera only draws the viewmodel layer)
 var _lift_stop: Node3D
 var _lift_stop_light: OmniLight3D
+var _lift_stop_tag: Label3D       # the floating "Lift" over the lamp post (hidden up close, where it would fill the view)
 var _ride: Dictionary = {}     # the lift ride in progress
 var _ride_cage: Node3D
 var _ride_tube: MeshInstance3D
@@ -191,8 +193,12 @@ func _build_environment() -> void:
 	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	_env.tonemap_white = 6.0
 	_env.fog_enabled = true
+	_env.fog_mode = Environment.FOG_MODE_DEPTH
 	_env.fog_light_color = SURFACE_HAZE
 	_env.fog_density = SURFACE_FOG
+	_env.fog_depth_begin = SURFACE_FOG_BEGIN
+	_env.fog_depth_end = SURFACE_FOG_END
+	_env.fog_depth_curve = 1.0
 	_env.fog_sky_affect = 0.0
 	var we := WorldEnvironment.new()
 	we.environment = _env
@@ -207,13 +213,22 @@ func _build_environment() -> void:
 	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	_sun.directional_shadow_max_distance = 70.0
 	add_child(_sun)
+	_vm_sun = DirectionalLight3D.new()
+	_vm_sun.rotation = _sun.rotation
+	_vm_sun.light_color = SUN_COLOR
+	_vm_sun.light_energy = SUN_ENERGY
+	_vm_sun.shadow_enabled = false
+	_vm_sun.layers = Player.VIEWMODEL_LAYER
+	add_child(_vm_sun)
 
 
 const SKY_TOP := Color(0.42, 0.52, 0.64)
 const SKY_HORIZON := Color(0.95, 0.8, 0.6)
 const SURFACE_AMBIENT := Color(0.56, 0.65, 0.78)   # cool sky fill (#8EA6C8)
 const SURFACE_HAZE := Color(0.86, 0.74, 0.58)
-const SURFACE_FOG := 0.0065
+const SURFACE_FOG := 0.62                         # depth fog: how far the far hills fade into the haze
+const SURFACE_FOG_BEGIN := 22.0
+const SURFACE_FOG_END := 190.0
 const SUN_COLOR := Color(1.0, 0.83, 0.6)           # warm key (#FFD39A)
 const SUN_ENERGY := 1.25
 const LAMP_FALLOFF := 8.0                          # metres to near-black with the stock headlamp
@@ -228,14 +243,21 @@ func _update_env(blend: float) -> void:
 	var zi := field.zone_of_y(player.position.y)
 	var zone: Dictionary = Balance.ZONES[zi]
 	var tint: Color = zone.fog
-	var amb := SURFACE_AMBIENT.lerp(tint.lightened(0.18), under)
+	var amb := SURFACE_AMBIENT.lerp(tint * 1.6, under)
 	_env.ambient_light_color = _env.ambient_light_color.lerp(amb, blend)
-	_env.ambient_light_energy = lerpf(0.55, 0.32, under)
+	_env.ambient_light_energy = lerpf(0.55, 0.22, under)
 	_env.fog_light_color = _env.fog_light_color.lerp(SURFACE_HAZE.lerp(tint, under), blend)
+	# Depth fog: clear for the first couple of metres, the zone's own near-black
+	# by the lamp's reach.
 	var reach := LAMP_FALLOFF * sqrt(GameState.upgrade_mult("lamp"))
-	_env.fog_density = lerpf(SURFACE_FOG, 2.4 / reach, under)
+	_env.fog_density = lerpf(SURFACE_FOG, 0.97, under)
+	_env.fog_depth_begin = lerpf(SURFACE_FOG_BEGIN, 1.6, under)
+	_env.fog_depth_end = lerpf(SURFACE_FOG_END, reach * 1.1, under)
+	_env.fog_depth_curve = lerpf(1.0, 0.8, under)
 	_sun.light_energy = lerpf(SUN_ENERGY, 0.0, smoothstep(0.0, 7.0, d))
 	_sun.visible = _sun.light_energy > 0.01
+	_vm_sun.light_energy = _sun.light_energy * 0.85
+	_vm_sun.visible = _sun.visible
 	_sun.shadow_enabled = d < 4.0
 	player.sync_viewmodel(_env)
 
@@ -260,6 +282,7 @@ func _process(delta: float) -> void:
 	_update_floats(delta)
 	_update_pops(delta)
 	_update_near()
+	_update_lift_tag()
 	_update_sounds(delta)
 	_hit_glow = move_toward(_hit_glow, 0.0, delta * 3.0)
 	if player.target.hit:
@@ -406,6 +429,7 @@ func use_context() -> void:
 func _on_shop_closed() -> void:
 	GameState.save_game()
 	Monetization.maybe_show_interstitial(Monetization.PLACEMENT_INTERSTITIAL)
+	hud._sync_touch()
 
 
 func ride_lift(down: bool) -> void:
@@ -452,6 +476,9 @@ func _update_ride(delta: float) -> void:
 		_ride_tube.visible = true
 		_ride_props.visible = true
 		_dress_ride(r.from, r.to)
+		# Face the open side of the cage, looking a little along the way
+		# you're going, so the walls, sets and signs slide through view.
+		player.set_view(PI * 0.25, -0.42 if bool(r.down) else 0.5)
 		hud.fade_to(0.0, 0.2)
 		Sound.loop("lift", "lift_loop", true, -5.0)
 	if int(r.stage) == 1:
@@ -551,10 +578,10 @@ func _build_ride_cage() -> void:
 	_ride_cage.add_child(cable)
 	_ride_tube = MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 2.25
-	cyl.bottom_radius = 2.25
-	cyl.height = 22.0
-	cyl.radial_segments = 14
+	cyl.top_radius = 3.1
+	cyl.bottom_radius = 3.1
+	cyl.height = 26.0
+	cyl.radial_segments = 18
 	cyl.rings = 6
 	cyl.cap_top = false
 	cyl.cap_bottom = false
@@ -568,6 +595,11 @@ func _build_ride_cage() -> void:
 	for z in Balance.zone_count():
 		zimg.set_pixel(z, 0, Balance.MATERIALS[int(Balance.ZONES[z].mats[0])].color)
 	tm.set_shader_parameter("zone_tex", ImageTexture.create_from_image(zimg))
+	var gimg := Image.create(Balance.zone_count(), 1, false, Image.FORMAT_RGB8)
+	for z in Balance.zone_count():
+		var g := float(Balance.MATERIALS[int(Balance.ZONES[z].mats[0])].get("glow", 0.0))
+		gimg.set_pixel(z, 0, Color(g, g, g))
+	tm.set_shader_parameter("glow_tex", ImageTexture.create_from_image(gimg))
 	tm.set_shader_parameter("zones", float(Balance.zone_count()))
 	tm.set_shader_parameter("zone_depth", Balance.ZONE_DEPTH)
 	_ride_tube.material_override = tm
@@ -602,9 +634,9 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 		var t := clampf((from.y - y) / maxf(from.y - to.y, 0.001), 0.0, 1.0) if from.y != to.y else 0.0
 		var p := from.lerp(to, t)
 		p.y = y
-		xfs.append(Transform3D(Basis(Vector3.UP, float(i % 4) * PI * 0.5), p + Vector3(0, 0.5, 0)))
-		if i % 4 == 2:
-			_ride_lamps.append(p + Vector3(1.25, 1.4, 0.0))
+		xfs.append(Transform3D(Basis(Vector3.UP, float(i % 4) * PI * 0.5).scaled(Vector3(1.3, 1.0, 1.3)), p + Vector3(0, 0.5, 0)))
+		if i % 2 == 1:
+			_ride_lamps.append(p + Vector3(-1.25, 1.4, -1.25) if i % 4 == 1 else p + Vector3(1.6, 1.4, 0.0))
 		y -= 3.0
 		i += 1
 	if mesh != null and not xfs.is_empty():
@@ -627,6 +659,67 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 		b.material_override = lm
 		b.position = lp
 		_ride_props.add_child(b)
+	# Each layer's own things on the walls as they slide past (roots up top,
+	# shells, bones, crystals, magma vents), and its landmark set back in a
+	# niche with its own light: something to look at on the way down.
+	var zone_lo := field.zone_of_y(top)
+	var zone_hi := field.zone_of_y(bottom)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	for z in range(zone_lo, zone_hi + 1):
+		var y0 := minf(top, field.zone_top(z))
+		var y1 := maxf(bottom, field.zone_floor(z))
+		if y0 - y1 < 1.0:
+			continue
+		var zd: Array = DigField.ZONE_DECOR.get(z, [])
+		var model := str(zd[0]) if not zd.is_empty() else "pebble"
+		var dm := DigField.decor_mesh(model)
+		var cols: Array = zd[3] if not zd.is_empty() else [Color(0.5, 0.45, 0.4)]
+		if dm != null:
+			var n := int(clampf((y0 - y1) * 4.0, 8.0, 120.0))
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.use_colors = true
+			mm.mesh = dm
+			mm.instance_count = n
+			for k in n:
+				var yy := rng.randf_range(y1, y0)
+				var t := clampf((from.y - yy) / maxf(from.y - to.y, 0.001), 0.0, 1.0) if from.y != to.y else 0.0
+				var c := from.lerp(to, t)
+				var ang := rng.randf() * TAU
+				var nr := Vector3(-cos(ang), 0.0, -sin(ang))
+				var at := Vector3(c.x + cos(ang) * 3.05, yy, c.z + sin(ang) * 3.05)
+				var s := rng.randf_range(2.0, 3.6)
+				mm.set_instance_transform(k, DigField._decor_xf(at, nr, rng.randf() * TAU, s, 0.02))
+				mm.set_instance_color(k, cols[k % cols.size()])
+			var mi := MultiMeshInstance3D.new()
+			mi.multimesh = mm
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			if model == "crystal_small":
+				mi.material_override = field._decor_mat("glint" if z != 9 else "glow")
+			elif model != "magma_vent":
+				mi.material_override = field._decor_mat("matte")
+			_ride_props.add_child(mi)
+		if DigField.LANDMARKS.has(z):
+			var d: Dictionary = DigField.LANDMARKS[z]
+			var ly := (y0 + y1) * 0.5
+			var t := clampf((from.y - ly) / maxf(from.y - to.y, 0.001), 0.0, 1.0) if from.y != to.y else 0.0
+			var c := from.lerp(to, t)
+			var mark := Models.instance(str(d.model))
+			mark.scale = Vector3.ONE * float(d.get("scale", 1.0))
+			mark.position = Vector3(c.x - 1.9, ly - 1.2, c.z - 1.9)
+			mark.rotation = Vector3(0.0, float(z) * 1.3, 0.0)
+			if d.has("surface"):
+				DigField.dress_landmark(mark, str(d.surface))
+			_ride_props.add_child(mark)
+			if d.has("light"):
+				var ll := OmniLight3D.new()
+				ll.light_color = d.light
+				ll.light_energy = float(d.energy) * 0.8
+				ll.omni_range = 5.0
+				ll.position = mark.position + Vector3(0.6, 1.0, 0.0)
+				ll.layers = 1 | Player.VIEWMODEL_LAYER
+				_ride_props.add_child(ll)
 	# A sign at the top of each layer you pass.
 	for z in range(1, Balance.zone_count()):
 		var zy := -z * Balance.ZONE_DEPTH
@@ -639,7 +732,7 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 		pm.size = Vector3(0.05, 0.42, 1.3)
 		plate.mesh = pm
 		plate.material_override = Models.flat(UiTheme.CREAM, 0.5)
-		plate.position = Vector3(p.x - 1.42, zy + 1.6, p.z)
+		plate.position = Vector3(p.x - 2.6, zy + 1.6, p.z - 0.6)
 		_ride_props.add_child(plate)
 		var l := Label3D.new()
 		l.text = "%s  ·  %d m" % [Balance.ZONES[z].name, int(-zy)]
@@ -648,7 +741,7 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 		l.outline_size = 0
 		l.modulate = UiTheme.ENAMEL_RED
 		l.pixel_size = 0.0045
-		l.position = Vector3(p.x - 1.39, zy + 1.6, p.z)
+		l.position = Vector3(p.x - 2.57, zy + 1.6, p.z - 0.6)
 		l.rotation = Vector3(0, PI * 0.5, 0)
 		_ride_props.add_child(l)
 
@@ -662,8 +755,8 @@ func _build_lift_stop() -> void:
 	_lift_stop.add_child(Models.instance("liftstop"))
 	_lift_stop_light = OmniLight3D.new()
 	_lift_stop_light.light_color = Color(1.0, 0.72, 0.4)
-	_lift_stop_light.light_energy = 1.5
-	_lift_stop_light.omni_range = 7.0
+	_lift_stop_light.light_energy = 0.7
+	_lift_stop_light.omni_range = 4.5
 	_lift_stop_light.position = Vector3(0.6, 1.8, 0)
 	_lift_stop_light.layers = 1 | Player.VIEWMODEL_LAYER
 	_lift_stop.add_child(_lift_stop_light)
@@ -688,6 +781,7 @@ func _build_lift_stop() -> void:
 	tag.position = Vector3(0, 2.65, 0)
 	tag.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	_lift_stop.add_child(tag)
+	_lift_stop_tag = tag
 	_place_lift_stop()
 
 
@@ -713,11 +807,43 @@ func lift_stop_spot(p: Vector3, facing: float) -> Vector3:
 
 
 func lift_arrival() -> Vector3:
-	## Where the lift sets you down: the spot you stood on, on today's floor.
-	var s := GameState.lift_spot if GameState.lift_spot.is_finite() else GameState.lift_stop
-	if field.is_loaded(field.zone_of_y(s.y - 0.5)):
-		return Vector3(s.x, field.floor_below(s + Vector3(0, 1.2, 0), 30.0), s.z)
-	return s
+	## Where the lift sets you down: the spot you stood on, on today's floor,
+	## and always beside the lift stop (if the stop has fallen further down
+	## the shaft since, you're set down next to it, not dropped from above).
+	var stop := GameState.lift_stop
+	var s := GameState.lift_spot if GameState.lift_spot.is_finite() else stop
+	# The far end's rock must be there before working out where you land.
+	if stop.is_finite():
+		field.ensure_loaded(field.zone_of_y(stop.y - 0.3))
+	field.ensure_loaded(field.zone_of_y(s.y - 0.3))
+	field.flush()
+	var fl := field.floor_below(s + Vector3(0, 1.2, 0), 300.0)
+	if stop.is_finite() and absf(fl - stop.y) > 2.0:
+		return _beside(stop, Vector3(s.x, fl, s.z))
+	return Vector3(s.x, fl, s.z)
+
+
+func _beside(stop: Vector3, fallback: Vector3) -> Vector3:
+	## Open floor a step from the lamp post, where your whole body fits (not
+	## touching the walls of a narrow pit, or you'd be pushed up out of it).
+	for dist in [0.7, 0.5, 0.95]:
+		for k in 8:
+			var a := float(k) * PI * 0.25
+			var c: Vector3 = stop + Vector3(cos(a), 0.0, sin(a)) * float(dist)
+			c.x = clampf(c.x, -DigField.HALF + 0.35, DigField.HALF - 0.35)
+			c.z = clampf(c.z, -DigField.HALF + 0.35, DigField.HALF - 0.35)
+			if field.solid_at(c + Vector3(0, 0.6, 0)) or field.solid_at(c + Vector3(0, 1.5, 0)):
+				continue
+			var fl := field.floor_below(c + Vector3(0, 1.0, 0), 3.0)
+			if absf(fl - stop.y) > 1.0:
+				continue
+			var at := Vector3(c.x, fl + 0.05, c.z)
+			if player.collides(at):
+				continue
+			return Vector3(c.x, fl, c.z)
+	if not player.collides(stop + Vector3(0, 0.05, 0)):
+		return stop
+	return fallback
 
 
 func _place_lift_stop() -> void:
@@ -754,6 +880,11 @@ func _update_depth() -> void:
 		var ratio := float(zone.hp) * float(zone.worth) / maxf(float(prev.hp) * float(prev.worth), 0.001)
 		hud.big_toast(str(zone.name), "Layer %d of %d. Harder rock, worth %sx more." % [z + 1, Balance.zone_count(), Fmt.num(ratio)], zone.band)
 		Sound.play("zone", -2.0)
+
+
+func _update_lift_tag() -> void:
+	if _lift_stop_tag != null and _lift_stop.visible:
+		_lift_stop_tag.visible = player.eye_pos().distance_to(_lift_stop_tag.global_position) > 2.4
 
 
 func _update_slow() -> void:
@@ -798,7 +929,10 @@ func _build_float_pool() -> void:
 		l.font = UiTheme.display_font()
 		l.font_size = 46
 		l.outline_size = 10
-		l.pixel_size = 0.004
+		# The same size on screen however close the strike is (right at the
+		# lens they ballooned into smeared text filling the view).
+		l.fixed_size = true
+		l.pixel_size = 0.0011
 		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		l.no_depth_test = true
 		l.modulate = UiTheme.AMBER

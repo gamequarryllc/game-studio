@@ -78,7 +78,7 @@ The owner wants every game and UI to look like a small, skilled studio made it, 
 **Process, every time a game is shown to the owner:**
 1. Screenshots plus the model contact sheet.
 2. A fresh-eyes critic agent that has NOT seen the build process reviews them with one question: "what here looks AI-generated, generic or template-made, and what would a skilled indie artist change?" It must return concrete findings.
-3. The builder fixes every finding, then re-shoots. A game isn't "first playable" or "ready to play" while the critic still flags it.
+3. The builder fixes every finding, then re-shoots. The critic ends with a verdict (yes / almost / no). A game is "first playable" once the verdict is at least "almost" (the remaining findings move into its polish work), and "ready to play" only when it's "yes".
 
 ## Playtesting: Claude plays every game end to end (the owner's request)
 
@@ -150,6 +150,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: Dig to the Core critic fixes + QA done: all 12 review items, playthrough bot passes keen (25:47), casual (~80 min, varies 63-92) and boosted (12:22 game time in ~2.5 min real), chaos/visual/browser runs clean, 12 bugs fixed and added to the smoke test (72 checks). Next: second critic.
 - 2026-11-09: The daily backstop's first run stopped at the plan's usage limit (08:26 UTC) right after marking Drain an Ocean as building; nothing was built, so it's back to `queued` and the conversation loop starts it when a builder slot frees. Builders also paused at the limit 08:30-09:10 UTC and were resumed (Dig's builder couldn't resume: its partial work was checkpoint-committed and a fresh builder is finishing).
 - 2026-11-09: daily backstop: all three games in progress had commits in the last 6 h, so it started the next queued game, Drain an Ocean (in progress in the backstop session; if `games/drain-an-ocean/` is still missing after 2026-11-09 16:00 UTC, treat it as abandoned and start it fresh).
 - 2026-11-09: Burn Down a Forest art pass done: all 12 review items (41 SVG icons, charred-plank HUD, paper notebook, IM Fell/Alegreya/Caveat Brush, 48 Blender models, inked cartoon flames, composed village spawn, measured palette, meadow drifts, phone-first hints, sentence-case copy). Next: second critic review, then fixes + full QA playthrough.

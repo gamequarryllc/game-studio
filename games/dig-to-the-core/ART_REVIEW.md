@@ -1,21 +1,35 @@
 # Art review 1: fresh-eyes critic, 2026-11-09 (first build)
 
+Status: all 12 items fixed in art pass 2 (notes under each). Next: a second fresh-eyes review.
+
 Reviewed every screenshot, the model contact sheet and the icon sheet against the studio's "Look and feel" standard. The next pass works from this list. Mark each item done here when fixed, then get a second review.
 
 ## Problems, worst first
 
 1. **The underground is one flat orange-brown wash**: no darks; rock facets read as crumpled paper; pebbles are flat confetti quads floating in the air; ore is flat teal triangles. Fix: lamp light falls off to a zone-tinted soot (clay #2A1610) by 8 m; strata bands every 0.5-1.5 m, each about 15% lighter or darker than the next; a 256px hand-painted triplanar rock texture; half-buried 3D pebbles; ore as nuggets standing out of the wall with a rim glint.
+   **Done.** Headlamp is now the main light (spot 4.0, gentle decay) over a dim fill and lantern; depth fog clear for 1.6 m and the zone's own near-black by the lamp's reach (~9 m); new painted rock texture (knife-laid value patches, chipped facets lit from above, sideways bedding strokes, sparse jagged joints) at two scales; strata bands 12-22% apart with warm/cool shifts, seams and grit beds; stronger facets; darker damp 3D pebbles; ore nuggets with rim glint.
 2. **Clay and Fossil Bed shots are the same image**: a full-screen yellow dust card plus a white wedge (the drill bit clipping the camera near plane). Fix: viewmodel on its own camera; fade dust near the lens; each zone gets its own hue and a prop.
+   **Done.** Viewmodel on its own camera (never clips), dust fades out within 1.3 m of the lens; every layer has its own fog tint and a lit landmark (timbers, mine cart, ribcages, crystals, lava, basalt, core spires), now with real materials (lava shader, faceted crystal shader, white-hot spires).
 3. **The surface looks like stock Godot**: lime #5CC232 noise grass, default sky, mint fog hills, flat noon light. Fix: late-afternoon sun, warm key #FFD39A, cool ambient #8EA6C8, long shadows; olive grass #7E9A4C with darker clumps, worn umber paths, a spoil heap, hills in three values fading with distance.
+   **Done.** Late-afternoon sun (#FFD39A key, cool #8EA6C8 fill), long shadows, olive grass with painted clumps, worn umber paths, a spoil heap, and depth haze that fades the hills in steps; the tool in your hands is now lit by the sun too.
 4. **Spawn composition**: you spawn facing a headframe leg, the shack is hidden, an endless fence cuts the frame. Fix: spawn on a 3/4 view, shack on the left, headframe on the right, a path leading in.
+   **Done.** You spawn on the path in at a 3/4 view: shack on the left, headframe on the right, the sign and fence gap in the middle distance.
 5. **Hazard-stripe bollards** read as a modern car park (wrong era) and their random lean looks broken. Fix: weathered timber posts, sagging rope, one enamel "Open shaft" sign.
+   **Done.** Weathered timber posts with a sagging rope and one cream enamel "Open shaft" sign facing the path in (its face catches the sky so it reads against the low sun).
 6. **Primitive-soup models**: mole and robo-mole are eggs; oak is icospheres and pine is stacked cones; the barrel is a bucket with hoops floating off it; the crate is a plain bevelled box; the jackhammer looks like a syringe; the borer is a salmon drum with no cutting head; the pickaxe has one point; tools drift to salmon #E8956B (not in the art bible). Fix: pear-bodied mole with spade claws, snout and hard hat; brass-boiler robo-mole; bulging barrel; planked crate; oversized double-ended pick; T-handle jackhammer; toothed cone on the borer; vertex AO and worn edges on every model.
+   **Done.** Robo-mole rebuilt as a brass steam tunnelling engine on caterpillar tracks with a fluted drill cone and scoops; mole has a long pale snout, big nose and whiskers; oak is a gnarled forked trunk with separate faceted clumps; pine is whorls of drooping boughs; bulging stave barrel and planked crate; one-piece forged double-ended pick; jackhammer is a blackened iron rock drill with brass bands (no hazard stripes); borer has a toothed cone; AO and edge wear baked on every model, palette colours only.
 7. **The headframe reads as a steel radio mast.** Fix: heavy squared timbers, back legs sloping out, a bigger sheave wheel, a cable that reaches the cage.
+   **Done.** Squat, broad tower of heavy squared timbers (0.3 m posts), back legs raked far out, X-braces, a ladder, a bigger 1.6 m sheave, and a cable down to the cage.
 8. **Template UI**: every element is the same chamfered plate with four corner rivets and the same tick scratches; the shop is identical rows under five equal tabs. Fix: material by role (brass for money, chipped enamel for signs, paper ledger cards with stamped prices for items), uneven tabs, rivets only on brass.
+   **Done.** Material by role: brass for money and the shop header (the only plates with rivets, enforced in UiTheme), cream enamel for signs and hints, paper ledger cards with stamped prices for items, manila file tabs of uneven width.
 9. **Off-palette blue (#4F86BF)** on the ad buttons, the rare-find frame and Jump is the loudest colour on screen. Fix: ad buttons in verdigris enamel or as a cream ticket with a red play stamp; Jump in soot iron.
+   **Done.** No blue left: ad buttons are cream tickets with a red play stamp, Jump is soot iron with a brass rim, rarity colours are palette tints.
 10. **HUD overlaps**: the find card covers the gauge labels and stays up during the lift ride; zone names float in tiny grey lowercase; two 2x offers show at once; Jump overlaps Dig; the Down button has a soft glow halo.
+   **Done.** Find card lives in the right column and hides during the lift ride; one 2x offer at a time; Jump clear of Dig; no glow halo; zone tags are cream labels in sentence case; the right column now grows leftward so the offer tag never runs off a phone screen; touch controls hide the same frame a menu, ad or ride starts; floating money numbers keep one size on screen.
 11. **Viewmodels**: the shovel is held like a broom; the drill is hidden behind the buttons. Fix: a gloved hand, with the tool's working end framed above the buttons.
+   **Done.** New gloves built from smooth tubes (curled fingers, thumb over them, flared gauntlet cuff, sleeve) on every tool; the working ends sit above the touch buttons; the shovel blade is bigger and lit.
 12. **The lift ride is a yellow void**, and finds are 2D billboards (make them Blender models).
+   **Done.** The shaft is wider and dressed for the ride: each layer's own rock colour and strata streaming past, timber sets, lamps flashing by, layer signs, each layer's wall pieces (roots, shells, bones, crystals, magma vents) and its landmark in a niche with its light; the view looks up or down the shaft. All 16 finds are Blender models (ammonite, amber cabochon, cracked egg, keeled dragon scale and a cutaway-Earth core rebuilt this pass).
 
 ## Keep
 

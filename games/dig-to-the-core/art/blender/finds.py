@@ -15,7 +15,8 @@ import bpy  # noqa: E402
 import bmesh  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 from kit import (box, cyl, sphere, torus, join, wobble, export, reset, mat, bar, lathe, place, strut, ao, smooth,  # noqa: E402
-                 from_profile, subdivide)
+                 from_profile, subdivide, arc)
+from kit import tube as stube  # noqa: E402
 from world_models import bake, lump  # noqa: E402
 from props import tube, _prism  # noqa: E402
 
@@ -148,34 +149,63 @@ def tusk():
 
 
 def mosquito():
-    """A drop of glowing amber with a mosquito caught in it."""
-    amber = mat("amber", rough=0.15, emit=1.2)
-    parts = [lump(0.12, Vector((0, 0, 0)), amber, 6, scale=(1.0, 0.8, 1.25), sub=2, rough=0.12)]
+    """A polished cabochon of amber, flat face to the front, with a mosquito
+    caught just under the surface (drawn proud of the face so it reads)."""
+    amber = mat("amber", rough=0.12, emit=0.6)
+    deep = mat("amber_deep", color=(0.62, 0.36, 0.1), rough=0.2, emit=0.3)
     body = mat("soot", rough=0.5)
-    parts.append(place(sphere(0.02, (0, 0, 0), body, scale=(1, 1, 2.2), segs=8, rings=6), (0, 0.088, 0.0), (0.4, 0, 0)))
-    parts.append(place(sphere(0.012, (0, 0, 0), body, segs=6, rings=4), (0, 0.09, 0.05)))
-    for s in (-1, 1):
-        parts.append(place(box((0.05, 0.004, 0.02), (0, 0, 0), mat("cream", rough=0.3)), (s * 0.03, 0.095, 0.02), (0, s * 0.4, 0)))
+    wing = mat("cream", rough=0.3)
+    # The stone: a domed back, a flat polished face towards +Y.
+    stone = lathe([(0.0, -0.075), (0.09, -0.07), (0.135, -0.04), (0.15, 0.0), (0.14, 0.03), (0.12, 0.045), (0.0, 0.047)], 20, "amber", amber)
+    place(stone, (0, 0, 0), (-R90, 0, 0), (1.0, 1.0, 1.25))
+    parts = [stone]
+    parts.append(place(cyl(0.118, 0.006, (0, 0, 0), deep, verts=20), (0, 0.045, 0), (-R90, 0, 0), (1.0, 1.25, 1.0)))
+    # The mosquito on the face: body, head, proboscis, wings, six legs.
+    y = 0.05
+    parts.append(stube([Vector((0, y, -0.07)), Vector((0, y + 0.002, -0.02)), Vector((0, y + 0.003, 0.02))], [0.007, 0.012, 0.011], body, sides=6, flat=0.6))
+    parts.append(place(sphere(0.011, (0, 0, 0), body, segs=8, rings=5), (0, y + 0.003, 0.035)))
+    parts.append(stube([Vector((0, y + 0.003, 0.045)), Vector((0.004, y + 0.003, 0.085))], [0.0025, 0.0012], body, sides=4))
+    for sx in (-1, 1):
+        wp = from_profile([(0.0, 0.0), (0.03, 0.012), (0.065, 0.01), (0.07, 0.0), (0.04, -0.012)], 0.002, wing, name="wing")
+        place(wp, (sx * 0.006, y + 0.006, 0.012), (R90, 0, sx * 0.35 + (0 if sx > 0 else math.pi)))
+        parts.append(wp)
         for k in range(3):
-            parts.append(strut((s * 0.01, 0.092, 0.01 - k * 0.015), (s * 0.05, 0.092, -0.03 - k * 0.02), 0.002, body, sides=4))
-    return finish(parts, "Mosquito", 0.05, edge=0.3)
+            a = 0.018 - k * 0.012
+            leg = [Vector((sx * 0.006, y + 0.003, a)), Vector((sx * 0.035, y + 0.004, a + 0.015 - k * 0.012)), Vector((sx * 0.06, y + 0.004, a - 0.02 - k * 0.02))]
+            parts.append(stube(leg, [0.0018, 0.0015, 0.001], body, sides=4))
+    # The insect at 1.6x, so it reads from a couple of metres.
+    for o in parts[2:]:
+        bake(o)
+        o.data.transform(Matrix.Translation((0, 0.05, 0)) @ Matrix.Scale(1.6, 4) @ Matrix.Translation((0, -0.05, 0)))
+    return finish(parts, "Mosquito", 0.04, edge=0.3)
 
 
 def ammonite():
-    m = mat("brass", rough=0.6, metal=0.2)
+    """A giant ammonite: a ribbed coiled shell, the whorls getting wider,
+    half set in a slab of rock behind it."""
+    m = mat("brass", rough=0.6, metal=0.15)
+    rib = mat("shell_rib", color=(0.86, 0.68, 0.42), rough=0.55)
     rock = mat("stone", rough=0.9)
-    turns = 2.6
-    steps = 60
+    turns = 2.7
+    steps = 90
     pts = []
     radii = []
     for i in range(steps + 1):
         t = i / steps
         a = t * turns * math.tau
-        r = 0.02 + 0.17 * t
-        pts.append((math.cos(a) * r, 0.0, math.sin(a) * r))
-        radii.append((0.008 + 0.05 * t) * (1.0 + 0.1 * math.sin(i * 2.1)))
-    parts = [tube(pts, radii, m, res=8, name="coil")]
-    parts.append(place(cyl(0.21, 0.06, (0, 0, 0), rock, verts=10), (0, -0.07, -0.02), (R90, 0, 0)))
+        r = 0.018 + 0.16 * t ** 1.1
+        pts.append(Vector((math.cos(a) * r, 0.0, math.sin(a) * r)))
+        radii.append(0.008 + 0.055 * t ** 1.05)
+    parts = [stube(pts, radii, m, sides=10, flat=0.7, name="coil")]
+    # Ribs: rings across the coil.
+    for i in range(6, steps, 3):
+        c = pts[i]
+        d = (pts[min(i + 1, steps)] - pts[i - 1]).normalized()
+        up = Vector((0, 1, 0))
+        side = d.cross(up).normalized()
+        ring = arc(c, side * 0.7, up, radii[i] * 1.04, 0, 360, 11)
+        parts.append(stube(ring, [radii[i] * 0.16] * 11, rib, sides=5, cap=False, name="rib"))
+    parts.append(lump(0.16, Vector((0.02, -0.07, -0.02)), rock, 17, scale=(1.5, 0.45, 1.4), sub=2, rough=0.2))
     return finish(parts, "Ammonite", 0.1)
 
 
@@ -213,9 +243,17 @@ def egg():
         z = rnd.uniform(-0.12, 0.15)
         r = rad(z)
         n = Vector((math.cos(a), math.sin(a), 0.0))
-        d = place(sphere(rnd.uniform(0.012, 0.024), (0, 0, 0), spot, scale=(1, 1, 0.25), segs=8, rings=4),
-                  (n.x * r, n.y * r, z), (0, R90, a))
+        d = place(sphere(rnd.uniform(0.02, 0.034), (0, 0, 0), spot, scale=(1, 1, 0.3), segs=8, rings=4),
+                  (n.x * r * 1.02, n.y * r * 1.02, z), (0, R90, a))
         parts.append(d)
+    # A hairline crack, zigzagging down from the top. Still warm.
+    crack = []
+    for k in range(7):
+        z = 0.16 - k * 0.04
+        a = 1.2 + (0.12 if k % 2 else -0.12)
+        r = rad(z) * 1.01
+        crack.append(Vector((math.cos(a) * r, math.sin(a) * r, z)))
+    parts.append(stube(crack, [0.005] * 7, mat("soot", rough=0.6), sides=5))
     parts.append(lump(0.1, Vector((0, 0, -0.17)), mat("umber", rough=0.9), 31, scale=(1.5, 1.5, 0.45), sub=1))
     return finish(parts, "Egg", 0.08)
 
@@ -259,21 +297,41 @@ def geode():
 
 
 def scale():
-    """A dragon scale: a big curved shield of red with a dark rim, still warm."""
+    """A dragon scale: a keeled, pointed shield of deep red, ridged along its
+    length, with a glowing rim where it's still hot, and two smaller scales
+    still attached at the top, shingled, as if torn from the hide."""
     red = mat("red", rough=0.35, metal=0.2)
-    rim = mat("soot", rough=0.6)
-    prof = [(0.0, -0.26), (0.08, -0.17), (0.15, -0.04), (0.17, 0.08), (0.12, 0.18), (0.0, 0.22), (-0.12, 0.18), (-0.17, 0.08), (-0.15, -0.04), (-0.08, -0.17)]
-    s = from_profile(prof, 0.03, red, bevel=0.01, name="scale")
-    subdivide(s, 2)
-    bake(s)
-    for v in s.data.vertices:
-        v.co.y -= 0.9 * (v.co.x ** 2) + 0.3 * (v.co.z ** 2)
-    parts = [s]
-    for i in range(5):
-        z = -0.14 + i * 0.075
-        w = 0.22 - abs(z) * 0.6
-        parts.append(place(box((w, 0.012, 0.014), (0, 0, 0), mat("glow_red", rough=0.4, emit=1.2)), (0, 0.022 - 0.3 * z * z, z)))
-    parts.append(tube([(0.0, 0.03, -0.22), (0.0, 0.03 - 0.3 * 0.0, 0.0), (0.0, 0.02, 0.2)], [0.014, 0.012, 0.004], rim, name="ridge"))
+    dark = mat("red_dark", color=(0.42, 0.12, 0.1), rough=0.4, metal=0.2)
+    glow = mat("glow_red", rough=0.4, emit=1.6)
+    def one(w, h, loc, rot, mm):
+        prof = []
+        for i in range(16):
+            a = i / 16 * math.tau
+            x = math.sin(a) * w * (1.0 - 0.35 * max(0.0, -math.cos(a)))
+            z = math.cos(a) * h
+            if z < 0:
+                z *= 1.0 + 0.5 * (1 - abs(math.sin(a)))
+            prof.append((x, z))
+        o = from_profile(prof, 0.03, mm, bevel=0.01, name="scale")
+        subdivide(o, 2)
+        bake(o)
+        for v in o.data.vertices:
+            v.co.y += 0.12 - 1.1 * v.co.x ** 2 - 0.25 * v.co.z ** 2 + 0.04 * max(0.0, 1.0 - abs(v.co.x) / 0.04)
+        place(o, loc, rot)
+        return o
+    parts = [one(0.17, 0.2, (0, 0, -0.03), (0, 0, 0), red)]
+    # A strip of the hide it came off, darker, behind the top edge.
+    parts.append(one(0.15, 0.08, (0, -0.04, 0.15), (0.35, 0, 0), dark))
+    # The keel, the growth ridges and a hot rim.
+    parts.append(stube([Vector((0, 0.15, -0.3)), Vector((0, 0.17, -0.05)), Vector((0, 0.15, 0.17))], [0.008, 0.014, 0.006], dark, sides=6))
+    for i in range(4):
+        z = -0.2 + i * 0.09
+        w = 0.15 - abs(z + 0.02) * 0.4
+        ridge = [Vector((x, 0.152 - 1.1 * x * x - 0.25 * (z + 0.03) ** 2, z + 0.02 * (1 - abs(x) / w))) for x in (-w, -w * 0.5, 0.0, w * 0.5, w)]
+        parts.append(stube(ridge, [0.004] * 5, dark, sides=5))
+    edge = [Vector((math.sin(a) * 0.165, 0.11 - 1.1 * (math.sin(a) * 0.165) ** 2, math.cos(a) * 0.2 * (1.3 if math.cos(a) < 0 else 1.0) - 0.03))
+            for a in [k / 20 * math.pi * 1.2 + math.pi * 0.4 for k in range(21)]]
+    parts.append(stube(edge, [0.006] * 21, glow, sides=5, cap=False))
     return finish(parts, "Scale", 0.08)
 
 
@@ -314,17 +372,45 @@ def satellite():
 
 
 def core():
-    """The core itself: a faceted ball of molten gold with glowing seams."""
-    hot = mat("amber", rough=0.25, emit=2.5)
-    seam = mat("cream", rough=0.2, emit=4.0)
-    parts = [lump(0.3, Vector((0, 0, 0)), hot, 30, sub=2, rough=0.08)]
+    """The core: a cutaway Earth, as in a geology textbook. A ball of sea and
+    continents with one wedge cut out, showing the mantle, the outer core and
+    the glowing inner core inside."""
+    crust = mat("umber", rough=0.85)
+    sea = mat("verdigris", rough=0.5)
+    mantle = mat("red", rough=0.6, emit=0.4)
+    outer = mat("amber", rough=0.4, emit=1.4)
+    inner = mat("cream", rough=0.3, emit=3.0)
+    cutter = box((0.7, 0.7, 0.7), (0.35, 0.35, 0.35), None, name="cutter")
+    def shell(r, m, seed):
+        o = lump(r, Vector((0, 0, 0)), m, seed, sub=3, rough=0.02)
+        mod = o.modifiers.new("cut", "BOOLEAN")
+        mod.operation = "DIFFERENCE"
+        mod.object = cutter
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.modifier_apply(modifier="cut")
+        return o
+    parts = [shell(0.3, sea, 30), shell(0.285, mantle, 31), shell(0.2, outer, 32)]
+    parts.append(lump(0.11, Vector((0, 0, 0)), inner, 33, sub=2, rough=0.05))
+    # Continents: low lumpy plates on the sea, kept off the cut.
     rnd = random.Random(30)
-    for i in range(8):
+    for i in range(12):
         a = rnd.uniform(0, math.tau)
-        z = rnd.uniform(-0.25, 0.25)
-        r = math.sqrt(max(0.0, 0.3 ** 2 - z * z)) + 0.005
-        parts.append(place(sphere(0.04, (0, 0, 0), seam, scale=(1.5, 1.5, 0.4), segs=8, rings=5), (math.cos(a) * r, math.sin(a) * r, z)))
-    return finish(parts, "Core", 0.2, edge=0.3)
+        z = rnd.uniform(-0.26, 0.22)
+        r = math.sqrt(max(0.0, 0.3 ** 2 - z * z))
+        p = Vector((math.cos(a) * r, math.sin(a) * r, z))
+        if p.x > -0.04 and p.y > -0.04 and p.z > -0.04:
+            continue
+        n = p.normalized()
+        land = lump(rnd.uniform(0.07, 0.11), p, crust, 40 + i, sub=1, rough=0.35)
+        for v in land.data.vertices:
+            d = (v.co - p).dot(n)
+            v.co -= n * d * 0.8
+        parts.append(land)
+    bpy.data.objects.remove(cutter)
+    o = finish(parts, "Core", 0.1, edge=0.3)
+    # Turned so the cut faces you as it spins up out of the rock.
+    o.data.transform(Matrix.Rotation(math.radians(-45), 4, "Z") @ Matrix.Rotation(math.radians(-20), 4, "X"))
+    return o
 
 
 FINDS = [("keys", keys), ("cassette", cassette), ("chest", chest), ("subway", subway), ("sword", sword), ("tusk", tusk),

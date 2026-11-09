@@ -7,7 +7,9 @@ signal changed                                  # anything changed; the UI refre
 signal found_item(find: int, value: float)
 signal won
 
-const SAVE_PATH := "user://dig_save.json"
+# Tests and bots can run side by side, each on its own save: DIG_SAVE=<name>
+# in the environment picks user://dig_save_<name>.json (playtest builds only).
+var SAVE_PATH := "user://dig_save.json"
 const SAVE_VERSION := 1
 const AUTOSAVE_INTERVAL := 10.0
 const INCOME_BUCKET := 15.0
@@ -55,6 +57,9 @@ var _income_t := 0.0
 
 
 func _ready() -> void:
+	var slot := OS.get_environment("DIG_SAVE")
+	if slot != "" and slot.is_valid_identifier() and (OS.has_feature("playtest") or OS.has_feature("editor") or not OS.has_feature("template")):
+		SAVE_PATH = "user://dig_save_%s.json" % slot
 	reset_state()
 	load_game()
 

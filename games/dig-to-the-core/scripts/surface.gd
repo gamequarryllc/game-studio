@@ -218,9 +218,9 @@ func _build_headframe() -> void:
 		sheave = Node3D.new()
 	cage = _place("cage", LIFT_POS, LIFT_YAW)
 	var basis := Basis(Vector3.UP, LIFT_YAW)
-	var w := 1.35
+	var w := 1.68
 	for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-		_collider(Vector3(0.5, 2.4, 0.5), Transform3D(basis, LIFT_POS + basis * Vector3(c.x * w, 1.2, c.y * w)))
+		_collider(Vector3(0.62, 2.4, 0.62), Transform3D(basis, LIFT_POS + basis * Vector3(c.x * w, 1.2, c.y * w)))
 	# The cage: bars on three sides, open towards the dig site (west).
 	_collider(Vector3(0.12, 2.5, 2.0), Transform3D(basis, LIFT_POS + basis * Vector3(-0.95, 1.25, 0)))
 	_collider(Vector3(0.12, 2.5, 2.0), Transform3D(basis, LIFT_POS + basis * Vector3(0.95, 1.25, 0)))
@@ -269,26 +269,38 @@ func _build_fence() -> void:
 			continue
 		_rope(Vector3(p.x, 0.92, p.y), Vector3(q.x, 0.92, q.y), 0.16 + rng.randf_range(-0.03, 0.04), rope_m)
 	# The sign, beside the south gap, facing the path in.
-	var sign := _place("shaft_sign", Vector3(GATE_S.y + 0.9, 0.0, h + 0.25), PI + 0.18)
+	var sign := _place("shaft_sign", Vector3(GATE_S.y + 0.9, 0.0, h + 0.25), 0.18)   # enamel face (+Z) towards the path in
+	# The sun is low behind the site, so the sign's face is in its own shadow:
+	# glossy enamel still catches the bright sky, so let the cream face glow a little.
+	for mi in sign.find_children("*", "MeshInstance3D", true, false):
+		var m3 := mi as MeshInstance3D
+		for si in m3.mesh.get_surface_count():
+			var sm := m3.mesh.surface_get_material(si)
+			if sm is BaseMaterial3D and (sm as BaseMaterial3D).albedo_color.get_luminance() > 0.6:
+				var e := (sm as BaseMaterial3D).duplicate() as BaseMaterial3D
+				e.emission_enabled = true
+				e.emission = e.albedo_color
+				e.emission_energy_multiplier = 0.45
+				m3.set_surface_override_material(si, e)
 	var t := Label3D.new()
 	t.text = "Open shaft"
 	t.font = UiTheme.display_font()
 	t.font_size = 64
 	t.modulate = Color(0.71, 0.2, 0.165)
 	t.outline_size = 0
-	t.pixel_size = 0.0042
-	t.position = Vector3(0.0, 1.29, -0.125)
-	t.rotation = Vector3(0, PI, 0)
+	t.pixel_size = 0.0024
+	t.double_sided = false
+	t.position = Vector3(0.0, 1.31, 0.125)
 	sign.add_child(t)
 	var t2 := Label3D.new()
-	t2.text = "Mind the edge. Lift at the headframe."
+	t2.text = "Mind the edge.\nLift at the headframe."
 	t2.font = UiTheme.bold_font()
 	t2.font_size = 26
 	t2.modulate = Color(0.141, 0.11, 0.09)
 	t2.outline_size = 0
-	t2.pixel_size = 0.0033
-	t2.position = Vector3(0.0, 1.13, -0.125)
-	t2.rotation = Vector3(0, PI, 0)
+	t2.pixel_size = 0.0021
+	t2.double_sided = false
+	t2.position = Vector3(0.0, 1.16, 0.125)
 	sign.add_child(t2)
 
 

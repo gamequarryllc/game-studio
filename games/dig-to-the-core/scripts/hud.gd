@@ -17,7 +17,10 @@ var shop: ShopPanel
 var root: Control
 var popups: Control
 var fade: ColorRect
-var riding := false
+var riding := false:
+	set(v):
+		riding = v
+		_sync_touch()
 
 var _money: Label
 var _rate: Label
@@ -84,10 +87,17 @@ func _ready() -> void:
 
 func set_touch_mode(on: bool) -> void:
 	touch_mode = on
-	touch.visible = on and not is_blocking()
+	_sync_touch()
 	if not on:
 		touch.release_all()
 	_refresh()
+
+
+func _sync_touch() -> void:
+	## The phone controls show only while you're actually playing: never over
+	## the shop, a popup, an ad screen or the lift ride, not even for a frame.
+	if touch != null and popups != null:
+		touch.visible = touch_mode and not is_blocking() and not riding
 
 
 func is_blocking() -> bool:
@@ -158,8 +168,9 @@ func _build_top() -> void:
 	root.add_child(right)
 	right.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	right.offset_left = -330
-	right.offset_right = -12
+	right.offset_right = -14
 	right.offset_top = 12
+	right.grow_horizontal = Control.GROW_DIRECTION_BEGIN   # never pushes off the right edge
 	_boost = Button.new()
 	_boost.custom_minimum_size = Vector2(0, 60)
 	UiTheme.style_ticket(_boost, 21)
@@ -179,7 +190,7 @@ func _build_top() -> void:
 	_offer_tag.add_child(ov)
 	_offer_title = UiTheme.label("", 19, UiTheme.INK, 0)
 	_offer_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_offer_title.custom_minimum_size = Vector2(280, 0)
+	_offer_title.custom_minimum_size = Vector2(256, 0)
 	ov.add_child(_offer_title)
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 6)
@@ -316,6 +327,7 @@ func _build_find_card() -> void:
 	_find_card.offset_right = -14
 	_find_card.offset_top = 84
 	_find_card.custom_minimum_size = Vector2(328, 0)
+	_find_card.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
 
 func _build_rotate_overlay() -> void:
@@ -336,7 +348,7 @@ func _build_rotate_overlay() -> void:
 func _process(delta: float) -> void:
 	var vs := root.get_viewport_rect().size
 	_rotate.visible = touch_mode and vs.y > vs.x
-	touch.visible = touch_mode and not is_blocking() and not riding
+	_sync_touch()
 	_money.text = Fmt.num(GameState.money)
 	if player != null:
 		gauge.depth = maxf(0.0, -player.position.y)
@@ -520,6 +532,7 @@ func watch_ad(kind: String) -> void:
 		return
 	if offers.current == kind:
 		offers.watching = true
+	touch.release_all()
 	Monetization.watch_for_reward(kind, func(ok: bool, text: String):
 		if offers.current == kind:
 			if ok:
@@ -531,6 +544,7 @@ func watch_ad(kind: String) -> void:
 			Sound.play("reward", -3.0)
 			toast(text, UiTheme.AMBER)
 		_refresh())
+	_sync_touch()
 
 
 func take_offer() -> void:
@@ -655,6 +669,7 @@ func _double_find(f: int) -> void:
 			if _find_double != null and is_instance_valid(_find_double):
 				_find_double.disabled = true
 				_find_double.text = "Doubled")
+	_sync_touch()
 
 
 func find_card_up() -> bool:
@@ -691,6 +706,7 @@ func open_shop(tab: String = "") -> void:
 	shop.message.connect(func(t: String): toast(t, UiTheme.AMBER))
 	Sound.play("ui_open", -5.0)
 	touch.release_all()
+	_sync_touch()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
@@ -749,6 +765,7 @@ func popup(title: String, body: String, buttons: Array) -> Control:
 				cb.call())
 		row.add_child(btn)
 	touch.release_all()
+	_sync_touch()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	return wrap
 

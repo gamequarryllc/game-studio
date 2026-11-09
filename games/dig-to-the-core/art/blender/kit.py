@@ -389,54 +389,115 @@ def strut(a, b, r, m=None, sides=4, name="strut"):
     return o
 
 
+def tube(points, radii, m=None, sides=8, cap=True, flat=1.0, name="tube"):
+    """A smooth tube through `points` (Vectors) with a radius per point,
+    oriented by parallel transport so it never twists; rounded caps. `flat`
+    squashes the cross-section (1 = round). One continuous mesh, so it can be
+    shaded smooth: fingers, cables, forged steel."""
+    pts = [Vector(p) for p in points]
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    n = len(pts)
+    tang = []
+    for i in range(n):
+        a = pts[max(i - 1, 0)]
+        b = pts[min(i + 1, n - 1)]
+        tang.append((b - a).normalized())
+    ref = Vector((0, 0, 1)) if abs(tang[0].z) < 0.9 else Vector((1, 0, 0))
+    nrm = (ref - tang[0] * ref.dot(tang[0])).normalized()
+    rings = []
+    for i in range(n):
+        if i > 0:
+            q = tang[i - 1].rotation_difference(tang[i])
+            nrm = (q @ nrm)
+            nrm = (nrm - tang[i] * nrm.dot(tang[i])).normalized()
+        bi = tang[i].cross(nrm).normalized()
+        ring = []
+        for k in range(sides):
+            a = k / sides * math.tau
+            off = nrm * (math.cos(a) * radii[i] * flat) + bi * (math.sin(a) * radii[i])
+            ring.append(bm.verts.new(pts[i] + off))
+        rings.append(ring)
+    for i in range(n - 1):
+        for k in range(sides):
+            bm.faces.new((rings[i][k], rings[i][(k + 1) % sides], rings[i + 1][(k + 1) % sides], rings[i + 1][k]))
+    if cap:
+        for (ring, p, t, r) in ((rings[0], pts[0], -tang[0], radii[0]), (rings[-1], pts[-1], tang[-1], radii[-1])):
+            tip = bm.verts.new(p + t * r * 0.8)
+            for k in range(sides):
+                f = (ring[k], ring[(k + 1) % sides], tip) if t.dot(tang[0]) > 0 else (ring[(k + 1) % sides], ring[k], tip)
+                bm.faces.new(f)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    if m:
+        o.data.materials.append(m)
+    for poly in me.polygons:
+        poly.use_smooth = True
+    return o
+
+
+def arc(center, axis_u, axis_v, radius, a0, a1, steps):
+    """Points on an arc round `center` in the plane of axis_u/axis_v (degrees)."""
+    out = []
+    for i in range(steps):
+        a = math.radians(a0 + (a1 - a0) * i / (steps - 1))
+        out.append(Vector(center) + Vector(axis_u) * math.cos(a) * radius + Vector(axis_v) * math.sin(a) * radius)
+    return out
+
+
 def glove(m_leather=None, m_cuff=None, m_sleeve=None, r=0.022, name="Glove", sleeve_len=0.32):
-    """A leather work glove gripping a handle of radius r that runs along X
-    through the origin. The back of the hand faces -Y/+Z (towards the
-    viewer), the forearm runs back along -Y and down. Returns one object."""
+    """A worn leather work glove gripping a handle of radius r that runs along
+    X through the origin. The back of the hand faces -Y/+Z (towards the
+    viewer), the forearm runs back along -Y and down. Built from smooth tubes
+    and a rounded hand block (no beads, no struts): four fingers curled round
+    the handle, a thumb hooked over them, a flared gauntlet cuff with a rolled
+    edge, and the work-shirt sleeve. Returns one object."""
     m_leather = m_leather or mat("leather", rough=0.85)
     m_cuff = m_cuff or mat("leather_dark", rough=0.9)
     m_sleeve = m_sleeve or mat("canvas", rough=0.95)
     parts = []
-    # Palm and back of the hand, wrapped round behind the handle.
-    palm = sphere(0.05, (0, -0.042, 0.012), m_leather, scale=(1.05, 0.62, 0.78), segs=12, rings=8, name="palm")
-    parts.append(palm)
-    # Four fingers curled round the handle, a little fanned and uneven.
-    for k, x in enumerate((-0.033, -0.011, 0.011, 0.032)):
-        fr = 0.0105 - 0.001 * abs(k - 1.5)
-        rr = r + fr * 0.95
-        prev = None
-        for (a0, a1) in ((110, 40), (40, -30), (-30, -85)):
-            a0r = math.radians(a0 + k * 4)
-            a1r = math.radians(a1 + k * 4)
-            p0 = Vector((x, math.cos(a0r) * rr, math.sin(a0r) * rr))
-            p1 = Vector((x, math.cos(a1r) * rr, math.sin(a1r) * rr))
-            seg = strut(p0, p1, fr, m_leather, sides=6, name="finger")
-            parts.append(seg)
-            parts.append(sphere(fr * 1.02, tuple(p1), m_leather, segs=8, rings=5, name="knuckle"))
-        parts.append(sphere(fr * 1.05, (x, math.cos(math.radians(110 + k * 4)) * rr, math.sin(math.radians(110 + k * 4)) * rr),
-                            m_leather, segs=8, rings=5, name="knuckle"))
-    # Thumb across the front of the fingers.
-    t0 = Vector((-0.04, -0.03, -0.02))
-    t1 = Vector((-0.045, 0.012, -0.03))
-    t2 = Vector((-0.02, 0.028, -0.012))
-    parts.append(strut(t0, t1, 0.013, m_leather, sides=6, name="thumb"))
-    parts.append(strut(t1, t2, 0.0115, m_leather, sides=6, name="thumb"))
-    parts.append(sphere(0.012, tuple(t1), m_leather, segs=8, rings=5))
-    parts.append(sphere(0.0115, tuple(t2), m_leather, segs=8, rings=5))
-    # Stitched seam over the knuckles.
-    parts.append(box((0.085, 0.006, 0.006), (0, -0.012, 0.042), m_cuff, rot=(0.5, 0, 0)))
-    # Gauntlet cuff and the work-shirt sleeve going back out of frame.
-    wrist = Vector((0, -0.1, -0.02))
-    cuff = cyl(0.046, 0.075, (0, 0, 0), m_cuff, verts=12, r2=0.036, name="cuff")
-    place(cuff, tuple(wrist + Vector((0, -0.02, -0.006))), (math.radians(90) + 0.25, 0, 0))
-    parts.append(cuff)
-    parts.append(torus(0.046, 0.006, tuple(wrist + Vector((0, -0.057, -0.016))), m_cuff, (math.radians(90) + 0.25, 0, 0), 14, 4))
-    sleeve = cyl(0.043, sleeve_len, (0, 0, 0), m_sleeve, verts=12, r2=0.047, name="sleeve")
-    place(sleeve, tuple(wrist + Vector((0, -0.06 - sleeve_len / 2, -0.016 - sleeve_len * 0.25))), (math.radians(90) + 0.25, 0, 0))
-    parts.append(sleeve)
+    # The hand: a rounded block behind and above the handle.
+    hand = box((0.098, 0.062, 0.07), (0, -0.048, 0.016), m_leather, rot=(0.35, 0, 0), bevel=0.024, segs=3, name="hand")
+    for v in hand.data.vertices:
+        # Knuckle side a little fuller, the wrist end narrower.
+        t = (v.co.y + 0.048) / 0.06
+        v.co.x *= 1.0 - 0.12 * max(0.0, -t)
+    parts.append(hand)
+    # Fingers: one smooth tube each, from inside the hand, over the top of
+    # the handle and round under it. Slightly fanned and uneven.
+    for k, x in enumerate((-0.034, -0.0115, 0.0115, 0.0335)):
+        fr = 0.0118 - 0.0009 * abs(k - 1.3)
+        rr = r + fr * 0.92
+        a0 = 128 + k * 3
+        a1 = -78 + (k - 1.5) * 6
+        pts = [Vector((x * 0.95, -0.05, 0.03))] + arc((x, 0, 0), (0, 1, 0), (0, 0, 1), rr, a0, a1, 8)
+        rad = [fr * 1.15] + [fr * (1.08 - 0.18 * i / 7) for i in range(8)]
+        parts.append(tube(pts, rad, m_leather, sides=8, name="finger"))
+    # Thumb: out of the side of the hand, hooked round the front over the fingers.
+    tp = [Vector((-0.042, -0.06, -0.004)), Vector((-0.05, -0.03, -0.024)), Vector((-0.046, 0.0, -0.034)),
+          Vector((-0.032, 0.026, -0.03)), Vector((-0.016, 0.036, -0.016))]
+    parts.append(tube(tp, [0.016, 0.0145, 0.013, 0.012, 0.0105], m_leather, sides=8, name="thumb"))
+    # Stitched seam across the back of the hand.
+    seam = arc((0, -0.035, -0.01), (0, -0.55, 0.83), (1, 0, 0), 0.05, -55, 55, 7)
+    parts.append(tube(seam, [0.0028] * 7, m_cuff, sides=5, name="seam"))
+    # Gauntlet cuff, flaring back from the wrist, with a rolled edge.
+    wrist = Vector((0, -0.105, -0.004))
+    back = Vector((0, -1.0, -0.32)).normalized()
+    cuff_pts = [wrist + back * (i * 0.028) for i in range(4)]
+    parts.append(tube(cuff_pts, [0.038, 0.044, 0.05, 0.054], m_cuff, sides=12, cap=False, flat=0.86, name="cuff"))
+    edge = cuff_pts[-1]
+    ring = arc(edge, Vector((1, 0, 0)), back.cross(Vector((1, 0, 0))).normalized(), 0.054, 0, 360, 15)
+    parts.append(tube(ring, [0.0065] * 15, m_cuff, sides=6, cap=False, name="cuffroll"))
+    # The work-shirt sleeve going back out of frame, a little baggy.
+    sl = [edge + back * 0.01 + back * (sleeve_len * i / 4) for i in range(5)]
+    parts.append(tube(sl, [0.05, 0.056, 0.058, 0.06, 0.061], m_sleeve, sides=12, cap=False, flat=0.9, name="sleeve"))
     o = join(parts, name)
-    wobble(o, 0.0012, 77)
-    ao(o, 0.06)
+    smooth(o, 70)
+    wobble(o, 0.0009, 77)
+    ao(o, 0.05, strength=0.55, edge=0.4)
     return o
 
 

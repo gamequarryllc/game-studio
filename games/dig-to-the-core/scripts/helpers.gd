@@ -123,7 +123,10 @@ func _update_mole(m: Dictionary, delta: float, s: Vector3, zone_ok: bool) -> voi
 					m.spot = Vector3((m.spot as Vector3).x, fl, (m.spot as Vector3).z)
 				if player != null and player.position.distance_to(node.position) < 9.0:
 					Sound.play_at("mole_dig", node.position, -14.0, 1.0 + 0.1 * float(m.type), 0.15, 0.25)
-			if float(m.t) <= 0.0 or not zone_ok:
+			# Shy: one that finds your face right next to it ducks back into the
+			# rock (it filled the whole screen in a narrow shaft).
+			var too_close: bool = player != null and player.eye_pos().distance_to(node.global_position + Vector3(0, 0.3, 0)) < 1.15
+			if float(m.t) <= 0.0 or not zone_ok or too_close:
 				m.state = "down"
 				m.t = 0.3
 				(m.dust as CPUParticles3D).emitting = false
@@ -148,8 +151,8 @@ func _pick_spot(s: Vector3) -> Vector3:
 		var fl := field.floor_below(Vector3(x, top, z), 5.0)
 		if fl < s.y - 4.0 or fl > s.y + 2.4:
 			continue
-		if player != null and Vector2(player.position.x - x, player.position.z - z).length() < 0.9 and absf(player.position.y - fl) < 1.5:
-			continue   # not under your feet
+		if player != null and Vector2(player.position.x - x, player.position.z - z).length() < 1.4 and absf(player.position.y - fl) < 2.0:
+			continue   # not under your feet or in your face
 		return Vector3(x, fl, z)
 	return Vector3.INF
 

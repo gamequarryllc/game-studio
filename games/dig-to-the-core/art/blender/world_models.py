@@ -16,7 +16,7 @@ import bpy  # noqa: E402
 import bmesh  # noqa: E402
 from mathutils import Matrix, Vector, noise  # noqa: E402
 from kit import (box, cyl, sphere, torus, join, wear, wobble, export, reset, mat, taper, subdivide, bar, attach,  # noqa: E402
-                 lathe, place, strut, ao, smooth)
+                 lathe, place, strut, ao, smooth, tube, arc)
 
 R90 = math.radians(90)
 
@@ -68,12 +68,18 @@ def mole():
             v.co.y *= 0.9
     parts.append(body)
     parts.append(place(sphere(0.12, (0, 0, 0), belly, scale=(1.0, 0.45, 1.25), segs=14, rings=10), (0, 0.13, 0.14)))
-    # Snout: a tapering cone with a big pink nose.
-    sn = cyl(0.06, 0.16, (0, 0, 0), fur, verts=12, r2=0.028)
-    parts.append(place(sn, (0, 0.165, 0.33), (-R90 + 0.25, 0, 0)))
-    parts.append(place(sphere(0.036, (0, 0, 0), pink, scale=(1.15, 0.85, 0.9), segs=12, rings=8), (0, 0.245, 0.305)))
+    # Snout: long, a little upturned, pale on top, with a big pink nose and whiskers.
+    sn = tube([Vector((0, 0.1, 0.34)), Vector((0, 0.17, 0.33)), Vector((0, 0.235, 0.318)), Vector((0, 0.28, 0.322))],
+              [0.07, 0.052, 0.036, 0.028], belly, sides=12, name="snout")
+    parts.append(sn)
+    parts.append(place(sphere(0.042, (0, 0, 0), pink, scale=(1.2, 0.8, 0.95), segs=14, rings=8), (0, 0.3, 0.325)))
     for s in (-1, 1):
-        parts.append(place(sphere(0.007, (0, 0, 0), mat("soot"), segs=6, rings=4), (s * 0.014, 0.275, 0.307)))
+        parts.append(place(sphere(0.008, (0, 0, 0), mat("soot"), segs=6, rings=4), (s * 0.016, 0.332, 0.322)))
+        for k in range(3):
+            a = (k - 1) * 0.28
+            w = [Vector((s * 0.03, 0.25, 0.322)), Vector((s * (0.08 + 0.01 * k), 0.255 + 0.02 * math.sin(a), 0.322 + 0.03 * a)),
+                 Vector((s * (0.13 + 0.015 * k), 0.24 + 0.04 * math.sin(a), 0.315 + 0.06 * a))]
+            parts.append(tube(w, [0.0022, 0.0018, 0.0012], mat("cream", rough=0.6), sides=4, name="whisker"))
     # Squinty eyes: little dark slits under the hat brim.
     for s in (-1, 1):
         parts.append(place(box((0.032, 0.01, 0.008), (0, 0, 0), mat("soot", rough=0.4), bevel=0.003), (s * 0.055, 0.115, 0.38), (0, 0, s * 0.25)))
@@ -125,63 +131,83 @@ def mole():
 
 
 def robomole():
-    """The Robo-Mole: a riveted brass boiler on stubby iron legs, a drill for
-    a nose, glowing porthole eyes and a little smokestack."""
+    """The Robo-Mole: a little steam tunnelling engine. A riveted brass boiler
+    lying along its length on two iron caterpillar tracks, a smokestack and a
+    pressure dome on top, porthole lamps for eyes either side of a fat iron
+    collar, and the business end: a fluted steel drill cone with two scoop
+    claws, which nods as it digs (the "Claws" node). Faces +Y."""
     brass = mat("brass", metal=0.75, rough=0.35)
     iron = mat("iron", metal=0.6, rough=0.5)
-    soot = mat("soot", rough=0.7)
+    dark = mat("dark_steel", metal=0.5, rough=0.6)
+    rubber = mat("rubber", rough=0.9)
     parts = []
-    body = lathe([(0.0, 0.03), (0.17, 0.035), (0.2, 0.07), (0.205, 0.2), (0.195, 0.3), (0.17, 0.36),
-                  (0.12, 0.405), (0.0, 0.425)], 22, "boiler", brass)
-    parts.append(body)
-    # Riveted seams.
-    for z in (0.09, 0.2, 0.31):
-        rr = 0.207 if z < 0.3 else 0.198
-        parts.append(place(torus(rr, 0.009, (0, 0, 0), iron, (0, 0, 0), 22, 4), (0, 0, z)))
-        for k in range(16):
-            a = k / 16 * math.tau
-            parts.append(place(sphere(0.007, (0, 0, 0), brass, segs=6, rings=4), (math.cos(a) * (rr + 0.006), math.sin(a) * (rr + 0.006), z + 0.018)))
-    # Pressure gauge and a red valve wheel on the side.
-    parts.append(place(cyl(0.035, 0.02, (0, 0, 0), brass, verts=14), (0.2, 0.02, 0.25), (0, R90, 0)))
-    parts.append(place(cyl(0.028, 0.006, (0, 0, 0), mat("cream", rough=0.4), verts=14), (0.212, 0.02, 0.25), (0, R90, 0)))
-    parts.append(place(torus(0.03, 0.006, (0, 0, 0), mat("red", rough=0.5), (0, 0, 0), 12, 4), (-0.215, -0.02, 0.22), (0, R90, 0)))
-    # Porthole eyes.
-    for s in (-1, 1):
-        parts.append(place(torus(0.032, 0.008, (0, 0, 0), iron, (0, 0, 0), 14, 4), (s * 0.075, 0.17, 0.33), (R90 - 0.35, 0, s * 0.35)))
-        parts.append(place(sphere(0.027, (0, 0, 0), mat("glass", rough=0.2, emit=3.0), scale=(1, 0.5, 1), segs=10, rings=6), (s * 0.075, 0.172, 0.33), (-0.35, 0, s * 0.35)))
-    # Smokestack with a flared cap, set back on the dome.
-    parts.append(place(cyl(0.024, 0.13, (0, 0, 0), iron, verts=10), (0.04, -0.09, 0.46)))
-    parts.append(place(cyl(0.04, 0.03, (0, 0, 0), iron, verts=10, r2=0.026), (0.04, -0.09, 0.53)))
-    # Stubby legs and big iron feet.
-    for s in (-1, 1):
-        parts.append(place(cyl(0.045, 0.06, (0, 0, 0), iron, verts=10), (s * 0.1, 0.0, 0.02)))
-        parts.append(place(box((0.09, 0.15, 0.035), (0, 0, 0), soot, bevel=0.012), (s * 0.1, 0.03, 0.0)))
-    # The drill nose.
-    parts.append(place(cyl(0.065, 0.06, (0, 0, 0), iron, verts=14), (0, 0.2, 0.22), (-R90, 0, 0)))
+    zc = 0.2
+    # Boiler: a cylinder along Y with a domed back end.
+    boiler = lathe([(0.0, -0.3), (0.06, -0.295), (0.115, -0.27), (0.148, -0.23), (0.158, -0.18), (0.16, 0.0),
+                    (0.16, 0.12), (0.0, 0.12)], 22, "boiler", brass)
+    place(boiler, (0, 0, zc), (-R90, 0, 0))
+    parts.append(boiler)
+    # Riveted seams round the boiler.
+    for y in (-0.17, -0.04, 0.09):
+        parts.append(place(torus(0.162, 0.009, (0, 0, 0), iron, (0, 0, 0), 22, 4), (0, y, zc), (R90, 0, 0)))
+        for k in range(14):
+            a = k / 14 * math.tau
+            parts.append(sphere(0.0065, (math.cos(a) * 0.168, y + 0.016, zc + math.sin(a) * 0.168), brass, segs=6, rings=4))
+    # Smokestack (flared, sooty at the top) and the pressure dome.
+    parts.append(cyl(0.026, 0.16, (0, -0.16, zc + 0.22), iron, verts=10, r2=0.032))
+    parts.append(cyl(0.05, 0.035, (0, -0.16, zc + 0.31), dark, verts=12, r2=0.034))
+    parts.append(place(sphere(0.055, (0, 0, 0), brass, scale=(1, 1, 0.8), segs=14, rings=8), (0, 0.0, zc + 0.15)))
+    parts.append(cyl(0.012, 0.04, (0, 0.0, zc + 0.21), iron, verts=8))
+    # A gauge on one flank and a red valve wheel on the other.
+    parts.append(place(cyl(0.034, 0.02, (0, 0, 0), brass, verts=14), (0.162, 0.05, zc + 0.04), (0, R90, 0)))
+    parts.append(place(cyl(0.027, 0.006, (0, 0, 0), mat("cream", rough=0.4), verts=14), (0.174, 0.05, zc + 0.04), (0, R90, 0)))
+    parts.append(place(torus(0.032, 0.006, (0, 0, 0), mat("red", rough=0.5), (0, 0, 0), 12, 4), (-0.175, -0.08, zc + 0.05), (0, R90, 0)))
+    for k in range(3):
+        a = k / 3 * math.pi
+        parts.append(place(box((0.004, 0.06, 0.006), (0, 0, 0), mat("red", rough=0.5)), (-0.175, -0.08, zc + 0.05), (a, 0, 0)))
+    # Front collar and porthole lamps for eyes.
+    parts.append(place(cyl(0.13, 0.05, (0, 0, 0), iron, verts=18, bevel=0.01), (0, 0.14, zc), (-R90, 0, 0)))
+    for sx in (-1, 1):
+        parts.append(place(torus(0.03, 0.008, (0, 0, 0), iron, (0, 0, 0), 14, 4), (sx * 0.09, 0.115, zc + 0.12), (R90 - 0.3, 0, sx * 0.3)))
+        parts.append(place(sphere(0.026, (0, 0, 0), mat("glass", rough=0.2, emit=3.0), scale=(1, 0.55, 1), segs=10, rings=6), (sx * 0.09, 0.118, zc + 0.12), (-0.3, 0, sx * 0.3)))
+    # Tracks: a rounded block each side with road wheels and a ribbed tread.
+    for sx in (-1, 1):
+        x = sx * 0.165
+        tread = box((0.07, 0.46, 0.11), (x, -0.05, 0.06), rubber, bevel=0.045, segs=3)
+        parts.append(tread)
+        for k in range(10):
+            parts.append(box((0.074, 0.012, 0.012), (x, -0.25 + k * 0.045, 0.006), rubber))
+        for k in range(4):
+            parts.append(place(cyl(0.035, 0.02, (0, 0, 0), dark, verts=12), (x + sx * 0.038, -0.2 + k * 0.1, 0.06), (0, R90, 0)))
+            parts.append(place(cyl(0.012, 0.024, (0, 0, 0), brass, verts=8), (x + sx * 0.04, -0.2 + k * 0.1, 0.06), (0, R90, 0)))
+        parts.append(box((0.04, 0.4, 0.035), (sx * 0.12, -0.05, 0.11), iron, bevel=0.01))
     o = join(parts, "RoboMole")
     bake(o)
-    wobble(o, 0.0015, 22)
+    wobble(o, 0.0012, 22)
     ao(o, 0.12, edge=0.6)
-    nose = [cyl(0.055, 0.17, (0, 0, 0), mat("bright_steel", metal=0.8, rough=0.3), verts=10, r2=0.004)]
-    place(nose[0], (0, 0.31, 0.22), (-R90, 0, 0))
-    fl = bar(3, 0.012, 0.17, 12, (0, 0, 0), iron, name="flute")
-    for v in fl.data.vertices:
-        t = v.co.y / 0.17
-        rr = 0.052 * (1.0 - t) + 0.004
-        ang = t * 7.0
-        v.co.x += math.cos(ang) * rr
-        v.co.z += math.sin(ang) * rr
-    fl.data.transform(Matrix.Translation((0, 0.225, 0.22)))
-    nose.append(fl)
-    # Claws: two iron scoops either side of the nose.
-    for s in (-1, 1):
-        nose.append(place(box((0.08, 0.1, 0.025), (0, 0, 0), iron, bevel=0.01), (s * 0.14, 0.18, 0.13), (0.3, 0, s * 0.3)))
+    smooth(o, 40)
+    # The drill cone and the two scoops: the part that nods.
+    steel = mat("bright_steel", metal=0.8, rough=0.3)
+    nose = [place(cyl(0.11, 0.24, (0, 0, 0), steel, verts=14, r2=0.006), (0, 0.29, zc - 0.01), (-R90, 0, 0))]
+    for k in range(2):
+        fl = []
+        for i in range(14):
+            t = i / 13
+            rr = 0.108 * (1.0 - t) + 0.006
+            a = k * math.pi + t * 7.5
+            fl.append(Vector((math.cos(a) * rr, 0.17 + t * 0.24, zc - 0.01 + math.sin(a) * rr)))
+        nose.append(tube(fl, [0.014 * (1.0 - 0.7 * i / 13) for i in range(14)], iron, sides=5, name="flute"))
+    for sx in (-1, 1):
+        arm = [Vector((sx * 0.1, 0.12, zc - 0.07)), Vector((sx * 0.15, 0.2, zc - 0.11)), Vector((sx * 0.15, 0.28, zc - 0.15))]
+        nose.append(tube(arm, [0.02, 0.018, 0.016], iron, sides=8, name="arm"))
+        nose.append(place(box((0.09, 0.07, 0.022), (0, 0, 0), dark, bevel=0.012), (sx * 0.15, 0.31, zc - 0.16), (0.45, 0, sx * 0.15)))
         for k in range(3):
-            nose.append(place(cyl(0.011, 0.06, (0, 0, 0), mat("bright_steel", metal=0.8), verts=4, r2=0.0), (s * 0.14 + (k - 1) * 0.025, 0.24, 0.115), (-R90 + 0.3, 0, 0)))
+            nose.append(place(cyl(0.009, 0.05, (0, 0, 0), steel, verts=5, r2=0.0), (sx * 0.15 + (k - 1) * 0.026, 0.35, zc - 0.175), (-R90 + 0.6, 0, 0)))
     claws = join(nose, "Claws")
     bake(claws)
+    smooth(claws, 35)
     ao(claws, 0.06)
-    attach(claws, o, (0, 0.2, 0.18))
+    attach(claws, o, (0, 0.15, zc))
     return o
 
 
@@ -330,17 +356,17 @@ def headframe():
     red = mat("red", rough=0.55)
     cable = mat("dark_steel", metal=0.5, rough=0.5)
     rnd = random.Random(41)
-    top = 8.2
+    top = 6.9
     parts = []
-    w0, w1 = 1.35, 1.0           # half-width at the foot and at the deck
+    w0, w1 = 1.75, 1.2           # half-width at the foot and at the deck: a broad, squat tower
     corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
     for (cx, cy) in corners:
         foot = Vector((cx * w0, cy * w0, 0.0))
         head = Vector((cx * w1, cy * w1, top))
-        parts.append(strut(foot, head, 0.2, timber, name="post"))
-        parts.append(box((0.6, 0.6, 0.3), (foot.x, foot.y, 0.12), mat("stone", rough=0.95), bevel=0.05))
+        parts.append(strut(foot, head, 0.3, timber, name="post"))
+        parts.append(box((0.85, 0.85, 0.36), (foot.x, foot.y, 0.14), mat("stone", rough=0.95), bevel=0.06))
     # Girts every couple of metres, X-braces between them on each face.
-    levels = [0.6, 3.8, top - 0.15]
+    levels = [0.6, 3.5, top - 0.2]
     def at(cx, cy, z):
         k = 1.0 - (w0 - w1) / w0 * z / top
         return Vector((cx * w0 * k, cy * w0 * k, z))
@@ -349,7 +375,7 @@ def headframe():
             a, b = corners[i], corners[(i + 1) % 4]
             if li == 0 and i == 3:
                 continue          # the side you walk in by stays open at the bottom
-            parts.append(strut(at(*a, z), at(*b, z), 0.14, old if li % 2 else timber, name="girt"))
+            parts.append(strut(at(*a, z), at(*b, z), 0.21, old if li % 2 else timber, name="girt"))
     for li in range(len(levels) - 1):
         z0, z1 = levels[li], levels[li + 1]
         for i in range(4):
@@ -358,31 +384,31 @@ def headframe():
             a, b = corners[i], corners[(i + 1) % 4]
             if li == 1 and i % 2 == 1:
                 continue          # the top tier is braced front and back only
-            parts.append(strut(at(*a, z0 + 0.15), at(*b, z1 - 0.15), 0.09, old, name="brace"))
+            parts.append(strut(at(*a, z0 + 0.2), at(*b, z1 - 0.2), 0.14, old, name="brace"))
             if li == 0:
-                parts.append(strut(at(*b, z0 + 0.15), at(*a, z1 - 0.15), 0.09, old, name="brace"))
+                parts.append(strut(at(*b, z0 + 0.2), at(*a, z1 - 0.2), 0.14, old, name="brace"))
     # Back legs, raked out behind (towards -y), with a tie halfway.
     for cx in (-1, 1):
         hd = at(cx, -1, top - 0.6)
-        ft = Vector((cx * 1.5, -5.6, 0.0))
-        parts.append(strut(ft, hd, 0.18, timber, name="backleg"))
-        parts.append(box((0.55, 0.55, 0.28), (ft.x, ft.y, 0.12), mat("stone", rough=0.95), bevel=0.05))
+        ft = Vector((cx * 2.0, -6.2, 0.0))
+        parts.append(strut(ft, hd, 0.28, timber, name="backleg"))
+        parts.append(box((0.8, 0.8, 0.34), (ft.x, ft.y, 0.14), mat("stone", rough=0.95), bevel=0.06))
         mid = ft.lerp(hd, 0.45)
-        parts.append(strut(mid, at(cx, -1, mid.z), 0.11, old))
-    parts.append(strut(Vector((-1.5, -5.6, 0.2)).lerp(at(-1, -1, top - 0.6), 0.45), Vector((1.5, -5.6, 0.2)).lerp(at(1, -1, top - 0.6), 0.45), 0.11, old))
+        parts.append(strut(mid, at(cx, -1, mid.z), 0.17, old))
+    parts.append(strut(Vector((-2.0, -6.2, 0.2)).lerp(at(-1, -1, top - 0.6), 0.45), Vector((2.0, -6.2, 0.2)).lerp(at(1, -1, top - 0.6), 0.45), 0.17, old))
     # The deck and the bearing blocks the sheave turns in.
-    parts.append(box((2.4, 2.4, 0.16), (0, 0, top + 0.05), timber, bevel=0.03))
-    for i in range(7):
-        parts.append(box((2.5, 0.3, 0.05), (0, -1.05 + i * 0.35, top + 0.15), old if i % 2 else timber, rot=(0, 0, rnd.uniform(-0.02, 0.02)), bevel=0.01))
+    parts.append(box((2.9, 2.9, 0.22), (0, 0, top + 0.06), timber, bevel=0.04))
+    for i in range(8):
+        parts.append(box((3.0, 0.34, 0.06), (0, -1.2 + i * 0.34, top + 0.2), old if i % 2 else timber, rot=(0, 0, rnd.uniform(-0.02, 0.02)), bevel=0.012))
     for s in (-1, 1):
-        parts.append(box((0.3, 0.8, 0.75), (s * 0.45, -1.3, top + 0.5), timber, bevel=0.03))
-        parts.append(box((0.34, 0.3, 0.14), (s * 0.45, -1.3, top + 0.94), iron, bevel=0.02))
+        parts.append(box((0.38, 0.9, 0.95), (s * 0.5, -1.3, top + 0.62), timber, bevel=0.04))
+        parts.append(box((0.42, 0.34, 0.16), (s * 0.5, -1.3, top + 1.16), iron, bevel=0.02))
     # The cage cable: from the front of the sheave straight down to the cage.
-    parts.append(cyl(0.024, top + 1.05 - 2.62, (0, 0, (top + 1.05 + 2.62) / 2), cable, verts=6))
+    parts.append(cyl(0.028, top + 1.3 - 2.62, (0, 0, (top + 1.3 + 2.62) / 2), cable, verts=6))
     parts.append(place(cyl(0.05, 0.12, (0, 0, 0), iron, verts=8), (0, 0, 2.68)))
     # The back cable: from the top of the sheave down to the winding drum.
     drum_c = Vector((0, -9.5, 0.9))
-    parts.append(strut(Vector((0, -2.4, top + 1.7)), drum_c + Vector((0, 0.3, 0.3)), 0.024, cable, sides=6))
+    parts.append(strut(Vector((0, -2.9, top + 1.9)), drum_c + Vector((0, 0.3, 0.3)), 0.028, cable, sides=6))
     # Winding drum on a timber frame, with a brake lever.
     parts.append(place(cyl(0.45, 1.1, (0, 0, 0), timber, verts=18), tuple(drum_c), (0, R90, 0)))
     for s in (-1, 1):
@@ -392,13 +418,22 @@ def headframe():
         parts.append(strut(Vector((s * 0.78, drum_c.y + 0.6, 0.2)), Vector((s * 0.72, drum_c.y, drum_c.z)), 0.08, timber))
     parts.append(strut(Vector((0.95, drum_c.y + 0.3, 0.3)), Vector((1.15, drum_c.y - 0.2, 1.7)), 0.03, iron, sides=6))
     parts.append(place(sphere(0.06, (0, 0, 0), red, segs=8, rings=6), (1.15, drum_c.y - 0.2, 1.75)))
+    # A ladder up one side, to the deck.
+    lx = w0 + 0.3
+    lt = w1 + 0.3
+    for sx in (-0.22, 0.22):
+        parts.append(strut(Vector((lx, sx, 0.0)), Vector((lt, sx, top + 0.1)), 0.045, old, name="rail"))
+    for k in range(int(top / 0.35)):
+        z = 0.3 + k * 0.35
+        x = lx + (lt - lx) * z / top
+        parts.append(strut(Vector((x, -0.22, z)), Vector((x, 0.22, z)), 0.025, old, name="rung"))
     frame_o = join(parts, "Headframe")
     bake(frame_o)
     wobble(frame_o, 0.012, 41)
     ao(frame_o, 0.6, rays=10, edge=0.5)
     # The sheave: a big spoked wheel, painted signal red.
-    R = 1.3
-    wheel = [place(torus(R, 0.085, (0, 0, 0), red, (0, 0, 0), 36, 6), (0, 0, 0), (0, R90, 0))]
+    R = 1.6
+    wheel = [place(torus(R, 0.11, (0, 0, 0), red, (0, 0, 0), 40, 6), (0, 0, 0), (0, R90, 0))]
     wheel.append(place(torus(R - 0.1, 0.035, (0, 0, 0), red, (0, 0, 0), 32, 4), (0, 0, 0), (0, R90, 0)))
     wheel.append(place(cyl(0.16, 0.26, (0, 0, 0), iron, verts=14), (0, 0, 0), (0, R90, 0)))
     wheel.append(place(cyl(0.05, 1.2, (0, 0, 0), iron, verts=8), (0, 0, 0), (0, R90, 0)))
@@ -408,8 +443,8 @@ def headframe():
     sheave = join(wheel, "Sheave")
     bake(sheave)
     ao(sheave, 0.3, rays=8)
-    sheave.data.transform(Matrix.Translation((0, -1.3, top + 1.05)))
-    attach(sheave, frame_o, (0, -1.3, top + 1.05))
+    sheave.data.transform(Matrix.Translation((0, -1.3, top + 1.3)))
+    attach(sheave, frame_o, (0, -1.3, top + 1.3))
     return frame_o
 
 
@@ -533,71 +568,111 @@ def shaft_sign():
 
 
 # --- Trees and props --------------------------------------------------------------------------------
+def _bough(base, ang, length, width, droop, m, seed):
+    """One pine bough: a flat, jagged, drooping blade of needles, thicker at
+    the trunk, its tip bent down."""
+    rnd = random.Random(seed)
+    me = bpy.data.meshes.new("bough")
+    bm = bmesh.new()
+    d = Vector((math.cos(ang), math.sin(ang), 0.0))
+    sd = Vector((-d.y, d.x, 0.0))
+    steps = 6
+    top, left, right, under = [], [], [], []
+    for i in range(steps + 1):
+        t = i / steps
+        c = Vector(base) + d * (length * t) + Vector((0, 0, -droop * t * t))
+        w = width * (1.0 - t) ** 0.8 * (1.0 + (0.35 if i % 2 else -0.1)) * rnd.uniform(0.85, 1.1)
+        top.append(bm.verts.new(c + Vector((0, 0, 0.06 * (1 - t)))))
+        left.append(bm.verts.new(c + sd * w - Vector((0, 0, 0.05 + 0.08 * t))))
+        right.append(bm.verts.new(c - sd * w - Vector((0, 0, 0.05 + 0.08 * t))))
+        under.append(bm.verts.new(c - Vector((0, 0, 0.09 * (1 - t) + 0.02))))
+    for i in range(steps):
+        bm.faces.new((top[i], left[i], left[i + 1], top[i + 1]))
+        bm.faces.new((top[i], top[i + 1], right[i + 1], right[i]))
+        bm.faces.new((under[i], under[i + 1], left[i + 1], left[i]))
+        bm.faces.new((under[i], right[i], right[i + 1], under[i + 1]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new("bough", me)
+    bpy.context.collection.objects.link(o)
+    o.data.materials.append(m)
+    return o
+
+
 def pine():
-    """Tiers of star-shaped boughs that droop at the tips, each turned a
-    little, on a bare trunk."""
+    """A Scots-pine-ish conifer: a bare, slightly leaning trunk and whorls of
+    separate drooping boughs, longer and darker low down, gaps between the
+    whorls so the trunk shows, and a ragged leader at the top."""
     rnd = random.Random(7)
     bark = mat("bark", rough=0.9)
     needles = [mat("pine", rough=0.9), mat("leaf_dark", rough=0.9)]
-    parts = [cyl(0.15, 1.6, (0, 0, 0.8), bark, verts=7, r2=0.07)]
-    tiers = 6
-    for k in range(tiers):
-        t = k / (tiers - 1)
-        r = 1.55 * (1.0 - t * 0.78)
-        h = 1.25 + k * 0.78
-        pts = 9 if k < 4 else 7
-        me = bpy.data.meshes.new("bough")
-        bm = bmesh.new()
-        top_v = bm.verts.new((0, 0, h + 0.55 + 0.1 * (1 - t)))
-        rim = []
+    lean = Vector((0.12, 0.05, 0.0))
+    H = 6.6
+    trunk = [Vector((0, 0, 0)) + lean * (z / H) ** 2 * 1.0 + Vector((0, 0, z)) for z in (0.0, 1.5, 3.0, 4.5, 6.0, H)]
+    parts = [tube(trunk, [0.17, 0.13, 0.1, 0.07, 0.045, 0.02], bark, sides=8, name="trunk")]
+    whorls = 7
+    for k in range(whorls):
+        t = k / (whorls - 1)
+        z = 1.6 + t * (H - 2.1)
+        c = lean * (z / H) ** 2 + Vector((0, 0, z))
+        n = 9 if k < 4 else 7
+        length = 2.2 * (1.0 - t * 0.78) * rnd.uniform(0.9, 1.05)
         rot = rnd.uniform(0, math.tau)
-        for i in range(pts * 2):
-            a = rot + i / (pts * 2) * math.tau
-            rr = r * (1.0 if i % 2 == 0 else 0.62) * rnd.uniform(0.9, 1.08)
-            z = h - (0.28 if i % 2 == 0 else 0.05) * (r / 1.5)
-            rim.append(bm.verts.new((math.cos(a) * rr, math.sin(a) * rr, z)))
-        under = bm.verts.new((0, 0, h - 0.05))
-        for i in range(len(rim)):
-            bm.faces.new((top_v, rim[i], rim[(i + 1) % len(rim)]))
-            bm.faces.new((under, rim[(i + 1) % len(rim)], rim[i]))
-        bm.to_mesh(me)
-        bm.free()
-        ob = bpy.data.objects.new("bough", me)
-        bpy.context.collection.objects.link(ob)
-        ob.data.materials.append(needles[k % 2])
-        parts.append(ob)
-    parts.append(cyl(0.12, 0.7, (0, 0, 1.25 + tiers * 0.78 + 0.25), needles[0], verts=6, r2=0.0))
+        for i in range(n):
+            a = rot + i / n * math.tau + rnd.uniform(-0.25, 0.25)
+            L = length * rnd.uniform(0.75, 1.15)
+            parts.append(_bough(c + Vector((0, 0, rnd.uniform(-0.15, 0.15))), a, L, 0.55 * (1.0 - t * 0.45), 0.5 * L * (1.0 - t * 0.4),
+                                needles[1 if (k < 2 or rnd.random() < 0.25) else 0], k * 31 + i))
+    # The leader: a short spike with two little sprigs.
+    tip = lean + Vector((0, 0, H))
+    parts.append(cyl(0.14, 0.9, tuple(tip + Vector((0, 0, 0.1))), needles[0], verts=6, r2=0.0))
+    for a in (0.6, 3.4):
+        parts.append(_bough(tip - Vector((0, 0, 0.25)), a, 0.45, 0.12, 0.1, needles[0], int(a * 10)))
     o = join(parts, "Pine")
     bake(o)
-    wobble(o, 0.05, 51)
-    ao(o, 0.9, rays=10, strength=0.8, top=0.2)
+    wobble(o, 0.03, 51)
+    ao(o, 0.9, rays=10, strength=0.8, top=0.25)
     return o
 
 
 def oak():
-    """A broad oak: a forked trunk with a few limbs and a crown of lumpy,
-    flat-bottomed clumps (darker underneath), not a ball."""
+    """A broad field oak: a short gnarled trunk forking into four crooked
+    limbs, each carrying its own flat-bottomed, faceted clump of leaves with
+    gaps between them (so limbs show through), smaller tufts breaking the
+    outline, darker clumps underneath. Not a ball, not a cloud."""
     rnd = random.Random(8)
     bark = mat("bark", rough=0.9)
-    leaves = [mat("leaf", rough=0.9), mat("leaf_dark", rough=0.9)]
-    parts = [cyl(0.2, 2.2, (0, 0, 1.1), bark, verts=8, r2=0.13)]
-    limbs = [((0, 0, 1.8), (0.9, 0.3, 3.0)), ((0, 0, 1.9), (-0.8, 0.5, 3.1)), ((0, 0, 2.0), (0.1, -0.9, 3.2)), ((0, 0, 2.1), (0.2, 0.3, 3.6))]
-    for a, b in limbs:
-        parts.append(strut(a, b, 0.09, bark, sides=6))
-    clumps = []
-    for i in range(14):
-        a = i * 2.39996
-        ring = 0.35 + 0.85 * math.sqrt((i + 0.5) / 14)
-        z = 3.1 + 1.1 * (1.0 - ring / 1.2) + rnd.uniform(-0.15, 0.15)
-        clumps.append(((math.cos(a) * ring * 1.15, math.sin(a) * ring * 1.15, z), rnd.uniform(0.55, 0.8)))
-    for i, (c, r) in enumerate(clumps):
-        cl = lump(r, Vector(c), leaves[0 if c[2] > 3.6 else 1], i + 3, scale=(1.1, 1.1, 0.85), sub=2, rough=0.28, flat_bottom=-r * 0.55)
-        smooth(cl, 50)
+    leaf = mat("leaf", rough=0.9)
+    leaf_dark = mat("leaf_dark", rough=0.9)
+    parts = [tube([Vector((0, 0, 0)), Vector((0.05, 0.02, 0.8)), Vector((-0.04, 0.05, 1.5)), Vector((0.02, 0.0, 2.0))],
+                  [0.3, 0.24, 0.22, 0.2], bark, sides=9, name="trunk")]
+    ends = []
+    for i, (a, rise, out) in enumerate(((0.3, 1.4, 1.6), (2.0, 1.7, 1.4), (3.6, 1.2, 1.7), (5.0, 1.9, 1.1))):
+        d = Vector((math.cos(a), math.sin(a), 0))
+        p0 = Vector((0, 0, 1.85))
+        p1 = p0 + d * out * 0.45 + Vector((0, 0, rise * 0.55)) + Vector((rnd.uniform(-0.2, 0.2), rnd.uniform(-0.2, 0.2), 0))
+        p2 = p0 + d * out + Vector((0, 0, rise))
+        parts.append(tube([p0, p1, p2], [0.15, 0.1, 0.06], bark, sides=7, name="limb"))
+        ends.append(p2)
+    for i, e in enumerate(ends):
+        r = rnd.uniform(1.0, 1.25)
+        cl = lump(r, e + Vector((0, 0, 0.35)), leaf, i + 3, scale=(1.15, 1.15, 0.62), sub=1, rough=0.3, flat_bottom=-r * 0.32)
         parts.append(cl)
+        # A darker underside layer, a little wider and lower.
+        under = lump(r * 0.85, e + Vector((0, 0, 0.0)), leaf_dark, i + 13, scale=(1.25, 1.25, 0.45), sub=1, rough=0.25, flat_bottom=-r * 0.3)
+        parts.append(under)
+        # Tufts round the rim, breaking the outline.
+        for k in range(3):
+            a = k * 2.1 + i
+            tp = e + Vector((math.cos(a) * r * 1.1, math.sin(a) * r * 1.1, rnd.uniform(0.0, 0.5)))
+            parts.append(lump(rnd.uniform(0.35, 0.5), tp, leaf if k % 2 else leaf_dark, i * 7 + k + 30, scale=(1.1, 1.1, 0.7), sub=1, rough=0.3))
+    # A crown clump in the middle, higher, so the top isn't flat.
+    parts.append(lump(1.1, Vector((0.1, 0.1, 4.25)), leaf, 99, scale=(1.1, 1.1, 0.7), sub=1, rough=0.3, flat_bottom=-0.35))
     o = join(parts, "Oak")
     bake(o)
-    wobble(o, 0.04, 52)
-    ao(o, 1.2, rays=12, strength=0.85, top=0.22)
+    wobble(o, 0.03, 52)
+    ao(o, 1.2, rays=12, strength=0.85, top=0.25)
     return o
 
 

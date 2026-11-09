@@ -511,12 +511,53 @@ const LANDMARKS := {
 	2: {"model": "mine_cart", "scale": 1.0, "light": Color(1.0, 0.74, 0.4), "energy": 0.8, "at": Vector3(0.3, 1.0, -0.5)},
 	3: {"model": "ribcage", "scale": 0.6},
 	4: {"model": "ribcage", "scale": 1.0},
-	5: {"model": "crystal_big", "scale": 1.3, "light": Color(0.42, 0.85, 0.74), "energy": 1.4},
-	6: {"model": "lava_pool", "scale": 1.1, "light": Color(1.0, 0.32, 0.1), "energy": 3.2},
-	7: {"model": "basalt", "scale": 1.0, "light": Color(1.0, 0.42, 0.14), "energy": 2.2},
-	8: {"model": "lava_pool", "scale": 1.0, "light": Color(1.0, 0.62, 0.22), "energy": 2.6},
-	9: {"model": "core_spires", "scale": 1.0, "light": Color(1.0, 0.84, 0.5), "energy": 1.5},
+	5: {"model": "crystal_big", "scale": 1.0, "light": Color(0.42, 0.85, 0.74), "energy": 1.4, "surface": "crystal"},
+	6: {"model": "lava_pool", "scale": 1.1, "light": Color(1.0, 0.32, 0.1), "energy": 3.2, "surface": "lava"},
+	7: {"model": "basalt", "scale": 1.0, "light": Color(1.0, 0.42, 0.14), "energy": 2.2, "surface": "lava"},
+	8: {"model": "lava_pool", "scale": 1.0, "light": Color(1.0, 0.62, 0.22), "energy": 2.6, "surface": "lava"},
+	9: {"model": "core_spires", "scale": 0.85, "light": Color(1.0, 0.84, 0.5), "energy": 1.5, "surface": "hot_crystal"},
 }
+
+
+static var _landmark_mats := {}
+
+
+static func dress_landmark(n: Node, kind: String) -> void:
+	## Gives a set piece's light-coloured surfaces (the crystal, the melt) a
+	## material of their own: glowing lava, faceted crystal, white-hot spires.
+	## Its dark parts (rock bases, crust stones) keep their baked look.
+	if not _landmark_mats.has(kind):
+		var m := ShaderMaterial.new()
+		match kind:
+			"lava":
+				m.shader = load("res://shaders/lava.gdshader")
+				m.set_shader_parameter("paint_tex", load("res://textures/rock_paint.png"))
+			"crystal":
+				m.shader = load("res://shaders/crystal.gdshader")
+			"hot_crystal":
+				m.shader = load("res://shaders/crystal.gdshader")
+				m.set_shader_parameter("body", Vector3(0.95, 0.55, 0.15))
+				m.set_shader_parameter("tip", Vector3(1.0, 0.95, 0.8))
+				m.set_shader_parameter("inner", 0.9)
+				m.set_shader_parameter("height", 2.2)
+		_landmark_mats[kind] = m
+	var mat: Material = _landmark_mats[kind]
+	var stack: Array = [n]
+	while not stack.is_empty():
+		var c: Node = stack.pop_back()
+		stack.append_array(c.get_children())
+		if not c is MeshInstance3D:
+			continue
+		var mi := c as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for si in mi.mesh.get_surface_count():
+			var sm := mi.mesh.surface_get_material(si)
+			var col := Color(0.5, 0.5, 0.5)
+			if sm is BaseMaterial3D:
+				col = (sm as BaseMaterial3D).albedo_color
+			if col.get_luminance() > 0.42:
+				mi.set_surface_override_material(si, mat)
 
 
 func landmark_cave(z: int) -> Array:
@@ -540,6 +581,8 @@ func _place_landmark(zone: Zone) -> void:
 	n.rotation.y = float(z) * 1.3
 	zone.node.add_child(n)
 	n.position = Vector3(c.x, floor_below(c, 6.0) - 0.05, c.z)
+	if d.has("surface"):
+		dress_landmark(n, str(d.surface))
 	if d.has("light"):
 		var l := OmniLight3D.new()
 		l.light_color = d.light
@@ -947,11 +990,15 @@ func _build_decor(zone: Zone, z: int) -> Array:
 				zon_c.append(cl[(h >> 5) % cl.size()])
 				continue
 		if (h >> 9) % PEBBLE_EVERY == 0:
-			var s := 0.7 + 1.0 * float((h >> 19) & 255) / 255.0
-			peb_x.append(_decor_xf(p, nr, ang, s, 0.03 * s))
+			var s := 0.9 + 1.1 * float((h >> 19) & 255) / 255.0
+			peb_x.append(_decor_xf(p, nr, ang, s, 0.035 * s))
+			# A shade off the rock it sits in, mostly darker (they're damp and
+			# half in shadow), now and then a pale one.
 			var c := _dc[i]
-			var k := 0.95 + 0.35 * float((h >> 3) & 63) / 63.0
-			peb_c.append(Color(c.r * k, c.g * k, c.b * k).lerp(Color(0.62, 0.58, 0.52), 0.25))
+			var k := 0.62 + 0.3 * float((h >> 3) & 63) / 63.0
+			if (h >> 25) % 9 == 0:
+				k = 1.05
+			peb_c.append(Color(c.r * k, c.g * k, c.b * k).lerp(Color(0.45, 0.42, 0.38), 0.18))
 	if not peb_x.is_empty():
 		out.append(_multimesh(zone, "pebble", peb_x, peb_c, _decor_mat("matte")))
 	if not nug_x.is_empty():
@@ -1416,6 +1463,7 @@ static func clear_caches() -> void:
 	_detail_cache.clear()
 	_strata = null
 	_decor_meshes.clear()
+	_landmark_mats.clear()
 
 
 static func detail_texture(seed_base: int) -> ImageTexture:

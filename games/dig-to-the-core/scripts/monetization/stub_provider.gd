@@ -90,14 +90,19 @@ func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:
 		skip.pressed.connect(func():
 			_close()
 			rewarded_failed.emit(placement, "closed early"))
+	# This ad's own screen: if it's closed early and another ad opens straight
+	# away, this countdown must stop instead of writing to the old buttons.
+	var mine := _layer
 	for i in range(FAKE_AD_SECONDS, 0, -1):
 		btn.text = "Close in %d..." % i
 		await get_tree().create_timer(1.0).timeout
-		if _layer == null:
+		if _layer != mine or not is_instance_valid(btn):
 			return
 	btn.text = "Close ad"
 	btn.disabled = false
 	await btn.pressed
+	if _layer != mine:
+		return
 	_close()
 	if rewarded:
 		rewarded_completed.emit(placement)
