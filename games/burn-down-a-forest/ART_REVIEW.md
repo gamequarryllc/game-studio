@@ -83,3 +83,28 @@ Next: a second fresh-eyes review of the new screenshots and the contact sheet (t
 - The notebook's craft and the consistent hand-drawn ink icons. **Kept**; the new icons follow the same 2 px ink, two-fill, wobble style.
 - The dry, in-world, sentence-case copy. **Kept**; new lines follow it ("a fair price", "nothing here you can't burn for").
 - Best models: the hooked cursed pines, the daisies, the root arch. **Kept**; the pines only gained mint eyes and a lighter bake.
+
+---
+
+# Art review 3: third fresh-eyes critic, 2026-11-09 (after review-2 fixes + QA)
+
+**Verdict: Almost.** The UI and palette look made by people; the keeper, the fire at scale, the meadow and the ending (on screen most) still look like an early build. **Phone readability:** the village and notebook read well; the forest interior is too dark, HUD second lines and floating numbers are too small, and late-game fire walls hide the keeper. This review is the polish list toward "ready to play".
+
+## Problems, worst first
+
+1. **Fire at scale**: dozens of copies of the same three-prong flame card, upright, same size, no smoke; near the camera they become giant flat cutouts that bury the keeper and HUD; canopies next to the fire stay cold purple; ash is an even orange-dot speckle. Fix: one composed bonfire per tree (a leading flame plus a few licks), fewer cards and a fade near the camera, wind lean, a smoke plume, fire light tinting nearby canopies, a creeping glowing edge instead of the speckle.
+2. **The keeper**: a bell, a sphere hood and a black ball with two yellow dot eyes (the stock faceless-hood look); the "hand" is a pot, the head ~120 triangles; from behind it reads as a red bowling pin with a pale selection-style outline. Fix: one sculpted mesh with a floppy hood tip, shoulder cape, a satchel and notebook on the back, mittens, boots, swinging scarf tails; an ink outline only when the keeper is hidden.
+3. **The meadow looks like a sticker**: hard-edged flat sage shapes lying on the dirt like rugs, flowers sprinkled evenly at one height. Fix: an ash → sprouts → grass edge band, slightly raised ground, drifts, mixed heights, a grow-in animation.
+4. **The ending**: flat noisy olive terrain, a grey stream that reads as tarmac, hills of evenly scattered pink lollipop trees (far_oak is a hexagonal block on a stick); no Elder stump, no village, no warm sun; "398 cells" is developer wording. Fix: a low shot past the keeper toward a stump with a sapling, village roofs with chimney smoke, a low warm sun with long shadows, a stream with banks, trees in groves, "acres" not "cells".
+5. **Forest interior**: half of each frame near-black; hex oaks are one purple cushion copied hundreds of times with the same lavender rim and no trunks; a black blob in the middle of the grove-fire shot. Fix: lift shadows to L* 20-25, lighter trails, 3-4 canopy shapes with the drooping points the art bible promises, colour variation per tree, visible trunks.
+6. **Village models**: the lodge is a stacked-ring cone on a cylinder; both cottages are the same model and doghouse-sized next to the keeper; the well is a tub; the woodpile a pile of balls; flagstones evenly scattered blobs on untextured dirt. Fix: cottages 1.5-2x bigger with different roofs, eaves and chimneys; a proper path with partly sunk stones; painted dirt and moss.
+7. **The notebook is still a shop table**: identical rows on every page, six same-size tabs, the same footer on every mostly-empty left page, text ignoring the ruled lines, an even-vignette scorched edge, the margin note cut by the gutter. Fix: a different treatment per page (tool sketches, tally marks for upgrade levels, pasted-in helper portraits, a burn map on the left page), text on the ruled lines, uneven tabs.
+8. **Numbers**: IM Fell's old-style figures leak in ("+11" reads "+II", "x1" reads "XI"); a title wraps with "minutes" orphaned; HUD second lines ~7 px at 844x390. Fix: lining figures for every number; at least 11-12 px text on phones.
+9. **Offers**: the parcel is flat isometric clip-art in a style used nowhere else; the tag is a plain rectangle on a dead-straight line. Fix: redraw the parcel in the ink style; a die-cut tag on sagging twine.
+10. **Mint hearts read as Valentine health pickups; the Elder Tree never reads as a landmark.** Fix: a knot or seed pod with a mint glow; a skyline silhouette for the Elder visible from the village.
+
+## Keep
+
+- The charred-plank HUD, the log-slice touch buttons, the taped notes with a drawn finger.
+- The notebook details and voice: ribbon close, KEPT / IN HAND stamps on tags, margin notes, the icon set, the dry lines.
+- The opening village shots: hooked pines, the giant tree on the skyline, warm lanterns against moonlit plum. The flame drawing itself is good; the problem is how many flames and how big.
