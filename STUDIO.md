@@ -81,7 +81,8 @@ The owner wants every game and UI to look like a small, skilled studio made it, 
 **Process, every time a game is shown to the owner:**
 1. Screenshots plus the model contact sheet.
 2. A fresh-eyes critic agent that has NOT seen the build process reviews them with one question: "what here looks AI-generated, generic or template-made, and what would a skilled indie artist change?" It must return concrete findings.
-3. The builder fixes every finding, then re-shoots. The critic ends with a verdict (yes / almost / no). A game is "first playable" once the verdict is at least "almost" (the remaining findings move into its polish work), and "ready to play" only when it's "yes".
+3. **Polish budget:** after first playable, a game gets at most two polish passes (each followed by a critic) before its builder slot goes to a new game from the queue. Further polish waits for the owner's playtest feedback, which always outranks the critic. This keeps new games flowing while the critics, who are told to find problems, keep raising the bar.
+4. The builder fixes every finding, then re-shoots. The critic ends with a verdict (yes / almost / no). A game is "first playable" once the verdict is at least "almost" (the remaining findings move into its polish work), and "ready to play" only when it's "yes".
 
 ## Playtesting: Claude plays every game end to end (the owner's request)
 
@@ -153,6 +154,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: Burn a Cardboard City third critic: **Almost** again (polish pass 1 done; review 3 is the list for its last budgeted pass). Added the polish budget (two passes, then new games; more on owner feedback).
 - 2026-11-09: Burn Down a Forest polish pass done (composed bonfires, sculpted keeper, meadow growth band, dawn-ending shot, lifted shadows, four oak shapes, house-size village, illustrated notebook pages, Keeper Fell font with lining figures, ink parcel offer, seed pods, Elder on the skyline). Smoke 94; boosted, keen (28:52), chaos and browser pass; fixed an Elder-aim stall. Next: fourth critic. Started Eat a Giant Cake.
 - 2026-11-09: Burn a Cardboard City polish pass done (hand-painted scorch, rooted fire clusters with smoke, darker dressed floor, real egg-carton castle, tissue trees and paper lawns, gripping hands, insert-tray shop, HUD fixes, box variety, crane-shot ending). Smoke 104; boosted (x2) and keen (21:18) pass; browser passes. One engine crash at startup under heavy load, not reproduced. Next: third critic. Started the Dig to the Core polish pass.
 - 2026-11-09: Dig to the Core third critic: **Almost** → first playable. Review 3 is its polish list; the polish pass starts in the next free slot.
