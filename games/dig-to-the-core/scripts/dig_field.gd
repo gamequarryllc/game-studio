@@ -507,41 +507,39 @@ func _finish_zone(zone: Zone) -> void:
 # Landmarks: one set piece per layer, in a cave of its own near the middle
 # =====================================================================================
 const LANDMARKS := {
-	1: {"model": "old_timbers", "scale": 1.0, "light": Color(1.0, 0.7, 0.36), "energy": 0.9, "at": Vector3(0.2, 1.5, 0.0)},
-	2: {"model": "mine_cart", "scale": 1.0, "light": Color(1.0, 0.74, 0.4), "energy": 0.8, "at": Vector3(0.3, 1.0, -0.5)},
-	3: {"model": "ribcage", "scale": 0.6},
+	1: {"model": "old_timbers", "scale": 1.0, "light": Color(1.0, 0.7, 0.36), "energy": 0.9, "at": Vector3(0.25, 1.6, 0.0)},
+	2: {"model": "mine_cart", "scale": 1.0, "light": Color(1.0, 0.74, 0.4), "energy": 0.7, "at": Vector3(0.5, 1.0, 0.35), "lift": 0.1},
+	3: {"model": "fossil_slab", "scale": 1.1},
 	4: {"model": "ribcage", "scale": 1.0},
-	5: {"model": "crystal_big", "scale": 1.0, "light": Color(0.42, 0.85, 0.74), "energy": 1.4, "surface": "crystal"},
-	6: {"model": "lava_pool", "scale": 1.1, "light": Color(1.0, 0.32, 0.1), "energy": 3.2, "surface": "lava"},
-	7: {"model": "basalt", "scale": 1.0, "light": Color(1.0, 0.42, 0.14), "energy": 2.2, "surface": "lava"},
-	8: {"model": "lava_pool", "scale": 1.0, "light": Color(1.0, 0.62, 0.22), "energy": 2.6, "surface": "lava"},
-	9: {"model": "core_spires", "scale": 0.85, "light": Color(1.0, 0.84, 0.5), "energy": 1.5, "surface": "hot_crystal"},
+	5: {"model": "crystal_big", "scale": 1.0, "light": Color(0.45, 0.88, 0.78), "energy": 1.5, "at": Vector3(0.0, 1.2, 0.0)},
+	6: {"model": "lava_pool", "scale": 1.1, "light": Color(1.0, 0.42, 0.12), "energy": 2.6, "at": Vector3(0.0, 0.45, 0.0), "melt": "lava"},
+	7: {"model": "mantle_rocks", "scale": 1.0, "light": Color(1.0, 0.45, 0.16), "energy": 1.5, "at": Vector3(0.0, 0.8, 0.6), "melt": "lava"},
+	8: {"model": "lava_pool", "scale": 1.0, "light": Color(1.0, 0.62, 0.22), "energy": 2.4, "at": Vector3(0.0, 0.45, 0.0), "melt": "iron"},
+	9: {"model": "core_heart", "scale": 1.0, "light": Color(1.0, 0.78, 0.4), "energy": 3.2, "at": Vector3(0.0, 1.2, 0.0), "melt": "core"},
+}
+# The melt's colours: [cool edge, hot streaks, which painted layer it flows like].
+const MELTS := {
+	"lava": [Color(0.86, 0.26, 0.05), Color(1.0, 0.66, 0.2), 6.0],
+	"iron": [Color(0.95, 0.45, 0.1), Color(1.0, 0.85, 0.45), 8.0],
+	"core": [Color(1.0, 0.62, 0.2), Color(1.0, 0.95, 0.75), 8.0],
+}
+# Crystal materials by name (art/blender/props.py): [body, tip, inner glow, height].
+const CRYSTALS := {
+	"crystal_teal": [Color(0.3, 0.66, 0.58), Color(0.82, 0.97, 0.92), 0.6, 2.1],
+	"crystal_violet": [Color(0.48, 0.38, 0.74), Color(0.86, 0.8, 0.97), 0.6, 1.3],
+	"crystal_pale": [Color(0.62, 0.74, 0.72), Color(0.95, 0.98, 0.95), 0.45, 1.0],
+	"corehot": [Color(0.98, 0.56, 0.14), Color(1.0, 0.95, 0.74), 1.15, 2.2],
 }
 
 
 static var _landmark_mats := {}
 
 
-static func dress_landmark(n: Node, kind: String) -> void:
-	## Gives a set piece's light-coloured surfaces (the crystal, the melt) a
-	## material of their own: glowing lava, faceted crystal, white-hot spires.
-	## Its dark parts (rock bases, crust stones) keep their baked look.
-	if not _landmark_mats.has(kind):
-		var m := ShaderMaterial.new()
-		match kind:
-			"lava":
-				m.shader = load("res://shaders/lava.gdshader")
-				m.set_shader_parameter("paint_tex", load("res://textures/rock_paint.png"))
-			"crystal":
-				m.shader = load("res://shaders/crystal.gdshader")
-			"hot_crystal":
-				m.shader = load("res://shaders/crystal.gdshader")
-				m.set_shader_parameter("body", Vector3(0.95, 0.55, 0.15))
-				m.set_shader_parameter("tip", Vector3(1.0, 0.95, 0.8))
-				m.set_shader_parameter("inner", 0.9)
-				m.set_shader_parameter("height", 2.2)
-		_landmark_mats[kind] = m
-	var mat: Material = _landmark_mats[kind]
+static func dress_landmark(n: Node, melt: String = "lava") -> void:
+	## Swaps a set piece's special materials, found by name, for the game's
+	## shaders: "melt..." glows (lava, molten iron or the core's amber),
+	## "crystal_..." and "corehot" get the faceted crystal shader. Everything
+	## else keeps its baked palette look.
 	var stack: Array = [n]
 	while not stack.is_empty():
 		var c: Node = stack.pop_back()
@@ -553,11 +551,34 @@ static func dress_landmark(n: Node, kind: String) -> void:
 			continue
 		for si in mi.mesh.get_surface_count():
 			var sm := mi.mesh.surface_get_material(si)
-			var col := Color(0.5, 0.5, 0.5)
-			if sm is BaseMaterial3D:
-				col = (sm as BaseMaterial3D).albedo_color
-			if col.get_luminance() > 0.42:
-				mi.set_surface_override_material(si, mat)
+			if sm == null:
+				continue
+			var nm := sm.resource_name
+			var key := ""
+			if nm.begins_with("melt"):
+				key = "melt_" + (melt if nm != "melt_core" else "core")
+			elif CRYSTALS.has(nm):
+				key = nm
+			if key == "":
+				continue
+			if not _landmark_mats.has(key):
+				var m := ShaderMaterial.new()
+				if key.begins_with("melt_"):
+					var p: Array = MELTS[key.substr(5)]
+					m.shader = load("res://shaders/lava.gdshader")
+					m.set_shader_parameter("layer_tex", load("res://textures/rock_layers.png"))
+					m.set_shader_parameter("melt", p[0])
+					m.set_shader_parameter("hot", p[1])
+					m.set_shader_parameter("slice", p[2])
+				else:
+					var q: Array = CRYSTALS[key]
+					m.shader = load("res://shaders/crystal.gdshader")
+					m.set_shader_parameter("body", q[0])
+					m.set_shader_parameter("tip", q[1])
+					m.set_shader_parameter("inner", q[2])
+					m.set_shader_parameter("height", q[3])
+				_landmark_mats[key] = m
+			mi.set_surface_override_material(si, _landmark_mats[key])
 
 
 func landmark_cave(z: int) -> Array:
@@ -580,9 +601,8 @@ func _place_landmark(zone: Zone) -> void:
 	n.scale = Vector3.ONE * float(d.get("scale", 1.0))
 	n.rotation.y = float(z) * 1.3
 	zone.node.add_child(n)
-	n.position = Vector3(c.x, floor_below(c, 6.0) - 0.05, c.z)
-	if d.has("surface"):
-		dress_landmark(n, str(d.surface))
+	n.position = Vector3(c.x, floor_below(c, 6.0) - 0.05 + float(d.get("lift", 0.0)), c.z)
+	dress_landmark(n, str(d.get("melt", "lava")))
 	if d.has("light"):
 		var l := OmniLight3D.new()
 		l.light_color = d.light
@@ -905,20 +925,27 @@ func dug_volume() -> float:
 # Decoration: pebbles, ore nuggets and each layer's own bits, scattered over
 # every dug rock face (one MultiMesh per kind per chunk, rebuilt with it)
 # =====================================================================================
-const PEBBLE_EVERY := 7            # about one pebble cluster per this many surface vertices
+const PEBBLE_EVERY := 3            # inside a pebble bed, about one cluster per this many surface vertices
+const PEBBLE_BEDS := 38            # percent of 0.8 m beds that carry pebbles (the rest are clean rock)
 const NUGGET_CHANCE := 55          # percent of ore vertices that show a nugget
-# zone -> [model, one per this many vertices, where ("ceiling", "wall", "any"), colours]
+# zone -> [model, one per this many vertices, where ("ceiling", "wall", "any"), colours, material]
 const ZONE_DECOR := {
-	0: ["root", 9, "ceiling", [Color(0.36, 0.25, 0.16), Color(0.3, 0.21, 0.14)]],
-	2: ["crystal_small", 45, "any", [Color(0.9, 0.86, 0.78)]],
-	3: ["shell", 20, "wall", [Color(0.86, 0.8, 0.69), Color(0.8, 0.72, 0.58)]],
-	4: ["bone", 14, "any", [Color(0.88, 0.82, 0.7), Color(0.8, 0.73, 0.6)]],
-	5: ["crystal_small", 8, "any", [Color(0.36, 0.72, 0.64), Color(0.9, 0.88, 0.8), Color(0.5, 0.42, 0.75)]],
-	6: ["magma_vent", 16, "any", [Color(1, 1, 1)]],
-	7: ["magma_vent", 22, "any", [Color(1, 1, 1)]],
-	8: ["magma_vent", 28, "any", [Color(1, 0.92, 0.75)]],
-	9: ["crystal_small", 10, "any", [Color(0.95, 0.72, 0.3), Color(0.95, 0.9, 0.78)]],
+	0: ["root", 9, "ceiling", [Color(0.36, 0.25, 0.16), Color(0.3, 0.21, 0.14)], "matte"],
+	2: ["rubble", 16, "any", [Color(0.36, 0.36, 0.38), Color(0.44, 0.41, 0.4)], "matte"],
+	3: ["shell", 22, "wall", [Color(0.7, 0.62, 0.5), Color(0.62, 0.54, 0.42)], "matte"],
+	4: ["bone", 15, "any", [Color(0.76, 0.68, 0.52), Color(0.68, 0.58, 0.42)], "matte"],
+	5: ["crystal_small", 9, "any", [Color(0.42, 0.8, 0.72), Color(0.6, 0.5, 0.86)], "crystal"],
+	6: ["magma_vent", 16, "any", [Color(1, 1, 1)], ""],
+	7: ["magma_vent", 22, "any", [Color(1, 1, 1)], ""],
+	8: ["magma_vent", 28, "any", [Color(1, 0.92, 0.75)], ""],
+	9: ["crystal_small", 10, "any", [Color(1.0, 0.7, 0.3), Color(0.95, 0.78, 0.42)], "hot"],
 }
+# Each layer's loose stones: their colour (mixed into the rock's) and size.
+const PEBBLE := [
+	[Color(0.36, 0.32, 0.28), 1.0], [Color(0.42, 0.42, 0.44), 0.9], [Color(0.3, 0.3, 0.32), 1.1], [Color(0.55, 0.48, 0.38), 0.9],
+	[Color(0.6, 0.48, 0.32), 1.5], [Color(0.2, 0.18, 0.26), 0.9], [Color(0.1, 0.085, 0.08), 1.0], [Color(0.3, 0.32, 0.15), 0.9],
+	[Color(0.28, 0.2, 0.12), 0.8], [Color(0.32, 0.22, 0.1), 0.8],
+]
 var decor_enabled := true
 var decor_mats := {}               # "matte" / "glint" / "glow" -> ShaderMaterial (World updates their lamp range)
 var _dv := PackedVector3Array()    # candidates gathered while meshing a chunk: position
@@ -944,11 +971,14 @@ static func decor_mesh(model: String) -> Mesh:
 
 
 func _decor_mat(kind: String) -> ShaderMaterial:
+	## "matte" (stones, bone, roots), "glint" (ore nuggets), "crystal" (the
+	## Crystal Caves' clusters: they glow from inside), "hot" (the core's).
 	if not decor_mats.has(kind):
 		var m := ShaderMaterial.new()
 		m.shader = load("res://shaders/decor.gdshader")
-		m.set_shader_parameter("glint", 1.0 if kind == "glint" else 0.0)
-		m.set_shader_parameter("glow", 0.6 if kind == "glow" else 0.0)
+		m.set_shader_parameter("glint", 1.0 if kind in ["glint", "crystal", "hot"] else 0.0)
+		m.set_shader_parameter("glow", {"crystal": 0.55, "hot": 1.1}.get(kind, 0.0))
+		m.set_shader_parameter("glow_color", Vector3(0.5, 0.95, 0.85) if kind == "crystal" else Vector3(1.0, 0.72, 0.3))
 		decor_mats[kind] = m
 	return decor_mats[kind]
 
@@ -976,7 +1006,7 @@ func _build_decor(zone: Zone, z: int) -> Array:
 			nug_x.append(_decor_xf(p, nr, ang, s, 0.02))
 			nug_c.append((Balance.ORES[ore].color as Color).lerp(Color.WHITE, 0.08))
 			continue
-		if not zd.is_empty() and (h >> 12) % int(zd[1]) == 0:
+		if not zd.is_empty() and (h >> 12) % int(zd[1]) == 0 and (str(zd[2]) == "ceiling" or nr.y > -0.95):
 			var ok := true
 			match str(zd[2]):
 				"ceiling":
@@ -989,27 +1019,26 @@ func _build_decor(zone: Zone, z: int) -> Array:
 				var cl: Array = zd[3]
 				zon_c.append(cl[(h >> 5) % cl.size()])
 				continue
-		if (h >> 9) % PEBBLE_EVERY == 0:
-			var s := 0.9 + 1.1 * float((h >> 19) & 255) / 255.0
-			peb_x.append(_decor_xf(p, nr, ang, s, 0.035 * s))
-			# A shade off the rock it sits in, mostly darker (they're damp and
-			# half in shadow), now and then a pale one.
+		# Pebbles lie in beds, like the strata they weathered out of: some
+		# 0.8 m beds are full of them, most have none.
+		var bed := _hash(int(floor(p.y * 1.25)) * 7919 + z * 104729) % 100 < PEBBLE_BEDS
+		if bed and (h >> 9) % PEBBLE_EVERY == 0 and nr.y > -0.8:
+			var pk: Array = PEBBLE[mini(z, PEBBLE.size() - 1)]
+			var s := (0.8 + 0.9 * float((h >> 19) & 255) / 255.0) * float(pk[1])
+			peb_x.append(_decor_xf(p, nr, ang, s, 0.03 * s))
+			# A stone of the layer's own kind, a shade off the rock it sits in
+			# and always a little darker (damp, half in shadow).
 			var c := _dc[i]
-			var k := 0.62 + 0.3 * float((h >> 3) & 63) / 63.0
-			if (h >> 25) % 9 == 0:
-				k = 1.05
-			peb_c.append(Color(c.r * k, c.g * k, c.b * k).lerp(Color(0.45, 0.42, 0.38), 0.18))
+			var k := 0.7 + 0.22 * float((h >> 3) & 63) / 63.0
+			var pc: Color = (pk[0] as Color).lerp(Color(c.r, c.g, c.b), 0.35)
+			peb_c.append(Color(pc.r * k, pc.g * k, pc.b * k))
 	if not peb_x.is_empty():
 		out.append(_multimesh(zone, "pebble", peb_x, peb_c, _decor_mat("matte")))
 	if not nug_x.is_empty():
 		out.append(_multimesh(zone, "nugget", nug_x, nug_c, _decor_mat("glint")))
 	if not zon_x.is_empty():
 		var model: String = zd[0]
-		var m: Material = null
-		if model == "crystal_small":
-			m = _decor_mat("glint" if z != 9 else "glow")
-		elif model != "magma_vent":
-			m = _decor_mat("matte")
+		var m: Material = _decor_mat(str(zd[4])) if str(zd[4]) != "" else null
 		out.append(_multimesh(zone, model, zon_x, zon_c, m))
 	return out
 
@@ -1432,29 +1461,95 @@ static var _detail_cache := {}
 static var _strata: ImageTexture
 
 
+# Each layer's look (the rock shader's per-layer uniforms, and World's light
+# and fog down there). band: the second rock in the beds, as a multiplier on
+# the first; fleck: the second rock where the layer's texture paints it;
+# strata: how strong the beds are; beds: how thick (more = thinner); tex: the
+# texture's scale; contrast: of the painted value; dark: how dark its lines
+# are; glow: how hot its cracks glow (rock that glows by itself only); show:
+# how much of the painted second rock shows; glint: veins that catch the lamp;
+# hot: the glow's colour; molten: a glow over the whole face; fog: the dark
+# the lamp falls off into; fill: the cool bounce and ambient.
+const STYLE := [
+	{"band": Color(0.6, 0.56, 0.52), "fleck": Color(0.76, 0.72, 0.68), "strata": 0.8, "beds": 2.0, "tex": 0.5, "contrast": 1.25,
+		"dark": 0.5, "glow": 0.0, "show": 0.7, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.07, 0.05, 0.035), "fill": Color(0.3, 0.33, 0.4)},
+	{"band": Color(0.76, 0.56, 0.56), "fleck": Color(0.86, 0.64, 0.66), "strata": 1.0, "beds": 3.0, "tex": 0.4, "contrast": 1.05,
+		"dark": 0.55, "glow": 0.0, "show": 0.8, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.075, 0.042, 0.032), "fill": Color(0.32, 0.34, 0.42)},
+	{"band": Color(0.76, 0.79, 0.86), "fleck": Color(1.3, 1.12, 1.05), "strata": 0.75, "beds": 0.9, "tex": 0.45, "contrast": 1.35,
+		"dark": 0.45, "glow": 0.0, "show": 0.85, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.04, 0.045, 0.055), "fill": Color(0.32, 0.37, 0.46)},
+	{"band": Color(0.7, 0.62, 0.54), "fleck": Color(1.18, 1.15, 1.1), "strata": 1.0, "beds": 2.4, "tex": 0.5, "contrast": 1.5,
+		"dark": 0.5, "glow": 0.0, "show": 0.6, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.075, 0.06, 0.042), "fill": Color(0.33, 0.36, 0.42)},
+	{"band": Color(0.72, 0.62, 0.52), "fleck": Color(1.2, 1.2, 1.18), "strata": 0.9, "beds": 1.6, "tex": 0.42, "contrast": 0.9,
+		"dark": 0.35, "glow": 0.0, "show": 0.7, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.07, 0.05, 0.03), "fill": Color(0.32, 0.34, 0.4)},
+	{"band": Color(0.72, 0.74, 1.0), "fleck": Color(1.35, 1.12, 1.5), "strata": 0.6, "beds": 1.0, "tex": 0.45, "contrast": 1.3,
+		"dark": 0.0, "glow": 0.0, "show": 0.55, "glint": 0.55, "hot": Color(0.55, 0.9, 0.85), "molten": 0.0,
+		"fog": Color(0.035, 0.03, 0.07), "fill": Color(0.32, 0.36, 0.55)},
+	{"band": Color(0.72, 0.7, 0.72), "fleck": Color(1.5, 0.9, 0.72), "strata": 0.5, "beds": 1.4, "tex": 0.5, "contrast": 1.25,
+		"dark": 0.75, "glow": 1.0, "show": 0.55, "glint": 0.0, "hot": Color(1.0, 0.42, 0.1), "molten": 0.0,
+		"fog": Color(0.06, 0.03, 0.022), "fill": Color(0.3, 0.3, 0.38)},
+	{"band": Color(0.8, 0.74, 0.7), "fleck": Color(0.8, 1.22, 1.05), "strata": 0.7, "beds": 1.6, "tex": 0.45, "contrast": 1.2,
+		"dark": 0.5, "glow": 0.85, "show": 0.4, "glint": 0.0, "hot": Color(1.0, 0.5, 0.15), "molten": 0.0,
+		"fog": Color(0.075, 0.035, 0.02), "fill": Color(0.32, 0.31, 0.38)},
+	{"band": Color(0.8, 0.7, 0.6), "fleck": Color(1.08, 1.12, 1.25), "strata": 0.45, "beds": 1.0, "tex": 0.35, "contrast": 1.0,
+		"dark": 0.35, "glow": 1.1, "show": 0.6, "glint": 0.0, "hot": Color(1.0, 0.64, 0.22), "molten": 0.12,
+		"fog": Color(0.1, 0.05, 0.02), "fill": Color(0.34, 0.32, 0.36)},
+	{"band": Color(0.8, 0.66, 0.5), "fleck": Color(1.15, 1.08, 1.0), "strata": 0.4, "beds": 0.8, "tex": 0.42, "contrast": 1.35,
+		"dark": 0.45, "glow": 1.7, "show": 0.6, "glint": 0.0, "hot": Color(1.0, 0.74, 0.3), "molten": 0.12,
+		"fog": Color(0.13, 0.065, 0.02), "fill": Color(0.42, 0.32, 0.22)},
+]
+
+
 static func make_rock_material() -> ShaderMaterial:
-	## The rock shader with its painted texture and strata bands (also used by
-	## the field's grass and the lift shaft's walls).
+	## The rock shader with each layer's painted texture and strata bands (also
+	## used by the field's grass; the lift shaft's walls share the textures).
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/rock.gdshader")
 	m.set_shader_parameter("paint_tex", load("res://textures/rock_paint.png"))
+	m.set_shader_parameter("layer_tex", load("res://textures/rock_layers.png"))
 	m.set_shader_parameter("strata_tex", strata_texture())
+	m.set_shader_parameter("zone_depth", Balance.ZONE_DEPTH)
+	set_style_uniforms(m)
 	return m
 
 
-static func strata_texture() -> ImageTexture:
-	## textures/strata.png, read as raw data so no import setting can squash
-	## a 512 x 1 strip.
+static func set_style_uniforms(m: ShaderMaterial) -> void:
+	var band := PackedVector3Array()
+	var fleck := PackedVector3Array()
+	var look := PackedVector4Array()
+	var lns := PackedVector4Array()
+	var glow := PackedVector4Array()
+	for i in 10:
+		var s: Dictionary = STYLE[mini(i, STYLE.size() - 1)]
+		var bc: Color = s.band
+		var fc: Color = s.fleck
+		var hc: Color = s.hot
+		band.append(Vector3(bc.r, bc.g, bc.b))
+		fleck.append(Vector3(fc.r, fc.g, fc.b))
+		look.append(Vector4(s.strata, s.beds, s.tex, s.contrast))
+		lns.append(Vector4(s.dark, s.glow, s.show, s.glint))
+		glow.append(Vector4(hc.r, hc.g, hc.b, s.molten))
+	m.set_shader_parameter("band_tint", band)
+	m.set_shader_parameter("fleck_tint", fleck)
+	m.set_shader_parameter("look", look)
+	m.set_shader_parameter("lines", lns)
+	m.set_shader_parameter("glow_color", glow)
+
+
+static func strata_texture() -> Texture2D:
+	## textures/strata.png (512 x 1, lossless, no mipmaps; see make_textures.py).
 	if _strata == null:
-		var img := Image.new()
-		var f := FileAccess.open("res://textures/strata.png", FileAccess.READ)
-		var ok := false
-		if f != null:
-			ok = img.load_png_from_buffer(f.get_buffer(f.get_length())) == OK
-		if not ok:
-			img = Image.create(8, 1, false, Image.FORMAT_RGB8)
-			img.fill(Color(0.8, 0.8, 0.8))
-		_strata = ImageTexture.create_from_image(img)
+		var t: Texture2D = load("res://textures/strata.png")
+		if t != null:
+			_strata = ImageTexture.create_from_image(t.get_image())
+		else:
+			var img := Image.create(8, 1, false, Image.FORMAT_RGBA8)
+			img.fill(Color(0.8, 0.5, 0.0, 0.0))
+			_strata = ImageTexture.create_from_image(img)
 	return _strata
 
 

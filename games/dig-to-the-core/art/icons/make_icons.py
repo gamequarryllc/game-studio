@@ -423,6 +423,30 @@ def nugget():
                line([(24, 16), (30, 32), (48, 48)], "#888888", 2.0), line([(30, 32), (12, 42)], "#888888", 2.0), hl([(18, 28), (26, 19)]))
 
 
+# The crosshair's word for rock your tool can't touch: a faceted lump split by
+# a jagged crack, with a chipped pick point glancing off it.
+@icon
+def too_hard():
+    return svg(poly([(8, 40), (14, 22), (30, 12), (48, 16), (58, 32), (52, 52), (26, 56), (10, 50)], "#6E6A66"),
+               poly([(14, 22), (30, 12), (34, 26), (20, 30)], "#8E8A84", SOOT, 2.0),
+               poly([(34, 26), (48, 16), (58, 32), (40, 36)], "#5A5652", SOOT, 2.0),
+               line([(30, 13), (33, 24), (27, 32), (34, 40), (29, 55)], SOOT, 3.6),
+               line([(33, 24), (40, 30)], SOOT, 2.2),
+               poly([(44, 6), (58, 2), (52, 12)], RED, SOOT, 2.4),
+               line([(46, 14), (50, 20)], AMBER, 2.4), line([(54, 14), (60, 16)], AMBER, 2.4),
+               hl([(15, 27), (22, 19), (29, 15)]))
+
+
+# The shaft wall: banded iron plate you can't dig through.
+@icon
+def wall():
+    return svg(poly([(10, 10), (54, 10), (54, 54), (10, 54)], DSTEEL),
+               line([(10, 25), (54, 25)], SOOT, 3.0), line([(10, 40), (54, 40)], SOOT, 3.0),
+               circ(16, 17, 2.4, "#7d8086", SOOT, 1.5), circ(48, 17, 2.4, "#7d8086", SOOT, 1.5),
+               circ(16, 47, 2.4, "#7d8086", SOOT, 1.5), circ(48, 47, 2.4, "#7d8086", SOOT, 1.5),
+               hl([(14, 14), (40, 13)]))
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     for name, fn in ICONS.items():

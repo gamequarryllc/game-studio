@@ -54,6 +54,21 @@ func _drag(index: int, pos: Vector2, rel: Vector2) -> void:
 	root.push_input(ev, true)
 
 
+func _small_text(n: Node) -> Array:
+	## Labels and buttons with words on them smaller than 20 px.
+	var out: Array = []
+	for c in n.find_children("*", "", true, false):
+		if c is Label and str((c as Label).text).strip_edges() != "":
+			var fs: int = (c as Label).get_theme_font_size("font_size")
+			if fs < 20:
+				out.append("%s %d px" % [str((c as Label).text).left(18), fs])
+		elif c is Button and str((c as Button).text).strip_edges() != "":
+			var fs2: int = (c as Button).get_theme_font_size("font_size")
+			if fs2 < 20:
+				out.append("%s %d px" % [str((c as Button).text).left(18), fs2])
+	return out
+
+
 func _carve(field, at: Vector3, radius: float) -> void:
 	field.dig(at, radius, 1e9)
 
@@ -212,6 +227,28 @@ func _run() -> void:
 	check(gs.buy_upgrade("power") and gs.upgrade_levels["power"] == lv0 + 1, "bought a Dig Power upgrade")
 	hud.shop.show_tab("bonus")
 	await _frames(1)
+	# Phone first: nothing to read under 20 px at the 1280 x 720 design size
+	# (about 11 px on a small phone in landscape), in the HUD or on any of the
+	# shop's sections; the anchor offer is sold in one place only, with a
+	# store price (no "(test)").
+	var small: Array = []
+	for t in ["tools", "upgrades", "crew", "finds", "bonus"]:
+		hud.shop.show_tab(t)
+		await _frames(1)
+		small.append_array(_small_text(hud.root))
+	check(small.is_empty(), "no text under 20 px in the HUD or the shop (%s)" % ", ".join(small.slice(0, 6)))
+	hud.shop.show_tab("bonus")
+	await _frames(1)
+	var anchors := 0
+	for b in hud.shop.find_children("*", "Button", true, false):
+		if str((b as Button).text).contains("(test)"):
+			anchors += 100
+		if b == hud.shop.button_for(mon.PRODUCT_REMOVE_ADS_2X):
+			anchors += 1
+	check(anchors == 1, "No ads + 2x is sold from one enamel sign on the bonus wall, no test tags on prices")
+	hud.shop.show_tab("tools")
+	await _frames(1)
+	check(hud.shop.button_for(mon.PRODUCT_REMOVE_ADS_2X) == null, "...and not on every section")
 	hud.close_shop()
 	await _frames(1)
 	check(hud.shop == null, "the shop closes")

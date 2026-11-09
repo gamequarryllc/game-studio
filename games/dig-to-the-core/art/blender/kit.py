@@ -43,6 +43,8 @@ PAL.update({
     "iron": mix("soot", "cream", 0.16),
     "steel": mix("soot", "cream", 0.42),
     "bright_steel": mix("soot", "cream", 0.64),
+    # tool steel: a touch of verdigris cools it, so it doesn't turn gold under the lamp
+    "tool_steel": mix(mix("soot", "cream", 0.66), "verdigris", 0.14),
     "dark_steel": mix("soot", "cream", 0.08),
     # timber: umber toward amber (fresh) or soot (old)
     "wood": mix(mix("umber", "amber", 0.28), "cream", 0.08),
@@ -51,6 +53,10 @@ PAL.update({
     "leather": mix("umber", "amber", 0.42),
     "leather_dark": mix("umber", "soot", 0.25),
     "canvas": mix("umber", "soot", 0.55),
+    "work_shirt": mix(mix("verdigris", "umber", 0.55), "soot", 0.25),
+    "work_shirt_dark": mix(mix("verdigris", "umber", 0.55), "soot", 0.55),
+    "leather_worn": mix(mix("umber", "amber", 0.42), "cream", 0.22),
+    "tape": mix("soot", "umber", 0.3),
     "rubber": mix("soot", "umber", 0.15),
     "rope": mix("brass", "cream", 0.35),
     # living things
@@ -60,6 +66,9 @@ PAL.update({
     "leaf": mix(mix("verdigris", "umber", 0.45), "amber", 0.18),
     "leaf_dark": mix(mix(mix("verdigris", "umber", 0.45), "amber", 0.12), "soot", 0.35),
     "pine": mix("verdigris", "soot", 0.58),
+    "leaf_maple": mix(mix("verdigris", "umber", 0.4), "amber", 0.26),
+    "leaf_birch": mix(mix("verdigris", "amber", 0.42), "umber", 0.12),
+    "birch_bark": mix("cream", "soot", 0.08),
     "bark": mix("umber", "soot", 0.35),
     # stone and bone
     "stone": mix(mix("soot", "cream", 0.5), "umber", 0.15),
@@ -86,11 +95,11 @@ def srgb_to_linear(c):
 def mat(name, color=None, metal=0.0, rough=0.7, emit=0.0):
     """A flat palette material. Godot multiplies it by the vertex colour.
     Palette values are sRGB (as picked); Blender and glTF want linear."""
-    key = (name, metal, rough, emit)
+    key = (name, tuple(color) if color is not None else None, metal, rough, emit)
     if key in _mats:
         return _mats[key]
     c = srgb_to_linear(PAL.get(name, (0.8, 0.8, 0.8)) if color is None else color)
-    m = bpy.data.materials.new(name)
+    m = bpy.data.materials.new(name or "paint")
     m.use_nodes = True
     bsdf = m.node_tree.nodes.get("Principled BSDF")
     bsdf.inputs["Base Color"].default_value = (c[0], c[1], c[2], 1.0)
@@ -292,6 +301,10 @@ def attach(child, parent, pivot):
 
 
 def join(objs, name):
+    # Detail painted into some parts' vertex colour must survive: give the
+    # rest a plain white one first (else they'd come out black).
+    if any(o.type == "MESH" and "Col" in o.data.color_attributes for o in objs):
+        white_col([o for o in objs if o.type == "MESH"])
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
         o.select_set(True)
@@ -450,54 +463,172 @@ def arc(center, axis_u, axis_v, radius, a0, a1, steps):
 
 def glove(m_leather=None, m_cuff=None, m_sleeve=None, r=0.022, name="Glove", sleeve_len=0.32):
     """A worn leather work glove gripping a handle of radius r that runs along
-    X through the origin. The back of the hand faces -Y/+Z (towards the
-    viewer), the forearm runs back along -Y and down. Built from smooth tubes
-    and a rounded hand block (no beads, no struts): four fingers curled round
-    the handle, a thumb hooked over them, a flared gauntlet cuff with a rolled
-    edge, and the work-shirt sleeve. Returns one object."""
+    X through the origin, and the work-shirt sleeve behind it. The back of the
+    hand faces -Y/+Z (towards the viewer), the forearm runs back along -Y and
+    down. Built from smooth tubes and a rounded hand block: knuckles standing
+    up across the back of the hand, four fingers curled round the handle with
+    a crease at each joint, a thumb hooked over them, a stitched seam and a
+    wrist strap with a brass stud, a flared gauntlet cuff with a rolled edge;
+    then the sleeve, bunched in soft folds, with a turned-back cuff, its seam
+    and a button. Returns one object."""
     m_leather = m_leather or mat("leather", rough=0.85)
     m_cuff = m_cuff or mat("leather_dark", rough=0.9)
-    m_sleeve = m_sleeve or mat("canvas", rough=0.95)
+    m_sleeve = m_sleeve or mat("work_shirt", rough=0.95)
+    m_stitch = mat("rope", rough=0.9)
+    m_brass = mat("brass", metal=0.8, rough=0.35)
     parts = []
     # The hand: a rounded block behind and above the handle.
     hand = box((0.098, 0.062, 0.07), (0, -0.048, 0.016), m_leather, rot=(0.35, 0, 0), bevel=0.024, segs=3, name="hand")
     for v in hand.data.vertices:
-        # Knuckle side a little fuller, the wrist end narrower.
         t = (v.co.y + 0.048) / 0.06
         v.co.x *= 1.0 - 0.12 * max(0.0, -t)
     parts.append(hand)
-    # Fingers: one smooth tube each, from inside the hand, over the top of
-    # the handle and round under it. Slightly fanned and uneven.
-    for k, x in enumerate((-0.034, -0.0115, 0.0115, 0.0335)):
+    xs = (-0.034, -0.0115, 0.0115, 0.0335)
+    # Knuckles: a ridge of four bumps where the fingers start, worn pale.
+    for k, x in enumerate(xs):
+        kn = sphere(0.0128 - 0.001 * abs(k - 1.5), (x * 0.96, -0.024, 0.04 + 0.002 * (k % 2)), mat("leather_worn", rough=0.8), scale=(1.0, 0.95, 0.72), segs=10, rings=6, name="knuckle")
+        parts.append(kn)
+    # Fingers: one smooth tube each, over the top of the handle and round
+    # under it, narrowing at the two joints, slightly fanned and uneven.
+    for k, x in enumerate(xs):
         fr = 0.0118 - 0.0009 * abs(k - 1.3)
         rr = r + fr * 0.92
         a0 = 128 + k * 3
         a1 = -78 + (k - 1.5) * 6
-        pts = [Vector((x * 0.95, -0.05, 0.03))] + arc((x, 0, 0), (0, 1, 0), (0, 0, 1), rr, a0, a1, 8)
-        rad = [fr * 1.15] + [fr * (1.08 - 0.18 * i / 7) for i in range(8)]
+        pts = [Vector((x * 0.95, -0.05, 0.03))] + arc((x, 0, 0), (0, 1, 0), (0, 0, 1), rr, a0, a1, 10)
+        rad = [fr * 1.15]
+        for i in range(10):
+            t = i / 9
+            joint = 0.86 if i in (3, 6) else 1.0
+            rad.append(fr * (1.1 - 0.2 * t) * joint)
         parts.append(tube(pts, rad, m_leather, sides=8, name="finger"))
     # Thumb: out of the side of the hand, hooked round the front over the fingers.
     tp = [Vector((-0.042, -0.06, -0.004)), Vector((-0.05, -0.03, -0.024)), Vector((-0.046, 0.0, -0.034)),
           Vector((-0.032, 0.026, -0.03)), Vector((-0.016, 0.036, -0.016))]
-    parts.append(tube(tp, [0.016, 0.0145, 0.013, 0.012, 0.0105], m_leather, sides=8, name="thumb"))
-    # Stitched seam across the back of the hand.
-    seam = arc((0, -0.035, -0.01), (0, -0.55, 0.83), (1, 0, 0), 0.05, -55, 55, 7)
-    parts.append(tube(seam, [0.0028] * 7, m_cuff, sides=5, name="seam"))
+    parts.append(tube(tp, [0.016, 0.0145, 0.0118, 0.012, 0.0105], m_leather, sides=8, name="thumb"))
+    # Stitched seams down the back of the hand, between the fingers.
+    for x in (-0.023, 0.0, 0.023):
+        seam = [Vector((x, -0.085, 0.03)), Vector((x * 1.02, -0.06, 0.044)), Vector((x * 1.05, -0.035, 0.048))]
+        parts.append(tube(seam, [0.0022] * 3, m_stitch, sides=4, name="seam"))
+    # Wrist strap with a brass stud.
+    strap = arc((0, -0.098, 0.0), (1, 0, 0), (0, 0.32, 0.95), 0.05, -100, 100, 9)
+    parts.append(tube(strap, [0.0068] * 9, m_cuff, sides=6, flat=0.4, name="strap"))
+    parts.append(sphere(0.0065, (0.0, -0.1, 0.05), m_brass, segs=8, rings=5, name="stud"))
     # Gauntlet cuff, flaring back from the wrist, with a rolled edge.
     wrist = Vector((0, -0.105, -0.004))
     back = Vector((0, -1.0, -0.32)).normalized()
     cuff_pts = [wrist + back * (i * 0.028) for i in range(4)]
     parts.append(tube(cuff_pts, [0.038, 0.044, 0.05, 0.054], m_cuff, sides=12, cap=False, flat=0.86, name="cuff"))
     edge = cuff_pts[-1]
-    ring = arc(edge, Vector((1, 0, 0)), back.cross(Vector((1, 0, 0))).normalized(), 0.054, 0, 360, 15)
+    side = back.cross(Vector((1, 0, 0))).normalized()
+    ring = arc(edge, Vector((1, 0, 0)), side, 0.054, 0, 360, 15)
     parts.append(tube(ring, [0.0065] * 15, m_cuff, sides=6, cap=False, name="cuffroll"))
-    # The work-shirt sleeve going back out of frame, a little baggy.
-    sl = [edge + back * 0.01 + back * (sleeve_len * i / 4) for i in range(5)]
-    parts.append(tube(sl, [0.05, 0.056, 0.058, 0.06, 0.061], m_sleeve, sides=12, cap=False, flat=0.9, name="sleeve"))
+    # The sleeve: bunched in soft folds near the wrist, easing out further back.
+    n = 12
+    sl = [edge + back * 0.004 + back * (sleeve_len * i / (n - 1)) for i in range(n)]
+    srad = [0.05 + 0.011 * min(1.0, i / 3) for i in range(n)]
+    sleeve = tube(sl, srad, m_sleeve, sides=16, cap=False, flat=0.9, name="sleeve")
+    rnd = random.Random(int(sleeve_len * 1000))
+    ph = rnd.uniform(0, 6)
+    for v in sleeve.data.vertices:
+        d = v.co - edge
+        along = d.dot(back)
+        radial = d - back * along
+        if radial.length < 1e-5:
+            continue
+        a = math.atan2(radial.dot(side), radial.dot(Vector((1, 0, 0))))
+        bunch = math.exp(-along / (sleeve_len * 0.45))
+        fold = math.sin(along * 70.0 + 1.8 * math.sin(a * 2.0 + ph)) * (0.0055 * bunch + 0.0018)
+        crease = 0.0025 * math.sin(a * 3.0 + along * 25.0)
+        v.co += radial.normalized() * (fold + crease)
+    parts.append(sleeve)
+    # Turned-back shirt cuff over the glove's gauntlet, with its seam and a button.
+    cb = [edge + back * 0.006 + back * (0.05 * i / 3) for i in range(4)]
+    parts.append(tube(cb, [0.064, 0.066, 0.066, 0.064], m_sleeve, sides=16, cap=False, flat=0.9, name="shirtcuff"))
+    seam_ring = arc(edge + back * 0.058, Vector((1, 0, 0)), side, 0.064, 0, 360, 17)
+    parts.append(tube(seam_ring, [0.0025] * 17, mat("work_shirt_dark", rough=0.95), sides=4, cap=False, name="cuffseam"))
+    parts.append(sphere(0.0075, tuple(edge + back * 0.03 + side * 0.066), mat("bone", rough=0.5), scale=(1, 1, 0.5), segs=8, rings=5, name="button"))
     o = join(parts, name)
     smooth(o, 70)
-    wobble(o, 0.0009, 77)
-    ao(o, 0.05, strength=0.55, edge=0.4)
+    wobble(o, 0.0008, 77)
+    ao(o, 0.05, strength=0.6, edge=0.5)
+    return o
+
+
+def grain(o, axis, strength=0.22, scale=26.0, seed=1):
+    """Wood grain baked into the vertex colour: long streaks along `axis`
+    (fine lines and a few darker knots), under whatever AO comes later."""
+    from mathutils import noise as _noise
+    me = o.data
+    white_col([o])
+    col = me.color_attributes["Col"]
+    ax = Vector(axis).normalized()
+    off = Vector((seed * 3.1, seed * 1.7, seed * 2.3))
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            p = me.vertices[me.loops[li].vertex_index].co
+            along = p.dot(ax)
+            across = p - ax * along
+            n = _noise.noise(across * scale + off + ax * along * 1.2)
+            lines = 0.5 + 0.5 * math.sin((across.length * scale * 2.2) + n * 3.0 + along * 3.0)
+            knot = max(0.0, _noise.noise(p * 3.0 + off) - 0.45) * 2.0
+            k = 1.0 - strength * (0.6 * lines + 0.8 * knot)
+            c = col.data[li].color
+            col.data[li].color = (c[0] * k, c[1] * k, c[2] * k, 1.0)
+
+
+def paint_by(o, fn):
+    """Multiplies the vertex colour by fn(position) (worn steel edges, rust)."""
+    me = o.data
+    white_col([o])
+    col = me.color_attributes["Col"]
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            p = me.vertices[me.loops[li].vertex_index].co
+            k = fn(p)
+            c = col.data[li].color
+            col.data[li].color = (c[0] * k, c[1] * k, c[2] * k, 1.0)
+
+
+def handle(a, b, r0, r1, m, sides=12, rings=28, name="handle"):
+    """A turned wooden handle from a to b (radius r0 to r1), with enough rings
+    for the grain to show along it."""
+    a = Vector(a)
+    b = Vector(b)
+    L = (b - a).length
+    o = bar(sides, 1.0, L, rings, (0, 0, 0), m, name=name)
+    for v in o.data.vertices:
+        t = v.co.y / L
+        rr = r0 + (r1 - r0) * t
+        v.co.x *= rr
+        v.co.z *= rr
+    q = Vector((0, 1, 0)).rotation_difference((b - a).normalized())
+    mm = q.to_matrix().to_4x4()
+    mm.translation = a
+    o.data.transform(mm)
+    grain(o, b - a, 0.28, 60.0, sides + rings)
+    smooth(o, 50)
+    return o
+
+
+def tape_wrap(a, b, r, turns, m, width=0.006, name="tape"):
+    """Cloth grip tape wound round a handle from a to b: a flat ribbon in a
+    tight spiral, each wrap overlapping the last."""
+    a = Vector(a)
+    b = Vector(b)
+    d = (b - a)
+    L = d.length
+    ax = d.normalized()
+    ref = Vector((0, 0, 1)) if abs(ax.z) < 0.9 else Vector((1, 0, 0))
+    u = (ref - ax * ref.dot(ax)).normalized()
+    w = ax.cross(u)
+    pts = []
+    steps = int(turns * 14)
+    for i in range(steps + 1):
+        t = i / steps
+        ang = t * turns * math.tau
+        pts.append(a + ax * (t * L) + (u * math.cos(ang) + w * math.sin(ang)) * r)
+    o = tube(pts, [width] * len(pts), m, sides=4, cap=False, flat=0.35, name=name)
     return o
 
 
@@ -545,14 +676,32 @@ def ao(o, dist=0.2, rays=14, strength=0.75, seed=5, edge=0.6, top=0.1):
         s *= 1.0 - 0.06 * rnd.random()
         shade[v.index] = max(0.28, min(1.0, s))
     bm.free()
-    if "Col" not in me.color_attributes:
+    had = "Col" in me.color_attributes
+    if not had:
         me.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
     col = me.color_attributes["Col"]
     me.color_attributes.active_color = col
     for poly in me.polygons:
         for li in poly.loop_indices:
             s = shade[me.loops[li].vertex_index]
-            col.data[li].color = (s, s, s, 1.0)
+            if had:
+                # Detail painted in before (wood grain, rust): keep it under the AO.
+                c = col.data[li].color
+                col.data[li].color = (c[0] * s, c[1] * s, c[2] * s, 1.0)
+            else:
+                col.data[li].color = (s, s, s, 1.0)
+
+
+def white_col(objs):
+    """Gives every object a plain white "Col" so detail painted into some of
+    them survives a join (the others would otherwise come out black)."""
+    for o in objs:
+        me = o.data
+        if "Col" not in me.color_attributes:
+            col = me.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+            for d in col.data:
+                d.color = (1.0, 1.0, 1.0, 1.0)
+            me.color_attributes.active_color = col
 
 
 def wear(o, strength=1.0, top=0.12, seed=3):

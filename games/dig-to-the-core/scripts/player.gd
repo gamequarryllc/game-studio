@@ -89,17 +89,19 @@ func _ready() -> void:
 	lamp.light_energy = 1.5
 	lamp.spot_range = Balance.HEADLAMP_RANGE
 	lamp.spot_angle = Balance.HEADLAMP_ANGLE
-	lamp.spot_angle_attenuation = 0.6   # a soft edge to the pool, not a torch circle
+	lamp.spot_angle_attenuation = 0.85  # falls off across the whole pool: no torch circle
 	lamp.spot_attenuation = 0.55  # a flat falloff (no blow-out at the lens): the zone-tinted fog takes it the rest of the way to black
 	lamp.light_specular = 0.6
 	lamp.position = Vector3(0.0, 0.12, 0.0)
 	lamp.layers = 1 | VIEWMODEL_LAYER   # lights only reach cameras whose cull mask includes their layers
 	camera.add_child(lamp)
+	# A cool fill close round you (the bounce off the rock you're lighting),
+	# so props and the tool beside the beam aren't black.
 	fill = OmniLight3D.new()
-	fill.light_color = Color(1.0, 0.72, 0.42)
+	fill.light_color = Color(0.62, 0.7, 0.88)
 	fill.light_energy = 0.1
-	fill.omni_range = 2.6
-	fill.omni_attenuation = 2.0
+	fill.omni_range = 3.4
+	fill.omni_attenuation = 1.6
 	fill.light_specular = 0.0
 	fill.layers = 1 | VIEWMODEL_LAYER
 	camera.add_child(fill)
@@ -358,12 +360,14 @@ func _update_tool(delta: float) -> void:
 	var under := clampf(-position.y / 6.0, 0.0, 1.0)
 	lamp.spot_range = GameState.lamp_range() * 0.86
 	lamp.light_energy = lerpf(0.4, 2.8, under)
-	fill.light_energy = lerpf(0.0, 0.1, under)
+	fill.light_energy = lerpf(0.0, 0.16, under)
 	if field != null and field.material != null:
-		field.material.set_shader_parameter("lamp_pos", eye_pos())
+		var eye := eye_pos()
+		field.material.set_shader_parameter("lamp_pos", eye)
 		field.material.set_shader_parameter("lamp_range", lamp.spot_range)
 		for m in field.decor_mats.values():
 			(m as ShaderMaterial).set_shader_parameter("lamp_range", lamp.spot_range)
+			(m as ShaderMaterial).set_shader_parameter("lamp_pos", eye)
 
 
 func strike(damage: float) -> Dictionary:

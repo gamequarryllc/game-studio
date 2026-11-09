@@ -25,6 +25,7 @@ var found: Array = []                  # per find: dug out yet?
 var deepest := 0.0                     # metres: the deepest you've stood
 var lift_stop := Vector3.INF           # the lift's bottom stop: the lamp post (INF = none yet)
 var lift_spot := Vector3.INF           # where the lift sets you down, next to the post
+var spoil_at := Vector3.INF            # where the dirt from your first hole is heaped (on the grass)
 var dug_volume := 0.0                  # m³ dug, all zones
 var ore_points := 0                    # bits of ore dug
 var clock := 0.0                       # game seconds played (boosts run on this, so they only tick while you play)
@@ -81,6 +82,7 @@ func reset_state(keep_purchases: bool = false) -> void:
 	deepest = 0.0
 	lift_stop = Vector3.INF
 	lift_spot = Vector3.INF
+	spoil_at = Vector3.INF
 	dug_volume = 0.0
 	ore_points = 0
 	clock = 0.0
@@ -479,6 +481,7 @@ func to_dict() -> Dictionary:
 		"deepest": deepest,
 		"lift_stop": [lift_stop.x, lift_stop.y, lift_stop.z] if lift_stop.is_finite() else [],
 		"lift_spot": [lift_spot.x, lift_spot.y, lift_spot.z] if lift_spot.is_finite() else [],
+		"spoil_at": [spoil_at.x, spoil_at.y, spoil_at.z] if spoil_at.is_finite() else [],
 		"dug_volume": dug_volume,
 		"ore_points": ore_points,
 		"clock": clock,
@@ -546,6 +549,7 @@ func load_game() -> void:
 	deepest = float(data.get("deepest", 0.0))
 	lift_stop = _vec(data.get("lift_stop", []))
 	lift_spot = _vec(data.get("lift_spot", []))
+	spoil_at = _vec(data.get("spoil_at", []))
 	if lift_stop.is_finite() and not lift_spot.is_finite():
 		lift_spot = lift_stop
 	dug_volume = float(data.get("dug_volume", 0.0))

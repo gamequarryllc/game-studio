@@ -14,7 +14,8 @@ values the rock shader multiplies by each rock type's colour:
 
 and textures/strata.png (512 x 1): the strata bands, 64 m of them, each
 0.5 to 1.5 m thick and 12 to 22 percent lighter or darker than the last.
-  R  band value      G  band warmth (0.5 = as is, up = warmer, down = cooler)
+  R  band value
+  G  which rock the band is: 0 the layer's first, 1 its second, 0.5 mixed
   B  1 on the thin seam where two bands meet, and on the odd pebble bed
 """
 import os
@@ -156,27 +157,34 @@ def main():
     rgba = np.stack([val, g, crack, grass], -1)
     Image.fromarray((np.clip(rgba, 0, 1) * 255).astype(np.uint8), "RGBA").save(os.path.join(OUT, "rock_paint.png"))
 
-    # Strata: 64 m in 512 texels (8 per metre).
+    # Strata: 64 m in 512 texels (8 per metre). Each band is the layer's
+    # first rock or its second (A), so every layer shows two rock values.
     r = np.random.default_rng(3)
     bands = []
     y = 0.0
     shade = 1.0
-    warm = 0.5
+    kind = 0.0
     while y < 64.0:
         h = r.uniform(0.5, 1.5)
         step = r.uniform(0.12, 0.22) * (1 if shade < 1.0 else -1) * (1 if r.random() < 0.8 else -1)
         shade = float(np.clip(shade + step, 0.74, 1.22))
         warm = float(np.clip(0.5 + r.uniform(-0.45, 0.45), 0.05, 0.95))
         pebbly = r.random() < 0.18
-        bands.append((y, y + h, shade, warm, pebbly))
+        # Second-rock beds come in runs: thick ones, thin ones, the odd mixed bed.
+        roll = r.random()
+        if kind < 0.5:
+            kind = 1.0 if roll < 0.42 else (0.5 if roll < 0.52 else 0.0)
+        else:
+            kind = 0.0 if roll < 0.6 else (0.5 if roll < 0.7 else 1.0)
+        bands.append((y, y + h, shade, warm, pebbly, kind))
         y += h
     tex = np.zeros((512, 3))
     for i in range(512):
         m = i / 8.0
-        for (a, b, s, w, pb) in bands:
+        for (a, b, s, w, pb, kd) in bands:
             if a <= m < b:
                 seam = (m - a) < 0.09
-                tex[i] = (s / 1.25 * (0.84 if seam else 1.0), w, 1.0 if (seam or pb) else 0.0)
+                tex[i] = (s / 1.25 * (0.84 if seam else 1.0), kd, 1.0 if (seam or pb) else 0.0)
                 break
     img = tex[None, :, :]
     Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8), "RGB").save(os.path.join(OUT, "strata.png"))

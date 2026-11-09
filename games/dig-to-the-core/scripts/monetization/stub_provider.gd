@@ -51,7 +51,9 @@ func restore_purchases() -> void:
 
 
 func price_string(_product_id: String, fallback: String) -> String:
-	return fallback + " (test)"
+	# The price as the store would show it. (That purchases are fake in
+	# playtest builds is said on the fake purchase screen and in the dev tools.)
+	return fallback
 
 
 func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:

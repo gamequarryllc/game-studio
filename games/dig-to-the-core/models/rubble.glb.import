@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://8tjbvms8bev0"
-path="res://.godot/imported/basalt.glb-e962269328a32b17688f62d201270342.scn"
+uid="uid://5wqfr05mi0st"
+path="res://.godot/imported/rubble.glb-045e70eddbb813eda743968626af95b1.scn"
 
 [deps]
 
-source_file="res://models/basalt.glb"
-dest_files=["res://.godot/imported/basalt.glb-e962269328a32b17688f62d201270342.scn"]
+source_file="res://models/rubble.glb"
+dest_files=["res://.godot/imported/rubble.glb-045e70eddbb813eda743968626af95b1.scn"]
 
 [params]
 

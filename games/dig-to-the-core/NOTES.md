@@ -22,11 +22,13 @@ Value contrast (WCAG): cream on soot 13.2:1, amber on soot 9.1:1, soot on brass 
 - **Rye** (Sorkin Type), a woodtype face like old mining-company signage: signs, titles, layer names, the tool plate. Never for sentences.
 - **Zilla Slab** 500 and 700 (Typotheque for Mozilla): everything people read, numbers and buttons.
 
-**UI motif.** Riveted brass and blackened iron like the dials on a mine hoist, plus worn cream enamel signs. Plates are drawn in code (`RivetBox`): hand-cut uneven chamfers, rivets, a glint on the top edge, grain specks, fine scratches and chipped paint, and each plate wears differently. The first-run hint is a cream enamel sign hung slightly crooked; the offer tag hangs off-true; the money gauge sits left of centre. The depth gauge is a brass tube with a glass window, the main HUD element.
+**UI motif.** Riveted brass and blackened iron like the dials on a mine hoist, plus worn cream enamel signs. The shop is the shack itself (`WoodBox`: plank wall, pegboard, ledger, drawer cabinet), and signs in the world have their lettering painted into enamel textures (`art/textures/make_signs.py`), never floating text. Plates are drawn in code (`RivetBox`): hand-cut uneven chamfers, rivets, a glint on the top edge, grain specks, fine scratches and chipped paint, and each plate wears differently. The first-run hint is a cream enamel sign hung slightly crooked; the offer tag hangs off-true; the money gauge sits left of centre. The depth gauge is a brass tube with a glass window, the main HUD element.
 
 **Icons.** Drawn for the game (`art/icons/make_icons.py` writes `ui/icons/*.svg`): one style, a thick soot outline, flat palette fills, one cream highlight, a little hand wobble. No emoji anywhere in the UI.
 
 **Shape language.** Chunky, faceted and a little top-heavy; bevelled hard edges; working ends of tools slightly oversized; nothing perfectly straight (boards lean, the roof sags, fence posts tilt). Round only where it's alive (moles). Rock is faceted (the shader mixes flat face normals in) with strata bands, pebbles and baked nooks.
+
+**Each layer its own rock** (`DigField.STYLE`, `textures/rock_layers.png` from `art/textures/make_layers.py`): crumbly soil with root hairs; smeared, laminated clay; jointed grey stone and pink granite; cross-bedded shelly sandstone; an ochre cobble conglomerate; dark faceted crystal rock with glinting veins; black vesicular basalt whose cracks glow; folded granular peridotite with hot seams; streaming molten iron; bronze core crystal split by molten amber. Each has its own bed thickness and a second rock in alternate beds, its own loose stones, its own dark (fog) and a cool fill. The lamp is a wide, soft spot; a cool bounce near you keeps its edge soft.
 
 **Copy.** Short, in-world, sentence case, almost no exclamation marks. "Back at the shack. The counter's open."
 
@@ -88,8 +90,9 @@ Bundle id: `com.gamequarry.digtothecore`.
 - Generated sound effects and two ambience loops (`art/audio/make_sfx.py`), mute in the shop.
 - Art pass: art bible, Rye + Zilla Slab, custom SVG icons, worn riveted plates, no emoji, Blender models for tools, helpers, the shack, headframe, cage, lift stop, trees, fence posts, crates and barrel.
 - Art pass 2 (all 12 items of ART_REVIEW.md): headlamp-led lighting with zone-tinted depth fog, painted rock texture and strata, 3D pebbles and ore nuggets, a lit landmark per layer with lava and crystal shaders, late-afternoon surface with a composed spawn, timber-post fence and enamel sign, rebuilt mole, robo-mole, trees, headframe, jackhammer and pick, smooth gloved hands on every tool, all 16 finds as Blender models, UI materials by role, HUD overlap fixes, a dressed lift shaft for the ride.
+- Art round 3 (all 9 items of ART_REVIEW.md review 2, the underground): a hand-painted texture per layer (texture array) with its own strata and second rock, pebbles in beds, a soft headlamp with a cool bounce, lava as crust plates on a glowing melt, glowing crystals, the inner core as molten amber; Blender rebuilds of the skeleton, a fossil slab, the timber set, the ore cart on rails, the mantle pillows, quartz clusters, the core's heart, pebbles and rubble, the lift cage and the shaft's timber sets; gloves with knuckles and sleeves with cuffs and folds, grained handles, grip tape, worn steel, a new laser drill; the shop as the shack (pegboard, ledger, notices, drawer cabinet, one enamel No ads sign); small depth-tested money numbers that count up, painted sign lettering, a cracked-rock crosshair mark; one brass depth tube; layer banners with one line each; the 2x ticket only when it's worth having; 20 px minimum text; phone-first prompts; oaks, maples and birches; clods and a spoil heap round the first hole; the HUD hidden during the lift ride.
 - Phone render scale and frame-rate watcher (from the reference game).
-- Tests: `tests/smoke_test.gd` (67 checks, incl. one per QA bug), `tests/playthrough.gd` (keen / casual / boosted, the visual run), `tests/chaos.gd`, `tests/screenshots.gd`, `tests/look.gd` (quick art renders), `tests/pacing.gd`, `tests/field_bench.gd`. Each run can have its own save: `DIG_SAVE=<name>` in the environment uses `user://dig_save_<name>.json`, so bots and tests can run side by side.
+- Tests: `tests/smoke_test.gd` (75 checks, incl. one per QA bug), `tests/playthrough.gd` (keen / casual / boosted, the visual run), `tests/chaos.gd`, `tests/screenshots.gd` (`--size 844x390` for phone size), `tests/look.gd` (quick art renders), `tests/pacing.gd`, `tests/field_bench.gd`. Each run can have its own save: `DIG_SAVE=<name>` in the environment uses `user://dig_save_<name>.json`, so bots and tests can run side by side.
 
 ## Dev menu and bot hooks
 
@@ -100,6 +103,8 @@ Bot runs: `godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- keen
 Actions a bot can call: `World.move_player(pos, yaw, pitch)`, `World.dig_at(pos, radius, damage)` (or `Player.strike(damage)` at the crosshair, `World.force_dig`), `World.ride_lift(down)` / `World.use_context()`, `World.skip_to_zone(z)`, `GameState.buy(id)` (tool icon name like `"pickaxe"`, upgrade key like `"power"`, helper key like `"mole"`), `GameState.unlock_everything()`, `Hud.open_shop(tab)`, `Hud.watch_ad(kind)`, `Monetization.buy(product_id)`; the stub's `instant = true` skips the fake ad screens.
 
 ## QA
+
+**Art round 3 (2026-11-09):** smoke test passes (75 checks; new: no text under 20 px in the HUD or any shop section, No ads + 2x sold from one sign only with no "(test)" prices). Playthrough **boosted** passes (11:18 of play, 118 s real, every ad and purchase checked) and **keen** passes (25:15, was 25:47: pacing unchanged; all 16 finds, 9 save/reload checks). Browser check passes at 844x390, 932x430 and 1024x768 (no console errors; the rock shader's texture array compiles under WebGL). Screenshots checked at 1280x720 and 844x390 (`tests/screenshots.gd -- DIR --size 844x390`). Exit-time "resources still in use" lines from looping sound playbacks are printed after the bots report; they don't affect the runs.
 
 Done in the art pass 2 block (2026-11-09), per STUDIO.md "Playtesting". All runs on a shared 2-CPU machine, so real times are slow.
 
@@ -153,7 +158,7 @@ Keen lands a little under its ~30-minute target (22 to 26 across this block's ru
 ## Next steps (toward the polish bar)
 
 1. **Pacing.** Keen and casual both reach the core with no stalls (see "QA"); casual still runs long (63 to 92 minutes for the bot). Check with a real casual player, then nudge the early tool prices if it holds. Polish the run's stats screen.
-2. **Art, what's left**: a second fresh-eyes critic review of art pass 2; a splash screen; switch cream-on-verdigris lettering to soot; motion polish (eased staggered reveals in the shop, squash on the find pop); the pick head reads a little gold under the warm lamp.
+2. **Art, what's left**: a third fresh-eyes critic review (of art round 3); a splash screen; switch cream-on-verdigris lettering to soot; motion polish (eased staggered reveals in the shop, squash on the find pop); the pick head reads a little gold under the warm lamp.
 3. **Music.** Generated tunes for the surface and for the deep (only SFX and ambience so far), and separate music/effects volume sliders.
 4. **Deeper layers' identity.** Crystal Caves and Lava Lakes need their caves to read (glowing crystal props, lava you can't stand in), and per-layer ambience.
 5. **Real-phone check** of the web build: touch feel, frame rate while the jackhammer is running (chunk re-meshing is ~0.5 ms per chunk on desktop, 0.08 s per-chunk throttle), memory after a long session.
@@ -172,7 +177,7 @@ All numbers in `scripts/balance.gd`. A rock point pays hp x worth x m³, so valu
 ## Rebuilding assets
 
 - Models: `python3 art/blender/tools.py`, `world_models.py`, `props.py` and `finds.py` (Blender 5.2 as a Python module, each takes model names to build only some), then `python3 art/blender/contact_sheet.py out.png [names]` to review and `python3 art/blender/viewmodel_preview.py out.png` to check the tools against the phone buttons.
-- Textures: `python3 art/textures/make_textures.py` (painted rock, strata bands).
+- Textures: `python3 art/textures/make_textures.py` (the field's grass and packed earth, strata bands), `python3 art/textures/make_layers.py [preview.png]` (each layer's rock, a texture array: `textures/rock_layers.png` is imported with 10 vertical slices), `python3 art/textures/make_signs.py` (enamel signs with painted lettering).
 - Icons: `python3 art/icons/make_icons.py`.
 - Sounds: `python3 art/audio/make_sfx.py` (needs numpy, scipy, ffmpeg).
 

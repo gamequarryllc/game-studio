@@ -18,7 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 from kit import (box, cyl, sphere, torus, from_profile, join, wobble, export, reset, mat,  # noqa: E402
-                 twist, bend, subdivide, bar, lathe, place, strut, glove, ao, smooth, tube)
+                 twist, bend, subdivide, bar, lathe, place, strut, glove, ao, smooth, tube, handle, tape_wrap, paint_by, grain)
+from kit import tube as ktube  # noqa: E402
 
 R90 = math.radians(90)
 
@@ -93,34 +94,57 @@ def parent_keep(child, parent):
 
 
 # ---------------------------------------------------------------------------------------------
+def _edge_dist(p, outline):
+    """Distance from (x, z) to the nearest edge of a closed outline."""
+    best = 1e9
+    n = len(outline)
+    for i in range(n):
+        ax, az = outline[i]
+        bx, bz = outline[(i + 1) % n]
+        dx, dz = bx - ax, bz - az
+        L2 = dx * dx + dz * dz
+        t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - ax) * dx + (p[1] - az) * dz) / L2))
+        ex, ez = ax + dx * t - p[0], az + dz * t - p[1]
+        best = min(best, math.hypot(ex, ez))
+    return best
+
+
 def shovel():
     wood = mat("wood", rough=0.8)
-    steel = mat("bright_steel", metal=0.2, rough=0.55)
+    steel = mat("tool_steel", metal=0.45, rough=0.45)
     iron = mat("iron", metal=0.6, rough=0.6)
     grip = Vector((0.44, 0.32, -0.27))      # D-grip, right hand (low, by the hip)
     collar = Vector((0.33, 0.68, -0.31))    # where the blade starts
     d = (collar - grip).normalized()
-    parts = [along(cyl(0.021, (collar - grip).length, (0, (collar - grip).length / 2, 0), wood, (-R90, 0, 0), 10), grip, collar)]
-    # D-grip: a cross bar and two cheeks.
+    parts = [handle(grip, collar, 0.021, 0.023, wood, name="shaft")]
+    # D-grip: a cross bar and two cheeks, the same ash as the shaft.
     side = d.cross(Vector((0, 0, 1))).normalized()
     up = side.cross(d).normalized()
     top = grip - d * 0.12
-    parts.append(strut(top - side * 0.06, top + side * 0.06, 0.017, wood, sides=8))
-    parts.append(strut(grip - side * 0.012, top - side * 0.06, 0.012, wood, sides=6))
-    parts.append(strut(grip + side * 0.012, top + side * 0.06, 0.012, wood, sides=6))
+    parts.append(handle(top - side * 0.06, top + side * 0.06, 0.017, 0.017, wood, sides=8, rings=8, name="dbar"))
+    parts.append(handle(grip - side * 0.012, top - side * 0.06, 0.012, 0.011, wood, sides=6, rings=6, name="cheek"))
+    parts.append(handle(grip + side * 0.012, top + side * 0.06, 0.012, 0.011, wood, sides=6, rings=6, name="cheek"))
     parts.append(along(cyl(0.025, 0.06, (0, 0.03, 0), iron, (-R90, 0, 0), 10), grip - d * 0.01, grip + d * 0.05))
     # Collar (socket) with two brass rivets.
     parts.append(along(cyl(0.032, 0.16, (0, 0.08, 0), iron, (-R90, 0, 0), 10, r2=0.024), collar - d * 0.12, collar + d * 0.04))
-    for s in (-1, 1):
-        parts.append(sphere(0.006, tuple(collar - d * 0.05 + side * 0.026 * s), mat("brass", metal=0.8, rough=0.35), segs=6, rings=4))
-    # The blade: a cupped, pointed spade, oversized, with a worn bright edge.
+    for s_ in (-1, 1):
+        parts.append(sphere(0.006, tuple(collar - d * 0.05 + side * 0.026 * s_), mat("brass", metal=0.8, rough=0.35), segs=6, rings=4))
+    # The blade: a cupped, pointed spade, oversized. Blackened steel worn back
+    # to bright metal along the cutting edge, a few long scratches.
     outline = [(-0.14, 0.0), (-0.035, 0.0), (0.0, 0.026), (0.035, 0.0), (0.14, 0.0), (0.146, 0.2),
                (0.1, 0.315), (0.0, 0.375), (-0.1, 0.315), (-0.146, 0.2)]
     blade = from_profile(outline, 0.008, steel, bevel=0.003, name="blade")
-    subdivide(blade, 2)
+    subdivide(blade, 3)
+    cut = outline[4:] + outline[:1]
+
+    def worn(p):
+        e = _edge_dist((p.x, p.z), outline)
+        rim = max(0.0, 1.0 - e / 0.028) * (1.0 if p.z > 0.05 else 0.3)
+        scratch = 0.12 * max(0.0, math.sin(p.x * 160.0 + p.z * 9.0) - 0.7) * 3.0
+        return min(1.0, 0.5 + 0.5 * rim - scratch * (1.0 - rim))
+    paint_by(blade, worn)
     bend(blade, math.radians(-35), "Z")
     bake(blade)
-    # The outline is drawn in x/z: z runs along the shaft. Tip it down a little.
     bm = frame(side, -up, d).to_4x4() @ Matrix.Rotation(math.radians(22), 4, "X")
     bm.translation = collar + d * 0.01
     xform(blade, bm)
@@ -137,39 +161,40 @@ def shovel():
 
 def pickaxe():
     wood = mat("wood", rough=0.8)
-    steel = mat("steel", metal=0.45, rough=0.45)
-    leather = mat("leather_dark", rough=0.9)
+    steel = mat("tool_steel", metal=0.55, rough=0.4)
+    tape = mat("tape", rough=0.95)
     hand = Vector((0.26, 0.32, -0.25))
     head = Vector((0.22, 0.86, 0.05))
     d = (head - hand).normalized()
     L = (head - hand).length
-    parts = [along(cyl(0.022, L + 0.06, (0, (L + 0.06) / 2, 0), wood, (-R90, 0, 0), 10, r2=0.03), hand - d * 0.06, head + d * 0.0)]
-    # Leather grip wrap near the end.
-    for i in range(6):
-        parts.append(along(torus(0.025, 0.006, (0, 0, 0), leather, (R90, 0, 0), 12, 4), hand + d * (0.015 + i * 0.025), hand + d * (0.03 + i * 0.025)))
+    parts = [handle(hand - d * 0.06, head, 0.022, 0.03, wood, name="haft")]
+    # Cloth grip tape wound round the end, a tail of it hanging loose.
+    parts.append(tape_wrap(hand - d * 0.04, hand + d * 0.17, 0.0255, 8, tape, 0.0085))
     side = d.cross(Vector((0, 0, 1))).normalized()
     fwd = side.cross(d).normalized()        # the way the head points (forward/up)
+    parts.append(ktube([hand + d * 0.17 + fwd * 0.026, hand + d * 0.19 + fwd * 0.03 - side * 0.01, hand + d * 0.2 + fwd * 0.012 - side * 0.03],
+                       [0.007, 0.006, 0.005], tape, sides=4, flat=0.35, name="tail"))
     # Double-ended head, oversized: one forged piece, thick at the eye and
     # curving down to a point at each end (a sharp pick and a chisel end).
+    # Blackened from the forge, worn bright at both working ends.
     pts = []
     rad = []
-    for i in range(17):
-        t = -1.0 + 2.0 * i / 16
+    for i in range(21):
+        t = -1.0 + 2.0 * i / 20
         pts.append(Vector((t * 0.4, 0.0, 0.075 * (1.0 - t * t) - 0.035 * t * t)))
         rad.append(0.05 * (1.0 - 0.86 * abs(t) ** 0.9) + 0.005)
-    head_parts = [tube(pts, rad, steel, sides=8, flat=0.72, name="pickhead")]
-    # The eye: a thick collar the handle goes through.
-    head_parts.append(cyl(0.046, 0.075, (0, 0, 0.035), steel, (0, 0, 0), 10, bevel=0.01))
-    # Chisel end flattened into a blade.
-    for v in head_parts[0].data.vertices:
+    hd = ktube(pts, rad, steel, sides=8, flat=0.72, name="pickhead")
+    for v in hd.data.vertices:
         if v.co.x < -0.2:
             v.co.y *= 0.55
             v.co.z = v.co.z * 1.25 - 0.004
-    for hp_ in head_parts:
-        bake(hp_)
-    hh = join(head_parts, "head")
+    eye = cyl(0.046, 0.075, (0, 0, 0.035), steel, (0, 0, 0), 10, bevel=0.01)
+    bake(eye)
+    wedge = box((0.05, 0.012, 0.012), (0, 0, 0.074), mat("iron", metal=0.6, rough=0.6), bevel=0.002)
+    bake(wedge)
+    hh = join([hd, eye, wedge], "head")
+    paint_by(hh, lambda p: 0.45 + 0.55 * min(1.0, max(0.0, (abs(p.x) - 0.17) / 0.17)) ** 1.5 + 0.06 * math.sin(p.x * 90.0))
     smooth(hh, 55)
-    # Turned a little about the handle so both points read from the eye.
     a = math.radians(38)
     pick = (fwd * math.cos(a) + side * math.sin(a)).normalized()
     across = d.cross(pick).normalized()
@@ -322,37 +347,77 @@ def dynamite_held():
 
 
 def laser():
+    """The laser drill, nothing like a torch: a pistol-gripped brass and
+    enamel body with a fat copper induction coil wound round its middle, a
+    glass capacitor standing on top with a glowing filament, a pressure gauge
+    on its flank, a ring of cooling fins, and a three-pronged emitter holding
+    the red focusing crystal out in front."""
     enamel = mat("cream", rough=0.35)
     brass = mat("brass", metal=0.85, rough=0.35)
+    copper = mat(None, color=(0.72, 0.4, 0.22), metal=0.8, rough=0.35)
     iron = mat("iron", metal=0.7, rough=0.5)
-    soot = mat("rubber", rough=0.9)
-    body_c = Vector((0.25, 0.66, -0.2))
+    wood = mat("wood_dark", rough=0.8)
+    glass = mat("glass", rough=0.15, emit=0.6)
+    body_c = Vector((0.25, 0.64, -0.21))
     aim = (Vector((0.04, 1.6, -0.02)) - body_c).normalized()
     side = aim.cross(Vector((0, 0, 1))).normalized()
     up = side.cross(aim).normalized()
-    parts = [cyl(0.055, 0.32, (0, 0.0, 0), enamel, (-R90, 0, 0), 16, bevel=0.01)]
-    for y in (-0.12, 0.0, 0.12):
-        parts.append(torus(0.057, 0.008, (0, y, 0), brass, (R90, 0, 0), 16, 4))
-    for i in range(6):
-        parts.append(cyl(0.07, 0.006, (0, -0.21 + i * 0.016, 0), iron, (-R90, 0, 0), 16))
-    parts.append(cyl(0.052, 0.13, (0, 0.225, 0), iron, (-R90, 0, 0), 14, r2=0.03))
-    parts.append(cyl(0.026, 0.012, (0, 0.295, 0), mat("laser", rough=0.2, emit=4.0), (-R90, 0, 0), 14))
-    parts.append(place(box((0.052, 0.068, 0.15), (0, 0, 0), soot, bevel=0.012), (0, -0.06, -0.11), (math.radians(16), 0, 0)))
-    parts.append(cyl(0.021, 0.17, (0, 0.0, 0.07), mat("verdigris", rough=0.2, emit=1.4), (-R90, 0, 0), 10, bevel=0.005))
-    for y in (-0.085, 0.085):
-        parts.append(box((0.022, 0.014, 0.03), (0, y, 0.058), brass))
+    parts = []
+    # Body: a stepped enamel cylinder, brass bands at the steps.
+    parts.append(lathe([(0.0, -0.17), (0.045, -0.17), (0.05, -0.14), (0.05, -0.05), (0.06, -0.04), (0.06, 0.08),
+                        (0.048, 0.1), (0.048, 0.16), (0.0, 0.16)], 18, "body", enamel))
+    parts[-1].data.transform(Matrix.Rotation(-R90, 4, "X"))
+    for y in (-0.14, -0.045, 0.085):
+        parts.append(torus(0.061 if y > -0.1 else 0.052, 0.007, (0, y, 0), brass, (R90, 0, 0), 18, 4))
+    # The induction coil: copper wire wound tight round the middle.
+    coil = []
+    turns = 9
+    for i in range(turns * 12 + 1):
+        t = i / (turns * 12)
+        ang = t * turns * math.tau
+        coil.append(Vector((math.cos(ang) * 0.068, -0.035 + t * 0.11, math.sin(ang) * 0.068)))
+    parts.append(ktube(coil, [0.0075] * len(coil), copper, sides=6, name="coil"))
+    # Cooling fins and the emitter: three brass prongs round the crystal.
+    for i in range(5):
+        parts.append(cyl(0.056 - i * 0.003, 0.006, (0, 0.17 + i * 0.016, 0), iron, (-R90, 0, 0), 16))
+    parts.append(cyl(0.032, 0.07, (0, 0.27, 0), iron, (-R90, 0, 0), 12, r2=0.024))
+    for k in range(3):
+        a = k / 3 * math.tau + 0.3
+        base = Vector((math.cos(a) * 0.03, 0.29, math.sin(a) * 0.03))
+        tipp = Vector((math.cos(a) * 0.022, 0.37, math.sin(a) * 0.022))
+        parts.append(ktube([base, base + Vector((0, 0.04, 0)) + Vector((math.cos(a), 0, math.sin(a))) * 0.012, tipp], [0.007, 0.006, 0.004], brass, sides=6, name="prong"))
+    parts.append(place(lathe([(0.0, -0.02), (0.016, -0.01), (0.018, 0.0), (0.012, 0.02), (0.0, 0.032)], 6, "crystal", mat("laser", rough=0.2, emit=4.0)), (0, 0.33, 0), (-R90, 0, 0)))
+    # The capacitor on top: a glass tube in brass end caps, glowing inside.
+    cap_c = Vector((0, -0.07, 0.1))
+    parts.append(cyl(0.024, 0.1, tuple(cap_c), glass, (-R90, 0, 0), 12))
+    parts.append(cyl(0.007, 0.09, tuple(cap_c), mat("laser", rough=0.3, emit=3.0), (-R90, 0, 0), 6))
+    for dy in (-0.055, 0.055):
+        parts.append(cyl(0.028, 0.016, tuple(cap_c + Vector((0, dy, 0))), brass, (-R90, 0, 0), 12, bevel=0.003))
+        parts.append(box((0.012, 0.012, 0.05), tuple(cap_c + Vector((0, dy, -0.03))), brass))
+    # A pressure gauge on the left flank.
+    g_c = Vector((-0.064, -0.1, 0.01))
+    parts.append(place(cyl(0.024, 0.014, (0, 0, 0), brass, (0, 0, 0), 14), tuple(g_c), (0, R90, 0)))
+    parts.append(place(cyl(0.019, 0.004, (0, 0, 0), mat("cream", rough=0.4), (0, 0, 0), 14), tuple(g_c + Vector((-0.008, 0, 0))), (0, R90, 0)))
+    parts.append(strut(g_c + Vector((-0.011, 0, 0)), g_c + Vector((-0.011, 0.012, 0.01)), 0.0018, mat("red"), sides=4))
+    # Pistol grip with wooden plates and a trigger guard.
+    parts.append(place(box((0.046, 0.06, 0.15), (0, 0, 0), iron, bevel=0.01), (0, -0.08, -0.11), (math.radians(16), 0, 0)))
+    for s_ in (-1, 1):
+        gp = place(box((0.008, 0.05, 0.12), (0, 0, 0), wood, bevel=0.003), (s_ * 0.026, -0.08, -0.115), (math.radians(16), 0, 0))
+        grain(gp, (0, 0.27, -0.96), 0.3, 120, 5 + s_)
+        parts.append(gp)
+    parts.append(ktube([Vector((0, -0.04, -0.05)), Vector((0, -0.0, -0.08)), Vector((0, -0.035, -0.11))], [0.005] * 3, iron, sides=5, name="guard"))
     m = frame(side, aim, up).to_4x4()
     m.translation = body_c
     for p in parts:
         xform(p, m)
     o = bake(join(parts, "Laser"))
-    wobble(o, 0.001, 16)
+    wobble(o, 0.0008, 16)
     ao(o, 0.08)
     muzzle = bpy.data.objects.new("Muzzle", None)
     bpy.context.collection.objects.link(muzzle)
-    muzzle.location = body_c + aim * 0.31
+    muzzle.location = body_c + aim * 0.36
     parent_keep(muzzle, o)
-    grip_at = body_c + m.to_3x3() @ Vector((0, -0.06, -0.1))
+    grip_at = body_c + m.to_3x3() @ Vector((0, -0.08, -0.1))
     g = glove_on(grip_at, (m.to_3x3() @ Vector((0, 0.28, -1))).normalized(), (0.5, -1.0, -0.3), 1, "GloveR", 0.22)
     parent_keep(g, o)
     return o

@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bdgvdbrqjif31"
-path="res://.godot/imported/core_spires.glb-001d11fb22fbd7ee66fcfd58817b7e96.scn"
+uid="uid://h385k3y0uvub"
+path="res://.godot/imported/mantle_rocks.glb-cea59b23d9499f0adeca97949d933fcd.scn"
 
 [deps]
 
-source_file="res://models/core_spires.glb"
-dest_files=["res://.godot/imported/core_spires.glb-001d11fb22fbd7ee66fcfd58817b7e96.scn"]
+source_file="res://models/mantle_rocks.glb"
+dest_files=["res://.godot/imported/mantle_rocks.glb-cea59b23d9499f0adeca97949d933fcd.scn"]
 
 [params]
 

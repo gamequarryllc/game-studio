@@ -38,6 +38,21 @@ const ZONES = [
 		"fog": Color(0.26, 0.21, 0.12), "band": Color(1.0, 0.92, 0.66)},
 ]
 
+# What the banner says when you break into each layer: one line, in the
+# fiction, sentence case, no numbers.
+const ZONE_LINES := [
+	"Grass roots and grandpa's car keys.",
+	"Sticky going. Somebody shored this up long before you.",
+	"Solid stone. Somebody left a cart down here.",
+	"Shells in every bed. This was the sea floor once.",
+	"Bones. Big ones. Mind where you swing.",
+	"The walls start to sparkle. Keep the lamp low.",
+	"Warm down here. Leave the orange bits alone.",
+	"The rock moves if you watch it long enough.",
+	"Molten iron. Your boots were not rated for this.",
+	"Nearly there. Everything glows.",
+]
+
 # Rock. hp_mult: the pocket rock is a bit harder than the main one.
 # glow: it shines by itself (magma, the core).
 const MATERIALS = [
@@ -47,20 +62,20 @@ const MATERIALS = [
 	{"name": "Red Clay", "color": Color(0.56, 0.27, 0.19), "hp_mult": 1.2},
 	{"name": "Bedrock", "color": Color(0.44, 0.43, 0.43), "hp_mult": 1.0},
 	{"name": "Granite", "color": Color(0.58, 0.53, 0.52), "hp_mult": 1.25},
-	{"name": "Sandstone", "color": Color(0.68, 0.55, 0.42), "hp_mult": 1.0},
-	{"name": "Shell Rock", "color": Color(0.76, 0.7, 0.6), "hp_mult": 1.2},
+	{"name": "Sandstone", "color": Color(0.6, 0.47, 0.33), "hp_mult": 1.0},
+	{"name": "Shell Rock", "color": Color(0.68, 0.6, 0.48), "hp_mult": 1.2},
 	{"name": "Ochre Rock", "color": Color(0.6, 0.43, 0.24), "hp_mult": 1.0},
-	{"name": "Bone Bed", "color": Color(0.82, 0.78, 0.68), "hp_mult": 1.2},
+	{"name": "Bone Bed", "color": Color(0.7, 0.6, 0.44), "hp_mult": 1.2},
 	{"name": "Crystal Rock", "color": Color(0.3, 0.25, 0.42), "hp_mult": 1.0},
 	{"name": "Geode Shell", "color": Color(0.5, 0.38, 0.62), "hp_mult": 1.25},
 	{"name": "Basalt", "color": Color(0.16, 0.14, 0.14), "hp_mult": 1.0},
-	{"name": "Magma Rock", "color": Color(0.7, 0.2, 0.05), "hp_mult": 1.2, "glow": 0.45},
+	{"name": "Magma Rock", "color": Color(0.36, 0.13, 0.07), "hp_mult": 1.2, "glow": 0.45},
 	{"name": "Mantle Rock", "color": Color(0.62, 0.27, 0.1), "hp_mult": 1.0, "glow": 0.15},
 	{"name": "Peridotite", "color": Color(0.46, 0.52, 0.18), "hp_mult": 1.2},
-	{"name": "Liquid Iron", "color": Color(0.88, 0.52, 0.16), "hp_mult": 1.0, "glow": 0.32},
-	{"name": "Molten Nickel", "color": Color(0.95, 0.66, 0.3), "hp_mult": 1.2, "glow": 0.4},
-	{"name": "Core Iron", "color": Color(0.95, 0.8, 0.5), "hp_mult": 1.0, "glow": 0.38},
-	{"name": "Core Crystal", "color": Color(0.97, 0.92, 0.78), "hp_mult": 1.2, "glow": 0.48},
+	{"name": "Liquid Iron", "color": Color(0.5, 0.3, 0.14), "hp_mult": 1.0, "glow": 0.32},
+	{"name": "Molten Nickel", "color": Color(0.6, 0.42, 0.22), "hp_mult": 1.2, "glow": 0.4},
+	{"name": "Core Iron", "color": Color(0.44, 0.27, 0.1), "hp_mult": 1.0, "glow": 0.38},
+	{"name": "Core Crystal", "color": Color(0.58, 0.4, 0.17), "hp_mult": 1.2, "glow": 0.48},
 ]
 const WALL_NAME := "Shaft Wall"   # the edge of the dig site: too hard for any tool
 
@@ -87,7 +102,7 @@ const JUMP_VELOCITY := 6.4      # about 1.15 m up: enough to climb out of a shal
 const LOOK_SENSITIVITY_TOUCH := 0.0034
 const LOOK_SENSITIVITY_MOUSE := 0.0025
 const HEADLAMP_RANGE := 11.0     # metres (Headlamp Range upgrade adds to it)
-const HEADLAMP_ANGLE := 46.0     # degrees, half-angle of the beam
+const HEADLAMP_ANGLE := 58.0     # degrees, half-angle of the beam (wide and soft: it falls off across the pool)
 
 # --- Tools (bought in order at the shack) -------------------------------------------------
 # damage: per strike, at the centre of the dig zone (see the header).

@@ -46,8 +46,9 @@ func build(p_rock_material: Material) -> void:
 		[Vector2(0.2, 9.4), Vector2(-9.4, 9.0), 1.2],                       # round the south-west corner...
 		[Vector2(-9.4, 9.0), Vector2(SHACK_DOOR.x, SHACK_DOOR.z), 1.3],      # ...to the shack door
 		[Vector2(-9.5, 0.5), Vector2(SHACK_DOOR.x, SHACK_DOOR.z), 1.2],      # the shack to the west gap
-		[Vector2(0.2, 9.4), Vector2(9.6, 8.6), 1.1],                         # round the south-east corner...
-		[Vector2(9.6, 8.6), Vector2(LIFT_EXIT.x + 0.4, LIFT_EXIT.z), 1.2],   # ...to the lift
+		[Vector2(0.2, 9.4), Vector2(9.6, 8.6), 1.4],                         # round the south-east corner...
+		[Vector2(9.6, 8.6), Vector2(LIFT_EXIT.x + 0.4, LIFT_EXIT.z), 1.5],   # ...to the lift, worn wide
+		[Vector2(8.6, -2.1), Vector2(LIFT_EXIT.x + 0.4, LIFT_EXIT.z), 1.4],   # the east gap to the lift: the miners' short cut
 	]
 	_build_ground()
 	_build_shack()
@@ -174,27 +175,11 @@ func _build_shack() -> void:
 	_place("shack", SHACK_POS)
 	var s := SHACK_SIZE
 	_collider(Vector3(s.x + 0.3, s.y + 0.3, s.z + 0.3), Transform3D(Basis(), SHACK_POS + Vector3(0, (s.y + 0.3) * 0.5, 0)))
-	# The lettering on its enamel sign, in the woodtype face.
-	var sign := Label3D.new()
-	sign.text = "Supply Shack"
-	sign.font = UiTheme.display_font()
-	sign.font_size = 72
-	sign.outline_size = 0
-	sign.modulate = Color(0.71, 0.2, 0.165)
-	sign.pixel_size = 0.0058
-	sign.position = SHACK_POS + Vector3(s.x * 0.5 + 0.17, 0.3 + s.y - 0.1, 0)
-	sign.rotation = Vector3(0, PI / 2, 0)
-	add_child(sign)
-	var sub := Label3D.new()
-	sub.text = "tools · upgrades · crew"
-	sub.font = UiTheme.bold_font()
-	sub.font_size = 40
-	sub.modulate = Color(0.141, 0.11, 0.09)
-	sub.outline_size = 0
-	sub.pixel_size = 0.0042
-	sub.position = SHACK_POS + Vector3(s.x * 0.5 + 0.17, 0.3 + s.y - 0.3, 0)
-	sub.rotation = Vector3(0, PI / 2, 0)
-	add_child(sub)
+	# Its enamel board over the door, lettering painted on (art/textures/make_signs.py).
+	var board := Models.sign("res://textures/signs/shack.png", Vector2(3.3, 0.5), 0.12)
+	board.position = SHACK_POS + Vector3(s.x * 0.5 + 0.166, 0.3 + s.y - 0.12, 0)
+	board.rotation = Vector3(0, PI / 2, 0)
+	add_child(board)
 	var lamp := OmniLight3D.new()
 	lamp.light_color = Color(1.0, 0.72, 0.4)
 	lamp.light_energy = 1.0
@@ -231,17 +216,11 @@ func _build_headframe() -> void:
 	lamp.omni_range = 3.5
 	lamp.position = Vector3(0, 2.2, 0)
 	cage.add_child(lamp)
-	var label := Label3D.new()
-	label.text = "Lift"
-	label.font = UiTheme.display_font()
-	label.font_size = 64
-	label.outline_size = 14
-	label.modulate = Color(0.949, 0.71, 0.267)
-	label.outline_modulate = Color(0.141, 0.11, 0.09)
-	label.pixel_size = 0.006
-	label.position = Vector3(0, 3.3, 0)
-	label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	cage.add_child(label)
+	# An enamel plate hung on the cage's open side, towards the site.
+	var plate := Models.sign("res://textures/signs/lift.png", Vector2(0.84, 0.34), 0.2)
+	plate.position = Vector3(0, 2.62, -1.02)
+	plate.rotation = Vector3(0, PI, 0)
+	cage.add_child(plate)
 
 
 func _build_fence() -> void:
@@ -269,39 +248,13 @@ func _build_fence() -> void:
 			continue
 		_rope(Vector3(p.x, 0.92, p.y), Vector3(q.x, 0.92, q.y), 0.16 + rng.randf_range(-0.03, 0.04), rope_m)
 	# The sign, beside the south gap, facing the path in.
-	var sign := _place("shaft_sign", Vector3(GATE_S.y + 0.9, 0.0, h + 0.25), 0.18)   # enamel face (+Z) towards the path in
-	# The sun is low behind the site, so the sign's face is in its own shadow:
-	# glossy enamel still catches the bright sky, so let the cream face glow a little.
-	for mi in sign.find_children("*", "MeshInstance3D", true, false):
-		var m3 := mi as MeshInstance3D
-		for si in m3.mesh.get_surface_count():
-			var sm := m3.mesh.surface_get_material(si)
-			if sm is BaseMaterial3D and (sm as BaseMaterial3D).albedo_color.get_luminance() > 0.6:
-				var e := (sm as BaseMaterial3D).duplicate() as BaseMaterial3D
-				e.emission_enabled = true
-				e.emission = e.albedo_color
-				e.emission_energy_multiplier = 0.45
-				m3.set_surface_override_material(si, e)
-	var t := Label3D.new()
-	t.text = "Open shaft"
-	t.font = UiTheme.display_font()
-	t.font_size = 64
-	t.modulate = Color(0.71, 0.2, 0.165)
-	t.outline_size = 0
-	t.pixel_size = 0.0024
-	t.double_sided = false
-	t.position = Vector3(0.0, 1.31, 0.125)
-	sign.add_child(t)
-	var t2 := Label3D.new()
-	t2.text = "Mind the edge.\nLift at the headframe."
-	t2.font = UiTheme.bold_font()
-	t2.font_size = 26
-	t2.modulate = Color(0.141, 0.11, 0.09)
-	t2.outline_size = 0
-	t2.pixel_size = 0.0021
-	t2.double_sided = false
-	t2.position = Vector3(0.0, 1.16, 0.125)
-	sign.add_child(t2)
+	var sign := _place("shaft_sign", Vector3(GATE_S.y + 0.9, 0.0, h + 0.25), 0.18, 1.3)   # enamel face (+Z) towards the path in, big enough to read from the path
+	# Its face, lettering painted on. The sun is low behind the site, so the
+	# face is in its own shadow: glossy enamel still catches the bright sky,
+	# so it glows a little.
+	var face := Models.sign("res://textures/signs/shaft.png", Vector2(0.86, 0.48), 0.35)
+	face.position = Vector3(0.0, 1.25, 0.124)
+	sign.add_child(face)
 
 
 func _in_gate(m: Vector2, h: float) -> bool:
@@ -367,15 +320,27 @@ func _build_trees() -> void:
 				continue
 			p.y = ground_height(p.x, p.z, noise)
 			var big := rng.randf_range(0.8, 1.5)
-			var pine := rng.randf() < 0.6
-			_place("pine" if pine else "oak", p, rng.randf() * TAU, big)
+			_place(_tree_kind(rng), p, rng.randf() * TAU, big)
 			_collider(Vector3(0.45, 3.0, 0.45) * big, Transform3D(Basis(), p + Vector3(0, 1.5 * big, 0)))
 	for k in 34:
 		var a := rng.randf() * TAU
 		var r := rng.randf_range(40.0, 75.0)
 		var p := Vector3(cos(a) * r, 0, sin(a) * r)
 		p.y = ground_height(p.x, p.z, noise) - 0.2
-		_place("pine" if rng.randf() < 0.7 else "oak", p, rng.randf() * TAU, rng.randf_range(1.1, 2.0))
+		_place("pine" if rng.randf() < 0.45 else _tree_kind(rng), p, rng.randf() * TAU, rng.randf_range(1.1, 2.0))
+
+
+static func _tree_kind(rng: RandomNumberGenerator) -> String:
+	## A mixed temperate wood: oaks and maples mostly, birches in twos and
+	## threes at the edges, the odd pine.
+	var r := rng.randf()
+	if r < 0.32:
+		return "oak"
+	if r < 0.6:
+		return "maple"
+	if r < 0.82:
+		return "birch"
+	return "pine"
 
 
 func _build_grass() -> void:

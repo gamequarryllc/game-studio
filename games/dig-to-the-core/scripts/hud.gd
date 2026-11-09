@@ -1,10 +1,13 @@
 class_name Hud
 extends CanvasLayer
 ## Everything drawn over the game: the depth gauge (left), money (top), the
-## 2x boost button and the timed offer tag (top right), the tool and the
-## next tool's price (bottom), the crosshair and what it's pointing at,
-## toasts, first-run hints, the find card (with "double it"), the shop
-## panel, popups, the lift's fade, and the phone controls.
+## 2x boost ticket (only when it's worth having) and the timed offer tag (top
+## right), the tool and the next tool's price (bottom), the crosshair (with a
+## cracked-rock mark when your tool can't touch the rock), toasts, first-run
+## hints, the find card (with "double it"), the shop panel, popups, the
+## lift's fade, and the phone controls. All of it but the fade steps aside
+## during the lift ride. Phone first: every word is at least 20 px at the
+## 1280 x 720 design size (11 px on a small phone).
 
 signal shop_closed
 
@@ -21,6 +24,7 @@ var riding := false:
 	set(v):
 		riding = v
 		_sync_touch()
+		_sync_play()
 
 var _money: Label
 var _rate: Label
@@ -33,7 +37,14 @@ var _tool_icon: TextureRect
 var _next_label: Label
 var _next_bar: ProgressBar
 var _cross: Control
-var _target: Label
+var _target_icon: TextureRect
+var _play: Array = []              # HUD pieces hidden during the lift ride
+var _boost_window := 0.0           # seconds left that the boost ticket is worth showing
+var _boost_cool := 0.0             # seconds before it may show again
+var _hard_t := 0.0                 # how long you've been chipping at slow rock
+var _banner_t := 0.0               # a layer banner is having its moment
+var _queued: Array = []            # toasts waiting for the banner to finish
+var _keycap: PanelContainer
 var _toasts: VBoxContainer
 var _coach: PanelContainer
 var _coach_label: Label
@@ -157,7 +168,7 @@ func _build_top() -> void:
 	_money = UiTheme.label("0", 38, UiTheme.AMBER, 0)
 	_money.custom_minimum_size = Vector2(110, 0)
 	mrow.add_child(_money)
-	_rate = UiTheme.label("", 16, Color(0.2, 0.12, 0.05), 0)
+	_rate = UiTheme.label("", 20, Color(0.2, 0.12, 0.05), 0)
 	_rate.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(_rate)
 	# Boost button and the offer tag, top right.
@@ -196,7 +207,7 @@ func _build_top() -> void:
 	srow.add_theme_constant_override("separation", 6)
 	srow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	srow.add_child(_icon_rect("ad", 22))
-	srow.add_child(UiTheme.label("tap to watch a short ad", 15, UiTheme.INK.lightened(0.2), 0, false))
+	srow.add_child(UiTheme.label("tap to watch a short ad", 20, UiTheme.INK.lightened(0.2), 0, false))
 	ov.add_child(srow)
 	_offer_bar = ProgressBar.new()
 	_offer_bar.show_percentage = false
@@ -223,6 +234,7 @@ func _build_top() -> void:
 	_toasts.offset_left = -330
 	_toasts.offset_right = 330
 	_toasts.offset_top = 104
+	_play.append_array([top, right])
 
 
 func _build_center() -> void:
@@ -233,14 +245,17 @@ func _build_center() -> void:
 	_cross.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_cross.size = Vector2(40, 40)
 	_cross.position -= Vector2(20, 20)
-	_target = UiTheme.label("", 18, UiTheme.CREAM, 5)
-	_target.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	root.add_child(_target)
-	_target.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_target.offset_left = -260
-	_target.offset_right = 260
-	_target.offset_top = 30
-	_target.offset_bottom = 60
+	# Rock your tool can't touch: a cracked-rock mark beside the crosshair
+	# (no words, no labels under it).
+	_target_icon = _icon_rect("too_hard", 46)
+	_target_icon.visible = false
+	root.add_child(_target_icon)
+	_target_icon.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_target_icon.offset_left = 22
+	_target_icon.offset_top = -50
+	_target_icon.offset_right = 68
+	_target_icon.offset_bottom = -4
+	_play.append_array([_cross, _target_icon])
 	_coach = PanelContainer.new()
 	_coach.add_theme_stylebox_override("panel", UiTheme.enamel(UiTheme.CREAM, Vector4(28, 12, 28, 14), 7))
 	_coach.rotation = -0.012
@@ -273,9 +288,31 @@ func _build_bottom() -> void:
 	_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_prompt.visible = false
 	box.add_child(_prompt)
+	var prow := HBoxContainer.new()
+	prow.add_theme_constant_override("separation", 10)
+	prow.alignment = BoxContainer.ALIGNMENT_CENTER
+	prow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_prompt.add_child(prow)
+	# The key to press, on a little cream keycap (keyboards only: phones get the
+	# context button instead).
+	_keycap = PanelContainer.new()
+	var kc := StyleBoxFlat.new()
+	kc.bg_color = UiTheme.CREAM
+	kc.border_color = UiTheme.SOOT
+	kc.set_border_width_all(2)
+	kc.border_width_bottom = 4
+	kc.set_corner_radius_all(5)
+	kc.content_margin_left = 9
+	kc.content_margin_right = 9
+	kc.content_margin_top = 0
+	kc.content_margin_bottom = 2
+	_keycap.add_theme_stylebox_override("panel", kc)
+	_keycap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_keycap.add_child(UiTheme.label("E", 20, UiTheme.SOOT, 0))
+	prow.add_child(_keycap)
 	_prompt_label = UiTheme.label("", 21, UiTheme.CREAM, 5)
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_prompt.add_child(_prompt_label)
+	prow.add_child(_prompt_label)
 	var plate := PanelContainer.new()
 	var iron := UiTheme.plate(UiTheme.IRON_LIGHT, false, Vector4(22, 8, 22, 10))
 	iron.seed = 5
@@ -309,9 +346,10 @@ func _build_bottom() -> void:
 	_next_bar.add_theme_stylebox_override("background", bg)
 	_next_bar.add_theme_stylebox_override("fill", fg)
 	v.add_child(_next_bar)
-	_next_label = UiTheme.label("", 15, Color(0.9, 0.85, 0.75), 4, false)
+	_next_label = UiTheme.label("", 20, Color(0.9, 0.85, 0.75), 4, false)
 	_next_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(_next_label)
+	_play.append(box)
 
 
 func _build_find_card() -> void:
@@ -328,6 +366,7 @@ func _build_find_card() -> void:
 	_find_card.offset_top = 84
 	_find_card.custom_minimum_size = Vector2(328, 0)
 	_find_card.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_play.append(gauge)
 
 
 func _build_rotate_overlay() -> void:
@@ -354,9 +393,16 @@ func _process(delta: float) -> void:
 		gauge.depth = maxf(0.0, -player.position.y)
 	gauge.deepest = GameState.deepest
 	gauge.lift_depth = -GameState.lift_stop.y if GameState.lift_stop.is_finite() else -1.0
-	_update_cross()
+	_update_cross(delta)
 	_update_offer(delta)
+	_update_boost(delta)
 	_update_find_card(delta)
+	if _banner_t > 0.0:
+		_banner_t -= delta
+		if _banner_t <= 0.0:
+			for q in _queued:
+				toast(q[0], q[1], q[2])
+			_queued.clear()
 	_slow_t += delta
 	if _slow_t > 0.25:
 		_slow_t = 0.0
@@ -408,38 +454,33 @@ func _refresh() -> void:
 		gauge.finds_at = fa
 
 
-func _update_cross() -> void:
+func _update_cross(delta: float = 0.0) -> void:
 	var st := "none"
-	var txt := ""
+	var slow := false
 	if player != null and player.target.hit and not riding:
 		var info: Dictionary = GameState.field.point_info(player.target.pos - player.target.normal * 0.15) if GameState.field != null else {}
 		if not info.is_empty():
 			if info.wall:
 				st = "wall"
-				txt = "Shaft wall. Nothing gets through this."
 			else:
 				var per := GameState.tool_damage() / maxf(float(info.hp), 0.0001)
 				var hits := int(ceil(0.5 / maxf(per, 0.00001)))
 				if hits > 14:
 					st = "hard"
-					txt = "%s: too hard for the %s" % [info.name, str(GameState.tool_def().name).to_lower()]
 				else:
 					st = "ore" if int(info.ore) > 0 else "ok"
-					txt = str(info.name)
-					if hits >= 3:
-						txt += "  ·  %d hits" % hits
-	if txt != _target.text:
-		_target.text = txt
-		var c := UiTheme.CREAM
-		if st == "hard" or st == "wall":
-			c = Color(1.0, 0.5, 0.4)
-		elif st == "ore":
-			c = UiTheme.AMBER
-		_target.add_theme_color_override("font_color", c)
+					slow = hits >= 5
+	# Chipping away at slow rock for a while is when 2x digging is worth having.
+	if slow and player != null and player.digging:
+		_hard_t += delta
+	else:
+		_hard_t = maxf(0.0, _hard_t - delta * 0.5)
 	if st != _cross_state:
 		_cross_state = st
 		_cross.queue_redraw()
+		_target_icon.texture = UiTheme.icon("wall" if st == "wall" else "too_hard")
 	_cross.visible = not is_blocking() and not riding
+	_target_icon.visible = _cross.visible and (st == "hard" or st == "wall")
 
 
 func _draw_cross() -> void:
@@ -459,6 +500,9 @@ func _draw_cross() -> void:
 
 # --- Toasts, hints, prompts ---------------------------------------------------------------------------
 func toast(text: String, color: Color = UiTheme.CREAM, seconds: float = 3.2) -> void:
+	if _banner_t > 0.0:
+		_queued.append([text, color, seconds])   # the layer banner has the stage
+		return
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", UiTheme.screen(Color(0.1, 0.075, 0.05, 0.92), 16.0))
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -480,31 +524,40 @@ func toast(text: String, color: Color = UiTheme.CREAM, seconds: float = 3.2) -> 
 
 
 func big_toast(title: String, sub: String, color: Color) -> void:
-	## Breaking into a new zone.
+	## Breaking into a new layer: an enamel banner with the layer's name and
+	## one line about it. It has the stage to itself (other toasts wait), lands
+	## with a little overshoot, holds, then lifts away and fades.
+	for c in _toasts.get_children():
+		c.queue_free()
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiTheme.enamel(color.darkened(0.35), Vector4(34, 10, 34, 14), title.length()))
+	p.add_theme_stylebox_override("panel", UiTheme.enamel(color.darkened(0.35), Vector4(38, 10, 38, 14), title.length()))
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", -2)
 	p.add_child(v)
-	var a := UiTheme.label(title, 36, UiTheme.CREAM, 0)
-	UiTheme.sign_text(a, 38, UiTheme.CREAM, 7)
+	var a := UiTheme.label(title, 38, UiTheme.CREAM, 0)
+	UiTheme.sign_text(a, 40, UiTheme.CREAM, 7)
 	a.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(a)
-	var b := UiTheme.label(sub, 18, UiTheme.CREAM, 4, false)
+	var b := UiTheme.label(sub, 22, UiTheme.CREAM, 4, false)
 	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(b)
 	p.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_toasts.add_child(p)
 	_toasts.move_child(p, 0)
-	p.pivot_offset = Vector2(200, 40)
-	p.scale = Vector2(0.6, 0.6)
+	p.pivot_offset = Vector2(220, 40)
+	p.scale = Vector2(0.7, 0.7)
+	p.modulate.a = 0.0
 	var tw := p.create_tween()
-	tw.tween_property(p, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(3.6)
-	tw.tween_property(p, "modulate:a", 0.0, 0.5)
+	tw.tween_property(p, "modulate:a", 1.0, 0.18)
+	tw.parallel().tween_property(p, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(3.4)
+	tw.tween_property(p, "modulate:a", 0.0, 0.7).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(p, "position:y", p.position.y - 18.0, 0.7).set_ease(Tween.EASE_IN)
 	tw.tween_callback(p.queue_free)
+	_banner_t = 4.4
 	gauge.flash_zone()
+	boost_relevant()
 
 
 func set_coach(text: String) -> void:
@@ -517,8 +570,10 @@ func set_coach(text: String) -> void:
 
 
 func set_prompt(text: String) -> void:
-	## Desktop: "E: ride the lift" above the tool plate. Phones get the context button.
+	## Keyboards: the key on a cream keycap and what it does, above the tool
+	## plate. Phones get the context button instead (and see no prompt).
 	_prompt.visible = text != "" and not touch_mode and not is_blocking() and not riding
+	_keycap.visible = not text.begins_with("Dig a shaft")
 	if _prompt_label.text != text:
 		_prompt_label.text = text
 
@@ -563,8 +618,6 @@ func _update_offer(delta: float) -> void:
 	elif ev == -1:
 		_hide_offer()
 	_offer_tag.visible = offers.current != "" and not find_card_up() and not riding
-	# One 2x offer at a time: the boost ticket steps aside while the tag offers the boost.
-	_boost.visible = not (_offer_tag.visible and offers.current == "boost")
 	if _offer_tag.visible:
 		if offers.current == "cash":
 			_offer_title.text = AdOffers.headline("cash")
@@ -576,6 +629,44 @@ func _update_offer(delta: float) -> void:
 
 func _hide_offer() -> void:
 	_offer_tag.visible = false
+
+
+func boost_relevant() -> void:
+	## A moment when 2x digging is worth having (a new, harder layer; a long
+	## chip at slow rock): the ticket shows for a while, then steps away.
+	if _boost_cool <= 0.0 and GameState.play_time > Balance.OFFER_FIRST_AFTER:
+		_boost_window = 28.0
+
+
+func _update_boost(delta: float) -> void:
+	## The 2x ticket is only up when it means something: while a boost is
+	## running (it counts down), or for a short while at a moment you'd want
+	## one. Never with Remove Ads (that's 2x for good already).
+	_boost_cool = maxf(0.0, _boost_cool - delta)
+	if _hard_t > 8.0:
+		_hard_t = 0.0
+		boost_relevant()
+	if _boost_window > 0.0:
+		_boost_window -= delta
+		if _boost_window <= 0.0:
+			_boost_cool = 120.0
+	var want := GameState.is_boost_active() or (_boost_window > 0.0 and not GameState.owns_remove_ads)
+	want = want and not (_offer_tag.visible and offers.current == "boost") and not riding
+	if want and not _boost.visible:
+		_boost.visible = true
+		_boost.pivot_offset = Vector2(_boost.size.x, 0)
+		_boost.scale = Vector2(0.85, 0.85)
+		_boost.create_tween().tween_property(_boost, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	elif not want:
+		_boost.visible = false
+
+
+func _sync_play() -> void:
+	for n in _play:
+		if is_instance_valid(n):
+			(n as CanvasItem).visible = not riding
+	if not riding and _boost != null:
+		_boost.visible = false
 
 
 # --- Finds -------------------------------------------------------------------------------------------
@@ -603,14 +694,14 @@ func show_find(f: int, value: float) -> void:
 	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(tv)
-	var head := UiTheme.label("Found · %s" % str(Balance.rarity(f).name).to_lower(), 15, rc.darkened(0.35), 0)
+	var head := UiTheme.label("Found · %s" % str(Balance.rarity(f).name).to_lower(), 20, rc.darkened(0.35), 0)
 	tv.add_child(head)
 	var nm := UiTheme.label(str(d.name), 23, UiTheme.INK, 0)
 	UiTheme.sign_text(nm, 23, UiTheme.INK, 0)
 	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	nm.custom_minimum_size = Vector2(210, 0)
 	tv.add_child(nm)
-	var fl := UiTheme.label(str(d.flavor), 15, UiTheme.INK.lightened(0.25), 0, false)
+	var fl := UiTheme.label(str(d.flavor), 20, UiTheme.INK.lightened(0.25), 0, false)
 	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	fl.custom_minimum_size = Vector2(210, 0)
 	tv.add_child(fl)

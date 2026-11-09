@@ -71,3 +71,31 @@ static func find(n: Node, name: String) -> Node3D:
 		if r != null:
 			return r
 	return null
+
+
+static func sign(path: String, size: Vector2, glow: float = 0.25, row: int = -1, rows: int = 1) -> MeshInstance3D:
+	## A painted enamel sign face (art/textures/make_signs.py): lettering is in
+	## the texture, never floating text. A quad facing +Z; `row` picks one plate
+	## out of a sheet of `rows`. A little glow keeps it readable in shade.
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = size
+	mi.mesh = q
+	var m := StandardMaterial3D.new()
+	var tex: Texture2D = load(path)
+	m.albedo_texture = tex
+	m.roughness = 0.35
+	m.metallic_specular = 0.6
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	if glow > 0.0:
+		m.emission_enabled = true
+		m.emission_texture = tex
+		m.emission = Color(1, 1, 1)
+		m.emission_energy_multiplier = glow
+	if row >= 0:
+		m.uv1_scale = Vector3(1.0, 1.0 / rows, 1.0)
+		m.uv1_offset = Vector3(0.0, float(row) / rows, 0.0)
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+

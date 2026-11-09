@@ -2,19 +2,31 @@ extends SceneTree
 ## Renders screenshots of key moments for checking the look:
 ##   xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- /tmp/dig-shots [names...]
 ## With names, only those shots (by prefix, e.g. "05" or "07b") are saved.
+## --size WxH renders at that window size (e.g. 844x390, a small phone in landscape).
 ## (Untyped on purpose: this compiles before the autoloads exist.)
 
 var out_dir := "/tmp/dig-shots"
 var only: Array = []
+var win_size := Vector2i.ZERO
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		out_dir = args[0]
-	for i in range(1, args.size()):
+	var i := 1
+	while i < args.size():
+		if args[i] == "--size" and i + 1 < args.size():
+			var wh: PackedStringArray = args[i + 1].split("x")
+			win_size = Vector2i(int(wh[0]), int(wh[1]))
+			i += 2
+			continue
 		only.append(args[i])
+		i += 1
 	DirAccess.make_dir_recursive_absolute(out_dir)
+	if win_size != Vector2i.ZERO:
+		DisplayServer.window_set_size(win_size)
+		root.size = win_size
 	_run.call_deferred()
 
 
@@ -77,7 +89,7 @@ func _landmark_view(world, z: int, tool: int) -> void:
 	var fl: float = field.floor_below(stand + Vector3(0, 1.0, 0), 4.0)
 	world.move_player(Vector3(stand.x, fl + 0.05, stand.z), 0.0, -0.15)
 	gs.note_depth(-fl)
-	var lm := Vector3(c.x, field.floor_below(c, 6.0) + 0.5, c.z)
+	var lm := Vector3(c.x, field.floor_below(c, 6.0) + (1.25 if z == 1 else 0.5), c.z)
 	world.player.look_at_point(lm)
 
 
@@ -99,7 +111,7 @@ func _run() -> void:
 	hud.set_touch_mode(true)
 	await _frames(3)
 	await _shot("01b_surface_touch")
-	hud.set_touch_mode(false)
+	# Phone first: the rest of the shots show the phone HUD (as a player sees it).
 	# The shack and the lift from the dig site.
 	player.position = Vector3(-1.0, 0.0, 6.0)
 	player.look_at_point(Vector3(-4.0, 2.6, -2.0))
@@ -167,7 +179,8 @@ func _run() -> void:
 		await _shot("05h_drill_close")
 		world.force_dig = false
 
-	# The crew digging at the lift stop.
+	# The crew digging round the lift stop: a roomy chamber, you a few metres
+	# off, every mole and robo-mole up and scratching.
 	world.skip_to_zone(1)
 	await _frames(5)
 	gs.grant_money(1e6)
@@ -175,14 +188,22 @@ func _run() -> void:
 		gs.buy_helper(0)
 	for _i in 2:
 		gs.buy_helper(1)
-	var y0: float = player.position.y
-	for k in 5:
-		field.dig(player.position + Vector3(1.2 + k * 0.5, 0.6, 0.0), 1.2, 1e12)
+	var stop: Vector3 = player.position + Vector3(2.6, 0, 0)
+	for k in 10:
+		var a: float = k * TAU / 10.0
+		field.dig(stop + Vector3(cos(a) * 1.8, 0.9, sin(a) * 1.8), 1.5, 1e12)
+	field.dig(stop + Vector3(0, 0.9, 0), 2.0, 1e12)
+	field.dig(player.position + Vector3(1.0, 0.9, 0), 1.4, 1e12)
 	field.flush()
-	gs.lift_stop = player.position + Vector3(1.6, 0, 0)
+	gs.lift_stop = Vector3(stop.x, field.floor_below(stop + Vector3(0, 1.0, 0), 4.0), stop.z)
 	world._place_lift_stop()
-	player.look_at_point(gs.lift_stop + Vector3(0.6, 0.2, 0))
-	await _frames(150)
+	await _frames(20)
+	for m in world.helpers._crew:
+		m.state = "hidden"
+		m.t = 0.0
+	await _frames(40)
+	player.look_at_point(gs.lift_stop + Vector3(0.0, 0.3, 0))
+	await _frames(10)
 	await _shot("06_crew")
 
 	# The shop.
@@ -223,7 +244,7 @@ func _run() -> void:
 	hud.offers._wait = 0.0
 	await _frames(4)
 	await _shot("09_touch_offer")
-	hud.set_touch_mode(false)
+	pass
 
 	# Riding the lift up from deep down.
 	world.skip_to_zone(4)

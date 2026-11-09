@@ -46,6 +46,11 @@ var _fps_t := 0.0
 var _mouse_dig := false
 var _zone_seen := 0
 var _hit_glow := 0.0
+var _bounce_col := Color(0.3, 0.35, 0.45)
+var _clods: MultiMeshInstance3D   # dirt thrown up round a hole dug in the field
+var _clod_n := 0
+var _spoil: Node3D                # the heap of dirt from your first hole
+const CLODS_MAX := 110
 var _near := ""                # "lift_top", "lift_stop", "shop" or ""
 var _pops: Array = []          # finds popping out: {node, t, from, light}
 var _detector_t := 0.0
@@ -97,6 +102,7 @@ func _ready() -> void:
 	helpers.player = player
 	add_child(helpers)
 	_build_float_pool()
+	_build_clods()
 
 	hud = Hud.new()
 	hud.player = player
@@ -107,8 +113,9 @@ func _ready() -> void:
 
 	get_window().size_changed.connect(_fit_render_scale)
 	_fit_render_scale()
-	if DisplayServer.is_touchscreen_available():
-		hud.set_touch_mode(true)
+	# Phone first: the touch controls and touch wording until a mouse click or
+	# a walking key says otherwise.
+	hud.set_touch_mode(true)
 	_update_env(1.0)
 
 
@@ -236,29 +243,37 @@ const LAMP_FALLOFF := 8.0                          # metres to near-black with t
 
 func _update_env(blend: float) -> void:
 	## Fades from the sunny field to the dark of the shaft as you go down.
-	## Down there the headlamp's amber pool falls off to the zone's own dark
-	## tint by about 8 m (further with the Headlamp Range upgrade).
+	## Down there the headlamp's warm pool falls off into the layer's own dark
+	## (DigField.STYLE fog) by about 8 m (further with the Headlamp Range
+	## upgrade); a cool fill (ambient, and the rock shader's bounce near you)
+	## keeps the shadows readable and the pool's edge soft.
 	var d := maxf(0.0, -player.position.y)
 	var under := smoothstep(0.5, 9.0, d)
 	var zi := field.zone_of_y(player.position.y)
-	var zone: Dictionary = Balance.ZONES[zi]
-	var tint: Color = zone.fog
-	var amb := SURFACE_AMBIENT.lerp(tint * 1.6, under)
+	var st: Dictionary = DigField.STYLE[zi]
+	var fog: Color = st.fog
+	var fill: Color = st.fill
+	var amb := SURFACE_AMBIENT.lerp(fill, under)
 	_env.ambient_light_color = _env.ambient_light_color.lerp(amb, blend)
-	_env.ambient_light_energy = lerpf(0.55, 0.22, under)
-	_env.fog_light_color = _env.fog_light_color.lerp(SURFACE_HAZE.lerp(tint, under), blend)
-	# Depth fog: clear for the first couple of metres, the zone's own near-black
-	# by the lamp's reach.
+	_env.ambient_light_energy = lerpf(0.55, 0.32, under)
+	_env.fog_light_color = _env.fog_light_color.lerp(SURFACE_HAZE.lerp(fog, under), blend)
+	# Depth fog: clear for the first couple of metres, the layer's own dark by
+	# the lamp's reach.
 	var reach := LAMP_FALLOFF * sqrt(GameState.upgrade_mult("lamp"))
-	_env.fog_density = lerpf(SURFACE_FOG, 0.97, under)
-	_env.fog_depth_begin = lerpf(SURFACE_FOG_BEGIN, 1.6, under)
-	_env.fog_depth_end = lerpf(SURFACE_FOG_END, reach * 1.1, under)
-	_env.fog_depth_curve = lerpf(1.0, 0.8, under)
+	_env.fog_density = lerpf(SURFACE_FOG, 0.96, under)
+	_env.fog_depth_begin = lerpf(SURFACE_FOG_BEGIN, 1.8, under)
+	_env.fog_depth_end = lerpf(SURFACE_FOG_END, reach * 1.15, under)
+	_env.fog_depth_curve = lerpf(1.0, 0.75, under)
 	_sun.light_energy = lerpf(SUN_ENERGY, 0.0, smoothstep(0.0, 7.0, d))
 	_sun.visible = _sun.light_energy > 0.01
 	_vm_sun.light_energy = _sun.light_energy * 0.85
 	_vm_sun.visible = _sun.visible
 	_sun.shadow_enabled = d < 4.0
+	_bounce_col = _bounce_col.lerp(fill, blend)
+	var bc := Vector3(_bounce_col.r, _bounce_col.g, _bounce_col.b)
+	for m in [field.material] + field.decor_mats.values():
+		(m as ShaderMaterial).set_shader_parameter("bounce", under * 0.6)
+		(m as ShaderMaterial).set_shader_parameter("bounce_color", bc)
 	player.sync_viewmodel(_env)
 
 
@@ -360,6 +375,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.device != InputEvent.DEVICE_ID_EMULATION and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _ride.is_empty():
 			player.add_look(event.relative * Balance.LOOK_SENSITIVITY_MOUSE)
 	elif event is InputEventKey and event.pressed and not event.echo:
+		if hud.touch_mode and event.physical_keycode in [KEY_W, KEY_A, KEY_S, KEY_D, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
+			hud.set_touch_mode(false)   # someone's at a keyboard
 		match event.physical_keycode:
 			KEY_SPACE:
 				player.jump()
@@ -398,13 +415,13 @@ func _update_near() -> void:
 		"lift_top":
 			var deep := GameState.lift_stop.is_finite()
 			hud.touch.set_action("Down", "%d m" % int(-GameState.lift_stop.y) if deep else "", UiTheme.LAMP_GREEN, "lift_down")
-			hud.set_prompt("E: ride the lift down to %d m" % int(-GameState.lift_stop.y) if deep else "Dig a shaft first, then the lift can take you down")
+			hud.set_prompt("Ride the lift down to %d m" % int(-GameState.lift_stop.y) if deep else "Dig a shaft first, then the lift can take you down")
 		"lift_stop":
 			hud.touch.set_action("Up", "to the shack", UiTheme.LAMP_GREEN, "lift_up")
-			hud.set_prompt("E: ride the lift up to the shack")
+			hud.set_prompt("Ride the lift up to the shack")
 		"shop":
 			hud.touch.set_action("Shop", "", UiTheme.BRASS.darkened(0.1), "shop")
-			hud.set_prompt("E: open the shop")
+			hud.set_prompt("Open the shop")
 		_:
 			hud.touch.set_action("")
 			hud.set_prompt("")
@@ -695,9 +712,9 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 			var mi := MultiMeshInstance3D.new()
 			mi.multimesh = mm
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			if model == "crystal_small":
-				mi.material_override = field._decor_mat("glint" if z != 9 else "glow")
-			elif model != "magma_vent":
+			if not zd.is_empty() and str(zd[4]) != "":
+				mi.material_override = field._decor_mat(str(zd[4]))
+			elif zd.is_empty():
 				mi.material_override = field._decor_mat("matte")
 			_ride_props.add_child(mi)
 		if DigField.LANDMARKS.has(z):
@@ -709,8 +726,7 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 			mark.scale = Vector3.ONE * float(d.get("scale", 1.0))
 			mark.position = Vector3(c.x - 1.9, ly - 1.2, c.z - 1.9)
 			mark.rotation = Vector3(0.0, float(z) * 1.3, 0.0)
-			if d.has("surface"):
-				DigField.dress_landmark(mark, str(d.surface))
+			DigField.dress_landmark(mark, str(d.get("melt", "lava")))
 			_ride_props.add_child(mark)
 			if d.has("light"):
 				var ll := OmniLight3D.new()
@@ -727,23 +743,10 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 			continue
 		var t := clampf((from.y - zy) / maxf(from.y - to.y, 0.001), 0.0, 1.0)
 		var p := from.lerp(to, t)
-		var plate := MeshInstance3D.new()
-		var pm := BoxMesh.new()
-		pm.size = Vector3(0.05, 0.42, 1.3)
-		plate.mesh = pm
-		plate.material_override = Models.flat(UiTheme.CREAM, 0.5)
-		plate.position = Vector3(p.x - 2.6, zy + 1.6, p.z - 0.6)
+		var plate := Models.sign("res://textures/signs/layers.png", Vector2(1.3, 0.375), 0.3, z, Balance.zone_count())
+		plate.position = Vector3(p.x - 2.57, zy + 1.6, p.z - 0.6)
+		plate.rotation = Vector3(0, PI * 0.5, 0)
 		_ride_props.add_child(plate)
-		var l := Label3D.new()
-		l.text = "%s  ·  %d m" % [Balance.ZONES[z].name, int(-zy)]
-		l.font = UiTheme.display_font()
-		l.font_size = 48
-		l.outline_size = 0
-		l.modulate = UiTheme.ENAMEL_RED
-		l.pixel_size = 0.0045
-		l.position = Vector3(p.x - 2.57, zy + 1.6, p.z - 0.6)
-		l.rotation = Vector3(0, PI * 0.5, 0)
-		_ride_props.add_child(l)
 
 
 func _build_lift_stop() -> void:
@@ -760,24 +763,20 @@ func _build_lift_stop() -> void:
 	_lift_stop_light.position = Vector3(0.6, 1.8, 0)
 	_lift_stop_light.layers = 1 | Player.VIEWMODEL_LAYER
 	_lift_stop.add_child(_lift_stop_light)
-	var sign := Label3D.new()
-	sign.text = "Lift\nup"
-	sign.font = UiTheme.display_font()
-	sign.font_size = 40
-	sign.outline_size = 0
-	sign.modulate = Color(0.71, 0.2, 0.165)
-	sign.pixel_size = 0.004
-	sign.position = Vector3(0.12, 1.42, 0.0)
-	sign.rotation = Vector3(0, PI / 2, 0)
-	_lift_stop.add_child(sign)
+	var plate := Models.sign("res://textures/signs/liftup.png", Vector2(0.46, 0.26), 0.2)
+	plate.position = Vector3(0.117, 1.42, 0.0)
+	plate.rotation = Vector3(0, PI / 2, 0)
+	_lift_stop.add_child(plate)
 	var tag := Label3D.new()
 	tag.text = "Lift"
-	tag.font = UiTheme.display_font()
-	tag.font_size = 56
-	tag.outline_size = 12
+	tag.font = UiTheme.bold_font()
+	tag.font_size = 30
+	tag.outline_size = 8
 	tag.modulate = Color(0.949, 0.71, 0.267)
 	tag.outline_modulate = Color(0.141, 0.11, 0.09)
-	tag.pixel_size = 0.005
+	tag.fixed_size = true
+	tag.pixel_size = 0.0009
+	tag.no_depth_test = false
 	tag.position = Vector3(0, 2.65, 0)
 	tag.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	_lift_stop.add_child(tag)
@@ -876,19 +875,19 @@ func _update_depth() -> void:
 	if z > _zone_seen:
 		_zone_seen = z
 		var zone: Dictionary = Balance.ZONES[z]
-		var prev: Dictionary = Balance.ZONES[z - 1]
-		var ratio := float(zone.hp) * float(zone.worth) / maxf(float(prev.hp) * float(prev.worth), 0.001)
-		hud.big_toast(str(zone.name), "Layer %d of %d. Harder rock, worth %sx more." % [z + 1, Balance.zone_count(), Fmt.num(ratio)], zone.band)
+		hud.big_toast(str(zone.name), str(Balance.ZONE_LINES[z]), zone.band)
 		Sound.play("zone", -2.0)
 
 
 func _update_lift_tag() -> void:
 	if _lift_stop_tag != null and _lift_stop.visible:
-		_lift_stop_tag.visible = player.eye_pos().distance_to(_lift_stop_tag.global_position) > 2.4
+		var dd := player.eye_pos().distance_to(_lift_stop_tag.global_position)
+		_lift_stop_tag.visible = dd > 2.4 and dd < 16.0
 
 
 func _update_slow() -> void:
 	field.settle_landmarks()
+	_place_spoil()
 	# The lift stop sits on the floor: if it's been dug out from under, it drops.
 	if GameState.lift_stop.is_finite():
 		var s := GameState.lift_stop
@@ -908,10 +907,82 @@ func _update_slow() -> void:
 # =====================================================================================
 # Money from digging, floating numbers, finds
 # =====================================================================================
+func _build_clods() -> void:
+	## Digging into the field throws clods of dirt and turf onto the grass
+	## round the hole, and the first hole's dirt goes on a spoil heap beside it.
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = DigField.decor_mesh("pebble")
+	mm.instance_count = CLODS_MAX
+	mm.visible_instance_count = 0
+	_clods = MultiMeshInstance3D.new()
+	_clods.multimesh = mm
+	_clods.material_override = field._decor_mat("matte")
+	_clods.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(_clods)
+	_spoil = Models.instance("spoil_heap")
+	_spoil.visible = false
+	add_child(_spoil)
+	_place_spoil()
+
+
+func _throw_clods(at: Vector3) -> void:
+	if _clod_n >= CLODS_MAX:
+		return
+	for k in 2:
+		var a := randf() * TAU
+		var rr := randf_range(0.9, 1.9)
+		var p := Vector3(at.x + cos(a) * rr, 0.0, at.z + sin(a) * rr)
+		if absf(p.x) > DigField.HALF - 0.3 or absf(p.z) > DigField.HALF - 0.3:
+			continue
+		if not field.solid_at(p + Vector3(0, -0.2, 0)) or field.solid_at(p + Vector3(0, 0.15, 0)):
+			continue
+		var fl := field.floor_below(p + Vector3(0, 0.5, 0), 1.5)
+		var sc := randf_range(1.6, 3.0)
+		var xf := Transform3D(Basis(Vector3.UP, randf() * TAU).scaled(Vector3(sc, sc * 0.8, sc)), Vector3(p.x, fl, p.z))
+		var c := Color(0.52, 0.37, 0.23) * randf_range(0.8, 1.1)
+		if randf() < 0.3:
+			c = Color(0.42, 0.46, 0.22)   # a bit of turf
+		_clods.multimesh.set_instance_transform(_clod_n, xf)
+		_clods.multimesh.set_instance_color(_clod_n, Color(c.r, c.g, c.b, 1.0))
+		_clod_n += 1
+		_clods.multimesh.visible_instance_count = _clod_n
+		if _clod_n >= CLODS_MAX:
+			return
+	if not GameState.spoil_at.is_finite():
+		# The first hole: heap its dirt a couple of metres off, on grass.
+		for k in 8:
+			var a := float(k) * PI * 0.25 + 0.4
+			var p := Vector3(at.x + cos(a) * 2.6, 0.0, at.z + sin(a) * 2.6)
+			if absf(p.x) > DigField.HALF - 1.0 or absf(p.z) > DigField.HALF - 1.0:
+				continue
+			if field.solid_at(p + Vector3(0, -0.3, 0)) and not field.solid_at(p + Vector3(0, 0.2, 0)):
+				GameState.spoil_at = Vector3(p.x, field.floor_below(p + Vector3(0, 0.5, 0), 1.5), p.z)
+				_place_spoil()
+				return
+
+
+func _place_spoil() -> void:
+	## The heap grows with how much you've dug out near the top, and goes if
+	## you dig the ground out from under it.
+	if _spoil == null or not GameState.spoil_at.is_finite():
+		if _spoil != null:
+			_spoil.visible = false
+		return
+	var s := GameState.spoil_at
+	_spoil.visible = field.solid_at(s + Vector3(0, -0.25, 0))
+	_spoil.position = s + Vector3(0, -0.05, 0)
+	_spoil.rotation.y = s.x * 1.7
+	_spoil.scale = Vector3.ONE * clampf(0.28 + GameState.dug_volume / 40.0, 0.28, 0.7)
+
+
 func _on_dug(r: Dictionary) -> void:
 	## Anything dug out of the rock (you, a mole, a blast) pays.
 	var v := GameState.on_dug(r)
 	var at: Vector3 = r.at
+	if at.y > -2.2 and at.distance_to(player.position) < 5.0 and float(r.get("volume", 0.0)) > 0.0:
+		_throw_clods(at)
 	if at.distance_to(player.position) < 14.0:
 		_pending += v
 		_pending_at = at
@@ -924,52 +995,72 @@ func _on_struck(_r: Dictionary, _at: Vector3, _normal: Vector3) -> void:
 
 
 func _build_float_pool() -> void:
+	## Money popping off the rock: small Zilla Slab numbers in the colour of
+	## what you dug, a fixed size on screen, hidden by rock in front of them
+	## (depth tested, placed a little out from the wall towards you). While you
+	## keep digging the newest one keeps counting up instead of a new one
+	## popping every strike.
 	for i in FLOAT_POOL:
 		var l := Label3D.new()
-		l.font = UiTheme.display_font()
-		l.font_size = 46
-		l.outline_size = 10
-		# The same size on screen however close the strike is (right at the
-		# lens they ballooned into smeared text filling the view).
+		l.font = UiTheme.bold_font()
+		l.font_size = 30
+		l.outline_size = 8
 		l.fixed_size = true
-		l.pixel_size = 0.0011
+		l.pixel_size = 0.0009
 		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		l.no_depth_test = true
+		l.no_depth_test = false
+		l.render_priority = 2
 		l.modulate = UiTheme.AMBER
 		l.outline_modulate = Color(0.08, 0.05, 0.02)
 		l.visible = false
 		add_child(l)
-		_floats.append({"node": l, "t": 0.0, "v": Vector3.ZERO})
+		_floats.append({"node": l, "t": 0.0, "v": Vector3.ZERO, "sum": 0.0, "age": 0.0})
 
 
-func _float_text(at: Vector3, text: String, color: Color) -> void:
+func _float_text(at: Vector3, text: String, color: Color, value: float = -1.0) -> void:
+	# Out from the wall towards your eye, so the rock it came from doesn't hide it.
+	var eye := player.eye_pos()
+	var p := at + (eye - at).normalized() * minf(0.45, at.distance_to(eye) * 0.3)
+	# Keep counting on the newest number while it's fresh.
+	var last: Dictionary = _floats[(_float_i - 1 + _floats.size()) % _floats.size()]
+	if value >= 0.0 and float(last.t) > 0.0 and float(last.age) < 0.7 and float(last.sum) >= 0.0 \
+			and _same_hue((last.node as Label3D).modulate, color) and (last.node as Label3D).global_position.distance_to(p) < 1.5:
+		last.sum = float(last.sum) + value
+		(last.node as Label3D).text = "+" + Fmt.num(float(last.sum))
+		last.t = maxf(float(last.t), 0.9)
+		return
 	var f: Dictionary = _floats[_float_i]
 	_float_i = (_float_i + 1) % _floats.size()
 	var l: Label3D = f.node
 	l.text = text
 	l.modulate = color
-	l.global_position = at
+	l.global_position = p
 	l.visible = true
 	f.t = 1.1
-	f.v = Vector3(randf_range(-0.2, 0.2), 1.0, randf_range(-0.2, 0.2))
+	f.age = 0.0
+	f.sum = value
+	f.v = Vector3(randf_range(-0.1, 0.1), 0.55, randf_range(-0.1, 0.1))
+
+
+static func _same_hue(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) < 0.02
 
 
 func _update_floats(delta: float) -> void:
 	_pending_t += delta
-	if _pending_t > 0.3 and _pending > 0.0:
+	if _pending_t > 0.25 and _pending > 0.0:
 		_pending_t = 0.0
 		var col := UiTheme.AMBER
-		var text := "+" + Fmt.num(_pending)
 		if _pending_ore > 0:
 			col = (Balance.ORES[_pending_ore].glint as Color).lightened(0.1)
-			text = "%s +%s" % [Balance.ORES[_pending_ore].name, Fmt.num(_pending)]
-		_float_text(_pending_at + Vector3(0, 0.35, 0), text, col)
+		_float_text(_pending_at, "+" + Fmt.num(_pending), col, _pending)
 		_pending = 0.0
 		_pending_ore = 0
 	for f in _floats:
 		if float(f.t) <= 0.0:
 			continue
 		f.t = float(f.t) - delta
+		f.age = float(f.age) + delta
 		var l: Label3D = f.node
 		l.global_position += (f.v as Vector3) * delta
 		l.modulate.a = clampf(float(f.t) / 0.4, 0.0, 1.0)
@@ -1020,7 +1111,7 @@ func _on_find_exposed(f: int) -> void:
 	var v := GameState.discover(f)
 	Sound.play("find_%d" % clampi(int(d.get("rarity", 0)) / 2, 0, 2), -1.0)
 	if not d.get("core", false):
-		_float_text(p + Vector3(0, 0.8, 0), "+" + Fmt.num(v), rc.lightened(0.3))
+		_float_text(p + Vector3(0, 0.8, 0), "+" + Fmt.num(v), rc.lightened(0.3), -1.0)
 
 
 func _update_pops(delta: float) -> void:

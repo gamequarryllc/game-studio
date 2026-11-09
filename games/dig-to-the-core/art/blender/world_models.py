@@ -16,7 +16,7 @@ import bpy  # noqa: E402
 import bmesh  # noqa: E402
 from mathutils import Matrix, Vector, noise  # noqa: E402
 from kit import (box, cyl, sphere, torus, join, wear, wobble, export, reset, mat, taper, subdivide, bar, attach,  # noqa: E402
-                 lathe, place, strut, ao, smooth, tube, arc)
+                 lathe, place, strut, ao, smooth, tube, arc, apply_mods, white_col, paint_by, from_profile)
 
 R90 = math.radians(90)
 
@@ -448,48 +448,115 @@ def headframe():
     return frame_o
 
 
+def chain(a, b, link_r, m, name="chain"):
+    """A chain from a to b: oval links, each turned a quarter to the last."""
+    a = Vector(a)
+    b = Vector(b)
+    d = b - a
+    n = max(2, int(d.length / (link_r * 2.6)))
+    q = Vector((0, 0, 1)).rotation_difference(d.normalized())
+    parts = []
+    for i in range(n):
+        t = (i + 0.5) / n
+        lk = torus(link_r, link_r * 0.28, (0, 0, 0), m, (0, 0, 0), 10, 4)
+        lk.data.transform(Matrix.Scale(1.6, 4, (0, 0, 1)) @ Matrix.Rotation(R90, 4, "X"))
+        lk.data.transform(Matrix.Rotation(R90 * (i % 2), 4, "Z"))
+        mm = q.to_matrix().to_4x4()
+        mm.translation = a + d * t
+        lk.data.transform(mm)
+        parts.append(lk)
+    return join(parts, name)
+
+
 def cage():
-    """The lift cage: an iron frame with brass corner caps, a plank floor,
-    bars on three sides (open towards +y), a roof with the cable bail and a
-    caged lamp."""
+    """The lift cage: a riveted steel frame of angle iron, woven-mesh walls on
+    three sides (open towards +y) with rails across, a folding lattice gate
+    pushed back to one side, a chequer-plate floor with a timber kick board, a
+    grab rail inside, guide shoes on the frame, and a pitched steel bonnet
+    with a crosshead and four chains up to the cable shackle."""
     iron = mat("iron", metal=0.6, rough=0.5)
+    dark = mat("dark_steel", metal=0.6, rough=0.55)
     brass = mat("brass", metal=0.8, rough=0.35)
-    plank = mat("wood", rough=0.85)
-    plank2 = mat("wood_dark", rough=0.85)
+    wood = mat("wood_dark", rough=0.85)
     rnd = random.Random(42)
-    parts = [box((1.92, 1.92, 0.1), (0, 0, 0.05), iron, bevel=0.02)]
-    for i in range(7):
-        parts.append(box((1.84, 0.25, 0.04), (0, -0.78 + i * 0.26, 0.12), plank if i % 2 else plank2, rot=(0, 0, rnd.uniform(-0.01, 0.01)), bevel=0.008))
-    parts.append(box((2.0, 2.0, 0.1), (0, 0, 2.5), iron, bevel=0.02))
-    for i in range(5):
-        parts.append(box((1.9, 0.34, 0.03), (0, -0.7 + i * 0.35, 2.57), plank2, bevel=0.006))
+    parts = []
+    W = 0.93
+    H = 2.4
+    # Floor: chequer plate with raised diamonds, a timber kick board round it.
+    parts.append(box((1.92, 1.92, 0.1), (0, 0, 0.05), iron, bevel=0.02))
+    for i in range(9):
+        for j in range(9):
+            x = -0.8 + i * 0.2 + (0.1 if j % 2 else 0)
+            y = -0.8 + j * 0.2
+            if abs(x) < 0.88:
+                parts.append(place(box((0.07, 0.022, 0.012), (0, 0, 0), dark), (x, y, 0.106), (0, 0, math.radians(45 if (i + j) % 2 else -45))))
+    for (sz, loc) in (((1.86, 0.06, 0.16), (0, -0.89, 0.18)), ((0.06, 1.86, 0.16), (-0.89, 0, 0.18)), ((0.06, 1.86, 0.16), (0.89, 0, 0.18))):
+        parts.append(box(sz, loc, wood, bevel=0.01))
+    # Corner posts in angle iron, rivets up them.
     for cx in (-1, 1):
         for cy in (-1, 1):
-            parts.append(box((0.09, 0.09, 2.5), (cx * 0.93, cy * 0.93, 1.25), iron, bevel=0.015))
-            parts.append(box((0.12, 0.12, 0.08), (cx * 0.93, cy * 0.93, 2.6), brass, bevel=0.02))
+            parts.append(box((0.1, 0.02, H), (cx * W, cy * (W - 0.04), H / 2), iron, bevel=0.004))
+            parts.append(box((0.02, 0.1, H), (cx * (W - 0.04), cy * W, H / 2), iron, bevel=0.004))
+            for k in range(6):
+                parts.append(sphere(0.012, (cx * (W + 0.012), cy * (W - 0.04), 0.3 + k * 0.38), brass, segs=6, rings=4))
+    # Mesh walls: a frame, rails across, and a woven grid of thin bars.
     for side in range(3):
-        for i in range(7):
-            off = -0.78 + i * 0.26
-            pos = [(off, -0.93), (-0.93, off), (0.93, off)][side]
-            parts.append(cyl(0.014, 2.36, (pos[0], pos[1], 1.3), iron, verts=6))
-        rail = [(0, -0.93), (-0.93, 0), (0.93, 0)][side]
-        for z in (0.95, 1.9):
-            size = (1.9, 0.07, 0.06) if side == 0 else (0.07, 1.9, 0.06)
-            parts.append(box(size, (rail[0], rail[1], z), iron, bevel=0.01))
-    # Bail and shackle for the cable.
+        for z in (0.12, 1.15, H - 0.06):
+            if side == 0:
+                parts.append(box((1.9, 0.05, 0.07), (0, -W, z), iron, bevel=0.008))
+            else:
+                parts.append(box((0.05, 1.9, 0.07), ((-W if side == 1 else W), 0, z), iron, bevel=0.008))
+        n = 14
+        for i in range(n):
+            off = -0.84 + i * (1.68 / (n - 1))
+            if side == 0:
+                parts.append(box((0.012, 0.012, H - 0.2), (off, -W + 0.01, H / 2), dark))
+            else:
+                parts.append(box((0.012, 0.012, H - 0.2), ((-W if side == 1 else W) + (0.01 if side == 1 else -0.01), off, H / 2), dark))
+        for k in range(17):
+            z = 0.22 + k * 0.125
+            if side == 0:
+                parts.append(box((1.7, 0.012, 0.012), (0, -W + 0.015, z), dark))
+            else:
+                parts.append(box((0.012, 1.7, 0.012), ((-W if side == 1 else W) + (0.015 if side == 1 else -0.015), 0, z), dark))
+    # The folding lattice gate, pushed back against the right-hand post.
+    gx = W - 0.2
+    for k in range(5):
+        x = gx + k * 0.035
+        for z0 in (0.25, 1.15):
+            parts.append(strut((x, W, z0), (x + 0.03, W, z0 + 0.85), 0.01, iron, sides=4))
+            parts.append(strut((x + 0.03, W, z0), (x, W, z0 + 0.85), 0.01, iron, sides=4))
+    parts.append(box((0.2, 0.04, 0.04), (gx + 0.08, W, 2.1), iron, bevel=0.005))
+    parts.append(box((0.2, 0.04, 0.04), (gx + 0.08, W, 0.2), iron, bevel=0.005))
+    # A latch handle and a grab rail inside along the back.
+    parts.append(strut((W - 0.02, W + 0.02, 1.2), (W - 0.12, W + 0.06, 1.2), 0.012, brass, sides=6))
+    parts.append(strut((-0.75, -W + 0.12, 1.35), (0.75, -W + 0.12, 1.35), 0.02, brass, sides=8))
+    for x in (-0.7, 0.7):
+        parts.append(strut((x, -W + 0.02, 1.35), (x, -W + 0.12, 1.35), 0.012, iron, sides=6))
+    # Guide shoes on the frame (it rides the shaft's guides).
+    for cx in (-1, 1):
+        for z in (0.35, H - 0.3):
+            parts.append(box((0.12, 0.22, 0.16), (cx * (W + 0.08), 0, z), iron, bevel=0.015))
+            parts.append(box((0.04, 0.18, 0.12), (cx * (W + 0.15), 0, z), brass, bevel=0.008))
+    # The bonnet: two pitched plates on a frame, a crosshead, chains up to the shackle.
+    parts.append(box((2.0, 2.0, 0.08), (0, 0, H + 0.02), iron, bevel=0.015))
     for s in (-1, 1):
-        parts.append(strut((s * 0.9, 0, 2.55), (0, 0, 2.95), 0.03, iron, sides=6))
-    parts.append(place(torus(0.06, 0.015, (0, 0, 0), brass, (0, 0, 0), 10, 4), (0, 0, 3.0), (R90, 0, 0)))
-    # A caged lamp under the roof.
-    parts.append(box((0.24, 0.24, 0.05), (0, 0.4, 2.42), mat("soot")))
-    parts.append(place(sphere(0.07, (0, 0, 0), mat("glass", rough=0.2, emit=3.0), segs=10, rings=6), (0, 0.4, 2.33)))
-    for k in range(4):
-        a = k / 4 * math.tau
-        parts.append(strut((0, 0.4, 2.42), (math.cos(a) * 0.08, 0.4 + math.sin(a) * 0.08, 2.25), 0.006, iron, sides=4))
+        pl = box((1.0, 2.04, 0.025), (0, 0, 0), iron, bevel=0.004)
+        place(pl, (s * 0.48, 0, H + 0.2), (0, s * math.radians(-18), 0))
+        parts.append(pl)
+    parts.append(box((0.16, 2.08, 0.16), (0, 0, H + 0.38), dark, bevel=0.02))
+    sh = Vector((0, 0, H + 1.05))
+    for cx in (-1, 1):
+        for cy in (-1, 1):
+            parts.append(chain((cx * 0.62, cy * 0.62, H + 0.12), sh, 0.03, iron))
+    parts.append(place(torus(0.07, 0.018, (0, 0, 0), brass, (0, 0, 0), 12, 4), tuple(sh + Vector((0, 0, 0.06))), (R90, 0, 0)))
+    parts.append(cyl(0.035, 0.22, tuple(sh + Vector((0, 0, 0.22))), dark, verts=8))
+    # A hook under the roof for the lamp.
+    parts.append(strut((0, 0, H - 0.02), (0, 0, H - 0.14), 0.01, iron, sides=4))
     o = join(parts, "Cage")
     bake(o)
-    wobble(o, 0.003, 42)
-    ao(o, 0.35, rays=10)
+    wobble(o, 0.002, 42)
+    ao(o, 0.3, rays=10)
     return o
 
 
@@ -636,43 +703,181 @@ def pine():
     return o
 
 
+def crown(blobs, m, seed, res=0.22, ratio=0.35, rough=0.12, name="crown"):
+    """One tree crown as a single lobed mass, not a cluster of balls: metaball
+    blobs melted together, converted to a mesh, faceted down and pushed about
+    by noise so the outline is ragged; flat-ish underneath like a real canopy.
+    blobs: [(centre, radius, (sx, sy, sz))]."""
+    mb = bpy.data.metaballs.new(name)
+    mb.resolution = res
+    mb.render_resolution = res
+    mb.threshold = 0.6
+    ob = bpy.data.objects.new(name, mb)
+    bpy.context.collection.objects.link(ob)
+    for (c, r, sc) in blobs:
+        e = mb.elements.new()
+        e.type = "ELLIPSOID"
+        e.co = c
+        e.radius = r * 1.75        # the surface sits at about 0.56 x radius x size
+        e.size_x, e.size_y, e.size_z = sc[0], sc[1], sc[2]
+        e.stiffness = 2.0
+    bpy.ops.object.select_all(action="DESELECT")
+    ob.select_set(True)
+    bpy.context.view_layer.objects.active = ob
+    bpy.ops.object.convert(target="MESH")
+    o = bpy.context.active_object
+    dec = o.modifiers.new("dec", "DECIMATE")
+    dec.ratio = ratio
+    apply_mods(o)
+    off = Vector((seed * 1.3, seed * 0.7, seed * 2.1))
+    for v in o.data.vertices:
+        n = noise.noise(v.co * 1.3 + off)
+        n2 = noise.noise(v.co * 3.1 + off * 2)
+        v.co += v.normal * (rough * 3.0 * n + rough * 1.2 * n2)
+    o.data.materials.clear()
+    o.data.materials.append(m)
+    for poly in o.data.polygons:
+        poly.use_smooth = False
+    return o
+
+
+def canopy_shade(o, low, high, warm_side=None, warm=0.0):
+    """Vertex colour for a crown: darker and cooler underneath, lighter on
+    top, and (for the maple) one side turning early."""
+    me = o.data
+    white_col([o])
+    col = me.color_attributes["Col"]
+    zs = [v.co.z for v in me.vertices]
+    z0, z1 = min(zs), max(zs)
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            v = me.vertices[me.loops[li].vertex_index]
+            t = (v.co.z - z0) / max(z1 - z0, 1e-3)
+            k = low + (high - low) * t ** 0.8
+            k *= 0.88 + 0.24 * max(0.0, v.normal.z)
+            c = col.data[li].color
+            r, g, b = c[0] * k, c[1] * k, c[2] * k
+            if warm_side is not None:
+                w = max(0.0, Vector(warm_side).dot(Vector((v.co.x, v.co.y, 0)).normalized() if v.co.xy.length > 0.01 else Vector((0, 0, 0))))
+                w = w * w * warm
+                r, g, b = r + (1.35 * r - r) * w + 0.08 * w, g * (1 - 0.15 * w), b * (1 - 0.5 * w)
+            col.data[li].color = (min(r, 1), min(g, 1), min(b, 1), 1.0)
+
+
+def limbs(rnd, base, n, length, rise, r0, bark, spread=0.0):
+    """Crooked limbs from a point: each a tapering tube that bends twice."""
+    parts = []
+    ends = []
+    for i in range(n):
+        a = i / n * math.tau + spread + rnd.uniform(-0.3, 0.3)
+        d = Vector((math.cos(a), math.sin(a), 0))
+        L = length * rnd.uniform(0.8, 1.15)
+        p0 = Vector(base)
+        p1 = p0 + d * L * 0.35 + Vector((0, 0, rise * 0.45)) + Vector((rnd.uniform(-0.15, 0.15), rnd.uniform(-0.15, 0.15), 0))
+        p2 = p0 + d * L * 0.75 + Vector((0, 0, rise * 0.8))
+        p3 = p0 + d * L + Vector((0, 0, rise))
+        parts.append(tube([p0, p1, p2, p3], [r0, r0 * 0.7, r0 * 0.45, r0 * 0.25], bark, sides=7, name="limb"))
+        ends.append(p3)
+    return parts, ends
+
+
 def oak():
-    """A broad field oak: a short gnarled trunk forking into four crooked
-    limbs, each carrying its own flat-bottomed, faceted clump of leaves with
-    gaps between them (so limbs show through), smaller tufts breaking the
-    outline, darker clumps underneath. Not a ball, not a cloud."""
+    """A broad field oak: a short, thick, gnarled trunk with root flare,
+    forking low into crooked limbs that spread wider than the tree is tall;
+    a wide crown of heavy lobes with deep gaps, darker underneath."""
     rnd = random.Random(8)
     bark = mat("bark", rough=0.9)
     leaf = mat("leaf", rough=0.9)
-    leaf_dark = mat("leaf_dark", rough=0.9)
-    parts = [tube([Vector((0, 0, 0)), Vector((0.05, 0.02, 0.8)), Vector((-0.04, 0.05, 1.5)), Vector((0.02, 0.0, 2.0))],
-                  [0.3, 0.24, 0.22, 0.2], bark, sides=9, name="trunk")]
-    ends = []
-    for i, (a, rise, out) in enumerate(((0.3, 1.4, 1.6), (2.0, 1.7, 1.4), (3.6, 1.2, 1.7), (5.0, 1.9, 1.1))):
-        d = Vector((math.cos(a), math.sin(a), 0))
-        p0 = Vector((0, 0, 1.85))
-        p1 = p0 + d * out * 0.45 + Vector((0, 0, rise * 0.55)) + Vector((rnd.uniform(-0.2, 0.2), rnd.uniform(-0.2, 0.2), 0))
-        p2 = p0 + d * out + Vector((0, 0, rise))
-        parts.append(tube([p0, p1, p2], [0.15, 0.1, 0.06], bark, sides=7, name="limb"))
-        ends.append(p2)
+    parts = [tube([Vector((0, 0, -0.2)), Vector((0.06, 0.02, 0.6)), Vector((-0.05, 0.06, 1.2)), Vector((0.03, 0.0, 1.7))],
+                  [0.48, 0.34, 0.3, 0.27], bark, sides=10, name="trunk")]
+    for k in range(5):
+        a = k / 5 * math.tau + 0.4
+        parts.append(tube([Vector((math.cos(a) * 0.15, math.sin(a) * 0.15, 0.5)), Vector((math.cos(a) * 0.45, math.sin(a) * 0.45, 0.05)), Vector((math.cos(a) * 0.62, math.sin(a) * 0.62, -0.12))],
+                          [0.16, 0.1, 0.05], bark, sides=6, name="root"))
+    lp, ends = limbs(rnd, (0, 0, 1.6), 5, 2.3, 1.7, 0.17, bark, 0.3)
+    parts += lp
+    blobs = [(Vector((0, 0, 4.0)), 1.6, (1.2, 1.2, 1.0)), (Vector((0.3, -0.2, 5.0)), 1.1, (1.1, 1.1, 0.9))]
     for i, e in enumerate(ends):
-        r = rnd.uniform(1.0, 1.25)
-        cl = lump(r, e + Vector((0, 0, 0.35)), leaf, i + 3, scale=(1.15, 1.15, 0.62), sub=1, rough=0.3, flat_bottom=-r * 0.32)
-        parts.append(cl)
-        # A darker underside layer, a little wider and lower.
-        under = lump(r * 0.85, e + Vector((0, 0, 0.0)), leaf_dark, i + 13, scale=(1.25, 1.25, 0.45), sub=1, rough=0.25, flat_bottom=-r * 0.3)
-        parts.append(under)
-        # Tufts round the rim, breaking the outline.
-        for k in range(3):
-            a = k * 2.1 + i
-            tp = e + Vector((math.cos(a) * r * 1.1, math.sin(a) * r * 1.1, rnd.uniform(0.0, 0.5)))
-            parts.append(lump(rnd.uniform(0.35, 0.5), tp, leaf if k % 2 else leaf_dark, i * 7 + k + 30, scale=(1.1, 1.1, 0.7), sub=1, rough=0.3))
-    # A crown clump in the middle, higher, so the top isn't flat.
-    parts.append(lump(1.1, Vector((0.1, 0.1, 4.25)), leaf, 99, scale=(1.1, 1.1, 0.7), sub=1, rough=0.3, flat_bottom=-0.35))
+        blobs.append((e + Vector((0, 0, 0.55)), rnd.uniform(1.0, 1.25), (1.15, 1.15, 0.95)))
+        if i % 2 == 0:
+            a = rnd.uniform(0, math.tau)
+            blobs.append((e * 0.6 + Vector((math.cos(a) * 0.5, math.sin(a) * 0.5, 2.2)), rnd.uniform(0.7, 0.9), (1.0, 1.0, 0.9)))
+    c = crown(blobs, leaf, 3, res=0.26, ratio=0.3, rough=0.17)
+    canopy_shade(c, 0.42, 1.0)
+    parts.append(c)
     o = join(parts, "Oak")
     bake(o)
-    wobble(o, 0.03, 52)
-    ao(o, 1.2, rays=12, strength=0.85, top=0.25)
+    ao(o, 1.4, rays=12, strength=0.7, top=0.2)
+    return o
+
+
+def maple():
+    """A sugar maple: a straight trunk carrying a dense, round-shouldered crown
+    taller than it's wide, lobed but full, and one side already turning amber
+    at the end of the summer."""
+    rnd = random.Random(18)
+    bark = mat("bark", rough=0.9)
+    leaf = mat("leaf_maple", rough=0.9)
+    parts = [tube([Vector((0, 0, -0.2)), Vector((0.03, 0.02, 1.2)), Vector((-0.02, 0.03, 2.3)), Vector((0.0, 0.0, 3.0))],
+                  [0.3, 0.22, 0.18, 0.12], bark, sides=9, name="trunk")]
+    lp, ends = limbs(rnd, (0, 0, 2.1), 4, 1.3, 1.6, 0.11, bark, 1.0)
+    parts += lp
+    blobs = [(Vector((0, 0, 4.3)), 1.45, (1.05, 1.05, 1.15)), (Vector((0, 0, 3.4)), 1.3, (1.2, 1.2, 0.8))]
+    for e in ends:
+        blobs.append((e + Vector((0, 0, 0.5)), rnd.uniform(0.85, 1.05), (1.05, 1.05, 1.0)))
+    for k in range(6):
+        a = k / 6 * math.tau + 0.5
+        z = 3.6 + (k % 3) * 0.8
+        rr = 1.35 - (z - 3.6) * 0.25
+        blobs.append((Vector((math.cos(a) * rr, math.sin(a) * rr, z)), rnd.uniform(0.55, 0.75), (1.0, 1.0, 0.95)))
+    blobs.append((Vector((0.2, -0.1, 5.5)), 0.8, (1.0, 1.0, 1.0)))
+    c = crown(blobs, leaf, 7, res=0.24, ratio=0.32, rough=0.15)
+    canopy_shade(c, 0.45, 1.0, warm_side=(0.7, -0.7, 0), warm=0.9)
+    parts.append(c)
+    o = join(parts, "Maple")
+    bake(o)
+    ao(o, 1.3, rays=12, strength=0.7, top=0.2)
+    return o
+
+
+def birch():
+    """A paper birch: a slender white trunk that leans and kinks a little,
+    black lenticel marks and scars on the bark, thin upswept branches and a
+    small, light, open crown in three loose lobes with sky through it."""
+    rnd = random.Random(28)
+    bark = mat("birch_bark", rough=0.8)
+    twig = mat("bark", rough=0.9)
+    leaf = mat("leaf_birch", rough=0.9)
+    pts = [Vector((0, 0, -0.2)), Vector((0.05, 0.0, 1.0)), Vector((0.15, 0.04, 2.0)), Vector((0.12, 0.1, 3.0)), Vector((0.22, 0.08, 4.2)), Vector((0.28, 0.1, 5.0))]
+    trunk = tube(pts, [0.15, 0.12, 0.1, 0.085, 0.06, 0.035], bark, sides=10, name="trunk")
+    subdivide(trunk, 2)
+
+    def marks(p):
+        n = noise.noise(Vector((p.x * 3, p.y * 3, p.z * 9)))
+        band = max(0.0, math.sin(p.z * 14.0 + noise.noise(p * 2) * 4) - 0.75) * 4.0
+        dark = min(1.0, max(0.0, n * 2.5 - 0.6)) + band * (0.5 + 0.5 * (n > 0)) * 0.6
+        base = 1.0 - 0.75 * min(1.0, dark)
+        return base * (0.55 if p.z < 0.5 else 1.0)
+    paint_by(trunk, marks)
+    parts = [trunk]
+    ends = []
+    for i, (z, a) in enumerate(((2.4, 0.4), (3.0, 2.6), (3.6, 4.6), (4.2, 1.5), (4.6, 3.6))):
+        p0 = Vector((0.15, 0.06, z))
+        d = Vector((math.cos(a), math.sin(a), 0))
+        p2 = p0 + d * rnd.uniform(0.8, 1.2) + Vector((0, 0, 0.9))
+        parts.append(tube([p0, p0 + d * 0.4 + Vector((0, 0, 0.3)), p2], [0.04, 0.025, 0.012], twig, sides=5, name="branch"))
+        ends.append(p2)
+    blobs = []
+    for i, e in enumerate(ends):
+        blobs.append((e + Vector((0, 0, 0.2)), rnd.uniform(0.42, 0.55), (1.0, 1.0, 1.35)))
+        blobs.append((e * 0.75 + Vector((0.05, 0.02, 1.0)), rnd.uniform(0.3, 0.4), (1.0, 1.0, 1.3)))
+    blobs.append((Vector((0.3, 0.1, 5.3)), 0.5, (0.9, 0.9, 1.3)))
+    c = crown(blobs, leaf, 11, res=0.16, ratio=0.4, rough=0.11)
+    canopy_shade(c, 0.5, 1.0)
+    parts.append(c)
+    o = join(parts, "Birch")
+    bake(o)
+    ao(o, 1.0, rays=12, strength=0.6, top=0.2)
     return o
 
 
@@ -843,33 +1048,55 @@ def grass_tuft():
 
 
 def timber_set():
-    """One set of shaft timbering for the lift shaft: a square frame of heavy
-    timbers with lagging boards behind (seen from inside the shaft)."""
+    """One set of shaft timbering for the lift shaft, seen from inside the
+    moving cage: four hewn timbers lapped at the corners into a square frame,
+    wedges driven in at each lap, hanging bolts up to the set above, lagging
+    boards of different widths behind, one split and one missing."""
+    from props import beam, grain
     timber = mat("wood_dark", rough=0.9)
     old = mat("wood_grey", rough=0.9)
+    iron = mat("iron", metal=0.5, rough=0.6)
     rnd = random.Random(70)
     parts = []
     h = 1.45
     for i in range(4):
-        rot = i * R90
-        b = box((2 * h + 0.3, 0.24, 0.24), (0, h, 0), timber, bevel=0.02)
-        bake(b)
-        b.data.transform(Matrix.Rotation(rot, 4, "Z"))
+        rot = Matrix.Rotation(i * R90, 4, "Z")
+        b = beam((-h - 0.2, h, 0.0), (h + 0.2, h, 0.0), 0.26, 0.26, timber if i % 2 else old, 70 + i, cuts=10)
+        grain(b, (1, 0, 0), 0.25, 28, 80 + i)
+        b.data.transform(rot)
         parts.append(b)
-        for k in range(6):
-            lg = box((0.4, 0.04, 1.4), (-h + 0.2 + k * 0.5 + rnd.uniform(-0.03, 0.03), h + 0.16, -0.75), old if k % 2 else timber, rot=(rnd.uniform(-0.02, 0.02), 0, 0), bevel=0.008)
-            bake(lg)
-            lg.data.transform(Matrix.Rotation(rot, 4, "Z"))
-            parts.append(lg)
+        # Wedges at the laps.
+        for sgn in (-1, 1):
+            wdg = from_profile([(-0.08, 0.0), (0.08, 0.0), (0.08, 0.03), (-0.08, 0.01)], 0.1, old)
+            bake(wdg)
+            wdg.data.transform(rot @ Matrix.Translation((sgn * (h - 0.05), h - 0.16, 0.0)) @ Matrix.Rotation(R90, 4, "X"))
+            parts.append(wdg)
+        # A hanging bolt up to the set above.
+        hb = strut((h - 0.15, h - 0.05, 0.12), (h - 0.15, h - 0.05, 1.6), 0.014, iron, sides=5)
+        hb.data.transform(rot)
+        parts.append(hb)
+        # Lagging behind: boards of different widths, one split, one gone.
+        x = -h + 0.05
+        k = 0
+        while x < h - 0.1:
+            w = rnd.uniform(0.22, 0.36)
+            if not (i == 2 and k == 3):
+                lg = box((w - 0.02, 0.04, 1.45), (x + w / 2, h + 0.17, -0.72), old if k % 2 else timber, rot=(rnd.uniform(-0.02, 0.02), 0, 0), bevel=0.006)
+                bake(lg)
+                grain(lg, (0, 0, 1), 0.3, 40, 90 + i * 10 + k)
+                lg.data.transform(rot)
+                parts.append(lg)
+            x += w
+            k += 1
     o = join(parts, "TimberSet")
     bake(o)
-    wobble(o, 0.008, 71)
+    wobble(o, 0.006, 71)
     ao(o, 0.4, rays=8)
     return o
 
 
 MODELS_LIST = [("mole", mole), ("robomole", robomole), ("shack", shack), ("headframe", headframe), ("cage", cage),
-               ("liftstop", liftstop), ("pine", pine), ("oak", oak), ("timber_post", timber_post), ("shaft_sign", shaft_sign),
+               ("liftstop", liftstop), ("pine", pine), ("oak", oak), ("maple", maple), ("birch", birch), ("timber_post", timber_post), ("shaft_sign", shaft_sign),
                ("crate", crate), ("barrel", barrel), ("spoil_heap", spoil_heap), ("grass_tuft", grass_tuft), ("timber_set", timber_set)]
 
 if __name__ == "__main__":

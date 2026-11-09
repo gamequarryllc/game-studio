@@ -29,12 +29,12 @@ const PRODUCT_CASH_MEDIUM := "com.gamequarry.digtothecore.cash_medium"       # c
 const PRODUCT_CASH_LARGE := "com.gamequarry.digtothecore.cash_large"         # consumable
 
 const PRODUCTS = {
-	PRODUCT_REMOVE_ADS_2X: {"title": "Remove Ads + Permanent 2x", "fallback_price": "$4.99"},
-	PRODUCT_STARTER: {"title": "Starter Pack", "fallback_price": "$1.99"},
-	PRODUCT_GOLDEN: {"title": "Golden Tools", "fallback_price": "$2.99"},
-	PRODUCT_CASH_SMALL: {"title": "Sack of Cash", "fallback_price": "$0.99", "pack": "small"},
-	PRODUCT_CASH_MEDIUM: {"title": "Crate of Cash", "fallback_price": "$2.99", "pack": "medium"},
-	PRODUCT_CASH_LARGE: {"title": "Mine Cart of Cash", "fallback_price": "$7.99", "pack": "large"},
+	PRODUCT_REMOVE_ADS_2X: {"title": "No ads, and 2x digging for good", "fallback_price": "$4.99"},
+	PRODUCT_STARTER: {"title": "Starter pack", "fallback_price": "$1.99"},
+	PRODUCT_GOLDEN: {"title": "Golden tools", "fallback_price": "$2.99"},
+	PRODUCT_CASH_SMALL: {"title": "A sack of cash", "fallback_price": "$0.99", "pack": "small"},
+	PRODUCT_CASH_MEDIUM: {"title": "A crate of cash", "fallback_price": "$2.99", "pack": "medium"},
+	PRODUCT_CASH_LARGE: {"title": "A mine cart of cash", "fallback_price": "$7.99", "pack": "large"},
 }
 
 var provider: MonetizationProvider
