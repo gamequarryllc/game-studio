@@ -17,6 +17,14 @@ so anything that must survive goes here.
 3. Alex has said: use his plan as much as needed. Run continuously. If the plan limit hits, the loop pauses and resumes after the reset.
 4. Stop working on a game when it meets the polish bar below; mark it `ready-to-play` and ping. When every game is ready or parked, pitch 10 new ideas in the conversation and wait for Alex to pick.
 
+## Autonomy (Alex: "something done at least once a day without my input")
+
+- **Two engines.** (1) The conversation loop above (send_later wake-ups, runs continuously). (2) A daily scheduled task, "Game studio daily backstop" (3:17 AM Detroit time, fresh session each run), which does at least one real work block every day even if the conversation loop has stalled. Both read and write only this repo, so either one can pick up where the other left off.
+- **No collisions.** Neither engine works on a game folder that got a commit in the last 6 hours from the other one; pick the next game instead. Always `git pull --rebase` before pushing.
+- **New ideas without asking.** Alex has said: if you bet he'd like a new idea based on what's been built and his feedback, just build it. When fewer than 2 games are actively being built, or the queue is all ready/parked, add one new idea to `queue.json` (distinct mechanic, money-making rules apply), log why in the block log, and start it. Still pitch a list of ideas in the conversation every so often so he can steer.
+- **Always improving.** When nothing is queued, keep polishing: the polish bar, Alex's feedback, then the monetization tuning (pacing with and without ads).
+- **Opportunity scout.** A separate daily scheduled task, "Daily opportunity scout" (6:41 AM Detroit time), finds up to 3 timely opportunities for Alex (Michigan tech/security events, indie game and App Store opportunities, Game Quarry openings, infrastructure training deals) and adds dated ones to his Google Calendar and the rest to his Todoist Inbox. That one doesn't touch this repo.
+
 ## Pings (push notification + short message in the conversation)
 
 - A game reaches **first playable** (play link works, core loop is fun for 5 minutes).
