@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://2uckv41sqktb"
-path="res://.godot/imported/IMFellEnglishSC-Regular.ttf-0386f6e57976568b1042bf0beb6cb804.fontdata"
+uid="uid://cc6rureh061a8"
+path="res://.godot/imported/KeeperFell-Regular.ttf-be32236fa5399bf21b1e2de856df1125.fontdata"
 
 [deps]
 
-source_file="res://fonts/IMFellEnglishSC-Regular.ttf"
-dest_files=["res://.godot/imported/IMFellEnglishSC-Regular.ttf-0386f6e57976568b1042bf0beb6cb804.fontdata"]
+source_file="res://fonts/KeeperFell-Regular.ttf"
+dest_files=["res://.godot/imported/KeeperFell-Regular.ttf-be32236fa5399bf21b1e2de856df1125.fontdata"]
 
 [params]
 

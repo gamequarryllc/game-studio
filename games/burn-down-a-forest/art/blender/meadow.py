@@ -105,10 +105,69 @@ def tuft(m, rng):
         m.quad_strip(left, right, lambda t: L.mix(SAGE_DARK, SAGE, t), L.LEAF, double=False)
 
 
+def tall_grass(m, rng):
+    """Meadow grass gone to seed: tall thin blades and a few stems with nodding
+    seed heads, twice the height of the flowers (so the meadow has layers)."""
+    for b in range(9):
+        a = 2 * math.pi * b / 9 + rng.uniform(-0.3, 0.3)
+        d = Vector((math.cos(a), math.sin(a), 0))
+        side = Vector((-d.y, d.x, 0))
+        root = d * rng.uniform(0.0, 0.05)
+        h = rng.uniform(0.45, 0.72)
+        lean = rng.uniform(0.1, 0.22)
+        left, right = [], []
+        for i in range(4):
+            t = i / 3
+            p = root + d * lean * t * t + Vector((0, 0, h * t))
+            w = 0.022 * (1 - t) + 0.002
+            left.append(p - side * w)
+            right.append(p + side * w)
+        m.quad_strip(left, right, lambda t: L.mix(SAGE_DARK, L.mix(SAGE, CREAM, 0.15), t), L.LEAF, double=False)
+    for k in range(3):
+        a = rng.uniform(0, 6.28)
+        d = Vector((math.cos(a), math.sin(a), 0))
+        h = rng.uniform(0.7, 0.9)
+        top = d * 0.12 + Vector((0, 0, h))
+        m.tube([Vector((0, 0, 0)), d * 0.03 + Vector((0, 0, h * 0.5)), top], [0.008, 0.007, 0.005], 3, STEM, L.LEAF, cap_top=False)
+        # the seed head: a little drooping spike of grains
+        head = [top, top + d * 0.04 + Vector((0, 0, 0.06)), top + d * 0.1 + Vector((0, 0, 0.08)), top + d * 0.15 + Vector((0, 0, 0.05))]
+        m.tube(head, [0.018, 0.022, 0.016, 0.0], 4, L.mix(SAGE, CREAM, 0.45), L.LEAF, cap_top=False)
+
+
+def yarrow(m, rng):
+    """Yarrow: a tall stiff stem with feathery leaves and a flat umbrella of
+    tiny cream flowers on top."""
+    top = stem(m, 0.58, 0.03, rng)
+    for k in range(7):
+        a = 2 * math.pi * k / 7 + rng.uniform(-0.2, 0.2)
+        r = rng.uniform(0.02, 0.07)
+        c = top + Vector((math.cos(a) * r, math.sin(a) * r, rng.uniform(-0.01, 0.015)))
+        m.blob(c, 0.022, CREAM, L.LEAF, subdiv=0, rough=0.25, seed=k, squash=(1, 1, 0.55))
+    m.blob(top + Vector((0, 0, 0.01)), 0.03, L.mix(CREAM, YOLK, 0.25), L.LEAF, subdiv=0, rough=0.2, seed=9, squash=(1, 1, 0.5))
+
+
+def sprout(m, rng):
+    """A seedling just up out of the ash: a short stem and two round leaves
+    (the edge of the meadow, where grass is only beginning)."""
+    for k in range(3):
+        a = rng.uniform(0, 6.28)
+        base = Vector((math.cos(a), math.sin(a), 0)) * rng.uniform(0.0, 0.08)
+        h = rng.uniform(0.05, 0.1)
+        top = base + Vector((0, 0, h))
+        m.tube([base, top], [0.006, 0.005], 3, STEM, L.LEAF, cap_top=False)
+        for side in (-1, 1):
+            d = Vector((math.cos(a + side * 1.5), math.sin(a + side * 1.5), 0.25)).normalized()
+            sd = d.cross(Vector((0, 0, 1))).normalized()
+            tip = top + d * 0.055
+            left = [top, top + d * 0.03 + sd * 0.018, tip]
+            right = [top, top + d * 0.03 - sd * 0.018, tip]
+            m.quad_strip(left, right, lambda t: L.mix(SAGE_DARK, SAGE, t), L.LEAF, double=True)
+
+
 def main():
     L.reset()
-    species = [poppy, daisy, buttercup, harebell, tuft]
-    names = ["poppy", "oxeye_daisy", "buttercup", "harebell", "sage_tuft"]
+    species = [poppy, daisy, buttercup, harebell, tuft, tall_grass, yarrow, sprout]
+    names = ["poppy", "oxeye_daisy", "buttercup", "harebell", "sage_tuft", "tall_grass", "yarrow", "sprout"]
     obs = []
     for k, fn in enumerate(species):
         m = L.Model(names[k], 5 + k)

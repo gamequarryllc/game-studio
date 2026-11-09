@@ -51,6 +51,8 @@ var ending_layer: Control
 var _letter: Control
 
 var _offer_title: RichTextLabel
+var _offer_box: UiTheme.DieCutTag
+var _string_ink: Line2D
 var _offer_bar: UiParts.Fuse
 var _offer_stamp: Label
 var _offer_t := 0.0
@@ -128,6 +130,27 @@ func _ready() -> void:
 			notebook.rebuild())
 	_shown_embers = GameState.embers
 	UiTheme.install_cursors()
+	get_viewport().size_changed.connect(fit_ui_scale)
+	fit_ui_scale()
+
+
+static func ui_scale_for(px: Vector2, dpr: float) -> float:
+	## Phones in landscape are only 390-430 points tall: there the whole UI is
+	## drawn 1.32x bigger, so nothing is under about 12 px (the 16-17 px small
+	## type lands at 11-12 px on an 844x390 iPhone). Tablets and computers: 1.
+	var pts := px.y / maxf(dpr, 1.0)
+	return clampf(remap(pts, 600.0, 430.0, 1.0, 1.32), 1.0, 1.32)
+
+
+func fit_ui_scale() -> void:
+	var win := get_window()
+	if win == null:
+		return
+	var f := ui_scale_for(Vector2(win.size), DisplayServer.screen_get_scale())
+	if absf(win.content_scale_factor - f) > 0.001:
+		win.content_scale_factor = f
+	if touch != null:
+		touch.g = 1.0 / f              # the thumb controls keep their size on the glass
 
 
 # =====================================================================================
@@ -209,17 +232,23 @@ func _build_top() -> void:
 func _build_offer_tag() -> void:
 	## Hangs on a string under the notebook now and then: a free reward for a
 	## short ad, saying exactly what it gets you. Tap or click it.
+	# the twine it hangs by: an ink line under a twine-coloured one, sagging
+	_string_ink = Line2D.new()
+	_string_ink.width = 5.0
+	_string_ink.default_color = UiTheme.INK
+	_string_ink.joint_mode = Line2D.LINE_JOINT_ROUND
+	_string_ink.visible = false
+	root.add_child(_string_ink)
 	string_line = Line2D.new()
-	string_line.width = 2.0
-	string_line.default_color = UiTheme.CREAM
+	string_line.width = 2.6
+	string_line.default_color = Color("#E3CFA0")
+	string_line.joint_mode = Line2D.LINE_JOINT_ROUND
 	string_line.visible = false
 	root.add_child(string_line)
 	offer_tag = PanelContainer.new()
-	var paper := UiTheme.PaperBox.new(57, 16.0)
-	paper.content_margin_top = 14
-	paper.scorch = 0.5
-	paper.tear = 1.5
-	offer_tag.add_theme_stylebox_override("panel", paper)
+	_offer_box = UiTheme.DieCutTag.new(57)
+	_offer_box.hole_x = 0.72
+	offer_tag.add_theme_stylebox_override("panel", _offer_box)
 	offer_tag.anchor_left = 1.0
 	offer_tag.anchor_right = 1.0
 	offer_tag.offset_left = -326
@@ -238,8 +267,7 @@ func _build_offer_tag() -> void:
 	v.add_theme_constant_override("separation", 6)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	offer_tag.add_child(v)
-	_offer_title = UiTheme.rich(UiTheme.T_BODY + 1, UiTheme.INK, UiTheme.bold())
-	_offer_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_offer_title = UiTheme.rich(UiTheme.T_BODY + 1, UiTheme.INK, UiTheme.bold())   # (wrapped by UiTheme.wrap)
 	_offer_title.custom_minimum_size = Vector2(262, 0)
 	v.add_child(_offer_title)
 	var h := HBoxContainer.new()
@@ -379,9 +407,7 @@ func _build_coach() -> void:
 	coach_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	coach_panel.visible = false
 	root.add_child(coach_panel)
-	coach_label = UiTheme.label(27, UiTheme.HAND_INK, UiTheme.hand())
-	coach_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	coach_label.custom_minimum_size = Vector2(230, 0)
+	coach_label = UiTheme.label(27, UiTheme.HAND_INK, UiTheme.hand())   # (wrapped by UiTheme.wrap: no lone last words)
 	coach_panel.add_child(coach_label)
 	coach_finger = UiParts.Finger.new()
 	coach_finger.visible = false
@@ -586,7 +612,7 @@ func set_coach(text: String, anchor: String = "center") -> void:
 	if text != _coach_text or anchor != _coach_anchor:
 		_coach_text = text
 		_coach_anchor = anchor
-		coach_label.text = text
+		coach_label.text = UiTheme.wrap(text, UiTheme.hand(), 27, 250.0)
 		coach_panel.reset_size()
 		coach_panel.visible = true
 		coach_panel.modulate.a = 0.0
@@ -608,15 +634,15 @@ func _place_coach() -> void:
 		"burn":
 			if touch_mode:
 				var c := touch.fire_center()
-				at = Vector2(c.x - sz.x - 130.0, c.y - sz.y - 70.0)
-				finger_at = c + Vector2(-20, -84)
+				at = Vector2(c.x - sz.x - 130.0 * touch.g, c.y - sz.y - 70.0 * touch.g)
+				finger_at = c + Vector2(-20, -84) * touch.g
 			else:
 				at = Vector2(vp.x * 0.5 + 60.0, vp.y * 0.5 - sz.y - 50.0)
 		"stick":
 			if touch_mode:
 				var c := touch.stick_home()
-				at = Vector2(c.x + 110.0, c.y - sz.y - 60.0)
-				finger_at = c + Vector2(-34, -80)
+				at = Vector2(c.x + 110.0 * touch.g, c.y - sz.y - 60.0 * touch.g)
+				finger_at = c + Vector2(-34, -80) * touch.g
 				press = false
 			else:
 				at = Vector2(vp.x * 0.5 + 60.0, vp.y * 0.5 - sz.y - 50.0)
@@ -700,6 +726,7 @@ func open_notebook(tab: String = "") -> void:
 	touch.visible = false
 	offer_tag.visible = false
 	string_line.visible = false
+	_string_ink.visible = false
 	coach_panel.visible = false
 	coach_finger.visible = false
 	notebook = Notebook.new()
@@ -739,23 +766,33 @@ func _update_offer(delta: float) -> void:
 			_hide_offer_tag()
 	if offers.current == "" or not offer_tag.visible:
 		string_line.visible = false
+		_string_ink.visible = false
 		return
 	offer_tag.visible = playing or offers.watching
 	_offer_t += delta
-	var title := AdOffers.headline(offers.current)
+	var title := UiTheme.wrap(AdOffers.headline(offers.current), UiTheme.bold(), UiTheme.T_BODY + 1, 258.0)
 	if _offer_title.text != title:
 		_offer_title.text = title
 	var stamp := "tap to watch a short ad" if touch_mode else "click to watch a short ad"
 	if _offer_stamp.text != stamp:
 		_offer_stamp.text = stamp
 	_offer_bar.value = 1.0 - offers.time_left / Balance.OFFER_LIFETIME
-	# it sways on its string
-	offer_tag.pivot_offset = Vector2(offer_tag.size.x * 0.75, 0.0)
+	# it sways on its twine, which sags in a curve from the notebook's corner
+	var hole := _offer_box.hole(Rect2(Vector2.ZERO, offer_tag.size))
+	offer_tag.pivot_offset = hole
 	offer_tag.rotation = 0.03 + sin(_offer_t * 1.7) * 0.025
 	var b := notebook_button.get_global_rect()
+	var a := Vector2(b.end.x - 40, b.end.y - 8)
+	var e: Vector2 = offer_tag.get_global_transform() * hole
+	var sag := 26.0 + sin(_offer_t * 1.7 + 0.6) * 3.0
+	var pts := PackedVector2Array()
+	for k in 17:
+		var u := k / 16.0
+		pts.append(a.lerp(e, u) + Vector2(sin(_offer_t * 1.3) * 2.0 * sin(u * PI), sag * 4.0 * u * (1.0 - u)))
 	string_line.visible = offer_tag.visible
-	string_line.points = PackedVector2Array([Vector2(b.end.x - 46, b.end.y - 6),
-		offer_tag.get_global_transform() * Vector2(offer_tag.size.x * 0.75, 8)])
+	_string_ink.visible = offer_tag.visible
+	string_line.points = pts
+	_string_ink.points = pts
 
 
 func _show_offer_tag() -> void:
@@ -778,7 +815,8 @@ func _hide_offer_tag() -> void:
 	tw.tween_callback(func():
 		if offers.current == "":
 			offer_tag.visible = false
-			string_line.visible = false)
+			string_line.visible = false
+			_string_ink.visible = false)
 
 
 func take_offer() -> void:
@@ -998,8 +1036,11 @@ func show_ending() -> void:
 	b.text = "The Elder Tree has burned down and the village is free. Where the cursed forest stood, there's a valley of flowers."
 	v.add_child(b)
 	var stats := UiTheme.label(27, UiTheme.HAND_INK, UiTheme.hand())
-	stats.text = "%s by the fire\n%s embers earned\n%s cells of forest turned to meadow\n%d critters ran off safe and sound" % [
-		Fmt.duration(GameState.play_time), Fmt.num(GameState.lifetime_embers), Fmt.num(float(GameState.cells_burned)), GameState.critters_saved]
+	# a cell is 1.5 m square: the whole valley is about three and a half acres
+	var acres := float(GameState.cells_burned) * Balance.CELL * Balance.CELL / 4046.86
+	stats.text = "%s by the fire\n%s embers earned\n%s acres of cursed forest turned to meadow\n%d critters ran off safe and sound" % [
+		Fmt.duration(GameState.play_time), Fmt.num(GameState.lifetime_embers), ("%.1f" % acres) if acres >= 0.95 else ("%.2f" % acres),
+		GameState.critters_saved]
 	v.add_child(stats)
 	var walk := UiParts.Stamp.new(9)
 	walk.ink = UiTheme.INK

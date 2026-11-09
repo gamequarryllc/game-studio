@@ -1,11 +1,15 @@
 class_name Notebook
 extends Control
 ## The shop: the fire-keeper's field notebook, opened full screen from the HUD.
-## A leather cover, two cream pages with grain and ruled lines and a stitched
-## spine, coloured index tabs down the edge, a red ribbon to close it. The left
-## page is the contents (embers, the chapter, a note in the keeper's hand); the
-## right page lists the chapter's entries, each with a sketch, a price on a
-## taped tag and an ink stamp to buy it.
+## A leather cover, two cream pages with grain and a stitched spine, index
+## tabs of different sizes down the edge, a red ribbon to close it. The left
+## page is the contents (embers, the chapter, a note in the keeper's hand) over
+## a burn map drawn from the forest itself (burned ground hatched, fires dotted
+## in red, an x where I stand) and a doodle for the chapter. The right page is
+## ruled, and every line of writing sits on a rule. Each chapter is kept its own
+## way: tools as big sketches with their heat written under them, upgrades as
+## tally marks, helpers as portraits pasted in with tape, free magic circled in
+## ink, the shop and the dials plain. Prices are on taped tags you tap.
 
 signal closed
 
@@ -26,6 +30,7 @@ const NOTES := {
 	"settings": "Knobs and dials.",
 }
 const PACK_ICONS := ["pouch", "jar", "cauldron"]
+const LINE := 31.0                    # the rule spacing on the right page; every line of writing sits on one
 
 var hud                               # the Hud (untyped: it calls back into it)
 var tab := "tools"
@@ -43,7 +48,7 @@ var _t := 0.0
 var _scroll: ScrollContainer
 var _book: Control
 var _spine: Control
-var _map: RingMap
+var _map: BurnMap
 var _seed := 0
 
 
@@ -95,40 +100,197 @@ class Spine:
 			y += 46.0
 
 
-class RingMap:
-	## A doodle of the forest's rings in the margin: burned share hatched, an x where I am.
+class BurnMap:
+	## The forest as the keeper has drawn it: the square of the valley, the
+	## rings in ink, burned ground hatched in scorch brown, fires burning now
+	## as red dots, the river in blue, the Elder Tree at the heart (a stump once
+	## it's gone) and an x where I stand. Redrawn from the real forest.
 	extends Control
-	var progress := 0.0
-	var zone := 0
+	var grid: ForestGrid
+	var me := Vector2(0.5, 0.9)
+	var caption := ""
+	var _sig := -1
+
+	func refresh_from(g: ForestGrid, keeper_pos: Vector3) -> void:
+		grid = g
+		if g == null:
+			return
+		me = Vector2((keeper_pos.x - g.origin.x) / (g.n * Balance.CELL), (keeper_pos.z - g.origin.y) / (g.n * Balance.CELL))
+		var sig := g.burned * 7 + g.burning.size() * 131 + int(me.x * 40.0) * 3 + int(me.y * 40.0) * 5
+		if sig != _sig:
+			_sig = sig
+			queue_redraw()
 
 	func _draw() -> void:
-		var c := Vector2(size.x * 0.5, size.y * 0.5)
-		var r := minf(size.x, size.y) * 0.47
+		var side := minf(size.x, size.y - 34.0)
+		if side < 40.0:
+			return
+		var o := Vector2((size.x - side) * 0.5, 4.0)
 		var rng := RandomNumberGenerator.new()
-		rng.seed = 21
-		var radii := [1.0, 0.72, 0.47, 0.24]
-		for k in radii.size():
+		rng.seed = 33
+		var ink := Color(UiTheme.HAND_INK, 0.8)
+		# the valley's edge, drawn freehand
+		var edge := PackedVector2Array()
+		for k in 4:
+			var a: Vector2 = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)][k]
+			var b: Vector2 = [Vector2(1, 0), Vector2(1, 1), Vector2(0, 1), Vector2(0, 0)][k]
+			for j in 6:
+				edge.append(o + a.lerp(b, j / 6.0) * side + Vector2(rng.randf_range(-1.2, 1.2), rng.randf_range(-1.2, 1.2)))
+		edge.append(edge[0])
+		draw_polyline(edge, ink, 1.6, true)
+		if grid == null:
+			return
+		var n := grid.n
+		var cell := side / float(n)
+		var hatch := PackedVector2Array()
+		var water := PackedVector2Array()
+		for by in range(0, n, 2):
+			for bx in range(0, n, 2):
+				var burned := 0
+				var fire := false
+				var wet := 0
+				for oy in 2:
+					for ox in 2:
+						var i := (bx + ox) + (by + oy) * n
+						var st := grid.state[i]
+						if st == ForestGrid.ASH or st == ForestGrid.MEADOW:
+							burned += 1
+						elif st == ForestGrid.BURNING:
+							fire = true
+						if grid.kind[i] == Balance.WATER:
+							wet += 1
+				var p := o + Vector2(bx, by) * cell
+				if burned >= 2:
+					hatch.append(p + Vector2(0.2, 1.8) * cell)
+					hatch.append(p + Vector2(1.8, 0.2) * cell)
+				if wet >= 2 and (bx + by) % 4 == 0:
+					water.append(p + Vector2(0.0, 1.0) * cell)
+					water.append(p + Vector2(1.0, 0.6) * cell)
+					water.append(p + Vector2(1.0, 0.6) * cell)
+					water.append(p + Vector2(2.0, 1.0) * cell)
+				if fire:
+					draw_circle(p + Vector2(1, 1) * cell, cell * 0.9, Color(UiTheme.STAMP, 0.85))
+		if hatch.size() >= 2:
+			draw_multiline(hatch, Color(UiTheme.SCORCH, 0.75), 1.3)
+		if water.size() >= 2:
+			draw_multiline(water, Color("#5C7FA8", 0.8), 1.4)
+		# the rings, inked round the heart
+		var c := o + Vector2(side, side) * 0.5
+		for rr in [28.5, 18.5, 9.5]:
 			var pts := PackedVector2Array()
-			for a in 33:
-				var ang := TAU * a / 32.0
-				var rr: float = r * float(radii[k]) * (1.0 + rng.randf_range(-0.035, 0.035))
-				pts.append(c + Vector2(cos(ang), sin(ang) * 0.82) * rr)
-			pts[32] = pts[0]
-			draw_polyline(pts, Color(UiTheme.HAND_INK, 0.75), 1.6, true)
-		# hatch the outer ring part-way round: how much has burned
-		var sweep := TAU * clampf(progress, 0.0, 1.0)
-		var n := int(sweep / 0.12)
-		for k in n:
-			var ang := -PI * 0.5 + k * 0.12
-			var a0 := c + Vector2(cos(ang), sin(ang) * 0.82) * r * 0.74
-			var a1 := c + Vector2(cos(ang + 0.05), sin(ang + 0.05) * 0.82) * r * 0.98
-			draw_line(a0, a1, Color(UiTheme.SCORCH, 0.8), 1.3, true)
-		# the Elder Tree at the heart, and where I am
-		draw_circle(c, 4.0, Color(UiTheme.HAND_INK, 0.85))
-		var zr: float = r * [0.86, 0.6, 0.36, 0.12][clampi(zone, 0, 3)]
-		var me := c + Vector2(0, zr * 0.82)
-		draw_line(me + Vector2(-6, -6), me + Vector2(6, 6), UiTheme.POPPY, 2.6, true)
-		draw_line(me + Vector2(6, -6), me + Vector2(-6, 6), UiTheme.POPPY, 2.6, true)
+			for a in 41:
+				var ang := TAU * a / 40.0
+				pts.append(c + Vector2(cos(ang), sin(ang)) * rr * cell * (1.0 + rng.randf_range(-0.03, 0.03)))
+			pts[40] = pts[0]
+			draw_polyline(pts, Color(UiTheme.HAND_INK, 0.5), 1.2, true)
+		# the Elder Tree (a little tree, or a stump with a sprout once it's gone)
+		var standing := grid.state[grid.elder_cell] == ForestGrid.INTACT
+		draw_line(c + Vector2(0, 5), c + Vector2(0, -4), ink, 2.0, true)
+		if standing:
+			draw_circle(c + Vector2(0, -7), 5.0, Color(UiTheme.HAND_INK, 0.85))
+		else:
+			draw_line(c + Vector2(0, -4), c + Vector2(4, -8), Color("#5E7D42"), 2.0, true)
+		# the village at the bottom: three roofs
+		for k in 3:
+			var hp := o + Vector2(side * (0.36 + 0.13 * k), side * 0.93)
+			draw_polyline(PackedVector2Array([hp + Vector2(-5, 3), hp + Vector2(0, -3), hp + Vector2(5, 3)]), ink, 1.4, true)
+		# where I am
+		var mp := o + me.clamp(Vector2(0.02, 0.02), Vector2(0.98, 0.98)) * side
+		draw_line(mp + Vector2(-5, -5), mp + Vector2(5, 5), UiTheme.POPPY, 2.6, true)
+		draw_line(mp + Vector2(5, -5), mp + Vector2(-5, 5), UiTheme.POPPY, 2.6, true)
+		# the caption, written under the map
+		if caption != "":
+			var f := UiTheme.hand()
+			var tw := f.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 23).x
+			draw_string(f, Vector2(maxf(0.0, (size.x - tw) * 0.5), o.y + side + 26.0), caption, HORIZONTAL_ALIGNMENT_LEFT, size.x, 23, UiTheme.HAND_INK)
+
+
+class Lines:
+	## Writing on a ruled page: every line of text sits on a rule (the page's
+	## rules are LINE apart and this control is a whole number of lines tall,
+	## starting on a rule). Parts: a name in the display face, a line or two in
+	## the body face, a note in the keeper's hand, or a tally of marks. Words
+	## wrap, and the last line never holds a lone word.
+	extends Control
+	const LINE := 31.0
+	var parts: Array = []           # [{kind, text, font, size, color, level, max}]
+	var _lines: Array = []          # [[part index, text]]
+	var _w := -1.0
+
+	func set_parts(p: Array) -> void:
+		parts = p
+		_w = -1.0
+		_layout()
+		queue_redraw()
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED and absf(size.x - _w) > 0.5:
+			_layout()
+			queue_redraw()
+
+	func _layout() -> void:
+		_w = size.x
+		var width := maxf(size.x, 120.0)
+		_lines.clear()
+		for pi in parts.size():
+			var part: Dictionary = parts[pi]
+			if part.kind == "tally":
+				_lines.append([pi, ""])
+				continue
+			var text: String = part.text
+			if text == "":
+				continue
+			var mine: PackedStringArray = UiTheme.wrap(text, part.font, part.size, width).split("\n")
+			for ln in mine:
+				_lines.append([pi, ln])
+		custom_minimum_size.y = maxf(1.0, _lines.size()) * LINE
+
+	func _draw() -> void:
+		for li in _lines.size():
+			var part: Dictionary = parts[_lines[li][0]]
+			var base := (li + 1) * LINE - 6.0
+			if part.kind == "tally":
+				_tally(Vector2(2.0, base), int(part.level), int(part.max))
+				continue
+			draw_string(part.font, Vector2(0, base), _lines[li][1], HORIZONTAL_ALIGNMENT_LEFT, -1, part.size, part.color)
+
+	func _tally(at: Vector2, level: int, most: int) -> void:
+		## Tally marks for the levels bought (four strokes and a slash through
+		## each five), pencil dots for the levels still to buy.
+		var rng := RandomNumberGenerator.new()
+		rng.seed = most * 13 + 5
+		var x := at.x
+		for k in most:
+			var g := k % 5
+			if k < level:
+				if g < 4:
+					var lean := rng.randf_range(-1.5, 1.5)
+					draw_line(Vector2(x + lean, at.y - 18), Vector2(x - lean * 0.5, at.y + 1), UiTheme.HAND_INK, 2.2, true)
+				else:
+					draw_line(Vector2(x - 34, at.y - 5), Vector2(x + 2, at.y - 14), UiTheme.HAND_INK, 2.2, true)
+			else:
+				draw_circle(Vector2(x, at.y - 6), 1.7, Color(UiTheme.PENCIL, 0.7))
+			x += 9.0 if g < 4 else 0.0
+			if g == 4:
+				x += 12.0
+		draw_string(UiTheme.hand(), Vector2(x + 10.0, at.y), "%d of %d" % [level, most], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, UiTheme.HAND_INK)
+
+
+class RuledList:
+	## The right page's column: entries stacked a whole number of lines tall,
+	## with the rules drawn behind them all the way down, so they scroll together.
+	extends VBoxContainer
+	const LINE := 31.0
+
+	func _draw() -> void:
+		var segs := PackedVector2Array()
+		var y := LINE
+		while y < size.y + 0.5:
+			segs.append(Vector2(-18, y))
+			segs.append(Vector2(size.x + 40, y))
+			y += LINE
+		if segs.size() >= 2:
+			draw_multiline(segs, Color("#7C93A8", 0.3), 1.0)
 
 
 class Rule:
@@ -233,12 +395,13 @@ func _page(seed: int, ruled: float, margin: float) -> PanelContainer:
 
 func _left_page() -> Control:
 	var page := _page(211, 0.0, -1.0)
-	page.custom_minimum_size = Vector2(330, 0)
+	page.custom_minimum_size = Vector2(340, 0)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 4)
+	v.add_theme_constant_override("separation", 2)
 	page.add_child(v)
-	var title := UiTheme.label(UiTheme.T_TITLE, UiTheme.INK, UiTheme.display())
+	var title := UiTheme.label(UiTheme.T_LABEL + 1, UiTheme.INK, UiTheme.display())
 	title.text = "The fire-keeper's notebook"
+	title.clip_text = true
 	v.add_child(title)
 	var eh := HBoxContainer.new()
 	eh.add_theme_constant_override("separation", 8)
@@ -246,47 +409,60 @@ func _left_page() -> Control:
 	var coal := TextureRect.new()
 	coal.texture = UiTheme.icon("coal")
 	coal.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	coal.custom_minimum_size = Vector2(44, 44)
+	coal.custom_minimum_size = Vector2(40, 40)
 	eh.add_child(coal)
-	_embers = UiTheme.label(UiTheme.T_BIG + 4, UiTheme.INK, UiTheme.display())
+	_embers = UiTheme.label(UiTheme.T_BIG + 2, UiTheme.INK, UiTheme.display())
 	eh.add_child(_embers)
 	var rule := Rule.new()
-	rule.custom_minimum_size = Vector2(0, 14)
+	rule.custom_minimum_size = Vector2(0, 10)
 	rule.seed = 3
 	v.add_child(rule)
-	_heading = UiTheme.label(UiTheme.T_HUGE, UiTheme.INK, UiTheme.display())
-	v.add_child(_heading)
-	_note = UiTheme.label(27, UiTheme.HAND_INK, UiTheme.hand())
-	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_note.custom_minimum_size = Vector2(270, 0)
-	v.add_child(_note)
-	_map = RingMap.new()
-	_map.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_map.custom_minimum_size = Vector2(0, 90)
-	_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(_map)
-	var sk := HBoxContainer.new()
-	sk.add_theme_constant_override("separation", 6)
-	v.add_child(sk)
+	var hh := HBoxContainer.new()
+	hh.add_theme_constant_override("separation", 6)
+	v.add_child(hh)
+	var hv := VBoxContainer.new()
+	hv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hv.add_theme_constant_override("separation", 0)
+	hh.add_child(hv)
+	_heading = UiTheme.label(UiTheme.T_BIG - 2, UiTheme.INK, UiTheme.display())
+	_heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART     # (so no chapter's name widens the page)
+	_heading.custom_minimum_size = Vector2(150, 0)
+	hv.add_child(_heading)
+	_note = UiTheme.label(25, UiTheme.HAND_INK, UiTheme.hand())   # (wrapped by UiTheme.wrap: no lone last words)
+	_note.custom_minimum_size = Vector2(176, 0)
+	hv.add_child(_note)
+	# the chapter's doodle, top right of the page, with a line about it
+	var dv := VBoxContainer.new()
+	dv.add_theme_constant_override("separation", -4)
+	hh.add_child(dv)
 	_sketch = TextureRect.new()
 	_sketch.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_sketch.custom_minimum_size = Vector2(96, 96)
-	_sketch.pivot_offset = Vector2(48, 48)
+	_sketch.custom_minimum_size = Vector2(78, 78)
+	_sketch.pivot_offset = Vector2(39, 39)
 	_sketch.rotation = -0.12
-	sk.add_child(_sketch)
-	_sketch_note = UiTheme.label(25, UiTheme.HAND_INK, UiTheme.hand())
-	_sketch_note.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sk.add_child(_sketch_note)
-	_progress = UiTheme.label(24, UiTheme.HAND_INK, UiTheme.hand())
-	_progress.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_progress.custom_minimum_size = Vector2(270, 0)
+	_sketch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	dv.add_child(_sketch)
+	_sketch_note = UiTheme.label(22, UiTheme.HAND_INK, UiTheme.hand())
+	_sketch_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_sketch_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_sketch_note.custom_minimum_size = Vector2(104, 0)
+	dv.add_child(_sketch_note)
+	# the burn map fills the rest of the page
+	_map = BurnMap.new()
+	_map.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_map.custom_minimum_size = Vector2(0, 150)
+	_map.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(_map)
+	_progress = UiTheme.label(22, UiTheme.HAND_INK, UiTheme.hand())   # (kept for code that reads it; the map writes the caption)
+	_progress.visible = false
 	v.add_child(_progress)
 	return page
 
 
 func _right_page() -> Control:
-	var page := _page(212, 31.0, 40.0)
+	var page := _page(212, 0.0, 40.0)
 	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page.custom_minimum_size = Vector2(570, 0)      # wider than any chapter's widest entry: no chapter changes the width
 	page.clip_contents = true
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -295,13 +471,15 @@ func _right_page() -> Control:
 	var m := MarginContainer.new()
 	m.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	m.add_theme_constant_override("margin_left", 22)
-	m.add_theme_constant_override("margin_right", 46)
-	m.add_theme_constant_override("margin_top", 4)
+	m.add_theme_constant_override("margin_right", 30)
+	m.add_theme_constant_override("margin_top", 0)
 	_scroll.add_child(m)
-	_list = VBoxContainer.new()
+	_list = RuledList.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.add_theme_constant_override("separation", 2)
+	_list.add_theme_constant_override("separation", 0)
 	m.add_child(_list)
+	# the rules run to the bottom of the page even when a chapter is short
+	_scroll.resized.connect(func(): _list.custom_minimum_size.y = _scroll.size.y)
 	return page
 
 
@@ -314,7 +492,7 @@ func select(key: String) -> void:
 	for t in TABS:
 		if t[0] == key:
 			_heading.text = str(t[2])
-	_note.text = NOTES[key]
+	_note.text = UiTheme.wrap(NOTES[key], UiTheme.hand(), 25, 176.0)
 	rebuild()
 
 
@@ -352,11 +530,13 @@ func refresh() -> void:
 	_embers.text = Fmt.num(GameState.embers)
 	var f := GameState.forest
 	if f != null:
-		var z := f.zone_at(GameState.keeper.position.x, GameState.keeper.position.z) if GameState.keeper != null else 0
-		_progress.text = "%d%% of the cursed forest burned. I'm in %s." % [int(f.progress() * 100.0), str(Balance.ZONES[z].name).to_lower()]
-		_map.progress = f.progress()
-		_map.zone = z
-		_map.queue_redraw()
+		var kp: Vector3 = GameState.keeper.position if GameState.keeper != null else Vector3(0, 0, 50)
+		var z := f.zone_at(kp.x, kp.z)
+		_progress.text = "%d%% burned. I'm in %s." % [int(f.progress() * 100.0), str(Balance.ZONES[z].name).to_lower()]
+		if _map.caption != _progress.text:
+			_map.caption = _progress.text
+			_map.queue_redraw()
+		_map.refresh_from(f, kp)
 	_left_page_sketch()
 	for r in _refreshers:
 		r.call()
@@ -366,7 +546,7 @@ func _left_page_sketch() -> void:
 	## Each chapter gets its own doodle on the left page, with a note about it.
 	var td := GameState.tool_def()
 	var icon_name := str(td.icon)
-	var note := "in hand:\nthe %s" % str(td.name).to_lower()
+	var note := "in hand"
 	match tab:
 		"upgrades":
 			icon_name = "bellows"
@@ -375,26 +555,25 @@ func _left_page_sketch() -> void:
 				var lv := int(GameState.upgrade_levels[u.key])
 				if lv > 0:
 					bits.append("%s %d" % [str(u.name).to_lower().split(" ")[0], lv])
-			note = "so far:\n" + (", ".join(bits) if not bits.is_empty() else "nothing yet")
+			var levels := 0
+			for u in Balance.UPGRADES:
+				levels += int(GameState.upgrade_levels[u.key])
+			note = "%d notches up" % levels if levels > 0 else "none yet"
 		"helpers":
 			icon_name = "salamander" if int(GameState.helper_counts[1]) > 0 else "sprite"
 			var n0 := int(GameState.helper_counts[0])
 			var n1 := int(GameState.helper_counts[1])
-			note = "%d sprite%s,\n%d salamander%s" % [n0, "" if n0 == 1 else "s", n1, "" if n1 == 1 else "s"] if n0 + n1 > 0 else "no helpers yet.\nlonely work"
+			note = "%d at work" % (n0 + n1) if n0 + n1 > 0 else "lonely work"
 		"magic":
 			icon_name = "magic_lantern"
-			note = "2x fire, %s left" % Fmt.duration(GameState.boost_seconds_left()) if GameState.is_boost_active() else "nothing\nrunning now"
+			note = "%s left" % Fmt.duration(GameState.boost_seconds_left()) if GameState.is_boost_active() else "nothing on"
 		"shop":
 			icon_name = "parcel"
-			note = "nothing here you\ncan't burn for"
+			note = "or burn for it"
 		"settings":
 			icon_name = "dial"
-			note = "sound at %d%%" % int(round(Sound.volume * 100.0)) if not Sound.muted else "all quiet"
-	var big := tab != "tools"
-	_map.visible = not big
-	_sketch.custom_minimum_size = Vector2(150, 150) if big else Vector2(96, 96)
-	_sketch.pivot_offset = _sketch.custom_minimum_size * 0.5
-	_sketch.rotation = -0.12 if not big else 0.07
+			note = "sound %d%%" % int(round(Sound.volume * 100.0)) if not Sound.muted else "all quiet"
+	_sketch.rotation = [-0.12, 0.08, -0.05, 0.1, -0.09, 0.04][TABS.map(func(t): return t[0]).find(tab) % 6]
 	_sketch.texture = UiTheme.icon(icon_name)
 	_sketch_note.text = note
 
@@ -402,45 +581,35 @@ func _left_page_sketch() -> void:
 # =====================================================================================
 # Entries
 # =====================================================================================
-func _card(icon_name: String, title: String, desc: String, kind: String = "tag") -> Dictionary:
-	## One entry: a sketch (with room for a note in the margin), the name and a
-	## line about it, and the price tag you tap to buy it (settings use stamps).
+func _card(icon_name: String, title: String, desc: String, kind: String = "tag", style: String = "") -> Dictionary:
+	## One entry, written on the rules: a sketch (drawn big for tools, pasted in
+	## as a photo for helpers, circled in ink for magic), the name, a line or two
+	## about it, a note in the keeper's hand or a tally, and on the right the
+	## price tag you tap to buy it (settings use stamps), with any margin note
+	## written under the tag.
 	_seed += 1
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
+	row.add_theme_constant_override("separation", 14)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.custom_minimum_size = Vector2(0, 108)
 	var ic := UiParts.Sketch.new()
 	ic.texture = UiTheme.icon(icon_name)
-	ic.custom_minimum_size = Vector2(76, 76)
+	ic.style = style
+	var big := style == "big"
+	ic.custom_minimum_size = Vector2(100, 100) if big else Vector2(82, 82)
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	ic.tilt = [-0.08, 0.05, -0.03, 0.09, -0.06][_seed % 5]
+	ic.tilt = [-0.08, 0.05, -0.03, 0.09, -0.06][_seed % 5] * (2.0 if style == "photo" else 1.0)
 	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(ic)
-	var v := VBoxContainer.new()
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	v.add_theme_constant_override("separation", 0)
-	row.add_child(v)
-	var tl := UiTheme.label(UiTheme.T_TITLE - 2, UiTheme.INK, UiTheme.display())
-	tl.text = title
-	tl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # long names wrap: the page never widens
-	tl.custom_minimum_size = Vector2(160, 0)
-	v.add_child(tl)
-	var dl := UiTheme.rich(UiTheme.T_BODY - 1, Color(UiTheme.INK, 0.86), UiTheme.body())
-	dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dl.custom_minimum_size = Vector2(180, 0)
-	dl.text = desc
-	v.add_child(dl)
-	var xl := UiTheme.rich(23, UiTheme.HAND_INK, UiTheme.hand())
-	xl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	xl.custom_minimum_size = Vector2(180, 0)
-	xl.visible = false
-	v.add_child(xl)
+	var lines := Lines.new()
+	lines.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lines.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	lines.custom_minimum_size = Vector2(170, LINE * 4)
+	lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(lines)
 	var side := VBoxContainer.new()
 	side.custom_minimum_size = Vector2(150, 0)
 	side.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	side.add_theme_constant_override("separation", 4)
+	side.add_theme_constant_override("separation", 0)
 	side.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(side)
 	var b: Button
@@ -454,14 +623,46 @@ func _card(icon_name: String, title: String, desc: String, kind: String = "tag")
 		b = pt
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	side.add_child(b)
+	var note := UiTheme.label(22, UiTheme.HAND_INK, UiTheme.hand())
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.rotation = -0.06
+	note.visible = false
+	side.add_child(note)
+	# (the entry's name as a Label, for code that looks entries up by name; the page writes it on the rules)
+	var tl := Label.new()
+	tl.text = title
+	tl.visible = false
+	row.add_child(tl)
 	_list.add_child(row)
-	var rule := Rule.new()
-	rule.seed = _seed
-	rule.custom_minimum_size = Vector2(0, 8)
-	_list.add_child(rule)
-	var card := {"panel": row, "title": tl, "desc": dl, "extra": xl, "button": b, "icon": ic}
+	var card := {"panel": row, "title": tl, "lines": lines, "name": title, "desc": desc, "extra": "", "tally": [],
+		"title_color": UiTheme.INK, "button": b, "icon": ic, "note": note}
+	lines.resized.connect(func(): _fit_row(card))
+	_relayout(card)
 	_cards.append(card)
 	return card
+
+
+func _relayout(card: Dictionary) -> void:
+	var parts: Array = [{"kind": "text", "text": card.name, "font": UiTheme.display(), "size": UiTheme.T_TITLE - 2, "color": card.title_color}]
+	if card.desc != "":
+		parts.append({"kind": "text", "text": card.desc, "font": UiTheme.body(), "size": UiTheme.T_BODY - 1, "color": Color(UiTheme.INK, 0.86)})
+	if not (card.tally as Array).is_empty():
+		parts.append({"kind": "tally", "level": card.tally[0], "max": card.tally[1]})
+	if card.extra != "":
+		parts.append({"kind": "text", "text": card.extra, "font": UiTheme.hand(), "size": 23, "color": UiTheme.HAND_INK})
+	(card.lines as Lines).set_parts(parts)
+	_fit_row(card)
+
+
+func _fit_row(card: Dictionary) -> void:
+	## A whole number of lines tall, with a blank line under it, so the next
+	## entry starts on a rule too.
+	var lines: Lines = card.lines
+	var n := maxi(3, int(round(lines.custom_minimum_size.y / LINE)))
+	var want := (n + 1) * LINE
+	var row: HBoxContainer = card.panel
+	if absf(row.custom_minimum_size.y - want) > 0.5:
+		row.custom_minimum_size.y = want
 
 
 func _set_btn(card: Dictionary, stamp: String, enabled: bool, price: String = "", price_icon: String = "coal", done: bool = false) -> void:
@@ -488,7 +689,9 @@ func _set_btn(card: Dictionary, stamp: String, enabled: bool, price: String = ""
 		st.queue_redraw()
 	var sk: UiParts.Sketch = card.icon
 	sk.set_pencil(false)
-	(card.title as Label).add_theme_color_override("font_color", UiTheme.INK)
+	if card.title_color != UiTheme.INK:
+		card.title_color = UiTheme.INK
+		_relayout(card)
 
 
 func _set_locked(card: Dictionary, price: String, why: String) -> void:
@@ -504,28 +707,47 @@ func _set_locked(card: Dictionary, price: String, why: String) -> void:
 	t.mouse_default_cursor_shape = Control.CURSOR_ARROW
 	t.queue_redraw()
 	(card.icon as UiParts.Sketch).set_pencil(true)
-	(card.title as Label).add_theme_color_override("font_color", UiTheme.PENCIL)
+	if card.title_color != UiTheme.PENCIL:
+		card.title_color = UiTheme.PENCIL
+		_relayout(card)
 	_extra(card, why)
 
 
 func _margin(card: Dictionary, note: String) -> void:
-	var sk: UiParts.Sketch = card.icon
-	if sk.note != note:
-		sk.note = note
-		sk.queue_redraw()
+	## A word in the margin, written under the tag ("next!", "save up", "on now").
+	var l: Label = card.note
+	l.visible = note != ""
+	if l.text != note:
+		l.text = note
 
 
 func _extra(card: Dictionary, text: String) -> void:
-	var l: RichTextLabel = card.extra
-	l.visible = text != ""
-	if l.text != text:
-		l.text = text
+	if card.extra != text:
+		card.extra = text
+		_relayout(card)
+
+
+func _desc(card: Dictionary, text: String) -> void:
+	if card.desc != text:
+		card.desc = text
+		_relayout(card)
+
+
+func _tally(card: Dictionary, level: int, most: int) -> void:
+	var t: Array = card.tally
+	if t.is_empty() or t[0] != level or t[1] != most:
+		card.tally = [level, most]
+		_relayout(card)
 
 
 func _section(text: String) -> void:
-	var l := UiTheme.label(UiTheme.T_TITLE, UiTheme.INK, UiTheme.display())
-	l.text = text
+	var l := Lines.new()
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.custom_minimum_size = Vector2(0, LINE * 2)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_list.add_child(l)
+	l.set_parts([{"kind": "text", "text": text, "font": UiTheme.display(), "size": UiTheme.T_TITLE, "color": UiTheme.INK}])
+	l.custom_minimum_size.y = LINE * 2
 
 
 func _buy_feedback(ok: bool, what: String) -> void:
@@ -540,7 +762,7 @@ func _buy_feedback(ok: bool, what: String) -> void:
 func _build_tools() -> void:
 	for i in Balance.TOOLS.size():
 		var t: Dictionary = Balance.TOOLS[i]
-		var card := _card(str(t.icon), t.name, t.desc)
+		var card := _card(str(t.icon), t.name, t.desc, "tag", "big")
 		var idx := i
 		card.button.pressed.connect(func():
 			var ok := GameState.buy_tool(idx)
@@ -572,7 +794,7 @@ func _build_tools() -> void:
 			card.button.pressed.connect(func(): Monetization.buy(id))
 			_refreshers.append(func():
 				var amount := GameState.ember_pack_amount(pack)
-				card.desc.text = "%s %s embers right now." % [UiTheme.icon_bb("coal", 20), Fmt.num(amount)]
+				_desc(card, "%s embers right now." % Fmt.num(amount))
 				var nt := GameState.next_tool_index()
 				if nt >= 0 and GameState.embers + amount >= GameState.tool_cost(nt):
 					_extra(card, "enough for the %s" % str(Balance.TOOLS[nt].name).to_lower())
@@ -589,7 +811,7 @@ func _build_upgrades() -> void:
 			_buy_feedback(GameState.buy_upgrade(key), "%s, one notch up" % u.name))
 		_refreshers.append(func():
 			var lv := int(GameState.upgrade_levels[key])
-			_extra(card, "level %d of %d" % [lv, int(u.max)])
+			_tally(card, lv, int(u.max))
 			if GameState.upgrade_maxed(key):
 				_set_btn(card, "Full", false, "", "", true)
 			else:
@@ -601,7 +823,7 @@ func _build_upgrades() -> void:
 func _build_helpers() -> void:
 	for i in Balance.HELPERS.size():
 		var h: Dictionary = Balance.HELPERS[i]
-		var card := _card(str(h.icon), h.name, h.desc)
+		var card := _card(str(h.icon), h.name, h.desc, "tag", "photo")
 		var idx := i
 		card.button.pressed.connect(func():
 			_buy_feedback(GameState.buy_helper(idx), "A new %s joins in" % str(h.name).to_lower()))
@@ -614,7 +836,7 @@ func _build_helpers() -> void:
 
 
 func _build_magic() -> void:
-	var boost := _card("hourglass", "2x fire for 5 minutes", "Everything burns twice as hot and pays twice the embers. Watch again to stack it, up to 15 minutes.")
+	var boost := _card("hourglass", "2x fire for 5 minutes", "Everything burns twice as hot and pays twice the embers. Watch again to stack it, up to 15 minutes.", "tag", "circled")
 	boost.button.pressed.connect(func(): hud.watch_ad("boost"))
 	_refreshers.append(func():
 		var left := GameState.boost_seconds_left()
@@ -624,7 +846,7 @@ func _build_magic() -> void:
 			_set_btn(boost, "Full", false, "", "", true)
 		else:
 			_set_btn(boost, "Watch", not Monetization.is_watching(), "free", "magic_lantern"))
-	var rush := _card("rush", "Helpers work 3x for 3 minutes", "Your sprites and salamanders burn three times as hot, and hurry.")
+	var rush := _card("rush", "Helpers work 3x for 3 minutes", "Your sprites and salamanders burn three times as hot, and hurry.", "tag", "circled")
 	rush.button.pressed.connect(func(): hud.watch_ad("helper_rush"))
 	_refreshers.append(func():
 		if not GameState.has_helpers():
@@ -636,10 +858,10 @@ func _build_magic() -> void:
 		else:
 			_set_btn(rush, "Watch", not Monetization.is_watching(), "free", "magic_lantern")
 			_extra(rush, ""))
-	var instant := _card("coals", "Free embers", "")
+	var instant := _card("coals", "Free embers", "", "tag", "circled")
 	instant.button.pressed.connect(func(): hud.watch_ad("instant"))
 	_refreshers.append(func():
-		instant.desc.text = "%s %s embers now, a few minutes of your burning." % [UiTheme.icon_bb("coal", 20), Fmt.num(GameState.instant_amount())]
+		_desc(instant, "%s embers now, a few minutes of your burning." % Fmt.num(GameState.instant_amount()))
 		var tool := AdOffers.unlocks_tool()
 		_extra(instant, "enough for the %s" % tool.to_lower() if tool != "" else "")
 		if not GameState.instant_ready():
@@ -658,8 +880,8 @@ func _build_shop() -> void:
 		else:
 			_set_btn(card, "Buy", true, Monetization.price(ra), ""))
 	var sp := Monetization.PRODUCT_STARTER
-	var starter := _card("parcel", Monetization.PRODUCTS[sp].title, "%s %s embers and the rainbow sparkler, a striped matchstick that fizzes in four colours. One per keeper." % [
-		UiTheme.icon_bb("coal", 20), Fmt.num(Balance.STARTER_EMBERS)])
+	var starter := _card("parcel", Monetization.PRODUCTS[sp].title, "%s embers and the rainbow sparkler, a striped matchstick that fizzes in four colours. One per keeper." % [
+		Fmt.num(Balance.STARTER_EMBERS)])
 	starter.button.pressed.connect(func(): Monetization.buy(sp))
 	_refreshers.append(func():
 		if Monetization.owns(sp):
@@ -693,7 +915,7 @@ func _build_shop() -> void:
 		var pack := k
 		pc.button.pressed.connect(func(): Monetization.buy(id))
 		_refreshers.append(func():
-			pc.desc.text = "%s %s embers." % [UiTheme.icon_bb("coal", 20), Fmt.num(GameState.ember_pack_amount(pack))]
+			_desc(pc, "%s embers." % Fmt.num(GameState.ember_pack_amount(pack)))
 			_set_btn(pc, "Buy", true, Monetization.price(id), ""))
 	var restore := _card("restore", "Restore purchases", "Bought something on another device? Get it back here.")
 	restore.button.pressed.connect(func():
@@ -765,8 +987,8 @@ func _build_dev_tools() -> void:
 		closed.emit())
 	_refreshers.append(func():
 		var z := _next_ring()
-		skip.desc.text = "Burns the rings outside it, gives its tool and walks you to its edge: %s." % (
-			"the Elder Tree" if z >= Balance.ZONES.size() else str(Balance.ZONES[z].name).to_lower())
+		_desc(skip, "Burns the rings outside it, gives its tool and walks you to its edge: %s." % (
+			"the Elder Tree" if z >= Balance.ZONES.size() else str(Balance.ZONES[z].name).to_lower()))
 		_set_btn(skip, "Skip", true))
 	var fire := _card("flame", "Fire speed", "Multiplies all tool and helper heat.", "stamp")
 	fire.button.pressed.connect(func():
@@ -776,7 +998,7 @@ func _build_dev_tools() -> void:
 	var ads := _card("chart", "Fake ads and purchases", "", "stamp")
 	_refreshers.append(func():
 		var c: Dictionary = Monetization.provider.get("counts") if Monetization.provider.get("counts") != null else {}
-		ads.desc.text = "rewarded %d, interstitial %d, purchases %d" % [int(c.get("rewarded", 0)), int(c.get("interstitial", 0)), int(c.get("purchases", 0))]
+		_desc(ads, "rewarded %d, interstitial %d, purchases %d" % [int(c.get("rewarded", 0)), int(c.get("interstitial", 0)), int(c.get("purchases", 0))])
 		_set_btn(ads, "Count", false, "", "", true))
 	var wipe := _card("sprout", "Start over", "A fresh cursed forest. Keeps purchases.", "stamp")
 	wipe.button.pressed.connect(func():

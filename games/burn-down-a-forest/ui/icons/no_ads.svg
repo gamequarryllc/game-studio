@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- no_ads: drawn by art/icons/make_icons.py -->
-  <path d="M 33.22 22.40 C 36.92 22.57 34.72 22.76 35.15 23.15 C 35.58 23.53 35.63 21.80 35.80 24.72 C 35.97 27.63 36.26 37.53 36.16 40.62 C 36.07 43.71 35.67 42.72 35.21 43.28 C 34.75 43.84 37.16 43.85 33.41 43.98 C 29.65 44.11 16.44 44.25 12.71 44.06 C 8.98 43.88 11.49 43.44 11.01 42.89 C 10.52 42.34 10.01 43.72 9.80 40.79 C 9.59 37.86 9.52 28.37 9.75 25.32 C 9.98 22.28 10.65 23.04 11.19 22.51 C 11.72 21.97 9.27 22.14 12.94 22.12 C 16.62 22.11 29.52 22.23 33.22 22.40 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 33.97 27.84 L 41.88 27.82 L 42.12 40.08 L 34.18 39.77 Z" fill="#6F7C88" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 42.10 30.17 L 58.09 21.53 L 57.86 45.53 L 41.84 38.30 Z" fill="#FFC15E" stroke="#2E1E14" stroke-width="1.80" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 7.76 7.97 L 57.98 58.35" fill="none" stroke="#D9483B" stroke-width="4.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 8.29 8.07 L 58.12 58.25" fill="none" stroke="#2E1E14" stroke-width="1.20" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 32.83 21.88 C 36.54 21.92 34.21 21.85 34.81 22.39 C 35.41 22.93 36.25 22.07 36.43 25.11 C 36.62 28.15 36.07 37.65 35.89 40.62 C 35.72 43.59 35.80 42.45 35.38 42.94 C 34.96 43.42 37.16 43.29 33.37 43.53 C 29.59 43.77 16.40 44.53 12.65 44.39 C 8.90 44.25 11.37 43.27 10.88 42.71 C 10.39 42.14 9.80 44.00 9.71 40.98 C 9.62 37.97 10.05 27.56 10.32 24.61 C 10.59 21.67 10.99 23.72 11.35 23.30 C 11.71 22.89 8.92 22.35 12.50 22.11 C 16.08 21.87 29.11 21.83 32.83 21.88 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 34.14 28.17 L 42.16 28.20 L 42.22 40.14 L 33.95 40.18 Z" fill="#6F7C88" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 42.01 30.33 L 58.20 22.19 L 57.55 46.02 L 41.76 37.64 Z" fill="#FFC15E" stroke="#2E1E14" stroke-width="1.80" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 8.37 8.16 L 58.08 57.70" fill="none" stroke="#D9483B" stroke-width="4.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 7.89 8.21 L 58.05 57.78" fill="none" stroke="#2E1E14" stroke-width="1.20" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

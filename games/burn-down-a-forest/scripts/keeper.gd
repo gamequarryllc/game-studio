@@ -1,8 +1,11 @@
 class_name Keeper
 extends Node3D
-## The fire-keeper: a round figure in a soot-stained cape, an ember scarf and a
-## round hood, a brass lantern hanging from a crooked pole in one hand and the
-## tool in the other (models/keeper.glb), walked around the forest floor (the
+## The fire-keeper: one sculpted figure (a rust cape gone sooty at the hem, a
+## mustard capelet, a hood with a long floppy tip and a tassel round a
+## soot-smudged face, a knitted ember scarf, a satchel on the back with the
+## notebook strapped to it), with mittens, boots and the scarf's two loose
+## ends moving on their own; a brass lantern hangs from a crooked pole in one
+## hand and the tool is in the other (models/keeper.glb), walked around the forest floor (the
 ## ground's height field, no physics needed) and followed by an elevated chase
 ## camera that orbits around them. The tool heats the forest where the
 ## screen's centre lands (the crosshair), out to the tool's range; aim further
@@ -18,8 +21,9 @@ const SHOULDER := 0.95              # this far to their right (an over-the-shoul
 const LOOK_AHEAD := 1.2             # and the ring sit clear of the keeper), looking this far ahead
 const MODEL_SCALE := 1.6            # the keeper reads clearly at phone size from the chase camera
 const DENSE_TILT := 0.3             # in thick woods the camera tilts down this much more (radians)
-const HAND_TOOL := Vector3(-0.42, 0.55, 0.1)     # the tool hand (screen right, beside the crosshair)
-const HAND_POLE := Vector3(0.42, 0.56, 0.04)     # the lantern-pole hand (screen left, clear of the crosshair)
+const HAND_TOOL := Vector3(-0.47, 0.5, 0.1)      # the tool hand (screen right, beside the crosshair)
+const HAND_POLE := Vector3(0.47, 0.52, 0.04)     # the lantern-pole hand (screen left, clear of the crosshair)
+const SCARF_KNOT := Vector3(0.07, 0.86, -0.24)   # where the scarf's loose ends hang from (the knot at the back)
 const MIN_AIM_DIST := 1.2
 
 var grid: ForestGrid
@@ -60,6 +64,8 @@ var _lantern: Node3D
 var _pole: Node3D
 var _scarf: Node3D
 var _outline: ShaderMaterial
+var _outline_k := 0.0                 # 0..1: the ink outline shows only while something hides the keeper
+var _outline_t := 0.0
 var _dense := 0.0                     # how thick the woods are round the keeper (0..1), smoothed
 var _pitch_eff := -0.5
 var fx: ToolFx
@@ -71,7 +77,7 @@ var _touch_device := DisplayServer.is_touchscreen_available()
 func _ready() -> void:
 	_mat = ShaderMaterial.new()
 	_mat.shader = load("res://shaders/prop.gdshader")
-	_mat.set_shader_parameter("rim", 0.85)                    # moonlit rim so the hero reads against the woods
+	_mat.set_shader_parameter("rim", 0.32)                    # a soft moonlit rim so the hero reads against the woods
 	_mat.set_shader_parameter("rim_color", Color("#A9C0F2"))
 	_mat.set_shader_parameter("ink_edge", 0.35)
 	_build_model()
@@ -98,23 +104,22 @@ func _ready() -> void:
 func _build_model() -> void:
 	_outline = ShaderMaterial.new()
 	_outline.shader = load("res://shaders/outline.gdshader")
-	_mat.next_pass = _outline           # an inked outline round the hero, so they read against any woods
+	_outline.set_shader_parameter("width_px", 0.0)
+	# (an inked outline round the hero only while flames or smoke stand in front of them: _update_outline)
 	_model = Node3D.new()
 	_model.scale = Vector3.ONE * MODEL_SCALE
 	add_child(_model)
 	_body = _part("body", _model, Vector3.ZERO)
-	_head = Node3D.new()
+	_head = Node3D.new()                # (the head is part of the sculpted body now; kept as a pivot)
 	_head.position = Vector3(0, 1.13, 0)
 	_body.add_child(_head)
-	_part("head", _head, Vector3.ZERO)
-	_part("hood", _head, Vector3.ZERO)
 	_hand_l = _part("hand", _body, HAND_POLE)
 	_hand_r = _part("hand", _body, HAND_TOOL)
 	_foot_l = _part("foot", _model, Vector3(-0.15, 0.0, 0.06))
 	_foot_r = _part("foot", _model, Vector3(0.15, 0.0, 0.06))
-	# The scarf's tail flies out behind from the knot at the back of the neck.
+	# The scarf's two loose ends swing from the knot at the back of the neck.
 	_scarf = Node3D.new()
-	_scarf.position = Vector3(0.05, 0.88, -0.17)
+	_scarf.position = SCARF_KNOT
 	_body.add_child(_scarf)
 	_part("scarf", _scarf, Vector3.ZERO)
 	# The lantern hangs from the hook of a crooked pole, held up beside the
@@ -153,6 +158,15 @@ func _part(name: String, parent: Node3D, pos: Vector3) -> MeshInstance3D:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	parent.add_child(mi)
 	return mi
+
+
+func face_toward(p: Vector3) -> void:
+	## Turn the keeper to look at a point (the ending's closing shot).
+	var to := p - position
+	if Vector2(to.x, to.z).length() > 0.1:
+		_facing = atan2(to.x, to.z)
+		if _model != null:
+			_model.rotation.y = _facing
 
 
 func lantern_pos() -> Vector3:
@@ -423,6 +437,14 @@ func update_aim() -> void:
 				hit = Vector3(p.x, g, p.z)
 				break
 		t += 0.35 if t < 30.0 else 0.8
+	# The Elder Tree's roots run out across the ground round it: a crosshair on
+	# its roots is on the Elder (from range, the low mound at its foot used to
+	# catch the ray a few metres short, where off-centre heat never lit it)
+	if hit.is_finite() and hit_cell < 0 and grid.state[grid.elder_cell] == ForestGrid.INTACT:
+		var ec2 := grid.cell_center(grid.elder_cell)
+		if Vector2(hit.x - ec2.x, hit.z - ec2.y).length() < 6.0:
+			hit = Vector3(ec2.x, grid.height_at(ec2.x, ec2.y), ec2.y)
+			hit_cell = grid.elder_cell
 	var range_m := GameState.tool_range()
 	var in_range := true
 	var ok_hit := hit.is_finite()
@@ -518,7 +540,6 @@ func _animate(d: float) -> void:
 		var swing := -s * 0.12 if moving else 0.0
 		_hand_r.position = _hand_r.position.lerp(HAND_TOOL + Vector3(0, 0, swing), 1.0 - exp(-d * 12.0))
 		_tool_holder.rotation = _tool_holder.rotation.lerp(Vector3(-0.9, -0.15, 0), 1.0 - exp(-d * 10.0))
-	_head.rotation.x = -0.15 if firing else 0.0
 	# the pole rocks with the stride, the lantern swings under it, lagging behind
 	_pole.rotation.x = lerpf(_pole.rotation.x, -0.22 + (s * 0.08 if moving else 0.0), 1.0 - exp(-d * 8.0))
 	_lantern.rotation.z = lerpf(_lantern.rotation.z, (s * 0.3 if moving else 0.0) + breathe * 3.0, 1.0 - exp(-d * 5.0))
@@ -534,4 +555,46 @@ func _animate(d: float) -> void:
 	var lift := clampf((position.y - g) / 3.0, 0.0, 0.7)
 	_shadow.scale = Vector3.ONE * (1.0 - lift)
 	lantern_flicker = 1.0 + 0.08 * sin(t * 9.0) + 0.05 * sin(t * 23.0)
+	_update_outline(d)
 
+
+func _update_outline(d: float) -> void:
+	## The ink outline shows only while the keeper is hidden: a fire burning
+	## between the camera and them (its flames duck away, but the smoke and
+	## sparks don't). Eased in and out; off, it costs nothing.
+	_outline_t -= d
+	if _outline_t <= 0.0 and grid != null and camera != null:
+		_outline_t = 0.15
+		var hidden := false
+		var from := camera.global_position
+		var to := position + Vector3(0, 1.4, 0)
+		var dist := Vector2(to.x - from.x, to.z - from.z).length()
+		var steps := int(dist / 1.2)
+		for k in range(1, steps):
+			var p := from.lerp(to, float(k) / steps)
+			var c := grid.cell_at(p.x, p.z)
+			if c < 0:
+				continue
+			var cx := c % grid.n
+			var cy := c / grid.n
+			for oy in range(-1, 2):
+				for ox in range(-1, 2):
+					var x := cx + ox
+					var y := cy + oy
+					if x >= 0 and y >= 0 and x < grid.n and y < grid.n and grid.state[x + y * grid.n] == ForestGrid.BURNING:
+						hidden = true
+			if hidden:
+				break
+		set_meta("hidden", hidden)
+	var want := 1.0 if bool(get_meta("hidden", false)) else 0.0
+	_outline_k = move_toward(_outline_k, want, d * 4.0)
+	if _outline_k > 0.01:
+		if _mat.next_pass == null:
+			_mat.next_pass = _outline
+		_outline.set_shader_parameter("width_px", 2.4 * _outline_k)
+	elif _mat.next_pass != null:
+		_mat.next_pass = null
+
+
+func outline_shown() -> bool:
+	return _mat.next_pass != null

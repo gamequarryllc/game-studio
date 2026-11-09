@@ -1,6 +1,6 @@
 extends SceneTree
 ## Renders screenshots of key moments, for checking the look by eye:
-##   xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- /tmp/forest-shots
+##   xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- /tmp/forest-shots [size=844x390]
 ## The fire is fast-forwarded tick by tick between shots, so a run takes a minute or two.
 ## (Untyped on purpose: this compiles before the GameState autoload exists.)
 
@@ -13,6 +13,12 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		out_dir = args[0]
+	for a in args:
+		if a.begins_with("size="):
+			# phone or tablet sized shots: size=844x390
+			var wh: PackedStringArray = a.substr(5).split("x")
+			DisplayServer.window_set_size(Vector2i(int(wh[0]), int(wh[1])))
+			root.size = Vector2i(int(wh[0]), int(wh[1]))
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	_run.call_deferred()
 
@@ -147,6 +153,20 @@ func _run() -> void:
 	hud.notebook.select("settings")
 	await _frames(4)
 	await _shot("07e_notebook_settings")
+	gs.helper_counts[0] = 3
+	gs.helper_counts[1] = 1
+	gs.upgrade_levels["value"] = 7
+	gs.upgrade_levels["heat"] = 2
+	hud.notebook.select("helpers")
+	await _frames(4)
+	await _shot("07f_notebook_helpers")
+	hud.notebook.select("upgrades")
+	await _frames(4)
+	await _shot("07g_notebook_tallies")
+	gs.helper_counts[0] = 0
+	gs.helper_counts[1] = 0
+	gs.upgrade_levels["value"] = 0
+	gs.upgrade_levels["heat"] = 0
 	hud.close_notebook()
 
 	# The timed offer tag.
@@ -237,8 +257,12 @@ func _run() -> void:
 		_ff(0.2)
 		await process_frame
 	await _shot("18_ending_sweep")
-	world._update_ending(4.0)
+	# the closing shot: low behind the keeper, the stump and its sapling, the village beyond
+	world._update_ending(4.4)
 	_ff(1.0)
+	await _frames(3)
+	await _shot("18a_ending_shot")
+	world._update_ending(1.4)
 	await _frames(8)
 	await _shot("18b_ending_letter")
 	hud.close_ending()

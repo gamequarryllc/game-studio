@@ -597,7 +597,7 @@ func _check_ending() -> void:
 	var hud = world.hud
 	if not hud.ending_active or hud.root.visible:
 		_fail("the ending didn't hide the HUD")
-	await _wait(10.0)
+	await _wait(13.0)
 	if not hud.ending_letter_shown():
 		_fail("the ending letter never showed")
 	hud.close_ending()

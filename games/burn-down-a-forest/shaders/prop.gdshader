@@ -29,6 +29,9 @@ uniform float see_through = 0.0;
 uniform vec3 focus_pos = vec3(0.0);
 uniform float hole_radius = 2.3;
 
+// a flat fill under every light: the night stays plum but never goes black (L* 20-25 in the shadows)
+uniform vec3 fill = vec3(0.0);       // linear (set from code, not converted)
+
 varying vec3 v_world;
 varying vec4 v_clip;
 
@@ -46,7 +49,7 @@ void fragment() {
 	if (see_through > 0.5) {
 		vec4 kc = PROJECTION_MATRIX * VIEW_MATRIX * vec4(focus_pos, 1.0);
 		float keep = 1.0;
-		if (kc.w > 0.1 && v_clip.w < kc.w - 0.8) {
+		if (kc.w > 0.1 && v_clip.w < kc.w - 2.2) {      // only what really stands in front of them, not a wall beside them
 			float aspect = VIEWPORT_SIZE.x / max(VIEWPORT_SIZE.y, 1.0);
 			vec2 a = v_clip.xy / v_clip.w;
 			vec2 b = kc.xy / kc.w;
@@ -71,5 +74,9 @@ void fragment() {
 	float ld = distance(v_world, lantern_pos);
 	float ll = pow(clamp(1.0 - ld / 6.0, 0.0, 1.0), 2.0) * lantern_gain;
 	em += col * (fire_tint * fl * fire_gain + lantern_tint * ll);
+	// dark colours are lifted most, light ones (plaster, packed earth) hardly: the shadows come up, nothing glares
+	float fl_l = dot(col, vec3(0.2126, 0.7152, 0.0722)) * 26.0;
+	float fill_w = 1.0 / (1.0 + fl_l * fl_l);
+	em += col * fill * fill_w;
 	EMISSION = em;
 }

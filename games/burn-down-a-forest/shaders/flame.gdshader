@@ -2,13 +2,22 @@ shader_type spatial;
 render_mode unshaded, cull_disabled, shadows_disabled, fog_disabled;
 // Inked cartoon flames from a hand-drawn flipbook (fx/flames.png, drawn by
 // art/fx/make_fx.py): each flame boils through four held drawings, 8 a second,
-// leans with the wind (the taller it is, the more its tip bends), and is
-// mirrored or not at random, so no two neighbours match. Opaque with a cut-out
-// edge, never added on top: a big fire never blows out to white. The same
-// MultiMesh draws the sparks that spit up out of the fire.
+// leans with the wind (the whole card shears downwind and its tip bends more,
+// the taller the more), and is mirrored or not at random, so no two
+// neighbours match. Opaque with a cut-out edge, never added on top: a big
+// fire never blows out to white. The same MultiMesh draws the sparks.
+//
+// A burning tree gets ONE composed bonfire (a tall leading flame off to one
+// side with a few licks stepping down from it, all one drawing) and at most a
+// lick at its roots, not a crowd of identical cards; a grass fire is a low
+// ragged front. Near the camera flames shrink away, and no flame is ever drawn
+// taller than about a third of the screen, so a late-game blaze never buries
+// the keeper or the HUD.
+//
 // INSTANCE_CUSTOM: r = random seed, g = how strong (0..1), b = colour style
 // (0 = cursed-wood fire, 1 = golden phoenix, 2 = dragon violet),
-// a = what it is (0 = a flame, 1 = the tall leading flame of a cluster, 2 = a spark).
+// a = what it is: 0 a flame, 1 a tall leading flame, 2 a spark, 3 a composed
+// bonfire, 4 a grass front, 5 a dying fire.
 // The quad's bottom edge sits on the instance origin.
 
 uniform sampler2D flames : filter_linear_mipmap, repeat_disable;
@@ -20,10 +29,15 @@ uniform vec3 deep_col : source_color = vec3(0.72, 0.21, 0.12);
 uniform vec3 smoke_col : source_color = vec3(0.27, 0.2, 0.3);
 uniform float fps = 8.0;
 uniform vec3 focus_pos = vec3(0.0, -1000.0, 0.0);   // the keeper: flames in front of them shrink away
-uniform float hole_radius = 2.6;
+uniform float hole_radius = 2.8;
+uniform float max_screen = 0.24;                     // the tallest a flame may stand on screen (share of its height)
 
 varying vec4 v_c;
 varying float v_life;
+
+bool is_type(float a, float t) {
+	return abs(a - t) < 0.5;
+}
 
 void vertex() {
 	v_c = INSTANCE_CUSTOM;
@@ -31,38 +45,49 @@ void vertex() {
 	float sx = length(MODEL_MATRIX[0].xyz);
 	float sy = length(MODEL_MATRIX[1].xyz);
 	vec3 right = normalize(vec3(INV_VIEW_MATRIX[0].x, 0.0, INV_VIEW_MATRIX[0].z));
+	vec3 cam = INV_VIEW_MATRIX[3].xyz;
 	v_life = 0.0;
 	vec3 p;
-	if (v_c.a > 1.5) {
+	if (is_type(v_c.a, 2.0)) {
 		// a spark: spat up out of the fire, drifting downwind, shrinking as it cools
 		float life = fract(TIME * (0.45 + 0.5 * v_c.r) + v_c.r * 13.0);
 		v_life = life;
 		o.y += life * (1.5 + 2.5 * v_c.r) * sy;
 		o.xz += (wind * 1.6 + vec2(sin(v_c.r * 40.0 + TIME * 3.0), cos(v_c.r * 31.0 + TIME * 2.3)) * 0.35) * life * sy;
-		float s = sx * (1.0 - life * 0.8);
+		float s = sx * (1.0 - life * 0.8) * smoothstep(2.0, 5.0, distance(o, cam));
 		vec3 up = INV_VIEW_MATRIX[1].xyz;
 		vec3 r = INV_VIEW_MATRIX[0].xyz;
 		p = o + (r * VERTEX.x + up * VERTEX.y) * s;
 	} else {
-		// flames right by the camera would fill the screen: they shrink away instead of fading
-		float near = smoothstep(2.5, 7.0, distance(o + vec3(0.0, sy * 0.4, 0.0), INV_VIEW_MATRIX[3].xyz));
-		// and so do flames standing between the camera and the keeper (never hide the hero)
+		// flames close to the camera shrink away instead of filling the screen
+		float dist = distance(o + vec3(0.0, sy * 0.4, 0.0), cam);
+		float near = smoothstep(3.0, 12.0, dist);
+		// ...and no flame stands taller than max_screen of the view, however close
+		vec4 oc = PROJECTION_MATRIX * VIEW_MATRIX * vec4(o + vec3(0.0, sy * 0.5, 0.0), 1.0);
+		if (oc.w > 0.1) {
+			float frac = sy * PROJECTION_MATRIX[1][1] / (2.0 * oc.w);
+			near = min(near, max_screen / max(frac, max_screen));
+		}
+		// and flames standing between the camera and the keeper duck right down (never hide the hero)
 		vec4 kc = PROJECTION_MATRIX * VIEW_MATRIX * vec4(focus_pos, 1.0);
 		vec4 fc = PROJECTION_MATRIX * VIEW_MATRIX * vec4(o + vec3(0.0, sy * 0.35, 0.0), 1.0);
 		if (kc.w > 0.1 && fc.w > 0.1 && fc.w < kc.w - 0.5) {
 			float aspect = VIEWPORT_SIZE.x / max(VIEWPORT_SIZE.y, 1.0);
 			vec2 d = fc.xy / fc.w - kc.xy / kc.w;
 			float r = hole_radius * PROJECTION_MATRIX[1][1] / kc.w;
-			near = min(near, mix(0.22, 1.0, smoothstep(r * 0.8, r * 1.5, length(vec2(d.x * aspect, d.y)))));
+			near = min(near, mix(0.12, 1.0, smoothstep(r * 0.8, r * 1.6, length(vec2(d.x * aspect, d.y)))));
 		}
 		sx *= near;
 		sy *= near;
 		float h = VERTEX.y + 0.5;
-		p = o + right * VERTEX.x * sx + vec3(0.0, (h - 0.08) * sy, 0.0);
+		p = o + right * VERTEX.x * sx + vec3(0.0, (h - 0.06) * sy, 0.0);
 		float frame = floor(TIME * fps + v_c.r * 7.0);
 		float jig = fract(sin(frame * 12.9898 + v_c.r * 78.233) * 43758.5453) - 0.5;
-		float lean = 0.42 + 0.3 * v_c.a;
-		p.xz += (wind * lean + vec2(jig * 0.1)) * h * h * sy * 0.55;
+		// the whole flame shears downwind and its tip curls over further
+		float lean = is_type(v_c.a, 1.0) ? 0.7 : (is_type(v_c.a, 3.0) ? 0.42 : (is_type(v_c.a, 4.0) ? 0.5 : 0.45));
+		float shear = is_type(v_c.a, 3.0) ? 0.16 : 0.26;
+		float wl = length(wind);
+		p.xz += (wind * (shear * h + lean * h * h) + vec2(jig * 0.08) * h * h) * sy * 0.6 * (0.6 + 0.4 * wl);
 	}
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(p, 1.0);
 }
@@ -80,7 +105,7 @@ void fragment() {
 		core = vec3(1.0, 0.88, 0.54);
 		deep = vec3(0.85, 0.48, 0.16);
 	}
-	if (v_c.a > 1.5) {
+	if (is_type(v_c.a, 2.0)) {
 		// a spark: a little four-pointed glint with an ink edge
 		vec2 q = abs(UV - 0.5) * 2.0;
 		float d = pow(q.x, 0.6) + pow(q.y, 0.6);
@@ -90,12 +115,23 @@ void fragment() {
 		ALBEDO = d > 0.72 ? ink : mix(core, body, v_life);
 	} else {
 		float frame = mod(floor(TIME * fps + v_c.r * 7.0), 4.0);
-		float row = v_c.a > 0.5 ? 3.0 : floor(fract(v_c.r * 3.71) * 3.0);
+		float row;
+		if (is_type(v_c.a, 1.0)) {
+			row = 3.0;
+		} else if (is_type(v_c.a, 3.0)) {
+			row = 4.0 + step(0.5, fract(v_c.r * 2.37));
+		} else if (is_type(v_c.a, 4.0)) {
+			row = 6.0;
+		} else if (is_type(v_c.a, 5.0)) {
+			row = 7.0;
+		} else {
+			row = floor(fract(v_c.r * 3.71) * 3.0);
+		}
 		vec2 uv = UV;
 		if (fract(v_c.r * 5.13) > 0.5) {
 			uv.x = 1.0 - uv.x;
 		}
-		vec4 t = texture(flames, (vec2(frame, row) + uv) * 0.25);
+		vec4 t = texture(flames, (vec2(frame, row) + uv) * vec2(0.25, 0.125));
 		if (t.a < 0.5) {
 			discard;
 		}

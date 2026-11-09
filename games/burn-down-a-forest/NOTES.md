@@ -31,14 +31,27 @@ Ember orange appears in the UI only on the main action (the burn button's brand
 while burning, the buy stamps).
 
 **Value structure:** foreground woods darkest, plum fog lifts the distance,
-the meadow sits mid-light, fire and the mint hearts are the only near-white
+the meadow sits mid-light, fire and the mint seeds are the only near-white
 values. Ambient light warms from cold plum to warm grey as the meadow spreads.
+For phones the woods never go near-black (the darkest quarter of a phone frame at L* 16-19, the median 21-29): a flat
+night fill (`World.FILL_NIGHT`, the `fill` uniform on the ground, plant and
+prop shaders) lifts dark colours most and light ones (plaster, packed earth)
+hardly at all, and the ground colours themselves were lifted (moss `#3B3445`,
+trails `#625850`). Measure with an L* percentile over the middle of a phone
+screenshot before changing any of it.
 
-**Type** (all SIL OFL, licences in `fonts/`): IM Fell English SC for titles,
-names and prices; Alegreya Sans for body text, with lining tabular figures
-(Alegreya Sans Bold, `lnum`+`tnum`) for the HUD counter because IM Fell only has
-old-style figures and "1.00M" read as "I.ooM"; Caveat Brush for the keeper's
-handwriting, never below 22 px. Scale (px at 1280x720): 16 / 19 / 22 / 28 / 36 / 48.
+**Type** (all SIL OFL, licences in `fonts/`): Keeper Fell for titles, names and
+prices: IM Fell English SC with its old-style figures swapped for thickened
+Libre Caslon lining figures (`art/fonts/make_keeper_fell.py` builds it; the
+sources and their licences are in `art/fonts/`), because IM Fell's figures read
+"+11" as "+II" and "x1" as "XI"; Alegreya Sans for body text with lining
+figures on (`lnum`), and lining tabular figures (Bold, `lnum`+`tnum`) for the HUD
+counter and the floating numbers; Caveat Brush for the keeper's handwriting,
+never below 22 px. Scale (px at 1280x720): 17 / 19 / 22 / 28 / 36 / 48. On
+phones (under ~600 points tall) the whole UI is drawn 1.32x bigger
+(`Hud.fit_ui_scale`), so the 17 px small type is 12 px on an 844x390 screen;
+the thumb controls keep their size. Wrapped notes go through `UiTheme.wrap`
+(no lone last word).
 
 **UI motif:** a field notebook plus burnt-wood signs. HUD pieces are charred
 planks with saw-cut uneven ends, wood grain, fire-darkened ends and a hard 3-4
@@ -75,28 +88,40 @@ damped (`key_response`) so the meadow sits mid-value under the trees' lit
 tops. Linear tonemapping and no bloom. After the ending it's dawn (peach
 horizon, warm low sun from the east).
 
-**Fire:** an inked flipbook (`art/fx/make_fx.py` draws `fx/flames.png`): three
-flame silhouettes and one tall leading flame, four held drawings each, played
-at 8 a second, carved lines through the body, sooty tips; stored as levels, so
-the shader paints cursed-wood, phoenix or dragon fire. Each burning plant gets
-a cluster of flames of different sizes round it with its leading flame on top
-(grass fires get a crest every few cells), all leaning with the wind (the
-taller, the more), mirrored at random; sparks spit out of the same MultiMesh;
-plum smoke in cel-shaded puffs (`fx/puffs.png`). Burning trees char from the
-roots up behind a thin ember line; bark splits into thin glowing cracks that
-cool as the front moves on; leaves just char with a few embers in them.
+**Fire:** an inked flipbook (`art/fx/make_fx.py` draws `fx/flames.png`, 4 x 8
+cells): three flame silhouettes, a tall leading flame, two composed bonfires
+(a leading tongue off to one side with licks stepping down from it), a low
+ragged grass front and a dying fire, four held drawings each, played at 8 a
+second, carved lines, sooty tips; stored as levels, so the shader paints
+cursed-wood, phoenix or dragon fire. A burning tree is ONE bonfire set on the
+near side of its crown (a lick at the roots on half of them, a tall leading
+flame on giants and the Elder), dying down to low licks; grass burns as a
+front along the fire's edge, thin behind it, with a tall crest now and then:
+under two cards per burning cell. Every card shears downwind and its tip
+curls further; cards shrink away near the camera, never stand taller than a
+quarter of the screen (`max_screen`), and duck right down in front of the
+keeper. Each tree sends up a three-puff plume that bends downwind, orange at
+its base. The fire map lights trunks and the ground, and a wider blur of it
+the undersides of nearby canopies. On the ground the fire's edge is a thin
+glowing contour that creeps with the front (from the heat in the cell
+texture's alpha); burnt ground is char `#2A2420`, never black. Trees char from
+the roots up behind an ember line with glowing bark cracks.
 
 **Camera:** an over-the-shoulder chase camera that rises over any canopy at its
 spot (never pulls in among leaves), tilts down 0.3 rad more when the woods
 round the keeper are thick (the player can still drag it back up), and cuts away everything up to the keeper's
 depth inside a circle on screen round them, with an inked rim (grass and
-bushes are spared, `ForestView.standing_flag`). The hero is always framed.
+bushes are spared, `ForestView.standing_flag`). The hero is always framed. The
+keeper's ink outline fades in only while a fire burns between the camera and
+them (`Keeper._update_outline`); otherwise they read by colour (mustard hood
+against plum and teal) and a soft moon rim.
 
 **Models:** all built in Blender from scripts in `art/blender/` (see "Models"
 below), detail baked into vertex colours (ray-cast AO, a vertical gradient,
 carved highlights on rims and tips, edge wear and crease grime from the
-mesh's curvature, a soft painted mottle). Contact sheet:
-`python3 art/blender/contact_sheet.py OUT.png [files] [--only a,b]`.
+mesh's curvature, a soft painted mottle). The keeper's body is a quad cage
+smoothed by subdivision (`characters.Cage`), then painted part by part.
+Contact sheet: `python3 art/blender/contact_sheet.py OUT.png [files.glb] [--only a,b]`.
 
 ---
 
@@ -111,7 +136,7 @@ and teal cursed trees, warm hand-drawn fire, critters that always scamper out un
 Godot 4.4, Compatibility renderer, landscape 1280x720 (stretch: canvas_items / expand).
 Bundle ID (when it ships): `com.gamequarry.burndownaforest`.
 
-## Status: first playable; art pass 2 (the 3D world) done and the full QA playthrough run (see "QA")
+## Status: first playable; review-3 polish pass done (phone readability, fire at scale, sculpted keeper, meadow, ending, village, notebook, offers); QA rerun (see "QA")
 
 Loads, phone and desktop controls work, the fire spreads by itself in chain
 reactions, embers come in, 6 tools (4 reachable in a normal run so far), 5
@@ -251,25 +276,72 @@ bodies; 0 everything else). Triangle counts:
 
 | File | Models |
 |---|---|
-| `forest.glb` (trees.py) | pine_s 313, pine_m 461, pine_l 581 (crooked trunk, drooping star tiers, hooked tip, mint knothole eyes on every size); oak_s ~1.1K, oak_m ~1.46K, oak_l ~1.5K (forked crooked trunk, clawed roots and twigs, carved scalloped cushions with hanging points, mint eyes); giant_a/b ~2.6K (buttress roots, clawed branches, carved cushions, curse moss, a cursed heart with the only sparkles, mint eyes); elder ~5.5K (a crown of five crooked finger limbs with clawed tips, knuckle cushions, weeping curse moss, the face and heart looking south); grass 36, bush 140, boulder 120, far_pine 72, far_oak 314 (two carved cushions on a short crooked trunk) |
-| `meadow.glb` (meadow.py) | poppy 52, oxeye_daisy 80, buttercup 96, harebell 162, sage_tuft 28 |
-| `village.glb` (village.py) | lodge ~4K (the landmark: round two storeys, carved cone of thatch, tall leaning chimney), cottage_mid, cottage_small (carved layered loaf thatch, damp plaster, leaning), woodshed, well, lantern_post, signpost, woodpile (uneven, chopping block and axe), fence, ground_roots, root_arch, flagstone_0..5 (hand-cut slabs) |
-| `keeper.glb`, `tools.glb`, `creatures.glb` (characters.py) | the keeper in eight parts (body: cape, scarf, clasp, patch; head: the dark face and eyes; hood; hand; foot; lantern; pole; scarf tail); matchstick, rainbow sparkler, lighter, tiki torch, flamethrower, dragon puppet, meteor staff (bevelled, worn); fire sprite, salamander (+ leg), rabbit, fox, hedgehog (heads, snouts, legs) |
-| `fx/flames.png`, `fx/puffs.png` (art/fx/make_fx.py) | the fire flipbook and the smoke puffs |
+| `forest.glb` (trees.py) | pine_s 313, pine_m 461, pine_l 581 (crooked trunk, drooping star tiers, hooked tip, mint knothole eyes on every size); oak_round 1.46K, oak_tall 1.05K, oak_lean 1.15K, oak_weep 1.38K (four silhouettes, each with a long bare forked trunk, clawed roots and twigs, carved scalloped cushions hanging into points, its own cast of violet, mint eyes); giant_a/b ~2.7K (buttress roots, clawed branches, carved cushions, curse moss, the curse's seed pod split open round a mint seed, with the only sparkles); elder ~6K (five crooked finger limbs reaching ~35 m, clawed tips, knuckle cushions, weeping moss, a seed pod in its trunk and a glowing seed held up in its palm, the face looking south); elder_stump 450 and sapling ~180 (what's left at the heart after the fire); grass 36, bush 140, boulder 120, far_pine 72, far_oak ~550 (a bare forked trunk under carved crowns with hanging points, planted in groves) |
+| `meadow.glb` (meadow.py) | poppy 52, oxeye_daisy 80, buttercup 96, harebell 162, sage_tuft 28, tall_grass 162 (seeding grass, the tall layer), yarrow 176, sprout 42 (seedlings at the meadow's edge) |
+| `village.glb` (village.py) | lodge ~11K (the landmark: coursed stone ground floor, jettied timber-framed upper floor, deep thatch with a dormer, porch on crooked posts, great fieldstone gable chimney, window boxes); cottage_mid (thatch loaf, fieldstone stack), cottage_small (wooden shingles, deep eaves, brick chimney), cottage_slate (hipped slate, clay chimney pot): all at house size, damp plaster, roots over them; woodshed; well ~2K (coursed fieldstones, shingled roof, windlass, rope, bucket); lantern_post, signpost, woodpile (split logs between stakes under a plank roof, chopping block and axe), fence, ground_roots, root_arch, flagstone_0..5 (flat hand-cut slabs, laid sunk) |
+| `keeper.glb`, `tools.glb`, `creatures.glb` (characters.py) | the keeper: k_body ~6K (ONE subdivided mesh: cape with folds and a sooty ragged hem, mustard capelet, hood with a floppy tip and tassel round a face, knitted scarf, satchel with the notebook strapped on, a strap across the chest), k_hand (knitted mitten), k_foot (laced boot), k_scarf (the two loose ends), k_lantern, k_pole; matchstick, rainbow sparkler, lighter, tiki torch, flamethrower, dragon puppet, meteor staff (bevelled, worn); fire sprite, salamander (+ leg), rabbit, fox, hedgehog (heads, snouts, legs) |
+| `fx/flames.png`, `fx/puffs.png` (art/fx/make_fx.py) | the fire flipbook (flames, leading flame, bonfires, grass front, dying fire) and the smoke puffs |
+| `fonts/KeeperFell-Regular.ttf` (art/fonts/make_keeper_fell.py) | IM Fell English SC with lining figures from Libre Caslon Text |
 
 `art/blender/contact_sheet.py OUT.png [files...]` renders them all in Cycles on
 the CPU (one cell each, labelled with triangle counts) for review.
 
-## QA (2026-11-09, after art pass 2)
+## QA (2026-11-09, after the review-3 polish pass; the art-pass-2 notes follow)
 
 Run per STUDIO.md "Playtesting". Commands (headless unless noted; runs side by
-side each need `-- save=<name> log=<path>` plus `--log-file <path>`):
+side each need `-- save=<name> log=<path>` plus `--log-file <path>` before `-s`):
 
-    godot --headless -s res://tests/smoke_test.gd                                   # 77 checks
+    godot --headless -s res://tests/smoke_test.gd                                   # 94 checks
     godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- keen|casual|boosted [ads]
     godot --headless --fixed-fps 20 -s res://tests/chaos.gd -- 6 4242               # minutes, seed
-    xvfb-run ... godot --rendering-driver opengl3 --fixed-fps 20 -s res://tests/playthrough.gd -- boosted shots=DIR size=844x390 every=10
+    xvfb-run ... godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- DIR [size=844x390]
+    xvfb-run ... godot --rendering-driver opengl3 -s res://tests/look.gd -- DIR [size=844x390] [hud] [close|ending|...]
     python3 tools/browser_check.py games/burn-down-a-forest
+
+**Polish pass results:** smoke test passes (94 checks, 17 new for this pass);
+boosted passes (2:01 of play, 17 s real); keen passes and reaches the ending at
+28:39 (28:52 of play: lighter 0:33, tiki torch 15:49, flamethrower 23:59,
+dragon breath 26:24, meteor shower 28:01), inside the 24-30 minute band of the
+last runs, so the pacing didn't drift (casual wasn't rerun: no balance number
+changed). Screenshots were reviewed at 1280x720 and at 844x390; the forest
+interior measures L* p25 16-19 / median 21-29 at 844x390 (was 5-6 / 7);
+smallest HUD type 12 px at 844x390.
+
+**Bugs found in this pass and fixed** (each has a smoke-test check where it can):
+
+13. The keen bot stalled 18 m from the Elder Tree for minutes: from there the
+    crosshair at its highest pitch landed on the mound at the Elder's foot,
+    3.7 m off-centre, where even the meteor shower's heat never reached its
+    ignite level (a player would have hit the same wall). A crosshair on the
+    Elder's roots (within 6 m of it) now counts as on the Elder.
+14. Locked price tags drew their pencil outline offset by half their size,
+    sticking out past the page's edge.
+15. Notebook chapters changed width with the size of their sketches: the right
+    page has a fixed minimum width now.
+16. Floating numbers landed on top of one another ("+8.?7.1"): a new one skips
+    any spot within 70 px of a number still rising.
+17. The see-through window cut away cottage walls standing beside the keeper
+    (not in front), showing the inside of the house: props are only cut when
+    they're 2.2 m nearer the camera than the keeper.
+18. Old-style figures: "+11" read "+II" and "x1" read "XI" (Keeper Fell, `lnum`).
+19. HUD second lines were ~7-9 px on an 844x390 phone (the phone UI scale).
+20. A big fire drew 4-9 identical cards per burning cell (now under 2.3).
+21. The mint hearts read as health pickups (seed pods now).
+22. Every ash cell sparkled with orange dots (the creeping edge replaces it).
+23. The stub ad's countdown wrote to a freed button when an ad was closed early
+    and another opened within the second (found by the chaos run): the
+    countdown now checks it's still its own ad.
+
+**Chaos run:** 4 game-minutes each, seeds 4242 and 77, after the fix: passes, no
+errors, no soft-lock, no broken UI state (the new notebook pages, tags and
+tallies included).
+
+**Browser run:** `tools/browser_check.py` exported the web build and loaded it
+at 844x390; on this busy machine (other games' agents running) its 3-minute
+screenshot timeout ran out at the larger sizes, so the same export was loaded
+again with a longer timeout: it loads and starts at 844x390, 932x430 and
+1024x768 with the phone UI scale and the thumb controls in place, a tap
+reaches the game, and there are no console or page errors.
 
 **The playthrough bot** plays a fresh save to the ending through the real
 systems: it walks with the stick input, turns the camera until the crosshair
@@ -286,7 +358,7 @@ Once the forest is nearly gone and its tool can light the Elder Tree it heads
 there. Debug arguments: `debug` (a trace every 10 s), `from=<ring>`,
 `embers=<n>`, `at=<x>,<z>`.
 
-**Pacing** (game time; final balance):
+**Pacing after art pass 2** (game time; final balance; the polish pass's keen run is above):
 
 | Milestone | keen | casual | boosted (x10 income, ads) |
 |---|---|---|---|
@@ -459,7 +531,7 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
   (multiline and triangle-array calls) to keep that low.
   `tests/perf_bench.gd`: at ~580 burning cells the fire costs ~1 ms per tick plus
   ~1 ms to rebuild the flames, 10 times a second, on desktop.
-- Tests: `tests/smoke_test.gd` (71 checks, passes; includes a regression check
+- Tests: `tests/smoke_test.gd` (94 checks, passes; includes a regression check
   for every bug the QA runs found), `tests/playthrough.gd` (the playthrough bot,
   keen / casual / boosted, plus the visual run), `tests/chaos.gd` (random input),
   `tests/screenshots.gd` (30 shots incl. the establishing shot, the phone layout,
@@ -472,9 +544,10 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
 
 ## Next steps toward the polish bar (STUDIO.md)
 
-0. **Third fresh-eyes art review** of the screenshots from
-   `tests/screenshots.gd` and the model contact sheet (STUDIO.md process step 2),
-   then fix what it finds.
+0. **Fourth fresh-eyes art review** of the polish pass (review 3 is all done,
+   see ART_REVIEW.md): the screenshots from `tests/screenshots.gd` at 1280x720
+   and at `size=844x390`, and the model contact sheet; "ready to play" needs a
+   "yes". Then the casual pacing run once more.
 
 1. Real-phone playtest of the new lighting (moon shadows cost a depth pass; the
    distance is 32 m on touch screens) and of the camera's tilt in the woods.
@@ -565,9 +638,10 @@ art/blender/                the model scripts (forest_lib.py helpers; trees, mea
                             and contact_sheet.py; rebuild a file: python3 art/blender/trees.py
 art/icons/make_icons.py     draws ui/icons/*.svg (incl. the match cursors)
 art/fx/make_fx.py           draws fx/flames.png and fx/puffs.png
+art/fonts/make_keeper_fell.py  builds fonts/KeeperFell-Regular.ttf (sources and their OFL licences beside it)
 ui/icons/                   the icon set (SVG)
 audio/                      generated by tools/make_audio.py
-fonts/                      IM Fell English SC, Alegreya Sans, Caveat Brush (all OFL, licences beside them)
+fonts/                      Keeper Fell (IM Fell English SC + Libre Caslon figures), Alegreya Sans, Caveat Brush (all OFL, licences beside them)
 tools/make_audio.py         rebuilds audio/ (numpy, scipy, ffmpeg)
 tests/                      smoke_test, playthrough (the bot, and the visual run), chaos, screenshots, look,
                             fire_bench, perf_bench, draw_calls

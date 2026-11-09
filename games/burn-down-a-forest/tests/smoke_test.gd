@@ -129,6 +129,37 @@ func _run() -> void:
 			break
 	check(not f.can_light(pine, gs.tool_heat()), "the matchstick can't light a cursed pine")
 
+	# --- Review 3 (polish pass): fire at scale, readable numbers, the keeper, the meadow.
+	f.add_heat_area(Vector2(-6.0, 20.0), 7.0, 99999.0)
+	for _t in 25:
+		f.tick(0.1)
+	world.view.update_fire(keeper.camera.global_position)
+	var cards: int = world.view._flames.visible_instance_count
+	var burning_n: int = f.burning.size()
+	check(burning_n > 20 and float(cards) / burning_n < 2.3, "a big fire is a few composed bonfires, not a crowd of cards (%d cards for %d burning cells)" % [cards, burning_n])
+	check(float(world.view.flame_mat.get_shader_parameter("max_screen")) <= 0.3, "no flame stands taller than about a third of the screen (it can't bury the keeper or the HUD)")
+	check(world.view._smoke.visible_instance_count >= 3, "burning trees send up smoke plumes")
+	keeper._outline_t = 0.0
+	keeper.set_meta("hidden", false)
+	keeper._update_outline(1.0)
+	check(not keeper.outline_shown(), "the keeper's ink outline is off while nothing hides them")
+	check(UiTheme.display().get_font_name().begins_with("Keeper Fell"), "titles and prices use Keeper Fell (IM Fell with lining figures: '+11' never reads '+II')")
+	var lnum: int = TextServerManager.get_primary_interface().name_to_tag("lnum")
+	check((UiTheme.body() as FontVariation).opentype_features.get(lnum, 0) == 1, "body text sets lining figures too")
+	var phone: float = hud.ui_scale_for(Vector2(844, 390), 1.0)
+	check(absf(phone - 1.32) < 0.01 and absf(hud.ui_scale_for(Vector2(1280, 720), 1.0) - 1.0) < 0.01, "the UI draws 1.32x bigger on a phone, 1x on a computer")
+	check(UiTheme.T_SMALL * (390.0 / 720.0) * phone >= 11.5, "the smallest HUD type is at least 11.5 px on an 844x390 phone")
+	var wrapped: String = UiTheme.wrap("Each one burns hotter. Hotter fire lights tougher trees.", UiTheme.hand(), 25, 176.0)
+	check(wrapped.contains("\n") and (wrapped.split("\n")[-1] as String).contains(" "), "wrapped notes never leave one word alone on the last line")
+	check(UiTheme.icon("seed") != null and not ResourceLoader.exists("res://ui/icons/heart.svg"), "freed critters show a seed of mint light, not a valentine heart")
+	await _frames(2)
+	var sprouted := false
+	for key in world.view._flower_keys:
+		if str(key).begins_with("7:") and int(world.view._flower_count[key]) > 0:
+			sprouted = true
+	check(sprouted, "seedlings come up at the meadow's edge, next to the ash")
+	check(not world.view._stump.visible, "the Elder Tree's stump only shows once it has burned")
+
 	# --- Phone controls.
 	hud.set_touch_mode(true)
 	await _frames(1)
@@ -358,6 +389,12 @@ func _run() -> void:
 		if (c.title as Label).text == str(Balance.TOOLS[5].name):
 			locked_ok = (c.button as UiParts.PriceTag).locked and (c.icon as UiParts.Sketch).pencil
 	check(locked_ok, "tools out of reach are drawn in pencil")
+	var on_rules := true
+	for c in hud.notebook._cards:
+		var hh: float = (c.panel as Control).custom_minimum_size.y
+		if absf(fmod(hh, hud.notebook.LINE)) > 0.5 and absf(fmod(hh, hud.notebook.LINE) - hud.notebook.LINE) > 0.5:
+			on_rules = false
+	check(on_rules, "every notebook entry is a whole number of ruled lines tall (its writing sits on the rules)")
 	# Developer tools: skip to a ring, unlock everything.
 	gs.dev_skip_to_ring(2)
 	check(f.zone_progress(0) > 0.99 and f.zone_progress(1) > 0.99 and gs.tool_index >= 2, "skip to a ring burns the rings outside it and hands over its tool")
@@ -365,6 +402,13 @@ func _run() -> void:
 	check(gs.tool_index == Balance.TOOLS.size() - 1 and gs.upgrade_maxed("heat"), "unlock everything works")
 	hud.close_notebook()
 	await _frames(1)
+
+	# A crosshair on the Elder's roots from range is on the Elder (the bot stalled 18 m out, aiming at the mound at its foot).
+	var elder_p: Vector3 = f.cell_pos(f.elder_cell)
+	keeper.position = Vector3(-13.0, f.height_at(-13.0, 13.0), 13.0)
+	keeper.set_view(atan2(-(elder_p.x + 13.0), -(elder_p.z - 13.0)), -0.12)
+	keeper.update_aim()
+	check(keeper.aim.cell == f.elder_cell, "aiming at the Elder Tree's roots from range lands on the Elder")
 
 	# --- The ending: the Elder Tree burns and the curse lifts.
 	f.ignite(f.elder_cell)
@@ -375,9 +419,16 @@ func _run() -> void:
 	check(gs.has_won, "burning the Elder Tree lifts the curse")
 	check(hud.ending_active and not hud.root.visible and keeper.cinematic, "the ending hides the HUD and takes the camera for the dawn sweep")
 	check(f.lifted, "the curse lifts: whatever's left of the forest withers (%d cells here)" % f.withered.size())
-	world._update_ending(9.5)
+	check(world.view._stump.visible and world.view._sapling.visible, "the Elder's charred stump stays at the heart, a green sapling growing out of it")
+	world._update_ending(12.0)
 	await _frames(1)
 	check(hud.ending_letter_shown(), "after the sweep, the letter shows the stats")
+	check(world.keeper.position.distance_to(world._end_keeper) < 0.1 and world.keeper.camera.global_position.y < world.keeper.position.y + 4.0,
+		"the closing shot is low behind the keeper, by the stump")
+	var letter_text := ""
+	for l in hud._letter.find_children("*", "Label", true, false):
+		letter_text += (l as Label).text
+	check(letter_text.contains("acres") and not letter_text.contains("cells"), "the letter counts acres of meadow, not cells")
 	check(world._dawn > 0.99, "it's dawn over the valley")
 	check(world.env.fog_density < world.FOG_DENSITY * 0.6, "the dawn air clears (the hill woods keep their shapes)")
 	var trail := -1

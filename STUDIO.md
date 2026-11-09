@@ -153,6 +153,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: Burn Down a Forest polish pass done (composed bonfires, sculpted keeper, meadow growth band, dawn-ending shot, lifted shadows, four oak shapes, house-size village, illustrated notebook pages, Keeper Fell font with lining figures, ink parcel offer, seed pods, Elder on the skyline). Smoke 94; boosted, keen (28:52), chaos and browser pass; fixed an Elder-aim stall. Next: fourth critic. Started Eat a Giant Cake.
 - 2026-11-09: Burn a Cardboard City polish pass done (hand-painted scorch, rooted fire clusters with smoke, darker dressed floor, real egg-carton castle, tissue trees and paper lawns, gripping hands, insert-tray shop, HUD fixes, box variety, crane-shot ending). Smoke 104; boosted (x2) and keen (21:18) pass; browser passes. One engine crash at startup under heavy load, not reproduced. Next: third critic. Started the Dig to the Core polish pass.
 - 2026-11-09: Dig to the Core third critic: **Almost** → first playable. Review 3 is its polish list; the polish pass starts in the next free slot.
 - 2026-11-09: Dig to the Core underground round 3 done (per-layer hand-painted rock and mood, soft headlamp, lava crust, glowing crystals, molten core, rebuilt underground props, gloves and sleeves, the shop as the shack counter, one brass depth tube, phone-first text >= 11 px). Smoke 75, boosted and keen (25:15) pass. Next: third critic. Started Drain an Ocean fixes + QA.

@@ -32,6 +32,7 @@ var look_delta := Vector2.ZERO
 var buttons: Array = []               # [{control, action}]
 var exclusions: Array[Control] = []
 var heat_ok := true                   # the fire button glows less when there's nothing it can light
+var g := 1.0                          # geometry scale: the HUD draws bigger on phones, the controls stay thumb-sized
 
 var _stick_finger := NONE
 var _stick_origin := Vector2.ZERO
@@ -64,15 +65,15 @@ func _process(delta: float) -> void:
 
 
 func fire_center() -> Vector2:
-	return Vector2(size.x - 150.0, size.y - 150.0)
+	return Vector2(size.x - 150.0 * g, size.y - 150.0 * g)
 
 
 func jump_center() -> Vector2:
-	return Vector2(size.x - 300.0, size.y - 76.0)
+	return Vector2(size.x - 300.0 * g, size.y - 76.0 * g)
 
 
 func stick_home() -> Vector2:
-	return Vector2(170.0, size.y - 160.0)
+	return Vector2(170.0 * g, size.y - 160.0 * g)
 
 
 func take_look_delta() -> Vector2:
@@ -140,11 +141,11 @@ func _on_touch(event: InputEventScreenTouch) -> void:
 		return
 	if _excluded(pos):
 		return
-	if pos.distance_to(fire_center()) <= FIRE_RADIUS + 25.0:
+	if pos.distance_to(fire_center()) <= (FIRE_RADIUS + 25.0) * g:
 		_release(_fire_finger)
 		_fire_finger = i
 		firing = true
-	elif pos.distance_to(jump_center()) <= JUMP_RADIUS + 22.0:
+	elif pos.distance_to(jump_center()) <= (JUMP_RADIUS + 22.0) * g:
 		_release(_jump_finger)
 		_jump_finger = i
 		jump_held = true
@@ -228,10 +229,11 @@ func _on_drag(event: InputEventScreenDrag) -> void:
 	if i == _stick_finger:
 		_stick_pos = pos
 		var d := _stick_pos - _stick_origin
-		if d.length() > STICK_RADIUS:
-			_stick_origin += d - d.normalized() * STICK_RADIUS   # the base follows your thumb
+		var sr := STICK_RADIUS * g
+		if d.length() > sr:
+			_stick_origin += d - d.normalized() * sr   # the base follows your thumb
 			d = _stick_pos - _stick_origin
-		var v := Vector2(d.x, -d.y) / STICK_RADIUS
+		var v := Vector2(d.x, -d.y) / sr
 		var m := v.length()
 		if m < STICK_DEAD:
 			move_vector = Vector2.ZERO
@@ -314,20 +316,21 @@ func _draw() -> void:
 	var base := _stick_origin if _stick_finger != NONE else stick_home()
 	var knob := _stick_pos if _stick_finger != NONE else base
 	var a := 0.95 if _stick_finger != NONE else 0.6
-	draw_arc(base + Vector2(3, 4), STICK_RADIUS, 0, TAU, 48, Color(UiTheme.INK, 0.5 * a), 9.0, true)
-	draw_arc(base, STICK_RADIUS, 0, TAU, 48, Color("#7A5636", a), 7.0, true)
-	draw_arc(base, STICK_RADIUS + 3.5, 0, TAU, 48, Color(UiTheme.INK, a), 1.6, true)
-	draw_arc(base, STICK_RADIUS - 3.5, 0, TAU, 48, Color(UiTheme.INK, a), 1.6, true)
+	var sr := STICK_RADIUS * g
+	draw_arc(base + Vector2(3, 4), sr, 0, TAU, 48, Color(UiTheme.INK, 0.5 * a), 9.0, true)
+	draw_arc(base, sr, 0, TAU, 48, Color("#7A5636", a), 7.0, true)
+	draw_arc(base, sr + 3.5, 0, TAU, 48, Color(UiTheme.INK, a), 1.6, true)
+	draw_arc(base, sr - 3.5, 0, TAU, 48, Color(UiTheme.INK, a), 1.6, true)
 	for k in 4:
 		var ang := TAU * k / 4.0 + PI * 0.25
-		draw_line(base + Vector2(cos(ang), sin(ang)) * (STICK_RADIUS - 3.5), base + Vector2(cos(ang), sin(ang)) * (STICK_RADIUS + 3.5),
+		draw_line(base + Vector2(cos(ang), sin(ang)) * (sr - 3.5), base + Vector2(cos(ang), sin(ang)) * (sr + 3.5),
 			Color(UiTheme.INK, a), 2.0, true)
-	_log_slice(knob, 32.0, 17, a, false)
-	draw_circle(knob, 7.0, Color(UiTheme.INK, 0.5 * a))
+	_log_slice(knob, 32.0 * g, 17, a, false)
+	draw_circle(knob, 7.0 * g, Color(UiTheme.INK, 0.5 * a))
 	# The burn button: a log slice with a flame branded into it. The brand
 	# glows ember only while you burn (the one warm thing in the corner).
 	var fc := fire_center()
-	_log_slice(fc, FIRE_RADIUS, 29, 1.0, firing)
+	_log_slice(fc, FIRE_RADIUS * g, 29, 1.0, firing)
 	var press := Vector2(3, 4) if firing else Vector2.ZERO
 	var pulse := 0.5 + 0.5 * sin(_t * 9.0)
 	var brand := Color("#2A1A12")
@@ -335,19 +338,19 @@ func _draw() -> void:
 		brand = UiTheme.EMBER.lerp(UiTheme.CORE, 0.35 * pulse)
 	elif not heat_ok:
 		brand = Color("#5E5048")
-	_brand_flame(fc + press + Vector2(0, -4), 40.0, brand)
+	_brand_flame(fc + press + Vector2(0, -4) * g, 40.0 * g, brand)
 	if firing:
-		_brand_flame(fc + press + Vector2(0, 8), 18.0, UiTheme.CORE)
-	_text(UiTheme.hand(), "hold to burn", fc + Vector2(0, FIRE_RADIUS + 22.0), 25, UiTheme.CREAM)
+		_brand_flame(fc + press + Vector2(0, 8) * g, 18.0 * g, UiTheme.CORE)
+	_text(UiTheme.hand(), "hold to burn", fc + Vector2(0, FIRE_RADIUS * g + 20.0), 25, UiTheme.CREAM)
 	# Jump: a smaller slice with a chevron branded in.
 	var jc := jump_center()
 	var jdown := _jump_finger != NONE
-	_log_slice(jc, JUMP_RADIUS, 41, 1.0, jdown)
+	_log_slice(jc, JUMP_RADIUS * g, 41, 1.0, jdown)
 	var jp := Vector2(3, 4) if jdown else Vector2.ZERO
-	var chev := PackedVector2Array([jc + jp + Vector2(-18, 10), jc + jp + Vector2(0, -12), jc + jp + Vector2(18, 10)])
+	var chev := PackedVector2Array([jc + jp + Vector2(-18, 10) * g, jc + jp + Vector2(0, -12) * g, jc + jp + Vector2(18, 10) * g])
 	draw_polyline(chev, UiTheme.INK, 9.0, true)
 	draw_polyline(chev, Color("#2A1A12"), 5.0, true)
-	_text(UiTheme.hand(), "jump", jc + Vector2(-JUMP_RADIUS - 36.0, 6.0), 24, UiTheme.CREAM)
+	_text(UiTheme.hand(), "jump", jc + Vector2(-JUMP_RADIUS * g - 34.0, 6.0), 24, UiTheme.CREAM)
 
 
 func _text(font: Font, s: String, center: Vector2, font_size: int, color: Color) -> void:

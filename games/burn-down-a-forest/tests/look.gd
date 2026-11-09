@@ -48,7 +48,17 @@ func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		out_dir = args[0]
-	var want: Array = args.slice(1)
+	var want: Array = []
+	var show_hud := false
+	for a in args.slice(1):
+		if a.begins_with("size="):
+			var wh: PackedStringArray = a.substr(5).split("x")
+			DisplayServer.window_set_size(Vector2i(int(wh[0]), int(wh[1])))
+			root.size = Vector2i(int(wh[0]), int(wh[1]))
+		elif a == "hud":
+			show_hud = true
+		else:
+			want.append(a)
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	gs = root.get_node("GameState")
 	gs.wipe_save(false)
@@ -57,7 +67,7 @@ func _run() -> void:
 	root.add_child(world)
 	world.hud.set_touch_mode(false)
 	world.hud.show_desktop_hint = false
-	world.hud.visible = false
+	world.hud.visible = show_hud
 	await _frames(3)
 	var all := want.is_empty()
 	if all or want.has("intro"):
@@ -73,10 +83,25 @@ func _run() -> void:
 		_place(Vector3(-2.0, 0, 50.0), PI * 0.85, -0.35)
 		await _frames(3)
 		await _shot("keeper")
+	if want.has("close"):
+		# the keeper up close from four sides (model checks)
+		var k = world.keeper
+		_place(Vector3(-2.0, 0, 50.0), 0.0, -0.3)
+		await _frames(2)
+		k.cinematic = true
+		for v in [["close_back", Vector3(0.8, 2.6, 3.4)], ["close_front", Vector3(-0.9, 2.2, -3.2)], ["close_side", Vector3(3.4, 2.2, 0.4)],
+				["close_back34", Vector3(-2.4, 2.6, 2.4)]]:
+			k.camera.global_position = k.position + v[1]
+			k.camera.look_at(k.position + Vector3(0, 1.2, 0), Vector3.UP)
+			await _frames(3)
+			await _shot(v[0])
+		k.cinematic = false
 	gs.grant_embers(1e6)
 	gs.buy_tool(1)
 	gs.buy_tool(2)
 	gs.buy_tool(3)
+	for t in world.hud.toast_box.get_children():
+		t.free()
 	if all or want.has("fire"):
 		_place(world.SPAWN, 0.0, world.SPAWN_PITCH)
 		_light(Vector3(-4.0, 0, 41.0), 3.0)
@@ -133,6 +158,9 @@ func _run() -> void:
 			await process_frame
 		await _frames(3)
 		await _shot("ending")
+		world._update_ending(4.6)
+		await _frames(2)
+		await _shot("ending_close")
 	gs.wipe_save(false)
 	world.queue_free()
 	await _frames(2)

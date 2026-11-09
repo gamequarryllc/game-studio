@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- horn: drawn by art/icons/make_icons.py -->
-  <path d="M 8.07 26.16 C 10.42 24.05 15.96 28.24 21.90 25.52 C 27.83 22.81 38.95 12.15 43.66 9.89 C 48.38 7.63 49.15 4.90 50.19 11.98 C 51.22 19.06 50.86 45.38 49.87 52.36 C 48.89 59.35 49.00 56.21 44.30 53.88 C 39.59 51.55 27.71 41.01 21.63 38.40 C 15.56 35.79 10.11 40.23 7.85 38.19 C 5.59 36.15 5.73 28.27 8.07 26.16 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 52.30 22.25 L 57.75 17.69" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 54.16 32.23 L 60.95 32.16" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 52.06 42.39 L 58.04 46.25" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 8.18 26.02 L 15.92 26.13 L 16.13 38.15 L 8.05 37.93 Z" fill="#EFE3C8" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 7.73 25.51 C 10.15 23.57 15.97 28.54 22.08 25.88 C 28.20 23.21 39.87 11.76 44.43 9.52 C 49.00 7.28 48.62 5.32 49.50 12.42 C 50.38 19.53 50.61 45.30 49.72 52.15 C 48.82 59.01 48.70 55.87 44.14 53.56 C 39.57 51.25 28.41 40.96 22.32 38.29 C 16.22 35.62 10.00 39.66 7.57 37.53 C 5.14 35.40 5.31 27.45 7.73 25.51 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 51.76 21.68 L 58.39 17.87" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 54.04 31.91 L 61.17 31.62" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 52.11 41.99 L 58.37 46.29" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 7.75 25.71 L 16.17 26.02 L 16.13 37.77 L 7.79 38.22 Z" fill="#EFE3C8" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

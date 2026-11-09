@@ -104,6 +104,8 @@ class Tab:
 	var icon_name := ""
 	var seed := 1
 
+	var jut := 0.0                  # each tab cut and glued on by hand: its own height and how far it sticks out
+
 	func _init(color: Color, label_text: String, icon_n: String, s: int) -> void:
 		fill = color
 		text = label_text
@@ -112,11 +114,14 @@ class Tab:
 		UiTheme.plain_button(self)
 		for c in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
 			add_theme_color_override(c, Color(0, 0, 0, 0))
-		custom_minimum_size = Vector2(158, 62)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = s * 7 + 3
+		jut = rng.randf_range(-10.0, 4.0)
+		custom_minimum_size = Vector2(150, rng.randf_range(54.0, 70.0))
 
 	func _draw() -> void:
-		var out := 0.0 if active else 10.0      # inactive tabs sit a little further in, behind the page
-		var r := Rect2(Vector2(-out, 3), Vector2(size.x, size.y - 6))
+		var out := (0.0 if active else 10.0) - jut     # inactive tabs sit a little further in, behind the page
+		var r := Rect2(Vector2(-out, 3), Vector2(size.x - jut * 0.5, size.y - 6))
 		var pts := PackedVector2Array([r.position, Vector2(r.end.x - 14, r.position.y), Vector2(r.end.x, r.position.y + 12),
 			Vector2(r.end.x, r.end.y - 12), Vector2(r.end.x - 14, r.end.y), Vector2(r.position.x, r.end.y)])
 		var sh := PackedVector2Array()
@@ -232,7 +237,11 @@ class WindDisc:
 
 
 class Parcel:
-	## The starter pack: a brown paper parcel tied up with twine.
+	## The starter pack, drawn in the game's ink style like the icons: a soft
+	## bundle of brown paper (not a box), its folded ends tucked under, creases,
+	## shading hatched in ink rather than filled, a scorch at one corner, twine
+	## round it both ways with a fat knot and a bow whose ends hang loose, and a
+	## blob of red sealing wax. Every line wobbles a little, and it breathes.
 	extends Control
 	var t := 0.0
 
@@ -240,49 +249,135 @@ class Parcel:
 		t += delta
 		queue_redraw()
 
+	func _wob(pts: PackedVector2Array, rng: RandomNumberGenerator, amp: float, n: int = 5) -> PackedVector2Array:
+		var out := PackedVector2Array()
+		for k in pts.size() - 1:
+			var a := pts[k]
+			var b := pts[k + 1]
+			var nrm := (b - a).normalized().orthogonal()
+			for j in n:
+				var u := float(j) / n
+				out.append(a.lerp(b, u) + nrm * (rng.randf_range(-amp, amp) if j > 0 else 0.0))
+		out.append(pts[pts.size() - 1])
+		return out
+
+	func _bulge(a: Vector2, b: Vector2, out: float, n: int = 8) -> PackedVector2Array:
+		var pts := PackedVector2Array()
+		var nrm := (b - a).normalized().orthogonal()
+		for k in n + 1:
+			var u := float(k) / n
+			pts.append(a.lerp(b, u) + nrm * sin(u * PI) * out)
+		return pts
+
 	func _draw() -> void:
 		var w := size.x
 		var h := size.y
-		var wob := sin(t * 2.0) * 1.5
-		var top := PackedVector2Array([Vector2(w * 0.08, h * 0.28 + wob), Vector2(w * 0.55, h * 0.1), Vector2(w * 0.95, h * 0.24), Vector2(w * 0.48, h * 0.44 + wob)])
-		var front := PackedVector2Array([Vector2(w * 0.08, h * 0.28 + wob), Vector2(w * 0.48, h * 0.44 + wob), Vector2(w * 0.5, h * 0.96), Vector2(w * 0.1, h * 0.8)])
-		var right := PackedVector2Array([Vector2(w * 0.48, h * 0.44 + wob), Vector2(w * 0.95, h * 0.24), Vector2(w * 0.93, h * 0.78), Vector2(w * 0.5, h * 0.96)])
-		for poly in [front, right, top]:
-			var sh := PackedVector2Array()
-			for p in poly:
-				sh.append(p + Vector2(5, 6))
-			draw_colored_polygon(sh, UiTheme.INK)
-		draw_colored_polygon(front, Color("#B98F5C"))
-		draw_colored_polygon(right, Color("#96703F"))
-		draw_colored_polygon(top, Color("#CFA672"))
-		for poly in [front, right, top]:
-			draw_texture_rect(UiTheme.grain(), Rect2(Vector2.ZERO, size), true, Color(0.4, 0.3, 0.2, 0.0))
-			draw_polyline(poly + PackedVector2Array([poly[0]]), UiTheme.INK, 2.4, true)
-		# twine both ways round, and a bow on top
-		var twine := Color("#EFE3C8")
-		var a := top[0].lerp(top[1], 0.5)
-		var b := top[3].lerp(top[2], 0.5)
-		var c := top[0].lerp(top[3], 0.5)
-		var d := top[1].lerp(top[2], 0.5)
-		for seg in [[a, b], [c, d], [b, front[3].lerp(front[2], 0.5) + Vector2(w * 0.2, 0) * 0.0], [c, front[3].lerp(front[0], 0.5)]]:
-			draw_line(seg[0], seg[1], UiTheme.INK, 6.0, true)
-			draw_line(seg[0], seg[1], twine, 3.0, true)
-		var mid := (a + b) * 0.5
-		var down1 := b.lerp(front[2], 1.0)
-		draw_line(b, Vector2(b.x + 2, front[2].y - 4), UiTheme.INK, 6.0, true)
-		draw_line(b, Vector2(b.x + 2, front[2].y - 4), twine, 3.0, true)
-		draw_line(d, Vector2(d.x - 2, right[2].y - 4), UiTheme.INK, 6.0, true)
-		draw_line(d, Vector2(d.x - 2, right[2].y - 4), twine, 3.0, true)
-		for side in [-1.0, 1.0]:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 41
+		var breathe := sin(t * 1.8) * 1.2
+		var ink := UiTheme.INK
+		# corners of the bundle in a three-quarter view (a soft, slightly squashed parcel)
+		var ftl := Vector2(w * 0.1, h * 0.36 + breathe)
+		var ftr := Vector2(w * 0.66, h * 0.4 + breathe)
+		var fbr := Vector2(w * 0.68, h * 0.9)
+		var fbl := Vector2(w * 0.08, h * 0.86)
+		var btl := Vector2(w * 0.32, h * 0.14 + breathe)
+		var btr := Vector2(w * 0.9, h * 0.18 + breathe)
+		var bbr := Vector2(w * 0.92, h * 0.68)
+		# faces, their edges bowed out where the paper is stuffed full
+		var front := PackedVector2Array()
+		front.append_array(_bulge(ftl, ftr, -4.0))
+		front.append_array(_bulge(ftr, fbr, -5.0))
+		front.append_array(_bulge(fbr, fbl, -3.0))
+		front.append_array(_bulge(fbl, ftl, -5.0))
+		var top := PackedVector2Array()
+		top.append_array(_bulge(btl, btr, -3.0))
+		top.append_array(_bulge(btr, ftr, -2.0))
+		top.append_array(_bulge(ftr, ftl, 4.0))
+		top.append_array(_bulge(ftl, btl, -2.0))
+		var side := PackedVector2Array()
+		side.append_array(_bulge(ftr, btr, 2.0))
+		side.append_array(_bulge(btr, bbr, -4.0))
+		side.append_array(_bulge(bbr, fbr, -2.0))
+		side.append_array(_bulge(fbr, ftr, 5.0))
+		# a hard ink shadow on the ground, then the paper
+		var shadow := PackedVector2Array([fbl + Vector2(-6, 2), fbr + Vector2(4, 6), bbr + Vector2(10, 4), bbr + Vector2(14, -6), fbl + Vector2(4, -4)])
+		draw_colored_polygon(shadow, Color(ink, 0.55))
+		draw_colored_polygon(front, Color("#C79B63"))
+		draw_colored_polygon(top, Color("#DDB883"))
+		draw_colored_polygon(side, Color("#B48550"))
+		draw_texture_rect(UiTheme.grain(), Rect2(Vector2.ZERO, size), true, Color(0.45, 0.3, 0.15, 0.1))
+		# hatching for the shade: the side face, and the underside of the front
+		var hatch := PackedVector2Array()
+		for k in 11:
+			var u := (k + 0.5) / 11.0
+			var a := ftr.lerp(btr, u) + Vector2(2, 6)
+			var b := fbr.lerp(bbr, u) + Vector2(0, -6)
+			hatch.append(a.lerp(b, rng.randf_range(0.05, 0.25)))
+			hatch.append(a.lerp(b, rng.randf_range(0.75, 0.95)))
+		for k in 9:
+			var u := (k + 0.5) / 9.0
+			var a := fbl.lerp(fbr, u) + Vector2(0, -4)
+			hatch.append(a)
+			hatch.append(a + Vector2(10, -18 - rng.randf_range(0, 10)))
+		draw_multiline(hatch, Color(ink, 0.4), 1.4)
+		# the folded end tucked under at the front: a flap and its creases
+		var flap := PackedVector2Array([fbl + Vector2(8, -6), fbl.lerp(fbr, 0.5) + Vector2(0, -h * 0.17), fbr + Vector2(-8, -6)])
+		draw_polyline(_wob(flap, rng, 1.2), ink, 2.0, true)
+		for k in 3:
+			var a := fbl.lerp(fbr, 0.25 + 0.2 * k) + Vector2(0, -8)
+			draw_polyline(_wob(PackedVector2Array([a, a + Vector2(rng.randf_range(-8, 8), -h * 0.07)]), rng, 1.0, 3), Color(ink, 0.5), 1.3, true)
+		# a scorch on the top corner (it came by way of the fire-keeper)
+		var sc := btl.lerp(ftl, 0.25) + Vector2(14, 4)
+		var blot := PackedVector2Array()
+		for k in 14:
+			var ang := TAU * k / 14.0
+			blot.append(sc + Vector2(cos(ang) * (16.0 + rng.randf_range(-5, 5)), sin(ang) * (9.0 + rng.randf_range(-3, 3))))
+		draw_colored_polygon(blot, Color(UiTheme.SCORCH, 0.55))
+		# ink outlines, wobbling
+		for poly: PackedVector2Array in [front, top, side]:
+			var closed: PackedVector2Array = poly.duplicate()
+			closed.append(poly[0])
+			draw_polyline(_wob(closed, rng, 0.9, 2), ink, 2.6, true)
+		# twine: round the front and over the top both ways, outlined in ink
+		var twine := Color("#EADBB5")
+		var knot := ftl.lerp(btr, 0.5) + Vector2(0, 2)
+		var runs := [
+			[ftl.lerp(ftr, 0.5), knot, btl.lerp(btr, 0.5)],
+			[ftl.lerp(btl, 0.5), knot, ftr.lerp(btr, 0.5)],
+			[ftl.lerp(ftr, 0.5), fbl.lerp(fbr, 0.52)],
+			[ftr.lerp(btr, 0.5), fbr.lerp(bbr, 0.5)],
+		]
+		for r in runs:
+			var pts := _wob(PackedVector2Array(r), rng, 0.8, 4)
+			draw_polyline(pts, ink, 6.4, true)
+			draw_polyline(pts, twine, 3.2, true)
+		# the bow: two loops and two loose ends, frayed
+		for sgn in [-1.0, 1.0]:
 			var loop := PackedVector2Array()
-			for k in 13:
-				var ang := TAU * k / 12.0
-				loop.append(mid + Vector2(side * (14.0 + cos(ang) * 13.0), -6.0 + sin(ang) * 8.0))
-			draw_polyline(loop, UiTheme.INK, 5.0, true)
-			draw_polyline(loop, twine, 2.6, true)
-		draw_circle(mid, 6.0, UiTheme.INK)
-		draw_circle(mid, 4.0, twine)
-		var _unused := down1
+			for k in 15:
+				var ang := TAU * k / 14.0
+				loop.append(knot + Vector2(sgn * (17.0 + cos(ang) * 15.0), -9.0 + sin(ang) * 9.0 - absf(cos(ang)) * 3.0))
+			draw_polyline(loop, ink, 5.6, true)
+			draw_polyline(loop, twine, 2.8, true)
+			var tail := PackedVector2Array([knot, knot + Vector2(sgn * 10.0, 14.0), knot + Vector2(sgn * 6.0 + sin(t * 2.0 + float(sgn)) * 2.0, 30.0)])
+			draw_polyline(tail, ink, 5.6, true)
+			draw_polyline(tail, twine, 2.8, true)
+			for f in 3:
+				var e := tail[2]
+				draw_line(e, e + Vector2(sgn * (f - 1) * 3.0, 6.0), ink, 1.4, true)
+		# the knot, and a blob of red sealing wax pressed under it
+		var wax := PackedVector2Array()
+		for k in 12:
+			var ang := TAU * k / 12.0
+			wax.append(knot + Vector2(0, 6) + Vector2(cos(ang), sin(ang) * 0.8) * (11.0 + rng.randf_range(-2, 2)))
+		draw_colored_polygon(wax, Color("#A8322A"))
+		var wc: PackedVector2Array = wax.duplicate()
+		wc.append(wax[0])
+		draw_polyline(wc, ink, 2.0, true)
+		draw_arc(knot + Vector2(0, 6), 5.5, 0.4, TAU - 0.4, 12, Color("#D9604F"), 1.6, true)
+		draw_circle(knot, 6.0, ink)
+		draw_circle(knot, 4.0, twine)
 
 
 class Finger:
@@ -370,7 +465,7 @@ class PriceTag:
 			# a pencil outline: dashes in graphite, no fill
 			var closed := pts + PackedVector2Array([pts[0]])
 			for k in closed.size() - 1:
-				UiTheme.dashed(get_canvas_item(), closed[k] + c, closed[k + 1] + c, Color(UiTheme.PENCIL, 0.8), 1.4, 6.0, 4.0)
+				UiTheme.dashed(get_canvas_item(), closed[k], closed[k + 1], Color(UiTheme.PENCIL, 0.8), 1.4, 6.0, 4.0)
 			draw_set_transform(c, rot, Vector2.ONE)
 			draw_arc(hole, 3.4, 0, TAU, 12, Color(UiTheme.PENCIL, 0.8), 1.2, true)
 		else:
@@ -432,13 +527,16 @@ class PriceTag:
 
 
 class Sketch:
-	## An entry's sketch in the notebook, with an optional note in the margin
-	## beside it in the keeper's hand ("next!", "save up", "on now").
+	## An entry's sketch in the notebook. Styles: "" a plain ink sketch, "big"
+	## a tool drawn large, "photo" a portrait pasted in (a cream-bordered
+	## print, a little crooked, two strips of tape), "circled" a sketch the
+	## keeper ringed in ink. In pencil while out of reach.
 	extends Control
 	var texture: Texture2D
-	var note := ""
+	var note := ""                 # (margin notes are written under the price tag now)
 	var pencil := false
 	var tilt := 0.0
+	var style := ""
 
 	func set_pencil(on: bool) -> void:
 		if on == pencil:
@@ -455,10 +553,37 @@ class Sketch:
 	func _draw() -> void:
 		var c := size * 0.5
 		draw_set_transform(c, tilt, Vector2.ONE)
-		if texture != null:
-			draw_texture_rect(texture, Rect2(-size * 0.5, size), false)
+		var half := size * 0.5
+		if style == "photo":
+			# the print: a cream border round a sepia-dark picture, a hard shadow, tape
+			var r := Rect2(-half, size)
+			draw_rect(Rect2(r.position + Vector2(3, 4), r.size), Color(UiTheme.INK, 0.55))
+			draw_rect(r, Color("#F4ECDA"))
+			var inner := r.grow(-7.0)
+			inner.size.y -= 8.0
+			draw_rect(inner, Color("#5A4636"))
+			draw_texture_rect(UiTheme.grain(), inner, true, Color(0.9, 0.7, 0.5, 0.18))
+			if texture != null:
+				draw_texture_rect(texture, inner.grow(-3.0), false)
+			draw_rect(r, Color(UiTheme.INK, 0.6), false, 1.2)
+			for k in 2:
+				var tc := r.position + Vector2(r.size.x * (0.18 if k == 0 else 0.82), 0)
+				var a := -0.5 if k == 0 else 0.45
+				var tp := PackedVector2Array()
+				for q in [Vector2(-14, -6), Vector2(14, -6), Vector2(14, 6), Vector2(-14, 6)]:
+					tp.append(tc + (q as Vector2).rotated(a))
+				draw_colored_polygon(tp, UiTheme.TAPE)
+		else:
+			if texture != null:
+				draw_texture_rect(texture, Rect2(-half, size), false)
+			if style == "circled":
+				# ringed in ink, the loop not quite closing
+				var rng := RandomNumberGenerator.new()
+				rng.seed = int(tilt * 1000.0) + 7
+				var pts := PackedVector2Array()
+				for k in 30:
+					var ang := -0.6 + TAU * 1.08 * k / 29.0
+					var rr := 1.0 + rng.randf_range(-0.03, 0.03)
+					pts.append(Vector2(cos(ang) * half.x * 1.12 * rr, sin(ang) * half.y * 0.98 * rr))
+				draw_polyline(pts, Color(UiTheme.HAND_INK, 0.75), 2.0, true)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		if note != "":
-			draw_set_transform(Vector2(-34, 6), -0.24, Vector2.ONE)
-			draw_string(UiTheme.hand(), Vector2.ZERO, note, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, UiTheme.HAND_INK)
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -41,13 +41,17 @@ uniform vec3 cam_pos = vec3(0.0, 1000.0, 0.0);
 uniform vec3 focus_pos = vec3(0.0);
 uniform float see_through = 1.0;
 uniform float hole_radius = 2.3;
-uniform float foreground_dark = 0.32;
+uniform float foreground_dark = 0.14;
 uniform float albedo_gain = 1.15;
+uniform float healed = 0.0;      // 0 cursed .. 1 the curse lifted (the far woods turn green)
 
 varying float v_burn;
 varying float v_var;
 varying float v_y;
 varying float v_height;
+// a flat fill under every light: the night stays plum but never goes black (L* 20-25 in the shadows)
+uniform vec3 fill = vec3(0.0);       // linear (set from code, not converted)
+
 varying vec3 v_world;
 varying vec4 v_clip;
 varying float v_small;
@@ -125,6 +129,14 @@ void fragment() {
 	float v = v_var - 0.5;
 	col *= 1.0 + v * 0.24 * (0.4 + 0.6 * leaf);
 	col *= vec3(1.0 + v * 0.06, 1.0, 1.0 - v * 0.06);
+	// and every tree its own cast of leaf: some plummier, some bluer, some greyer
+	float hv = fract(v_var * 5.3);
+	vec3 alt = hv < 0.33 ? col * vec3(1.2, 0.84, 0.84) : (hv < 0.66 ? col * vec3(0.78, 0.97, 1.15) : mix(col, vec3(dot(col, vec3(0.3, 0.5, 0.2))), 0.45) * 1.08);
+	col = mix(col, alt, leaf * (0.3 + 0.7 * fract(v_var * 11.7)) * (1.0 - flower_mode));
+	// once the curse is lifted the woods on the hills turn green again
+	vec3 green = vec3(dot(col, vec3(0.3, 0.55, 0.15))) * vec3(0.62, 1.05, 0.5) * 1.5;
+	col = mix(col, green, healed * leaf * (1.0 - flower_mode));
+	col = mix(col, col * vec3(1.1, 0.95, 0.85), healed * (1.0 - leaf));
 	// the inked edge of the silhouette (a linocut line, from the normals)
 	float fr = 1.0 - abs(dot(normalize(NORMAL), normalize(VIEW)));
 	float edge = smoothstep(0.62, 0.97, fr) * ink_edge * (1.0 - glow);
@@ -158,8 +170,9 @@ void fragment() {
 		float heat = (1.0 - smoothstep(0.0, H * 0.4, front - v_y)) * charred;
 		float flick = 0.75 + 0.25 * sin(TIME * 7.0 + v_world.y * 3.0 + v_var * 20.0);
 		float bark = 1.0 - leaf;
-		float speck = step(0.93, fract(sin(dot(floor(q * 0.7), vec2(12.9898, 78.233))) * 43758.5453)) * leaf;
-		em += mix(burn_color, core_color, heat * heat) * (c * bark + speck) * heat * 1.2 * flick * alive;
+		em += mix(burn_color, core_color, heat * heat) * c * bark * heat * 1.2 * flick * alive;
+		// the leaves glow only along the creeping edge, never in a speckle
+		em += burn_color * leaf * smoothstep(front - 0.55, front - 0.1, v_y) * (1.0 - smoothstep(front - 0.1, front + 0.05, v_y)) * 0.55 * alive;
 	}
 
 	// --- the round window: cut away whatever is between the camera and the keeper
@@ -183,15 +196,24 @@ void fragment() {
 
 	// --- light from the fire and the lantern (painted in, no extra light passes)
 	vec2 fuv = (v_world.xz - forest_origin) / forest_size;
+	vec3 nw = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
 	float fl = textureLod(fire_light, fuv, 1.0).r * 0.55 + textureLod(fire_light, fuv, 2.5).r * 1.6;
 	fl = 1.0 - exp(-fl * 1.6);
 	fl *= 1.0 - smoothstep(2.0, 9.0, v_y);     // the low trunks catch it, the high crowns less
+	// the canopies round a fire catch its glow too, strongest on their undersides
+	// and sides (lit from below), from a wider blur of the fire map
+	float fw = textureLod(fire_light, fuv, 3.2).r * 2.4 + textureLod(fire_light, fuv, 1.8).r * 0.6;
+	fw = (1.0 - exp(-fw * 1.4)) * leaf * (0.45 + 0.55 * clamp(0.5 - nw.y * 0.8, 0.0, 1.0));
+	fl = max(fl, fw * 0.85);
 	float ld = distance(v_world, lantern_pos);
 	float ll = pow(clamp(1.0 - ld / 6.5, 0.0, 1.0), 2.0) * lantern_gain;
 	em += col * (fire_tint * fl * fire_gain + lantern_tint * ll) * (1.0 - v_burn * 0.6);
 	// a cold rim of moonlight along the tops of the crowns
-	vec3 nw = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
-	em += rim_color * pow(fr, 3.0) * smoothstep(0.1, 0.7, nw.y) * leaf * rim_strength * (1.0 - v_burn);
+	em += rim_color * pow(fr, 3.0) * smoothstep(0.1, 0.7, nw.y) * leaf * rim_strength * (0.5 + 0.8 * fract(v_var * 3.1)) * (1.0 - v_burn) * (1.0 - healed * 0.7);
+	// dark colours are lifted most, light ones (plaster, packed earth) hardly: the shadows come up, nothing glares
+	float fl_l = dot(col, vec3(0.2126, 0.7152, 0.0722)) * 26.0;
+	float fill_w = 1.0 / (1.0 + fl_l * fl_l);
+	em += col * albedo_gain * fill * fill_w * (1.0 - v_burn * 0.7);
 	ALBEDO = col * albedo_gain;
 	ROUGHNESS = 1.0;
 	EMISSION = em;

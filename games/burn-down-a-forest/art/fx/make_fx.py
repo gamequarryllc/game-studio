@@ -1,10 +1,15 @@
 """Draws the fire's flipbooks: inked cartoon flames and cel-shaded plum smoke.
 
-  fx/flames.png  4 x 4 cells of 128 x 256: each row is one flame silhouette, its
+  fx/flames.png  4 x 8 cells of 128 x 256: each row is one flame silhouette, its
                  four cells the held drawings it boils through (8 a second in
                  the game). Rows 0-2 are ordinary flames (two, three and a
-                 lopsided crowd of tongues); row 3 is the tall leading flame
-                 each cluster gets one of. The image stores levels, not colours,
+                 lopsided crowd of tongues); row 3 is the tall leading flame;
+                 rows 4-5 are composed bonfires, one per burning tree (a tall
+                 leading flame off to one side and a few licks stepping down
+                 from it, all one shape, so a burning wood reads as a few big
+                 fires and not as rows of candles); row 6 is a grass front (a
+                 low ragged band of small tongues) and row 7 a dying fire (a
+                 few low licks over the embers). The image stores levels, not colours,
                  so the shader can paint cursed-wood fire, golden phoenix fire or
                  violet dragon fire from the same drawings:
                    R = 0 ink line, 0.33 the dark band inside it, 0.66 the body,
@@ -74,6 +79,19 @@ def flame_cell(row, frame, rng):
         tongues = [(cx + j(3) * S, H * 0.04 + j(6) * S, W * 0.21, 0.55 + j(0.25), 0.25 + j(0.15)),
                    (cx - W * 0.17 + j(3) * S, H * 0.42 + j(10) * S, W * 0.1, -0.6 + j(0.3), -0.2),
                    (cx + W * 0.19 + j(3) * S, H * 0.5 + j(10) * S, W * 0.09, 0.7 + j(0.3), 0.15)]
+    elif row >= 4:
+        # composed fires: (dx, top, width, curl, lean) per tongue, the leading one first
+        shapes = {
+            4: (0.3, 0.34, [(0.08, 0.03, 0.15, 0.6, 0.25), (-0.22, 0.26, 0.1, -0.7, -0.15), (0.31, 0.4, 0.085, 0.85, 0.3),
+                             (-0.06, 0.3, 0.08, -0.2, 0.0), (-0.37, 0.52, 0.06, -0.9, -0.35), (0.4, 0.6, 0.055, 0.9, 0.35)]),
+            5: (0.3, 0.33, [(-0.12, 0.05, 0.14, -0.55, -0.2), (0.16, 0.22, 0.11, 0.55, 0.15), (0.35, 0.44, 0.075, 0.9, 0.35),
+                             (-0.35, 0.38, 0.07, -0.85, -0.3), (0.03, 0.38, 0.07, 0.25, 0.05)]),
+            6: (0.47, 0.2, [(-0.28, 0.58, 0.09, -0.5, -0.1), (-0.08, 0.5, 0.1, 0.4, 0.1), (0.13, 0.62, 0.09, 0.7, 0.15),
+                             (0.31, 0.7, 0.08, 0.8, 0.2), (-0.4, 0.74, 0.06, -0.8, -0.2), (0.02, 0.68, 0.07, -0.3, 0.0)]),
+            7: (0.36, 0.16, [(-0.1, 0.66, 0.1, -0.5, -0.1), (0.14, 0.74, 0.08, 0.6, 0.15), (-0.28, 0.8, 0.06, -0.7, -0.2)]),
+        }[row]
+        bw, bh = W * shapes[0], H * shapes[1]
+        tongues = [(cx + (dx + j(0.02)) * W, (ty + j(0.03)) * H, tw * W, cu + j(0.25), le) for dx, ty, tw, cu, le in shapes[2]]
     else:
         bw, bh = W * 0.4, H * 0.55
         shapes = {
@@ -144,8 +162,8 @@ def puff_cell(k, rng):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    atlas = Image.new("RGBA", (CW * 4, CH * 4), (0, 0, 0, 0))
-    for row in range(4):
+    atlas = Image.new("RGBA", (CW * 4, CH * 8), (0, 0, 0, 0))
+    for row in range(8):
         for frame in range(4):
             rng = random.Random(1000 + row * 31 + frame * 7)
             atlas.paste(flame_cell(row, frame, rng), (frame * CW, row * CH))

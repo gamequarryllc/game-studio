@@ -10,6 +10,8 @@ const SPAWN_YAW := 0.0
 const SPAWN_PITCH := -0.58           # low enough to see the path lead into the woods and the moon over them
 const INTRO_PITCH := 0.02            # the establishing shot: level, the Elder Tree's crown over the woods
 const AMBIENT_COLD := Color("#6A6294")    # cursed night (the moon is the key light; the shadows stay plum)
+const FILL_NIGHT := Color(0.68, 0.65, 0.74)   # linear: the flat fill that keeps the woods' shadows at L* 20-25 on a phone
+const FILL_STRENGTH := 9.5
 const FOG_DENSITY := 0.0058
 const MOON_ENERGY := 3.0
 const STRAYS := 150                  # fewer cells than this (~3% of the forest) left to light counts as nothing left (the safety net)
@@ -100,6 +102,7 @@ func _ready() -> void:
 	critters.golden_found.connect(_on_golden)
 	for m in [critters._mat, critters._gold_mat, helpers._sprite_mat, helpers._lizard_mat]:
 		view.add_lit(m)
+	view.set_fill(FILL_NIGHT * FILL_STRENGTH)
 	critters.saved.connect(func(_icon): Sound.play("critter_pop", -12.0, 1.0, 0.15, 0.3))
 
 	hud = Hud.new()
@@ -174,6 +177,46 @@ func _build_environment() -> void:
 	add_child(moon)
 	# from the west-north-west and high: the upper left of the view from the village
 	moon.look_at_from_position(Vector3(-60.0, 70.0, -25.0), Vector3.ZERO, Vector3.UP)
+	_build_moon_disc()
+
+
+var _moon_disc: MeshInstance3D
+
+
+func _build_moon_disc() -> void:
+	## A big pale storybook moon low in the north, just behind the Elder Tree's
+	## crown as seen from the village, so the Elder stands out on the skyline as
+	## a black hand against it. (The light itself comes from higher up; this is
+	## the picture.) Fades out at dawn.
+	var n := 128
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	for y in n:
+		for x in n:
+			var d := Vector2(x + 0.5 - n * 0.5, y + 0.5 - n * 0.5).length() / (n * 0.5)
+			var disc := clampf((0.6 - d) / 0.012, 0.0, 1.0)
+			var halo := pow(clampf(1.0 - d, 0.0, 1.0), 2.2) * 0.35
+			var crater := 0.0
+			for cc in [[Vector2(0.42, 0.4), 0.09], [Vector2(0.6, 0.55), 0.06], [Vector2(0.47, 0.64), 0.05]]:
+				if Vector2(float(x) / n, float(y) / n).distance_to(cc[0]) < float(cc[1]):
+					crater = 0.08
+			var c := Color("#E9E4F2").darkened(crater) if disc > 0.0 else Color("#B9A9D8")
+			img.set_pixel(x, y, Color(c.r, c.g, c.b, maxf(disc, halo)))
+	img.generate_mipmaps()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_texture = ImageTexture.create_from_image(img)
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.disable_fog = true
+	mat.no_depth_test = false
+	var q := QuadMesh.new()
+	q.size = Vector2(46, 46)
+	_moon_disc = MeshInstance3D.new()
+	_moon_disc.mesh = q
+	_moon_disc.material_override = mat
+	_moon_disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_moon_disc.position = Vector3(-10.0, 50.0, -168.0)
+	add_child(_moon_disc)
 
 
 func _update_intro(d: float) -> void:
@@ -375,9 +418,9 @@ func _update_wind(d: float) -> void:
 func _build_float_pool() -> void:
 	for _i in FLOAT_POOL:
 		var l := Label3D.new()
-		l.font = UiTheme.display()
-		l.font_size = 72
-		l.outline_size = 16
+		l.font = UiTheme.numbers()         # lining figures: "+11", never "+II"
+		l.font_size = 64
+		l.outline_size = 18
 		l.pixel_size = 0.0085
 		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		l.no_depth_test = true
@@ -386,7 +429,7 @@ func _build_float_pool() -> void:
 		l.outline_modulate = UiTheme.INK
 		l.visible = false
 		add_child(l)
-		_floats.append({"node": l, "t": 9.0})
+		_floats.append({"node": l, "t": 9.0, "k": 0.0007})
 
 
 func _show_pay_spots() -> void:
@@ -405,6 +448,14 @@ func _show_pay_spots() -> void:
 		var top := at + Vector3(0, 3.0 + minf(4.0, log(v + 1.0)), 0)
 		if keeper.camera.is_position_behind(top) or keeper.camera.unproject_position(top).y < 130.0:
 			continue
+		# never on top of another number still rising
+		var sp := keeper.camera.unproject_position(top)
+		var crowded := false
+		for f in _floats:
+			if float(f.t) < 1.0 and (f.node as Label3D).visible and keeper.camera.unproject_position((f.node as Label3D).position).distance_to(sp) < 70.0:
+				crowded = true
+		if crowded:
+			continue
 		_float_text(at + Vector3(0, 3.0 + minf(4.0, log(v + 1.0)), 0), "+" + Fmt.num(v), v)
 		shown += 1
 		if shown >= 3:
@@ -418,7 +469,8 @@ func _float_text(at: Vector3, text: String, v: float) -> void:
 	l.text = text
 	l.position = at
 	l.visible = true
-	l.font_size = int(clampf(48.0 + log(v + 1.0) * 7.0, 48.0, 104.0))
+	# the bigger the payday, the bigger the number (3.5-5% of the screen's height)
+	f.k = clampf(0.00066 + log(v + 1.0) * 0.00003, 0.00068, 0.00098)
 	f.t = 0.0
 
 
@@ -429,6 +481,8 @@ func _update_floats(d: float) -> void:
 		f.t = float(f.t) + d
 		var l: Label3D = f.node
 		l.position.y += d * 1.6
+		# the same size on screen near or far: readable on a phone, never a wall of digits
+		l.pixel_size = float(f.k) * maxf(4.0, l.position.distance_to(keeper.camera.global_position))
 		var t := float(f.t) / 1.6
 		l.modulate.a = 1.0 - t * t
 		l.outline_modulate.a = l.modulate.a
@@ -484,19 +538,41 @@ func helpers_idle() -> bool:
 
 func _on_won() -> void:
 	## The curse lifts: the rest of the forest withers in a wave out from the
-	## heart and blooms, the HUD goes, night turns to dawn and the camera sweeps
-	## up over the restored valley. Then the letter.
+	## heart and blooms, the HUD goes, night turns to dawn, the camera sweeps up
+	## over the restored valley and comes down low behind the keeper, who has
+	## come to stand by the Elder Tree's stump: a sapling growing out of it,
+	## the village roofs beyond with smoke from every chimney, a low warm sun
+	## throwing long shadows across the meadow. Then the letter.
 	Sound.play("reward", 0.0)
 	if hud.notebook != null:
 		hud.close_notebook()
 	forest.lift_curse()
 	view.green_trails()
+	view.update_elder_remains()
 	hud.begin_ending()
 	keeper.cinematic = true
 	keeper.firing = false
 	ending_t = 0.0
 	_end_from = keeper.camera.global_position
 	_end_angle = atan2(_end_from.x, _end_from.z)
+	# where the closing shot stands: north of the stump, looking south past it to the village
+	var sc := forest.cell_center(forest.elder_cell)
+	_end_stump = Vector3(sc.x, forest.height_at(sc.x, sc.y), sc.y)
+	# the camera stands north of the stump, a little east, looking due south;
+	# the frame's right is west. The letter takes the left of the screen, so
+	# everything is set in the right half: the stump just right of centre, the
+	# village beyond it, the keeper a few steps ahead on the far right
+	_end_cam = _end_stump + Vector3(4.2, 0.0, -14.0)
+	_end_cam.y = forest.height_at(_end_cam.x, _end_cam.z) + 3.1
+	_end_keeper = Vector3(_end_cam.x - 5.6, 0.0, _end_cam.z + 7.4)
+	_end_keeper.y = forest.height_at(_end_keeper.x, _end_keeper.z)
+	# long shadows need to reach the village from here
+	moon.directional_shadow_max_distance = 90.0
+
+
+var _end_stump := Vector3.ZERO
+var _end_keeper := Vector3.ZERO
+var _end_cam := Vector3.ZERO
 
 
 func _update_ending(d: float) -> void:
@@ -504,21 +580,34 @@ func _update_ending(d: float) -> void:
 		return
 	ending_t += d
 	_set_dawn(clampf(ending_t / 7.0, 0.0, 1.0))
-	# the sweep: up from where the keeper stood, round and over the valley
-	var t := clampf(ending_t / 11.0, 0.0, 1.0)
-	var e := t * t * (3.0 - 2.0 * t)
-	var a := _end_angle + e * 1.9 + maxf(0.0, ending_t - 11.0) * 0.03
-	var r := lerpf(Vector2(_end_from.x, _end_from.z).length(), 38.0, e)
-	var h := lerpf(_end_from.y, 17.0, e)
-	var pos := Vector3(sin(a) * r, h, cos(a) * r)
-	if ending_t < 2.0:
-		pos = _end_from.lerp(pos, ending_t / 2.0)
 	var cam := keeper.camera
+	# 1. the sweep: up from where the keeper stood, round and over the valley (0-7 s)
+	var t := clampf(ending_t / 7.0, 0.0, 1.0)
+	var e := t * t * (3.0 - 2.0 * t)
+	var a := _end_angle + e * 1.6
+	var r := lerpf(Vector2(_end_from.x, _end_from.z).length(), 36.0, e)
+	var h := lerpf(_end_from.y, 18.0, e)
+	var sweep := Vector3(sin(a) * r, h, cos(a) * r)
+	if ending_t < 2.0:
+		sweep = _end_from.lerp(sweep, ending_t / 2.0)
+	var sweep_look := Vector3(0, 4.0, 0).lerp(Vector3(0, 2.0, 0), e)
+	# the keeper walks to the stump while we're up high
+	if ending_t > 3.0 and keeper.position.distance_to(_end_keeper) > 0.05:
+		keeper.position = _end_keeper
+		keeper.face_toward(_end_stump)
+	# 2. down low behind the keeper, toward the stump and the village beyond (7-11 s)
+	var low_cam := _end_cam
+	var low_look := Vector3(_end_cam.x - 0.4, _end_stump.y + 1.2, _end_stump.z + 36.0)
+	var u := clampf((ending_t - 7.0) / 4.0, 0.0, 1.0)
+	var eu := u * u * (3.0 - 2.0 * u)
+	# a slow push in once it's settled
+	low_cam += (low_look - low_cam).normalized() * maxf(0.0, ending_t - 11.0) * 0.08
+	var pos := sweep.lerp(low_cam, eu)
+	var look := sweep_look.lerp(low_look, eu)
 	cam.global_position = pos
-	var look := Vector3(0, 4.0, 0).lerp(Vector3(0, 2.0, 0), e)
 	if pos.distance_to(look) > 0.5:
 		cam.look_at(look, Vector3.UP)
-	if ending_t >= 9.0 and not hud.ending_letter_shown():
+	if ending_t >= 11.5 and not hud.ending_letter_shown():
 		hud.show_ending()
 
 
@@ -536,13 +625,20 @@ func _set_dawn(k: float) -> void:
 	sky_mat.sky_top_color = Color("#1B1430").lerp(Color("#3A4C86"), e)
 	sky_mat.sky_horizon_color = Color("#5E4C74").lerp(Color("#F2A87A"), e)
 	sky_mat.ground_horizon_color = Color("#3A2E4A").lerp(Color("#B98A86"), e)
-	env.ambient_light_color = env.ambient_light_color.lerp(Color("#9AA0B8"), e)
+	env.ambient_light_color = env.ambient_light_color.lerp(Color("#7E8298"), e)
 	env.fog_light_color = Color("#514468").lerp(Color("#B4979C"), e)
 	env.fog_density = FOG_DENSITY * lerpf(1.0, 0.55, e)     # the dawn air clears
-	moon.light_color = Color("#C4D2F2").lerp(Color("#FFDDB8"), e)
-	moon.light_energy = lerpf(MOON_ENERGY, 2.2, e)
-	var from := Vector3(-60.0, 70.0, -25.0).lerp(Vector3(70.0, 26.0, -20.0), e)
+	view.set_healed(e)
+	if _moon_disc != null:
+		(_moon_disc.material_override as StandardMaterial3D).albedo_color.a = 1.0 - e
+		_moon_disc.visible = e < 0.99
+	moon.light_color = Color("#C4D2F2").lerp(Color("#FFCF9A"), e)
+	moon.light_energy = lerpf(MOON_ENERGY, 3.3, e)
+	moon.shadow_opacity = lerpf(0.62, 0.8, e)
+	# a low sun from the east-north-east: long shadows across the meadow, toward the camera's left
+	var from := Vector3(-60.0, 70.0, -25.0).lerp(Vector3(80.0, 15.0, -26.0), e)
 	moon.look_at_from_position(from, Vector3.ZERO, Vector3.UP)
+	view.set_fill(FILL_NIGHT.lerp(Color(0.5, 0.48, 0.52), e) * lerpf(FILL_STRENGTH, FILL_STRENGTH * 0.3, e))
 
 
 func _update_coach() -> void:

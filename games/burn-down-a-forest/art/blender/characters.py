@@ -18,10 +18,13 @@ Run:  python3 art/blender/characters.py   (writes models/keeper.glb, tools.glb, 
 """
 import math
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import forest_lib as L  # noqa: E402
+import bmesh  # noqa: E402
+import bpy  # noqa: E402
 from mathutils import Matrix, Vector, noise  # noqa: E402
 
 CAPE = L.srgb("#8E3A2C")
@@ -76,160 +79,375 @@ def ring_mesh(m, rings, faces_closed=True):
 
 
 # ------------------------------------------------------------------------------------
-# The fire-keeper
+# The fire-keeper: one sculpted figure
 # ------------------------------------------------------------------------------------
+# The body is ONE mesh: a quad cage (cape, shoulder capelet, hood with a long
+# floppy tip and a tassel, the face inside it, the knitted scarf round the
+# neck, a satchel on the back with the notebook strapped to it), smoothed by
+# subdivision, then painted part by part (soot creeping up the cape's hem,
+# knit stripes, stitching, the notebook's cream page edges) and baked (AO,
+# edge wear, crease grime). Only what has to move is separate: the mittens,
+# the boots, the two scarf tails, the lantern and its pole.
+OCHRE_WOOL = L.srgb("#B98A44")
+OCHRE_DARK = L.srgb("#7E5A2A")
+SKIN = L.srgb("#E2B08A")
+CHEEK = L.srgb("#D9806E")
+SATCHEL = L.srgb("#7A5034")
+SATCHEL_HI = L.srgb("#A87A52")
+BOOK = L.srgb("#3E2A20")
+PAGE = L.srgb("#E9DCC0")
+RIBBON = L.srgb("#A8322A")
+MITTEN = L.srgb("#E3D3B0")
+
+P_CAPE, P_CAPELET, P_HOOD, P_FACE, P_EYE, P_GLINT, P_SCARF, P_SATCHEL, P_BUCKLE, P_BOOK, P_PAGE, P_RIBBON, P_TASSEL, P_STRAP = range(14)
+
+
+class Cage:
+    """A quad cage under construction: vertices, faces with a part number each."""
+
+    def __init__(self):
+        self.v = []
+        self.f = []          # (indices, part)
+
+    def add(self, p):
+        self.v.append(Vector(p))
+        return len(self.v) - 1
+
+    def ring(self, pts):
+        return [self.add(p) for p in pts]
+
+    def loft(self, rings, part, closed=True, cap_start=False, cap_end=False):
+        for i in range(len(rings) - 1):
+            a, b = rings[i], rings[i + 1]
+            n = len(a)
+            for k in range(n if closed else n - 1):
+                k2 = (k + 1) % n
+                self.f.append(([a[k], a[k2], b[k2], b[k]], part))
+        if cap_start:
+            self.f.append((list(reversed(rings[0])), part))
+        if cap_end:
+            self.f.append((list(rings[-1]), part))
+
+    def box(self, c, size, part, rot=None):
+        hx, hy, hz = size[0] * 0.5, size[1] * 0.5, size[2] * 0.5
+        R = rot if rot is not None else Matrix.Identity(3)
+        corners = [Vector((sx * hx, sy * hy, sz * hz)) for sz in (-1, 1) for sy in (-1, 1) for sx in (-1, 1)]
+        idx = [self.add(Vector(c) + R @ q) for q in corners]
+        for quad in ((0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)):
+            self.f.append(([idx[q] for q in quad], part))
+        return idx
+
+    def ellipsoid(self, c, r, part, seg=8, rings=6):
+        c = Vector(c)
+        top = self.add(c + Vector((0, 0, r[2])))
+        bot = self.add(c - Vector((0, 0, r[2])))
+        rs = []
+        for i in range(1, rings):
+            phi = math.pi * i / rings
+            rs.append(self.ring([c + Vector((math.sin(phi) * math.cos(2 * math.pi * k / seg) * r[0],
+                                             math.sin(phi) * math.sin(2 * math.pi * k / seg) * r[1],
+                                             math.cos(phi) * r[2])) for k in range(seg)]))
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            self.f.append(([top, rs[0][k], rs[0][k2]], part))
+            self.f.append(([bot, rs[-1][k2], rs[-1][k]], part))
+        self.loft(rs, part)
+
+    def to_object(self, name, levels=2):
+        bm = bmesh.new()
+        vs = [bm.verts.new(p) for p in self.v]
+        for idx, part in self.f:
+            try:
+                face = bm.faces.new([vs[i] for i in idx])
+            except ValueError:
+                continue
+            face.material_index = part
+            face.smooth = True
+        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+        me = bpy.data.meshes.new(name + "_cage")
+        bm.to_mesh(me)
+        bm.free()
+        for k in range(16):           # slots, so the part numbers survive the modifier
+            me.materials.append(bpy.data.materials.get("part%d" % k) or bpy.data.materials.new("part%d" % k))
+        ob = bpy.data.objects.new(name + "_cage", me)
+        bpy.context.scene.collection.objects.link(ob)
+        mod = ob.modifiers.new("smooth", 'SUBSURF')
+        mod.levels = levels
+        mod.render_levels = levels
+        dg = bpy.context.evaluated_depsgraph_get()
+        me2 = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+        bpy.data.objects.remove(ob)
+        return me2
+
+
+def model_from(name, me, seed, paint):
+    """A forest_lib Model whose bmesh is a finished (subdivided) mesh; paint(v,
+    part) gives each vertex its base colour, part flag and highlight weight."""
+    m = L.Model(name, seed)
+    m.bm.free()
+    m.bm = bmesh.new()
+    m.bm.from_mesh(me)
+    m.col = m.bm.verts.layers.float_color.new("base")
+    m.hi = m.bm.verts.layers.float.new("hi")
+    part_of = {}
+    for f in m.bm.faces:
+        f.smooth = True
+        for v in f.verts:
+            part_of.setdefault(v, f.material_index)
+        f.material_index = 0
+    for v in m.bm.verts:
+        rgb, flag, hi = paint(v.co, part_of.get(v, 0))
+        v[m.col] = (rgb[0], rgb[1], rgb[2], flag)
+        v[m.hi] = hi
+    bpy.data.meshes.remove(me)
+    return m
+
+
 def keeper_body():
-    """The cape (a round bell from the shoulders, ragged and sooty at the hem,
-    a patch on the back), a clasp at the throat, and the scarf rolled round the
-    neck with one tail down the chest."""
-    m = L.Model("k_body", 31)
-    rng = m.rng
-    sides = 20
-    # (radius, height) from the hem up to the neck
-    prof = [(0.43, 0.1), (0.445, 0.2), (0.43, 0.34), (0.395, 0.48), (0.35, 0.62), (0.3, 0.73), (0.22, 0.81), (0.14, 0.86)]
+    """The fire-keeper, all of a piece: a rust cape belling out to a ragged,
+    soot-black hem; a mustard wool capelet over the shoulders with a scalloped
+    edge; a hood that frames a round, soot-smudged face (a real face: a nose,
+    rosy cheeks, two dark eyes with a glint) and runs back into a long floppy
+    tip that flops over to one side and ends in a tassel; a fat knitted ember
+    scarf round the neck, knotted at the back; a leather satchel on the back,
+    a strap across the chest, and the notebook strapped to the satchel's flap
+    with its red ribbon hanging out. From behind: hood tip, capelet, satchel."""
+    c = Cage()
+    N = 16
+
+    def ell_ring(z, rx, ry, cy=0.0, phase=0.0, jag=None, folds=0.0):
+        pts = []
+        for k in range(N):
+            a = 2 * math.pi * k / N + phase
+            zz = z + (jag(k) if jag else 0.0)
+            back = 1.0 + 0.06 * max(0.0, math.sin(a))          # fuller at the back (+Y)
+            fold = 1.0 + folds * math.cos(a * 8.0 + 0.4)       # the cloth falls in folds
+            pts.append(Vector((math.cos(a) * rx * fold, cy + math.sin(a) * ry * back * fold, zz)))
+        return pts
+
+    # --- the cape: a bell from the neck to a ragged hem, with a lip of thickness
+    rng = random.Random(5)
+    jags = [rng.uniform(-0.05, 0.0) if k % 2 == 0 else rng.uniform(-0.015, 0.01) for k in range(N)]
+    prof = [(0.08, 0.47, 0.44), (0.18, 0.48, 0.45), (0.33, 0.45, 0.43), (0.48, 0.4, 0.38), (0.62, 0.33, 0.31), (0.73, 0.25, 0.23), (0.81, 0.16, 0.15)]
     rings = []
-    for i, (r, z) in enumerate(prof):
+    for i, (z, rx, ry) in enumerate(prof):
+        folds = max(0.0, 0.05 * (1.0 - z / 0.6))
+        rings.append(c.ring(ell_ring(z, rx, ry, jag=(lambda k: jags[k]) if i == 0 else None, folds=folds)))
+    inner = c.ring([Vector((p.x * 0.88, p.y * 0.88, p.z + 0.07)) for p in (c.v[i] for i in rings[0])])
+    c.loft([inner] + rings, P_CAPE, cap_end=True)
+
+    # --- the capelet over the shoulders: a shorter bell with eight round scallops
+    cprof = [(0.86, 0.18, 0.17), (0.79, 0.29, 0.27), (0.68, 0.4, 0.37), (0.58, 0.47, 0.44)]
+    crings = []
+    for i, (z, rx, ry) in enumerate(cprof):
+        if i == len(cprof) - 1:
+            crings.append(c.ring(ell_ring(z, rx, ry, jag=lambda k: -0.06 if k % 2 == 0 else 0.0)))
+        else:
+            crings.append(c.ring(ell_ring(z, rx, ry)))
+    cin = c.ring([Vector((p.x * 0.9, p.y * 0.9, p.z + 0.06)) for p in (c.v[i] for i in crings[-1])])
+    c.loft(crings + [cin], P_CAPELET)
+
+    # --- the face: a round head deep in the hood, a button nose, eyes with a glint
+    c.ellipsoid((0, -0.03, 1.12), (0.2, 0.19, 0.205), P_FACE, seg=10, rings=7)
+    c.ellipsoid((0, -0.225, 1.095), (0.04, 0.035, 0.034), P_FACE, seg=6, rings=4)
+    for sx in (-1, 1):
+        c.ellipsoid((sx * 0.075, -0.205, 1.155), (0.026, 0.016, 0.032), P_EYE, seg=6, rings=4)
+        c.ellipsoid((sx * 0.07, -0.22, 1.17), (0.008, 0.006, 0.008), P_GLINT, seg=4, rings=3)
+
+    # --- the hood: rings from the face opening round the head to the back of the
+    # neck, then on along a crooked spine into the long floppy tip
+    hood_spine = [Vector((0, -0.22, 1.13)), Vector((0, -0.12, 1.15)), Vector((0, 0.0, 1.16)), Vector((0, 0.12, 1.15)),
+                  Vector((0, 0.22, 1.18)), Vector((0.02, 0.32, 1.26)), Vector((0.07, 0.42, 1.3)), Vector((0.13, 0.5, 1.24)),
+                  Vector((0.18, 0.55, 1.12)), Vector((0.21, 0.57, 0.99))]
+    hood_r = [0.215, 0.29, 0.32, 0.31, 0.24, 0.17, 0.12, 0.085, 0.06, 0.04]
+    hrings = []
+    prev_x = None
+    for i, p in enumerate(hood_spine):
+        d = (hood_spine[min(i + 1, len(hood_spine) - 1)] - hood_spine[max(i - 1, 0)]).normalized()
+        x = Vector((1, 0, 0)) if prev_x is None else prev_x - d * prev_x.dot(d)
+        x.normalize()
+        prev_x = x
+        y = d.cross(x).normalized()
+        pts = []
+        for k in range(N):
+            a = 2 * math.pi * k / N
+            r = hood_r[i]
+            if i <= 3:
+                r *= 1.0 + 0.06 * max(0.0, -math.sin(a))     # the hood sags a little at its lower edge
+            pts.append(p + (x * math.cos(a) + y * math.sin(a) * 1.08) * r)
+        hrings.append(c.ring(pts))
+    # a rolled rim round the face opening (the hood's edge turned back)
+    rim_out = c.ring([Vector((q.x * 1.12, q.y - 0.03, (q.z - 1.13) * 1.12 + 1.13)) for q in (c.v[i] for i in hrings[0])])
+    c.loft([rim_out, hrings[0]] + hrings[1:], P_HOOD, cap_end=True)
+    # the tassel on the end of the tip
+    tip = hood_spine[-1]
+    c.ellipsoid(tip + Vector((0.01, 0.01, -0.06)), (0.055, 0.055, 0.06), P_TASSEL, seg=8, rings=5)
+
+    # --- the scarf: a fat knitted roll round the neck, knotted at the back
+    srings = []
+    for i in range(N):
+        a = 2 * math.pi * i / N
+        cen = Vector((math.cos(a) * 0.205, math.sin(a) * 0.19, 0.88 + 0.015 * math.sin(a * 2)))
+        tang = Vector((-math.sin(a), math.cos(a), 0))
+        out = Vector((math.cos(a), math.sin(a), 0))
         ring = []
-        for k in range(sides):
-            a = 2 * math.pi * k / sides
-            rr = r * (1.0 + 0.025 * math.sin(a * 3 + i))
-            zz = z
-            if i == 0:
-                # a ragged, scorched hem: torn points of different lengths
-                zz = z - (0.035 if k % 2 == 0 else 0.0) * (0.6 + 0.8 * rng.random())
-            p = Vector((math.cos(a) * rr, math.sin(a) * rr * 0.92, zz))
-            # soot creeps up from the hem in tongues; darker at the back of the hem where it drags
-            n = noise.noise(Vector((p.x * 5.0, p.y * 5.0, p.z * 2.0)))
-            soot = max(0.0, min(1.0, (0.36 - z) / 0.26 + n * 0.45))
-            col = L.mix(L.mix(CAPE_DARK, CAPE, min(1.0, z * 2.2)), SOOT, soot * 0.9)
-            ring.append(m.vert(p, col, L.BARK, 0.0))
-        rings.append(ring)
-    ring_mesh(m, rings)
-    # the hem's underside, so the cape has thickness when seen from below
-    inner = [m.vert(Vector((v.co.x * 0.9, v.co.y * 0.9, v.co.z + 0.02)), SOOT, L.BARK) for v in rings[0]]
-    ring_mesh(m, [inner, rings[0]])
-    # a seam down the front where the cape closes, and a brass clasp at the throat
-    for z0, z1 in ((0.12, 0.76),):
-        pts = [Vector((0, -prof[j][0] * 0.92 - 0.004, prof[j][1])) for j in range(len(prof)) if z0 <= prof[j][1] <= z1]
-        m.tube(pts, [0.012] * len(pts), 4, CAPE_DARK, L.BARK, cap_top=False)
-    m.blob(Vector((0, -0.215, 0.79)), 0.035, BRASS, L.BARK, subdiv=1, rough=0.0, seed=3, squash=(1.2, 0.6, 1.0))
-    # an ochre patch stitched on the back
-    pc = Vector((0.06, 0.39, 0.4))
-    pw, ph = 0.13, 0.11
-    corners = [pc + Vector((-pw, 0, -ph)), pc + Vector((pw, 0.0, -ph)), pc + Vector((pw, -0.02, ph)), pc + Vector((-pw, -0.02, ph))]
-    rot = Matrix.Rotation(0.12, 3, 'Y')
-    cv = [m.vert(pc + rot @ (c - pc) + Vector((0, 0.012, 0)), PATCH, L.BARK) for c in corners]
-    m.face(cv[::-1])
-    for k in range(4):
-        a, b = corners[k], corners[(k + 1) % 4]
-        for s in range(4):
-            q = a.lerp(b, (s + 0.5) / 4)
-            q = pc + rot @ (q - pc) + Vector((0, 0.016, 0))
-            m.box(q, (0.018, 0.006, 0.006), STITCH, L.BARK, rot=Matrix.Rotation(math.atan2(b.z - a.z, b.x - a.x), 3, 'Y'))
-    # the scarf: a fat knitted roll round the neck with ember stripes
-    roll = []
-    for i in range(14):
-        a = 2 * math.pi * i / 14
-        roll.append(Vector((math.cos(a) * 0.19, math.sin(a) * 0.17, 0.88 + 0.015 * math.sin(a * 2))))
-    roll.append(roll[0])
-    for i in range(14):
-        p0, p1 = roll[i], roll[i + 1]
-        col = STRIPE if i % 4 == 1 else SCARF
-        flag = WARM if i % 4 == 1 else L.BARK
-        m.tube([p0, p1], [0.075, 0.075], 8, col, flag, cap_top=False, cap_bottom=False)
-    # the front tail, hanging down the chest, with a fringe
-    tail = [Vector((0.08, -0.2, 0.86)), Vector((0.11, -0.3, 0.74)), Vector((0.12, -0.36, 0.6)), Vector((0.13, -0.39, 0.5))]
-    m.tube(tail, [0.05, 0.05, 0.048, 0.045], 6, SCARF, L.BARK, squash=(1.0, 0.4), cap_top=False,
-           color_fn=lambda t, k: STRIPE if 0.3 < t < 0.5 else SCARF)
-    for k in range(4):
-        q = tail[-1] + Vector(((k - 1.5) * 0.022, 0, 0))
-        m.tube([q, q + Vector((0, -0.01, -0.06))], [0.009, 0.006], 3, FRINGE, L.BARK, cap_top=False)
-    m.bake(ao_dist=0.35, ao_strength=0.7, ground=False, wear=0.25, grime=0.3, paint=0.18, paint_scale=6.0)
+        for k in range(8):
+            b = 2 * math.pi * k / 8
+            rr = 0.075 * (1.0 + 0.1 * math.cos(i * 2.0))     # knit ribs
+            ring.append(cen + (out * math.cos(b) + Vector((0, 0, 1)) * math.sin(b)) * rr)
+        srings.append(c.ring(ring))
+    for i in range(N):
+        a, b = srings[i], srings[(i + 1) % N]
+        for k in range(8):
+            k2 = (k + 1) % 8
+            c.f.append(([a[k], a[k2], b[k2], b[k]], P_SCARF))
+    c.ellipsoid((0.07, 0.22, 0.86), (0.08, 0.07, 0.075), P_SCARF, seg=8, rings=5)
+
+    # --- the satchel on the back, its flap, a buckle, and the strap over the shoulder
+    R = Matrix.Rotation(-0.1, 3, 'Z') @ Matrix.Rotation(0.12, 3, 'X')
+    c.box((0.04, 0.47, 0.33), (0.46, 0.2, 0.34), P_SATCHEL, rot=R)
+    c.box((0.04, 0.575, 0.41), (0.48, 0.04, 0.22), P_SATCHEL, rot=R)          # the flap
+    c.box((0.04, 0.605, 0.31), (0.08, 0.035, 0.08), P_BUCKLE, rot=R)           # the buckle
+    # the notebook strapped on the flap, standing a little proud, ribbon hanging out
+    RB = R @ Matrix.Rotation(0.1, 3, 'Y')
+    c.box((-0.06, 0.635, 0.46), (0.24, 0.055, 0.3), P_BOOK, rot=RB)
+    c.box((-0.06, 0.632, 0.465), (0.22, 0.062, 0.28), P_PAGE, rot=RB)
+    c.box((0.0, 0.67, 0.27), (0.028, 0.01, 0.17), P_RIBBON, rot=RB)
+    c.box((-0.06, 0.67, 0.47), (0.3, 0.014, 0.035), P_STRAP, rot=RB)           # the strap round the book
+    # the satchel's strap: up over the left shoulder and down across the chest
+    strap = [Vector((0.24, 0.42, 0.47)), Vector((0.05, 0.4, 0.62)), Vector((-0.17, 0.3, 0.66)), Vector((-0.31, 0.06, 0.58)),
+             Vector((-0.25, -0.26, 0.5)), Vector((-0.02, -0.4, 0.4)), Vector((0.22, -0.36, 0.33)), Vector((0.36, -0.12, 0.3))]
+    st_rings = []
+    for i, p in enumerate(strap):
+        d = (strap[min(i + 1, len(strap) - 1)] - strap[max(i - 1, 0)]).normalized()
+        out = Vector((p.x, p.y, 0)).normalized()
+        side = d.cross(out).normalized()
+        st_rings.append(c.ring([p + out * 0.012 + side * 0.03, p + out * 0.012 - side * 0.03, p - out * 0.008 - side * 0.03, p - out * 0.008 + side * 0.03]))
+    c.loft(st_rings, P_STRAP)
+
+    me = c.to_object("k_body", levels=1)
+
+    def paint(co, part):
+        z = co.z
+        n = noise.noise(Vector((co.x * 6.0, co.y * 6.0, co.z * 3.0)))
+        if part == P_CAPE:
+            soot = max(0.0, min(1.0, (0.3 - z) / 0.24 + n * 0.45))
+            return L.mix(L.mix(CAPE_DARK, CAPE, min(1.0, z * 2.0)), SOOT, soot * 0.92), L.BARK, 0.0
+        if part == P_CAPELET or part == P_HOOD:
+            base = L.mix(OCHRE_DARK, OCHRE_WOOL, 0.75 + 0.25 * n)
+            if part == P_HOOD:
+                # the turned-back rim and the tip go a little sooty; the inside of the opening is shadowed
+                if co.y < -0.2:
+                    base = L.mix(base, OCHRE_DARK, 0.45)
+                if co.y > 0.4:
+                    base = L.mix(base, L.mix(OCHRE_DARK, SOOT, 0.3), min(1.0, (co.y - 0.4) * 3.0))
+            elif z < 0.56:
+                base = L.mix(base, SOOT, 0.3)
+            return base, L.BARK, 0.0
+        if part == P_FACE:
+            col = SKIN
+            cheek = max(0.0, 1.0 - min((Vector((abs(co.x), co.y, co.z)) - Vector((0.11, -0.19, 1.07))).length / 0.06, 1.0))
+            col = L.mix(col, CHEEK, cheek * 0.6)
+            smudge = max(0.0, noise.noise(Vector((co.x * 14.0, co.y * 14.0, co.z * 14.0 + 3.0))) - 0.25)
+            col = L.mix(col, SOOT, min(0.5, smudge * 1.4))
+            return col, L.BARK, 0.0
+        if part == P_EYE:
+            return INK, L.BARK, 0.0
+        if part == P_GLINT:
+            return CREAM, L.BARK, 0.0
+        if part == P_SCARF:
+            ang = math.atan2(co.y, co.x)
+            stripe = (int((ang + math.pi) / (2 * math.pi) * 10.0) % 3 == 1) and z > 0.8
+            return (STRIPE if stripe else SCARF), L.BARK, 0.0
+        if part == P_SATCHEL:
+            return L.mix(SATCHEL, SATCHEL_HI, 0.25 + 0.25 * n), L.BARK, 0.0
+        if part == P_BUCKLE:
+            return BRASS, L.BARK, 0.6
+        if part == P_BOOK:
+            return BOOK, L.BARK, 0.0
+        if part == P_PAGE:
+            return PAGE, L.BARK, 0.0
+        if part == P_RIBBON:
+            return RIBBON, L.BARK, 0.0
+        if part == P_TASSEL:
+            return L.mix(SCARF, CREAM, 0.3), L.BARK, 0.0
+        if part == P_STRAP:
+            return L.mix(SATCHEL, SOOT, 0.25), L.BARK, 0.0
+        return CAPE, L.BARK, 0.0
+
+    m = model_from("k_body", me, 31, paint)
+    m.bake(ao_dist=0.35, ao_rays=20, ao_strength=0.7, ground=False, wear=0.3, wear_color=CREAM, grime=0.35, paint=0.14, paint_scale=7.0)
+    print("k_body", m.tri_count(), "tris")
     return m.finish()
 
 
 def keeper_scarf_tail():
-    """The scarf's long tail that flies out behind (animated); origin at the knot."""
+    """The scarf's two loose ends, from the knot at the back of the neck (origin):
+    a long one and a short one, flat knitted strips with stripes and a fringe,
+    swinging and streaming out when the keeper walks (animated in the game)."""
     m = L.Model("k_scarf", 37)
-    pts = [Vector((0, 0, 0)), Vector((0.03, 0.08, -0.03)), Vector((0.06, 0.18, -0.06)), Vector((0.08, 0.3, -0.1)), Vector((0.09, 0.42, -0.16))]
-    m.tube(pts, [0.055, 0.055, 0.052, 0.05, 0.048], 6, SCARF, L.BARK, squash=(1.0, 0.35), cap_top=False,
-           color_fn=lambda t, k: STRIPE if (0.18 < t < 0.32 or 0.6 < t < 0.74) else SCARF)
-    end = pts[-1]
-    for k in range(5):
-        q = end + Vector(((k - 2) * 0.02, 0.0, 0.0))
-        m.tube([q, q + Vector((0.0, 0.05, -0.04))], [0.009, 0.005], 3, FRINGE, L.BARK, cap_top=False)
+    for k, (ln, side, sw) in enumerate(((0.62, 0.05, 1.0), (0.42, -0.06, 0.7))):
+        pts = [Vector((side * 0.3, 0, 0))]
+        for i in range(1, 7):
+            t = i / 6
+            # down over the capelet's slope (outward, +Y), not through it
+            pts.append(Vector((side * (0.3 + t * 1.6) + 0.04 * math.sin(t * 5 + k), 0.08 + t * ln * 0.62 * sw, -t * ln)))
+        n = len(pts)
+        m.tube(pts, [0.06] * n, 6, SCARF, L.BARK, squash=(1.0, 0.32), cap_top=False,
+               color_fn=lambda t, kk: STRIPE if (0.22 < t < 0.34 or 0.6 < t < 0.72) else SCARF)
+        end = pts[-1]
+        for f in range(5):
+            q = end + Vector(((f - 2) * 0.022, 0.0, 0.0))
+            m.tube([q, q + Vector((0.0, 0.01, -0.06))], [0.009, 0.005], 3, FRINGE, L.BARK, cap_top=False)
     m.bake(ao_dist=0.1, ao_strength=0.3, ground=False, paint=0.15, paint_scale=8.0)
-    return m.finish()
-
-
-def keeper_head():
-    """Only the face shows, deep in the hood: soot-dark, with two warm eyes."""
-    m = L.Model("k_head", 32)
-    m.blob(Vector((0, 0, 0)), 0.22, FACE, L.BARK, subdiv=2, rough=0.0, seed=1, squash=(1.0, 0.95, 0.98))
-    for sx in (-1, 1):
-        m.blob(Vector((sx * 0.075, -0.205, 0.015)), 0.034, EYE, L.GLOW, subdiv=1, rough=0.0, seed=2, squash=(0.8, 0.5, 1.15))
-    m.bake(ao_dist=0.2, ao_strength=0.3, ground=False)
-    return m.finish()
-
-
-def keeper_hood():
-    """A round hood (origin = the head's centre): a soft shell open at the face
-    with a rolled, scorched rim, and a short rounded tip drooping at the back."""
-    m = L.Model("k_hood", 33)
-    prof = [(0.2, 0.235), (0.27, 0.17), (0.315, 0.06), (0.32, -0.06), (0.29, -0.17), (0.21, -0.27), (0.1, -0.33), (0.0, -0.345)]
-    m.lathe(prof, 18, HOOD, L.BARK, close_top=False, close_bottom=False,
-            color_fn=lambda t, k: L.mix(L.mix(HOOD, SOOT, 0.35), HOOD, min(1.0, t * 3.0)))
-    m.transform(list(m.bm.verts), rot_x(90))
-    # stretch it a little taller than wide, and let it sit back over the neck
-    for v in m.bm.verts:
-        v.co.z *= 1.08
-        v.co.z += 0.02
-    # the rolled rim round the face, a darker scorched band
-    rim = []
-    for i in range(18):
-        a = 2 * math.pi * i / 18
-        rim.append(Vector((math.cos(a) * 0.205, -0.235, math.sin(a) * 0.205 * 1.08 + 0.02)))
-    rim.append(rim[0])
-    m.tube(rim, [0.04] * len(rim), 6, L.mix(HOOD, SOOT, 0.55), L.BARK, cap_top=False, cap_bottom=False)
-    # the soft drooping tip at the back
-    tip = [Vector((0, 0.2, 0.2)), Vector((0, 0.33, 0.22)), Vector((0.02, 0.43, 0.13)), Vector((0.03, 0.46, 0.04))]
-    m.tube(tip, [0.15, 0.1, 0.06, 0.0], 10, HOOD, L.BARK, cap_top=False, color_fn=lambda t, k: L.mix(HOOD, L.mix(HOOD, SOOT, 0.4), t))
-    # a capelet over the shoulders, attached to the hood's base
-    rows = []
-    for z, r in ((-0.26, 0.27), (-0.36, 0.34), (-0.44, 0.38)):
-        row = []
-        for k in range(18):
-            a = 2 * math.pi * k / 18
-            rr = r * (1.0 + (0.06 if (k % 2 == 0 and z < -0.4) else 0.0))
-            row.append(m.vert(Vector((math.cos(a) * rr, math.sin(a) * rr * 0.92, z - (0.03 if (k % 2 == 0 and z < -0.4) else 0.0))),
-                              L.mix(HOOD, SOOT, 0.25 if z < -0.4 else 0.0), L.BARK))
-        rows.append(row)
-    ring_mesh(m, rows)
-    m.bake(ao_dist=0.3, ao_strength=0.65, ground=False, wear=0.2, grime=0.35, paint=0.18, paint_scale=7.0)
+    print("k_scarf", m.tri_count(), "tris")
     return m.finish()
 
 
 def keeper_hand():
-    m = L.Model("k_hand", 34)
-    m.blob(Vector((0, 0, 0)), 0.085, LEATHER, L.BARK, subdiv=2, rough=0.05, seed=1, squash=(1.0, 1.1, 0.9))
-    m.blob(Vector((0.065, -0.04, 0.03)), 0.036, LEATHER, L.BARK, subdiv=1, rough=0.0, seed=2)
-    m.lathe([(0.07, 0.05), (0.085, 0.08), (0.088, 0.12), (0.075, 0.14)], 10, L.mix(LEATHER, SOOT, 0.35), L.BARK,
-            center=(0, 0.02, 0.0), close_top=False, close_bottom=False)
-    m.bake(ao_dist=0.1, ao_strength=0.4, ground=False, wear=0.5, wear_color=LEATHER_HI, grime=0.3)
+    """A knitted mitten: a fat round hand with a thumb, a ribbed cuff with a red band."""
+    c = Cage()
+    c.ellipsoid((0, -0.01, 0.0), (0.075, 0.07, 0.09), 0, seg=8, rings=6)
+    c.ellipsoid((0.065, -0.035, 0.02), (0.03, 0.028, 0.04), 0, seg=6, rings=4)
+    rings = []
+    for z, r in ((0.05, 0.068), (0.09, 0.075), (0.13, 0.074), (0.15, 0.066)):
+        rings.append(c.ring([Vector((math.cos(2 * math.pi * k / 10) * r, math.sin(2 * math.pi * k / 10) * r, z)) for k in range(10)]))
+    c.loft(rings, 1)
+    me = c.to_object("k_hand", levels=1)
+
+    def paint(co, part):
+        if part == 1:
+            band = 0.085 < co.z < 0.115
+            return (POPPY if band else L.mix(MITTEN, OCHRE_DARK, 0.15)), L.BARK, 0.0
+        return MITTEN, L.BARK, 0.0
+    m = model_from("k_hand", me, 34, paint)
+    m.bake(ao_dist=0.1, ao_strength=0.4, ground=False, wear=0.3, grime=0.35, paint=0.2, paint_scale=30.0)
+    print("k_hand", m.tri_count(), "tris")
     return m.finish()
 
 
 def keeper_foot():
-    """A chunky round boot: a fat toe, a dark sole, a turned-down cuff."""
-    m = L.Model("k_foot", 35)
-    m.blob(Vector((0, -0.05, 0.06)), 0.11, BOOT, L.BARK, subdiv=2, rough=0.04, seed=1, squash=(0.92, 1.45, 0.62))
-    m.blob(Vector((0, -0.05, 0.018)), 0.115, SOLE, L.BARK, subdiv=1, rough=0.0, seed=2, squash=(0.95, 1.5, 0.18))
-    m.lathe([(0.075, 0.06), (0.08, 0.14), (0.078, 0.17)], 10, BOOT, L.BARK, center=(0, 0.02, 0), close_top=True, close_bottom=False)
-    m.lathe([(0.082, 0.15), (0.098, 0.17), (0.1, 0.2), (0.086, 0.21)], 10, LEATHER, L.BARK, center=(0, 0.02, 0),
-            close_top=False, close_bottom=False)
-    for k in range(3):
-        m.blob(Vector((0, -0.11 + k * 0.035, 0.115 - k * 0.012)), 0.012, CREAM, L.BARK, subdiv=0, rough=0.0, seed=k)
+    """A chunky boot: a round toe cap, a heel, a thick dark sole, laces, a
+    turned-down leather cuff."""
+    c = Cage()
+    c.ellipsoid((0, -0.06, 0.07), (0.095, 0.16, 0.07), 0, seg=10, rings=6)        # the foot
+    c.ellipsoid((0, -0.05, 0.02), (0.105, 0.17, 0.028), 1, seg=10, rings=4)       # the sole
+    rings = []
+    for z, r in ((0.06, 0.08), (0.12, 0.078), (0.16, 0.076), (0.19, 0.09), (0.22, 0.095)):
+        rings.append(c.ring([Vector((math.cos(2 * math.pi * k / 10) * r, 0.02 + math.sin(2 * math.pi * k / 10) * r, z)) for k in range(10)]))
+    c.loft(rings, 2)
+    me = c.to_object("k_foot", levels=1)
+
+    def paint(co, part):
+        if part == 1:
+            return SOLE, L.BARK, 0.0
+        if part == 2:
+            return (LEATHER if co.z > 0.18 else BOOT), L.BARK, 0.0
+        lace = abs(co.x) < 0.02 and co.y < -0.06 and co.z > 0.1 and int((co.y + 1.0) * 60) % 2 == 0
+        return (CREAM if lace else BOOT), L.BARK, 0.0
+    m = model_from("k_foot", me, 35, paint)
     m.bake(ao_dist=0.15, ao_strength=0.55, ground=True, wear=0.55, wear_color=LEATHER_HI, grime=0.35)
+    print("k_foot", m.tri_count(), "tris")
     return m.finish()
 
 
@@ -580,8 +798,7 @@ def hedgehog():
 
 def main():
     L.reset()
-    L.export([keeper_body(), keeper_head(), keeper_hood(), keeper_hand(), keeper_foot(), keeper_lantern(), keeper_pole(),
-              keeper_scarf_tail()], "keeper.glb")
+    L.export([keeper_body(), keeper_hand(), keeper_foot(), keeper_lantern(), keeper_pole(), keeper_scarf_tail()], "keeper.glb")
     L.reset()
     L.export([tool_match(), tool_match(True), tool_lighter(), tool_tiki(), tool_flamer(), tool_dragon(), tool_meteor()], "tools.glb")
     L.reset()

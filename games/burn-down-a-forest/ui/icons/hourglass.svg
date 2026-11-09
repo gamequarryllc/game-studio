@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- hourglass: drawn by art/icons/make_icons.py -->
-  <path d="M 12.27 5.97 L 51.73 6.26 L 52.03 11.81 L 12.16 12.17 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 11.78 51.80 L 51.87 52.01 L 52.24 57.98 L 11.92 58.07 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 18.27 11.80 C 20.94 8.43 43.39 8.35 46.04 11.73 C 48.70 15.12 34.14 25.41 34.19 32.11 C 34.24 38.82 49.09 48.63 46.35 51.97 C 43.62 55.31 20.50 55.51 17.78 52.17 C 15.06 48.84 29.94 38.69 30.03 31.96 C 30.11 25.23 15.60 15.17 18.27 11.80 Z" fill="#EFE3C8" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 21.99 50.14 L 42.08 50.28 L 31.76 39.95 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="0.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 23.91 16.01 L 40.17 15.99 L 32.03 26.12 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="0.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 31.67 30.30 L 32.36 39.65" fill="none" stroke="#E8642C" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 12.17 5.99 L 51.76 5.80 L 51.88 11.98 L 11.80 11.90 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 11.98 51.88 L 51.88 51.97 L 52.28 57.73 L 11.88 57.86 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 17.93 11.63 C 20.60 8.22 43.34 8.52 46.02 11.89 C 48.70 15.25 34.05 25.15 34.00 31.83 C 33.95 38.50 48.38 48.52 45.72 51.95 C 43.07 55.37 20.68 55.64 18.06 52.38 C 15.45 49.12 30.03 39.17 30.01 32.38 C 29.99 25.59 15.26 15.05 17.93 11.63 Z" fill="#EFE3C8" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 22.01 50.09 L 41.77 50.06 L 31.70 40.28 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="0.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 24.04 15.80 L 40.28 15.98 L 31.92 25.75 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="0.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 31.93 30.20 L 31.73 40.04" fill="none" stroke="#E8642C" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

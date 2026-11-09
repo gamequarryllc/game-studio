@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- horn_mute: drawn by art/icons/make_icons.py -->
-  <path d="M 8.29 25.98 C 10.59 23.96 15.68 28.34 21.60 25.67 C 27.52 23.00 39.12 12.28 43.80 9.97 C 48.48 7.66 48.64 4.85 49.66 11.83 C 50.69 18.80 50.95 44.78 49.97 51.80 C 49.00 58.82 48.39 56.32 43.80 53.95 C 39.22 51.58 28.47 40.25 22.47 37.56 C 16.47 34.86 10.16 39.69 7.80 37.76 C 5.44 35.83 5.99 28.00 8.29 25.98 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 7.95 25.72 L 16.02 25.92 L 16.00 37.87 L 7.79 37.96 Z" fill="#EFE3C8" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 6.06 8.38 L 58.01 58.38" fill="none" stroke="#D9483B" stroke-width="4.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 6.02 8.13 L 57.69 58.07" fill="none" stroke="#2E1E14" stroke-width="1.20" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 8.07 26.16 C 10.42 24.05 15.96 28.24 21.90 25.52 C 27.83 22.81 38.95 12.15 43.66 9.89 C 48.38 7.63 49.15 4.90 50.19 11.98 C 51.22 19.06 50.86 45.38 49.87 52.36 C 48.89 59.35 49.00 56.21 44.30 53.88 C 39.59 51.55 27.71 41.01 21.63 38.40 C 15.56 35.79 10.11 40.23 7.85 38.19 C 5.59 36.15 5.73 28.27 8.07 26.16 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 8.22 26.19 L 15.81 25.77 L 16.12 38.18 L 7.97 38.12 Z" fill="#EFE3C8" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 6.06 8.39 L 58.04 58.25" fill="none" stroke="#D9483B" stroke-width="4.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 6.23 8.03 L 57.90 58.17" fill="none" stroke="#2E1E14" stroke-width="1.20" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

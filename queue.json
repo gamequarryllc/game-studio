@@ -8,7 +8,7 @@
       "color": "#e8642c",
       "tagline": "A cursed forest swallowed the valley overnight. Burn it back with a match, then a torch, then a dragon.",
       "status": "first-playable",
-      "note": "Critic: almost. Polish pass in progress (fire at scale, keeper, meadow, ending, phone readability)"
+      "note": "Polish pass done; fourth critic review in progress (ready to play needs a Yes)"
     },
     {
       "slug": "dig-to-the-core",
@@ -43,7 +43,7 @@
       "emoji": "🎂",
       "color": "#e98bb5",
       "tagline": "You are tiny and the cake is enormous. Spoon, fork, stand mixer, through frosting, sponge and jam.",
-      "status": "queued",
+      "status": "building",
       "note": ""
     },
     {

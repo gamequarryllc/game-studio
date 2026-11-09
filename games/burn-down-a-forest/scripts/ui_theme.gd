@@ -6,11 +6,14 @@ extends RefCounted
 ## price tags on tape, ink stamps to buy. No glows anywhere. Ember orange only
 ## on the main action.
 ##
-## Type: IM Fell English SC (titles and numbers), Alegreya Sans (body), Caveat
-## Brush (the keeper's handwriting, never under 22 px). All SIL OFL, licences
-## in fonts/. Icons: ui/icons/*.svg, drawn by art/icons/make_icons.py.
+## Type: Keeper Fell (IM Fell English SC with lining figures, for titles and
+## numbers), Alegreya Sans (body, lining figures switched on), Caveat Brush (the
+## keeper's handwriting, never under 22 px). All SIL OFL, licences in fonts/.
+## Every number in the game is set in lining figures: IM Fell's old-style ones
+## turn "+11" into "+II" and "x1" into "XI" at phone size.
+## Icons: ui/icons/*.svg, drawn by art/icons/make_icons.py.
 
-const DISPLAY_PATH := "res://fonts/IMFellEnglishSC-Regular.ttf"
+const DISPLAY_PATH := "res://fonts/KeeperFell-Regular.ttf"
 const BODY_PATH := "res://fonts/AlegreyaSans-Medium.ttf"
 const BODY_BOLD_PATH := "res://fonts/AlegreyaSans-Bold.ttf"
 const BODY_REGULAR_PATH := "res://fonts/AlegreyaSans-Regular.ttf"
@@ -46,7 +49,7 @@ const SOOT := INK
 const MEADOW := SAGE
 
 # --- Type scale (px at 1280x720) -------------------------------------------------------
-const T_SMALL := 16
+const T_SMALL := 17                # 12 px on an 844x390 phone (with the phone UI scale, Hud.fit_ui_scale)
 const T_BODY := 19
 const T_LABEL := 22
 const T_TITLE := 28
@@ -98,9 +101,10 @@ static func install_fonts() -> void:
 	if _body != null:
 		return
 	_display = load(DISPLAY_PATH)
-	_body = load(BODY_PATH)
-	_bold = load(BODY_BOLD_PATH)
-	_regular = load(BODY_REGULAR_PATH)
+	# Alegreya Sans defaults to old-style figures too: switch on its lining ones everywhere.
+	_body = _lining(load(BODY_PATH))
+	_bold = _lining(load(BODY_BOLD_PATH))
+	_regular = _lining(load(BODY_REGULAR_PATH))
 	var hand := FontVariation.new()
 	hand.base_font = load(HAND_PATH)
 	hand.spacing_glyph = 0
@@ -114,6 +118,14 @@ static func install_fonts() -> void:
 	_numbers = nums
 	ThemeDB.fallback_font = _body
 	ThemeDB.get_default_theme().default_font = _body
+
+
+static func _lining(base: Font) -> Font:
+	var v := FontVariation.new()
+	v.base_font = base
+	var ts := TextServerManager.get_primary_interface()
+	v.opentype_features = {ts.name_to_tag("lnum"): 1}
+	return v
 
 
 static func display() -> Font:
@@ -144,6 +156,50 @@ static func numbers() -> Font:
 static func hand() -> Font:
 	install_fonts()
 	return _hand
+
+
+static func wrap(text: String, font: Font, size: int, width: float) -> String:
+	## Break text into lines that fit `width` (with newlines, for labels that
+	## don't wrap themselves), never leaving one word alone on the last line:
+	## if it would, the text is wrapped a little narrower until it doesn't.
+	var lines := _wrap_lines(text, font, size, width)
+	var w := width
+	while lines.size() >= 2 and not (lines[-1] as String).contains(" ") and w > width * 0.6:
+		w -= width * 0.04
+		var tryl := _wrap_lines(text, font, size, w)
+		if (tryl[-1] as String).contains(" ") and tryl.size() <= lines.size() + 1:
+			lines = tryl
+			break
+	return "\n".join(lines)
+
+
+static func _wrap_lines(text: String, font: Font, size: int, width: float) -> Array:
+	var words := text.split(" ", false)
+	var lines: Array = []
+	var cur := ""
+	var tags := RegEx.create_from_string("\\[img[^\\]]*\\][^\\[]*\\[/img\\]|\\[[^\\]]*\\]")
+	for wd in words:
+		var t := wd if cur == "" else cur + " " + wd
+		var shown := tags.sub(t, "MM", true)      # (an inline icon is about two letters wide; other BBCode tags take no room)
+		if cur != "" and font.get_string_size(shown, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > width:
+			lines.append(cur)
+			cur = wd
+		else:
+			cur = t
+	if cur != "":
+		lines.append(cur)
+	if lines.is_empty():
+		lines.append("")
+	return lines
+
+
+static func no_orphan(text: String) -> String:
+	## Glue the last two words together (a no-break space), so wrapped text never
+	## leaves one word alone on its last line.
+	var k := text.rfind(" ")
+	if k <= 0 or text.substr(k + 1).contains("]"):
+		return text
+	return text.substr(0, k) + "\u00A0" + text.substr(k + 1)
 
 
 static func icon(name: String) -> Texture2D:
@@ -547,3 +603,83 @@ class TagBox:
 		var tc := Vector2(r.end.x - 10, r.position.y + 2)
 		var tp := PackedVector2Array([tc + Vector2(-16, -10), tc + Vector2(14, -4), tc + Vector2(8, 12), tc + Vector2(-20, 6)])
 		RenderingServer.canvas_item_add_polygon(ci, tp, PackedColorArray([UiTheme.TAPE]))
+
+
+class DieCutTag:
+	## A die-cut shipping tag hanging by its hole: the top corners clipped off,
+	## the rest with softly rounded corners, a punched hole with a paper
+	## reinforcement ring, grain, a scorch along the bottom edge, an ink outline
+	## and a hard shadow. (The offer tag; its string sags from the notebook.)
+	extends StyleBox
+	var seed := 9
+	var fill := Color("#E9D6A8")
+	var hole_x := 0.5               # where the hole is, as a share of the width
+
+	func _init(s: int = 9) -> void:
+		seed = s
+		content_margin_left = 20
+		content_margin_right = 18
+		content_margin_top = 34
+		content_margin_bottom = 14
+
+	func outline(r: Rect2) -> PackedVector2Array:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		var clip := minf(26.0, r.size.x * 0.12)
+		var rad := 7.0
+		var pts := PackedVector2Array()
+		pts.append(Vector2(r.position.x + clip, r.position.y))
+		pts.append(Vector2(r.end.x - clip, r.position.y))
+		pts.append(Vector2(r.end.x, r.position.y + clip))
+		# the right side, bottom corners rounded
+		for k in 5:
+			var a := PI * 0.5 * k / 4.0
+			pts.append(Vector2(r.end.x - rad + cos(a) * rad, r.end.y - rad + sin(a) * rad))
+		for k in 5:
+			var a := PI * 0.5 + PI * 0.5 * k / 4.0
+			pts.append(Vector2(r.position.x + rad + cos(a) * rad, r.end.y - rad + sin(a) * rad))
+		pts.append(Vector2(r.position.x, r.position.y + clip))
+		for k in pts.size():
+			pts[k] += Vector2(rng.randf_range(-0.7, 0.7), rng.randf_range(-0.7, 0.7))
+		return pts
+
+	func hole(r: Rect2) -> Vector2:
+		return Vector2(r.position.x + r.size.x * hole_x, r.position.y + 15.0)
+
+	func _draw(ci: RID, rect: Rect2) -> void:
+		var pts := outline(rect)
+		var sh := PackedVector2Array()
+		for p in pts:
+			sh.append(p + Vector2(3, 4))
+		RenderingServer.canvas_item_add_polygon(ci, sh, PackedColorArray([Color(UiTheme.INK, 0.85)]))
+		RenderingServer.canvas_item_add_polygon(ci, pts, PackedColorArray([fill]))
+		RenderingServer.canvas_item_add_texture_rect(ci, rect.grow(-2.0), UiTheme.grain().get_rid(), true, Color(0.5, 0.38, 0.2, 0.13))
+		# scorch creeping up from the bottom edge
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed * 5 + 1
+		var tp := PackedVector2Array()
+		var tc := PackedColorArray()
+		var idx := PackedInt32Array()
+		var n := 10
+		for k in n + 1:
+			var x := lerpf(rect.position.x + 6.0, rect.end.x - 6.0, float(k) / n)
+			tp.append(Vector2(x, rect.end.y - 2.0))
+			tc.append(Color(UiTheme.SCORCH, 0.45))
+			tp.append(Vector2(x, rect.end.y - 8.0 - rng.randf_range(0.0, 12.0)))
+			tc.append(Color(UiTheme.SCORCH, 0.0))
+		for k in n:
+			var a := k * 2
+			idx.append_array([a, a + 2, a + 3, a, a + 3, a + 1])
+		RenderingServer.canvas_item_add_triangle_array(ci, idx, tp, tc)
+		var closed: PackedVector2Array = pts.duplicate()
+		closed.append(pts[0])
+		RenderingServer.canvas_item_add_polyline(ci, closed, PackedColorArray([UiTheme.INK]), 2.0, true)
+		# the punched hole with its reinforcement ring
+		var hc := hole(rect)
+		RenderingServer.canvas_item_add_circle(ci, hc, 9.0, Color("#D2BC8A"))
+		RenderingServer.canvas_item_add_circle(ci, hc, 4.5, Color(UiTheme.INK, 0.95))
+		var ring := PackedVector2Array()
+		for k in 21:
+			var a := TAU * k / 20.0
+			ring.append(hc + Vector2(cos(a), sin(a)) * 9.0)
+		RenderingServer.canvas_item_add_polyline(ci, ring, PackedColorArray([Color(UiTheme.INK, 0.7)]), 1.2, true)

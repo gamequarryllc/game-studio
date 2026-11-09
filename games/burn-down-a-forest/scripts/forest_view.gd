@@ -16,7 +16,7 @@ extends Node3D
 const VCHUNK := 20                 # cells per side of a plant chunk (fewer, bigger chunks: fewer draw calls)
 const FCHUNK := 32                 # cells per side of a flower chunk
 const MAX_FLAMES := 1500
-const MAX_SMOKE := 320
+const MAX_SMOKE := 480
 const PER_CELL := {Balance.GRASS: 2, Balance.BUSH: 1, Balance.PINE: 1, Balance.OAK: 1, Balance.GIANT: 1, Balance.ELDER: 1}
 const NEVER := 1.0e6
 # The GPU keeps MultiMesh custom data as half floats in the Compatibility
@@ -25,27 +25,36 @@ const NEVER := 1.0e6
 const REBASE_AT := 300.0
 const REBASE_BY := 240.0
 
-# Flames per kind: [width, height, height above the ground (share of the plant's
-# height), how far out from the trunk] for each billboard. The first entry of
-# the list for trees is the tall leading flame at the top of the cluster.
-const FLAMES := {
-	Balance.GRASS: [[1.0, 1.25, 0.0, 0.3]],
-	Balance.BUSH: [[1.4, 1.9, 0.0, 0.25], [1.0, 1.3, 0.1, 0.45]],
-	Balance.PINE: [[1.5, 4.2, 0.55, 0.15], [2.4, 3.0, 0.0, 0.5], [2.0, 2.6, 0.3, 0.6], [1.6, 2.0, 0.45, 0.7]],
-	Balance.OAK: [[2.0, 4.8, 0.6, 0.2], [3.0, 3.4, 0.0, 0.6], [2.6, 3.0, 0.4, 1.1], [2.4, 2.6, 0.5, 1.2], [2.0, 2.2, 0.3, 1.0]],
-	Balance.GIANT: [[2.8, 7.0, 0.55, 0.3], [4.2, 5.0, 0.0, 0.8], [3.6, 4.4, 0.35, 1.6], [3.2, 4.0, 0.5, 1.8], [3.0, 3.4, 0.25, 1.4], [2.6, 3.0, 0.6, 1.2]],
-	Balance.ELDER: [[6.0, 15.0, 0.55, 0.5], [9.0, 11.0, 0.0, 2.0], [7.5, 9.5, 0.25, 3.5], [7.0, 8.5, 0.45, 5.0], [6.5, 8.0, 0.6, 6.0],
-		[6.0, 7.0, 0.35, 6.5], [5.5, 6.5, 0.7, 4.0], [4.0, 10.0, 0.75, 7.0]],
+# Fire per kind. A burning tree gets ONE composed bonfire drawing (a leading
+# flame and a few licks, fx/flames.png rows 4-5) over its crown: [width,
+# height, how high its base sits (share of the plant's height)], plus now and
+# then a small lick at its roots. Grass burns as a low ragged front, bushes as
+# little bonfires. Far fewer, bigger, composed shapes than a card per flame.
+const BONFIRE := {
+	Balance.BUSH: [1.4, 2.2, 0.0, 0.3],
+	Balance.PINE: [2.3, 4.4, 0.2, 0.9],
+	Balance.OAK: [3.0, 5.0, 0.28, 1.5],
+	Balance.GIANT: [4.8, 8.2, 0.28, 2.6],
+	Balance.ELDER: [8.0, 14.0, 0.26, 5.0],
 }
+# (the fourth number: the crown's radius; the bonfire stands that far toward the
+# camera, so it burns on the near side of the crown instead of behind it)
+# flame card kinds (INSTANCE_CUSTOM.a in shaders/flame.gdshader)
+const F_FLAME := 0.0
+const F_LEAD := 1.0
+const F_SPARK := 2.0
+const F_BONFIRE := 3.0
+const F_FRONT := 4.0
+const F_DYING := 5.0
 const LIGHT := [0.35, 0.5, 0.75, 0.9, 1.0, 1.0]   # how much light a burning cell of each kind throws
 
 # Palette for the ground (sRGB, converted when written): see NOTES.md, art bible.
-const G_MOSS := Color("#2A2236")       # cursed ground under the trees
-const G_GRASS := Color("#29323E")
-const G_TRAIL := Color("#4A3E3A")
-const G_VILLAGE := Color("#76604A")
-const G_ASH := Color("#4B4650")
-const G_CINDER := Color("#3B3640")
+const G_MOSS := Color("#3B3445")       # cursed ground under the trees (lifted for phones: L* ~22 in shadow)
+const G_GRASS := Color("#363D48")
+const G_TRAIL := Color("#625850")      # the trails read as paths through the dark, lighter than the moss
+const G_VILLAGE := Color("#7C664E")
+const G_ASH := Color("#5A5560")
+const G_CINDER := Color("#4A4450")
 const G_STONE := Color("#5A5462")
 const G_WATER := Color("#1E2C34")
 
@@ -58,6 +67,7 @@ var smoke_mat: ShaderMaterial
 var ground_mat: ShaderMaterial
 var prop_mat: ShaderMaterial
 var fire_light: OmniLight3D
+var water_mat: ShaderMaterial
 var draw_lists := 0                # MultiMeshes made (for the performance notes)
 var lit_materials: Array = []      # every material that takes the fire's light and the lantern's
 var _fire_img: Image               # one pixel per cell: how much light the fire there throws (mipmapped: the blur)
@@ -104,6 +114,7 @@ func build(g: ForestGrid) -> void:
 	_build_fire()
 	_build_cell_texture()
 	_build_village()
+	_build_elder_remains()
 
 
 # =====================================================================================
@@ -121,6 +132,7 @@ func _make_materials() -> void:
 	flame_mat = ShaderMaterial.new()
 	flame_mat.shader = load("res://shaders/flame.gdshader")
 	flame_mat.set_shader_parameter("flames", load("res://fx/flames.png"))
+	flame_mat.set_shader_parameter("max_screen", 0.24)   # no flame taller than about a quarter of the view
 	smoke_mat = ShaderMaterial.new()
 	smoke_mat.shader = load("res://shaders/smoke.gdshader")
 	smoke_mat.set_shader_parameter("puffs", load("res://fx/puffs.png"))
@@ -136,6 +148,7 @@ func _make_materials() -> void:
 	ground_mat.set_shader_parameter("hill_top", Color("#3A3048"))
 	ground_mat.set_shader_parameter("speck", Color("#2E1E14"))
 	ground_mat.set_shader_parameter("ember", Color("#E8642C"))
+	ground_mat.set_shader_parameter("core_glow", Color("#FFC15E"))
 	for m in [plant_mat, flower_mat]:
 		m.set_shader_parameter("ink", Color("#2E1E14"))
 		m.set_shader_parameter("char_color", Color("#1A1416"))
@@ -168,9 +181,16 @@ func set_lantern(at: Vector3, flicker: float) -> void:
 	ground_mat.set_shader_parameter("lantern_flicker", flicker)
 
 
+func set_fill(c: Color) -> void:
+	## The flat night fill on everything lit (ground, plants, props, the keeper).
+	for m in lit_materials:
+		(m as ShaderMaterial).set_shader_parameter("fill", c)
+
+
 func set_wind(w: Vector2) -> void:
-	for m in [plant_mat, flower_mat, flame_mat, smoke_mat]:
-		(m as ShaderMaterial).set_shader_parameter("wind", w)
+	for m in [plant_mat, flower_mat, flame_mat, smoke_mat, chimney_mat]:
+		if m != null:
+			(m as ShaderMaterial).set_shader_parameter("wind", w)
 
 
 # =====================================================================================
@@ -219,6 +239,18 @@ func _build_water() -> void:
 	mi.mesh = plane
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/water.gdshader")
+	# a small map of the ground's height under the water: shallow edges, deep middles, a line at the bank
+	var hn := grid.hn
+	var img := Image.create(hn, hn, false, Image.FORMAT_L8)
+	for vy in hn:
+		for vx in hn:
+			var h := grid.heights[vx + vy * hn] - ForestGrid.WATER_LEVEL
+			img.set_pixel(vx, vy, Color(clampf((h + 1.0) / 3.0, 0.0, 1.0), 0, 0))
+	mat.set_shader_parameter("height_tex", ImageTexture.create_from_image(img))
+	var c0 := grid.origin - Vector2(ForestGrid.MARGIN, ForestGrid.MARGIN) * Balance.CELL
+	mat.set_shader_parameter("hmap_origin", c0 - Vector2(0.5, 0.5) * Balance.CELL)   # texel centres sit on the corners
+	mat.set_shader_parameter("hmap_size", hn * Balance.CELL)
+	water_mat = mat
 	mi.material_override = mat
 	mi.position = Vector3(0, ForestGrid.WATER_LEVEL, 0)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -341,37 +373,54 @@ func _build_stones() -> void:
 
 
 func _build_edge_forest() -> void:
-	## Dark cursed woods on the hills all round: cheap silhouettes, out of reach,
-	## in clumps with gaps rather than an even carpet.
+	## The woods on the hills all round, out of reach: cheap silhouettes planted
+	## in groves (a clump of oaks here, a stand of pines there, clearings
+	## between), never an even carpet.
 	var half := grid.n * Balance.CELL * 0.5
 	var r := RandomNumberGenerator.new()
 	r.seed = Balance.WORLD_SEED + 5
-	var clump := FastNoiseLite.new()
-	clump.seed = Balance.WORLD_SEED + 6
-	clump.frequency = 0.05
-	var spots: Array = []
-	for _k in 1500:
+	var oaks: Array = []
+	var pines: Array = []
+	var groves := 0
+	var tries := 0
+	while groves < 64 and tries < 2000:
+		tries += 1
+		var c := Vector2(r.randf_range(-half - 34.0, half + 34.0), r.randf_range(-half - 34.0, half + 34.0))
+		if maxf(absf(c.x), absf(c.y)) < half + 6.0:
+			continue
+		groves += 1
+		var oak_grove := r.randf() < 0.45
+		var rad := r.randf_range(4.0, 10.0)
+		var count := int(rad * r.randf_range(1.4, 2.4))
+		for _k in count:
+			var a := r.randf() * TAU
+			var d := sqrt(r.randf()) * rad
+			var p := c + Vector2(cos(a), sin(a) * 0.8) * d
+			if maxf(absf(p.x), absf(p.y)) < half + 2.5:
+				continue
+			# the grove's own kind mostly, a stray of the other now and then;
+			# the biggest trees stand in the middle of a grove
+			var oak := oak_grove != (r.randf() < 0.15)
+			var s := r.randf_range(1.2, 1.7) + (1.0 - d / rad) * 0.7
+			(oaks if oak else pines).append([p, s])
+	# a few loners between the groves
+	for _k in 120:
 		var p := Vector2(r.randf_range(-half - 30.0, half + 30.0), r.randf_range(-half - 30.0, half + 30.0))
-		if maxf(absf(p.x), absf(p.y)) < half + 2.5:
+		if maxf(absf(p.x), absf(p.y)) < half + 3.0:
 			continue
-		if clump.get_noise_2d(p.x, p.y) < -0.25:
-			continue
-		spots.append(p)
+		(oaks if r.randf() < 0.3 else pines).append([p, r.randf_range(1.1, 1.6)])
 	for oak in [false, true]:
+		var list: Array = oaks if oak else pines
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_colors = true
 		mm.use_custom_data = true
 		mm.mesh = Models.far_tree(oak)
-		var mine: Array = []
-		for k in spots.size():
-			if (k % 3 == 0) == oak:
-				mine.append(spots[k])
-		mm.instance_count = mine.size()
-		for k in mine.size():
-			var p: Vector2 = mine[k]
-			var s := r.randf_range(1.2, 2.2)
-			var b := Basis(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(s, s * r.randf_range(0.9, 1.25), s))
+		mm.instance_count = list.size()
+		for k in list.size():
+			var p: Vector2 = list[k][0]
+			var s: float = list[k][1]
+			var b := Basis(Vector3.UP, r.randf_range(0, TAU)).scaled(Vector3(s, s * r.randf_range(0.9, 1.2), s))
 			mm.set_instance_transform(k, Transform3D(b, Vector3(p.x, grid.height_at(p.x, p.y) - 0.1, p.y)))
 			mm.set_instance_color(k, Color.WHITE)
 			mm.set_instance_custom_data(k, Color(-1.0, r.randf(), NEVER, 1.0))
@@ -454,46 +503,84 @@ func _edge_factor(i: int) -> float:
 	return clampf(1.0 - open / 9.0, 0.25, 1.0)
 
 
+const MEADOW_RAISE := 0.07           # the turf stands a little proud of the ash (shaders/ground.gdshader)
+const SP_TUFT := 4
+const SP_TALL := 5
+const SP_YARROW := 6
+const SP_SPROUT := 7
+
+
 func _bloom(i: int, instant: bool) -> void:
+	## A cell turns to meadow: flowers in drifts of one species (a low-frequency
+	## noise picks it, a second one how thick), the drifts' species mixed in
+	## height (low buttercups, mid poppies and daisies, tall yarrow, and clumps of
+	## seeding grass taller still), sage tufts everywhere, everything thinning out
+	## toward trails, rocks and water. At the meadow's edge, where the ash meets
+	## it, seedlings come up first. Each plant pushes up and opens on its own
+	## little delay, so a cell grows in rather than appearing.
 	_bloomed[i] = 1
 	var c := grid.cell_center(i)
 	var nc := int(ceil(float(grid.n) / FCHUNK))
 	var ch := (i % grid.n) / FCHUNK + ((i / grid.n) / FCHUNK) * nc
-	# A drift of one species here, its neighbour species at the drift's edge,
-	# sage tufts everywhere; thick in the middle of a patch, thin at its rim.
 	var d := (_drift.get_noise_2d(c.x, c.y) + 1.0) * 0.5
-	var main := clampi(int(d * 4.0), 0, 3)
+	var drifts := [0, 1, 2, 3, SP_YARROW]
+	var main: int = drifts[clampi(int(d * 5.0), 0, 4)]
 	var dense := clampf((_dense.get_noise_2d(c.x, c.y) + 1.0) * 0.5, 0.0, 1.0)
 	var edge := _edge_factor(i)
-	# drifts: thick in their cores, grass with hardly a flower between them
-	var flowers := int(round(pow(dense, 1.7) * 6.0 * edge))
+	var flowers := int(round(pow(dense, 1.6) * 6.0 * edge))
 	var tufts := 1 + int(_rng.randf() < (0.8 if flowers < 2 else 0.35))
 	var items: Array = []
 	for _f in flowers:
-		var sp := main
-		if _rng.randf() < 0.08:
-			sp = clampi(main + (1 if _rng.randf() < 0.5 else -1), 0, 3)
+		var sp: int = main
+		if _rng.randf() < 0.1:
+			sp = drifts[clampi(drifts.find(main) + (1 if _rng.randf() < 0.5 else -1), 0, 4)]
 		items.append(sp)
 	for _t in tufts:
-		items.append(4)
-	# a little cluster: flowers bunch round one spot in the cell
+		items.append(SP_TUFT)
+	# tall seeding grass in clumps where the flowers are thin: the meadow's top layer
+	if dense < 0.45 and _rng.randf() < 0.55:
+		items.append(SP_TALL)
+		if _rng.randf() < 0.4:
+			items.append(SP_TALL)
+	# seedlings where it borders ash
+	if _borders_ash(i):
+		for _s in 2 + _rng.randi() % 2:
+			items.append(SP_SPROUT)
 	var hub := c + Vector2(_rng.randf_range(-0.4, 0.4), _rng.randf_range(-0.4, 0.4))
 	for sp in items:
 		var mm := _flower_mm(sp, ch)
 		var key := "%d:%d" % [sp, ch]
 		var at: int = _flower_count[key]
 		_grow(mm, at + 1)
-		var spread := 0.75 if sp == 4 else 0.45
+		var spread := 0.75 if sp == SP_TUFT or sp == SP_SPROUT else (0.6 if sp == SP_TALL else 0.45)
 		var p := hub + Vector2(_rng.randf_range(-spread, spread), _rng.randf_range(-spread, spread))
-		var s := _rng.randf_range(0.95, 1.5) * (1.35 if sp == 4 else 1.15)
-		var b := Basis(Vector3.UP, _rng.randf_range(0, TAU)).scaled(Vector3(s, s * _rng.randf_range(0.85, 1.15), s))
+		var s := _rng.randf_range(0.75, 1.55) * (1.35 if sp == SP_TUFT else 1.15)
+		if sp == SP_SPROUT:
+			s = _rng.randf_range(1.4, 2.2)
+		var b := Basis(Vector3.UP, _rng.randf_range(0, TAU)).scaled(Vector3(s, s * _rng.randf_range(0.8, 1.25), s))
 		b = Basis(Vector3(_rng.randf_range(-1, 1), 0, _rng.randf_range(-1, 1)).normalized(), _rng.randf_range(0.0, 0.18)) * b
-		mm.set_instance_transform(at, Transform3D(b, Vector3(p.x, grid.height_at(p.x, p.y) - 0.02, p.y)))
-		var born := now - 5.0 if instant else now + _rng.randf_range(0.0, 0.8)
+		mm.set_instance_transform(at, Transform3D(b, Vector3(p.x, grid.height_at(p.x, p.y) + MEADOW_RAISE - 0.03, p.y)))
+		# sprouts first, then grass, then the flowers open
+		var delay := 0.0 if sp == SP_SPROUT else (0.3 if sp == SP_TUFT or sp == SP_TALL else 0.7)
+		var born := now - 5.0 if instant else now + delay + _rng.randf_range(0.0, 1.1)
 		mm.set_instance_color(at, Color.WHITE)
 		mm.set_instance_custom_data(at, Color(born, _rng.randf(), 0.0, 1.0))
 		_flower_count[key] = at + 1
 		mm.visible_instance_count = at + 1
+
+
+func _borders_ash(i: int) -> bool:
+	var x := i % grid.n
+	var y := i / grid.n
+	for dd in 8:
+		var xx: int = x + ForestGrid.DX[dd]
+		var yy: int = y + ForestGrid.DY[dd]
+		if xx < 0 or yy < 0 or xx >= grid.n or yy >= grid.n:
+			continue
+		var st := grid.state[xx + yy * grid.n]
+		if st == ForestGrid.ASH or st == ForestGrid.BURNING or (st == ForestGrid.INTACT and Balance.flammable(grid.kind[xx + yy * grid.n])):
+			return true
+	return false
 
 
 # =====================================================================================
@@ -556,12 +643,29 @@ func _style() -> float:
 	return 1.0 if GameState.phoenix_on else 0.0
 
 
+func _front(c: int) -> bool:
+	## A burning cell at the edge of the fire: something next to it can still catch.
+	var x := c % grid.n
+	var y := c / grid.n
+	for d in 4:
+		var xx: int = x + ForestGrid.DX[d]
+		var yy: int = y + ForestGrid.DY[d]
+		if xx < 0 or yy < 0 or xx >= grid.n or yy >= grid.n:
+			continue
+		var j := xx + yy * grid.n
+		if grid.state[j] == ForestGrid.INTACT and grid.kind[j] <= Balance.ELDER:
+			return true
+	return false
+
+
 func update_fire(camera_pos: Vector3) -> void:
 	## Rebuild the flame, spark and smoke billboards and the fire's light from the
-	## burning cells (once per tick). Each burning plant gets a cluster of flames
-	## of different sizes round it, one tall leading flame on top, sparks, smoke;
-	## grass fires get a leading flame every few cells so a burning patch has a
-	## crest, not a row of candles.
+	## burning cells (once per tick). Each burning tree is one composed bonfire
+	## over its crown (and now and then a lick at its roots), dying down to a
+	## few low licks at the end; giants and the Elder Tree add a tall leading
+	## flame. A grass fire is a low ragged front along its edge, thin behind it,
+	## with a tall crest here and there. Every tree sends up a plume of smoke
+	## that bends downwind.
 	var nf := 0
 	var ns := 0
 	var light_sum := Vector3.ZERO
@@ -570,56 +674,97 @@ func update_fire(camera_pos: Vector3) -> void:
 	var style := _style()
 	_fire_img.fill(Color.BLACK)
 	for c in grid.burning:
+		if nf >= MAX_FLAMES - 4:
+			break
 		var k := grid.kind[c]
 		var size := grid.flame_size(c)
+		var left := grid.fuel[c] / maxf(grid.fuel0[c], 0.001)
 		var v := grid.vary[c]
 		var big := _size[c] if _size.size() > c else 1.0
 		var cp := grid.cell_center(c)
 		var ground := grid.height_at(cp.x, cp.y)
 		var grow := sqrt(size)
 		var tall := float(Balance.PLANTS[k].height) * big
-		var list: Array = FLAMES[k]
 		var h := fmod(v * 91.7 + float(c) * 0.618, 1.0)          # this cell's own dice
-		var lead_grass := k == Balance.GRASS and h < 0.28
-		for fi in list.size():
-			if nf >= MAX_FLAMES:
-				break
-			var f: Array = list[fi]
-			var r := fmod(h * 7.3 + fi * 0.389, 1.0)
-			var ang := (h + fi * 0.27) * TAU
-			var out := float(f[3]) * (0.6 + 0.6 * r) * (big if k >= Balance.PINE else 1.0)
-			var at := Vector3(cp.x + cos(ang) * out, ground + float(f[2]) * tall, cp.y + sin(ang) * out)
-			var lead := (fi == 0 and k >= Balance.PINE) or lead_grass
-			var w := float(f[0]) * grow * (0.75 + 0.5 * r)
-			var hh := float(f[1]) * grow * (0.7 + 0.6 * fmod(r * 3.1, 1.0))
-			if lead_grass:
-				hh *= 1.9
-				w *= 1.1
-			if k >= Balance.PINE:
-				w *= 0.85 + 0.15 * big
-				hh *= big
-			_put(_buf, nf, at, w, hh, Color(fmod(h * 13.7 + fi * 0.137, 1.0), size, style, 1.0 if lead else 0.0))
-			nf += 1
-		# sparks spitting up out of the bigger fires
-		var sparks := 0 if k == Balance.GRASS and h > 0.3 else (1 if k <= Balance.BUSH else 3)
-		for si in sparks:
-			if nf >= MAX_FLAMES:
-				break
-			var sr := fmod(h * 5.1 + si * 0.43, 1.0)
-			var at := Vector3(cp.x + (sr - 0.5) * 1.2, ground + tall * (0.3 + 0.5 * sr), cp.y + (fmod(sr * 7.7, 1.0) - 0.5) * 1.2)
-			_put(_buf, nf, at, 0.22 + 0.12 * sr, 1.0 + tall * 0.25, Color(sr, size, style, 2.0))
-			nf += 1
-		if ns < MAX_SMOKE and (k >= Balance.PINE or (c % 4) == 0):
-			var puff := 1.3 + 0.55 * float(k)
-			_put(_smoke_buf, ns, Vector3(cp.x, ground + tall * 0.9 + 1.0, cp.y), 1.0, 1.0,
-				Color(v, puff, 0.3 + 0.5 * v, 0.5 + v))
-			ns += 1
+		var r1 := fmod(h * 7.3, 1.0)
+		var r2 := fmod(h * 13.1 + 0.37, 1.0)
+		var seed := fmod(h * 13.7, 1.0)
+		var dying := left < 0.22
+		if k == Balance.GRASS:
+			var front := _front(c)
+			if dying:
+				if h < 0.3:
+					_put(_buf, nf, Vector3(cp.x, ground, cp.y), 1.5 + r1, 0.8 * grow + 0.3, Color(seed, size, style, F_DYING))
+					nf += 1
+			elif front or h < 0.3:
+				var at := Vector3(cp.x + (r1 - 0.5) * 0.6, ground, cp.y + (r2 - 0.5) * 0.6)
+				var hh := (1.55 if front else 0.95) * (0.8 + 0.4 * r2) * grow
+				_put(_buf, nf, at, (2.4 + 0.8 * r1) * (1.0 if front else 0.8), hh, Color(seed, size, style, F_FRONT))
+				nf += 1
+				if front and h < 0.1:
+					# a crest: one tall flame standing up out of the front
+					_put(_buf, nf, at + Vector3(0.2, 0, 0), 1.1, 2.8 * grow, Color(fmod(seed * 3.3, 1.0), size, style, F_LEAD))
+					nf += 1
+			if h < 0.07 and not dying:
+				_put(_buf, nf, Vector3(cp.x, ground + 0.4, cp.y), 0.22, 1.2, Color(r1, size, style, F_SPARK))
+				nf += 1
+		else:
+			var bf: Array = BONFIRE[k]
+			var w := float(bf[0]) * big * (0.85 + 0.3 * r1)
+			var hh := float(bf[1]) * big * (0.82 + 0.36 * r2)
+			if dying:
+				# a few low licks over the embers
+				_put(_buf, nf, Vector3(cp.x, ground, cp.y), w * 0.7, hh * 0.32 * (0.5 + size), Color(seed, size, style, F_DYING))
+				nf += 1
+			else:
+				var base := ground + float(bf[2]) * tall * (0.6 + 0.4 * grow)
+				var toward := Vector2(camera_pos.x - cp.x, camera_pos.z - cp.y)
+				toward = toward.normalized() * float(bf[3]) * big * 0.8 if toward.length() > 0.5 else Vector2.ZERO
+				_put(_buf, nf, Vector3(cp.x + toward.x + (r1 - 0.5) * 0.4, base, cp.y + toward.y + (r2 - 0.5) * 0.4),
+					w * (0.75 + 0.25 * grow), hh * grow, Color(seed, size, style, F_BONFIRE))
+				nf += 1
+				if k >= Balance.PINE and r1 < 0.5:
+					# a lick at the roots, round the side of the trunk
+					var ang := h * TAU
+					var out := 0.55 * big + (0.4 if k >= Balance.OAK else 0.1)
+					_put(_buf, nf, Vector3(cp.x + cos(ang) * out, ground, cp.y + sin(ang) * out), 1.3 * big, 1.9 * big * grow,
+						Color(fmod(seed * 5.1, 1.0), size, style, F_FLAME))
+					nf += 1
+				if k >= Balance.GIANT:
+					# the big ones throw up a tall leading flame over everything
+					_put(_buf, nf, Vector3(cp.x - (r1 - 0.5) * 1.5, base + hh * 0.35, cp.y), w * 0.35, hh * 0.9 * grow,
+						Color(fmod(seed * 2.7, 1.0), size, style, F_LEAD))
+					nf += 1
+				if k == Balance.ELDER:
+					for e in 3:
+						var ea := TAU * e / 3.0 + 0.4
+						_put(_buf, nf, Vector3(cp.x + cos(ea) * 6.0, ground + tall * 0.2, cp.y + sin(ea) * 6.0), w * 0.55, hh * 0.6 * grow,
+							Color(fmod(seed + e * 0.31, 1.0), size, style, F_BONFIRE))
+						nf += 1
+			# sparks spitting up out of it
+			for si in ((1 if r2 < 0.5 else 0) if k <= Balance.OAK else 2):
+				var sr := fmod(h * 5.1 + si * 0.43, 1.0)
+				var at := Vector3(cp.x + (sr - 0.5) * 1.2, ground + tall * (0.4 + 0.4 * sr), cp.y + (fmod(sr * 7.7, 1.0) - 0.5) * 1.2)
+				_put(_buf, nf, at, 0.24 + 0.12 * sr, 1.0 + tall * 0.25, Color(sr, size, style, F_SPARK))
+				nf += 1
+		# smoke: a plume from every tree (three puffs a third of a cycle apart make a
+		# rising column), a wisp off every few cells of grass
+		if k >= Balance.PINE or (k == Balance.BUSH and (c % 3) == 0):
+			var puffs := 3 if k >= Balance.PINE else 1
+			var puff := 1.2 + 0.6 * float(k) + (1.5 if k == Balance.ELDER else 0.0)
+			var top := ground + (tall * 0.95 if k >= Balance.PINE else 0.6)
+			for pi in puffs:
+				if ns >= MAX_SMOKE:
+					break
+				_put(_smoke_buf, ns, Vector3(cp.x, top, cp.y), 1.0, 1.0,
+					Color(fmod(v + pi / 3.0, 1.0), puff * (0.6 + 0.6 * size), 0.25 + 0.55 * v + (0.2 if dying else 0.0), 0.4 + v))
+				ns += 1
 		_fire_img.set_pixel(c % grid.n, c / grid.n, Color(LIGHT[k] * (0.4 + 0.6 * size), 0, 0))
-		var base := Vector3(cp.x, ground, cp.y)
-		var d2 := base.distance_squared_to(camera_pos)
+		var basep := Vector3(cp.x, ground, cp.y)
+		var d2 := basep.distance_squared_to(camera_pos)
 		if d2 < near2:
 			var wgt := (1.0 + float(k)) * size
-			light_sum += base * wgt
+			light_sum += basep * wgt
 			light_w += wgt
 	_flames.buffer = _buf
 	_flames.visible_instance_count = nf
@@ -677,7 +822,8 @@ func _ground_color(i: int) -> Color:
 	var v := grid.vary[i]
 	match grid.state[i]:
 		ForestGrid.BURNING:
-			return Color(0.03, 0.02, 0.02, 1.0)
+			var ch := Color("#2A2420").srgb_to_linear()     # char, never pure black
+			return Color(ch.r, ch.g, ch.b, 1.0)
 		ForestGrid.ASH:
 			return _lin(G_ASH, v)
 		ForestGrid.MEADOW:
@@ -721,11 +867,16 @@ func _facing(from: Vector2, to: Vector2) -> float:
 	return atan2(d.x, d.y)
 
 
-const LODGE := Vector2(-11.0, 49.6)
-const HOUSES := [["lodge", Vector2(-11.0, 49.6), 1.15, 2.9], ["cottage_small", Vector2(9.4, 48.6), 1.0, 1.9],
-	["cottage_mid", Vector2(15.4, 55.2), 1.0, 2.4], ["woodshed", Vector2(-16.2, 56.4), 1.0, 1.6]]
-const LODGE_CHIMNEY := Vector3(1.32, 8.6, -1.87)   # in the lodge model's own space (art/blender/village.py)
-const WELL := Vector2(-4.6, 50.6)
+const LODGE := Vector2(-11.5, 50.5)
+# [model, where, scale, footprint radius, chimney top in the model's own space (Godot axes) or null]
+const HOUSES := [
+	["lodge", Vector2(-11.5, 50.5), 1.0, 3.7, Vector3(3.7, 8.3, -0.6)],
+	["cottage_small", Vector2(10.6, 47.8), 1.0, 3.0, Vector3(1.45, 7.15, -0.68)],
+	["cottage_mid", Vector2(16.2, 55.6), 1.0, 3.4, Vector3(-1.66, 5.78, -0.55)],
+	["cottage_slate", Vector2(-3.6, 58.6), 1.0, 3.2, Vector3(-1.38, 7.0, -0.72)],
+	["woodshed", Vector2(-17.0, 57.0), 1.0, 1.6, null],
+]
+const WELL := Vector2(-4.4, 50.4)
 
 var _stones: Array = []            # [Vector2 position, radius] laid so far
 
@@ -736,17 +887,17 @@ func _build_village() -> void:
 	## near on the right, a bigger cottage further back, a woodshed behind the
 	## lodge. Flagstones are laid round the well and at the lodge's door, and
 	## stepping stones lead off along the worn path, thinning out into the woods.
-	var square := Vector2(0.0, 50.0)
+	var square := Vector2(0.0, 51.0)
 	for h in HOUSES:
 		var pos: Vector2 = h[1]
 		var face := _facing(pos, square)
 		if h[0] == "woodshed":
 			face = _facing(pos, Vector2(-8.0, 56.0))
-		var mi := _place(Models.prop(h[0]), pos.x, pos.y, face + (0.35 if h[0] == "lodge" else 0.1), h[2], 0.1)
-		if h[0] == "lodge":
-			_chimney_smoke(mi.transform * LODGE_CHIMNEY)
+		var mi := _place(Models.prop(h[0]), pos.x, pos.y, face + (0.3 if h[0] == "lodge" else 0.08), h[2], 0.1)
+		if h[4] != null:
+			_chimney_smoke(mi.transform * (h[4] as Vector3), h[0] == "lodge")
 	_place(Models.prop("well"), WELL.x, WELL.y, 0.4)
-	_place(Models.prop("woodpile"), -7.4, 53.6, 1.2)
+	_place(Models.prop("woodpile"), -6.6, 54.4, 1.0)
 	_place(Models.prop("fence"), -5.6, 46.0, 0.3)
 	_place(Models.prop("fence"), 13.8, 45.8, -0.35)
 	_place(Models.prop("fence"), 17.4, 50.8, 1.3)
@@ -776,19 +927,67 @@ func _build_village() -> void:
 				_bloom(i, true)
 
 
-func _chimney_smoke(at: Vector3) -> void:
-	## A thin plume from the lodge's chimney: someone kept the fire in.
+var _stump: MeshInstance3D
+var _sapling: MeshInstance3D
+
+
+func _build_elder_remains() -> void:
+	## When the Elder Tree has burned, its charred stump stays at the heart, and
+	## once the meadow comes a green sapling grows out of it.
+	var c := grid.cell_center(grid.elder_cell)
+	_stump = _place(Models.forest_mesh("elder_stump"), c.x, c.y, 0.3, 1.0, 0.3)
+	_sapling = _place(Models.forest_mesh("sapling"), c.x + 0.4, c.y - 0.3, 1.1, 2.6, -1.6)
+	_stump.visible = false
+	_sapling.visible = false
+	update_elder_remains(true)
+
+
+func update_elder_remains(instant: bool = false) -> void:
+	if _stump == null:
+		return
+	var st := grid.state[grid.elder_cell]
+	_stump.visible = st == ForestGrid.ASH or st == ForestGrid.MEADOW
+	var grow := st == ForestGrid.MEADOW or (grid.lifted and st != ForestGrid.INTACT)
+	if grow and not _sapling.visible:
+		_sapling.visible = true
+		if instant:
+			_sapling.scale = Vector3.ONE * 2.6
+		else:
+			# it pushes up out of the stump and unfurls, with a little overshoot
+			_sapling.scale = Vector3(0.2, 0.05, 0.2)
+			var tw := _sapling.create_tween()
+			tw.tween_property(_sapling, "scale", Vector3.ONE * 2.6, 2.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	elif not grow:
+		_sapling.visible = false
+
+
+func set_healed(k: float) -> void:
+	## 0 cursed .. 1 lifted: the far woods turn green, the water mirrors the dawn.
+	plant_mat.set_shader_parameter("healed", k)
+	if water_mat != null:
+		water_mat.set_shader_parameter("sky_tint", Color("#5E4C74").lerp(Color("#E8A882"), k))
+
+
+var chimney_mat: ShaderMaterial
+
+
+func _chimney_smoke(at: Vector3, big: bool = false) -> void:
+	## A thin plume from each chimney: someone kept the fire in.
+	if chimney_mat == null:
+		chimney_mat = smoke_mat.duplicate()
+		chimney_mat.set_shader_parameter("glow_low", 0.0)
 	var quad := QuadMesh.new()
 	quad.size = Vector2(1, 1)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
 	mm.mesh = quad
-	mm.instance_count = 7
-	for k in 7:
+	var n := 7 if big else 5
+	mm.instance_count = n
+	for k in n:
 		mm.set_instance_transform(k, Transform3D(Basis(), at))
-		mm.set_instance_custom_data(k, Color(k / 7.0, 0.9 + 0.1 * (k % 3), 0.05, 0.25))
-	var mmi := _add_mm(mm, smoke_mat)
+		mm.set_instance_custom_data(k, Color(k / float(n), (0.9 if big else 0.6) + 0.1 * (k % 3), 0.05, 0.25))
+	var mmi := _add_mm(mm, chimney_mat)
 	mmi.custom_aabb = AABB(Vector3(-6, -1, -6), Vector3(12, 14, 12))
 
 
@@ -822,15 +1021,16 @@ func _lay_stones(gate: Vector2) -> void:
 	for k in 3:
 		var p := LODGE + door_dir * (3.6 + k * 0.95) + door_dir.orthogonal() * r.randf_range(-0.25, 0.25)
 		_try_stone(p, r.randf_range(0.6, 0.72), r)
-	# 2. paving round the well, big stones in the middle, ragged at the rim
-	var hub := Vector2(-2.2, 53.6)
-	for _k in 2600:
+	# 2. paving round the well: big worn slabs close to it, then ragged and
+	# thinning, with earth and moss between (not an even scatter)
+	var hub := WELL + Vector2(0.6, 1.2)
+	for _k in 1400:
 		var a := r.randf() * TAU
-		var d := sqrt(r.randf()) * 6.4
-		var p := hub + Vector2(cos(a), sin(a) * 0.85) * d
-		if r.randf() > 1.0 - smoothstep(3.2, 6.4, d) * 0.92:
+		var d := sqrt(r.randf()) * 5.2
+		var p := hub + Vector2(cos(a), sin(a) * 0.8) * d
+		if r.randf() > 1.0 - smoothstep(1.8, 5.2, d) * 0.97:
 			continue
-		_try_stone(p, lerpf(0.78, 0.42, d / 6.4) * r.randf_range(0.8, 1.2), r)
+		_try_stone(p, lerpf(0.8, 0.4, d / 5.2) * r.randf_range(0.75, 1.25), r)
 	# 3. stepping stones along the worn path, thinning out into the woods
 	var y := float(grid.n) - 5.5
 	while y > float(ForestGrid.PATH_END):
@@ -861,7 +1061,7 @@ func _lay_stones(gate: Vector2) -> void:
 			var s := float(st[1]) / 0.5
 			var b := Basis(Vector3.UP, float(st[3])) * Basis.from_scale(Vector3(s * r.randf_range(0.95, 1.15), 0.8 + 0.4 * s, s * r.randf_range(0.85, 1.05)))
 			b = Basis(Vector3(r.randf_range(-1, 1), 0, r.randf_range(-1, 1)).normalized(), r.randf_range(0.0, 0.05)) * b   # laid by hand: none quite level
-			mm.set_instance_transform(n, Transform3D(b, Vector3(p.x, grid.height_at(p.x, p.y) - 0.04, p.y)))
+			mm.set_instance_transform(n, Transform3D(b, Vector3(p.x, grid.height_at(p.x, p.y) - r.randf_range(0.02, 0.07), p.y)))   # partly sunk into the earth
 			mm.set_instance_color(n, Color.WHITE)
 			mm.set_instance_custom_data(n, Color(-1.0, r.randf(), NEVER, 0.5))
 		_add_mm(mm, plant_mat)
@@ -942,6 +1142,7 @@ func show_loaded_state() -> void:
 		_set_meadow(i)
 	_tex.update(_img)
 	_meadow_tex.update(_meadow_img)
+	update_elder_remains(true)
 
 
 func set_camera(cam: Vector3, focus: Vector3) -> void:

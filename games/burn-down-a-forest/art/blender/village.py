@@ -137,6 +137,98 @@ def wall_color(wall):
     return fn
 
 
+SHINGLE = [L.srgb("#5E4634"), L.srgb("#6E5240"), L.srgb("#4E3A2C")]
+SLATE = [L.srgb("#4E5466"), L.srgb("#5C6274"), L.srgb("#454A5A")]
+BRICK = L.srgb("#8A4A36")
+BRICK_HI = L.srgb("#B06A50")
+CLAY = L.srgb("#A86A44")
+
+
+def gable_roof(m, W, D, H, rise, over, cols, seed, rows=7, eave_drop=0.0, hip=0.0):
+    """A pitched roof laid in courses of shingles or slates: each course a row
+    of small tiles that step out over the one below (alternating colours, a
+    ragged lower edge), deep eaves that overhang the walls by `over`, and a
+    ridge cap. hip > 0 slopes the gable ends in too (a hipped roof)."""
+    rng = m.rng
+    hx = W * 0.5 + over
+    hy = D * 0.5 + over
+    for side in (-1, 1):
+        for r in range(rows):
+            t0 = r / rows
+            t1 = (r + 1.15) / rows
+            y0 = side * hy * (1.0 - t0)
+            y1 = side * hy * (1.0 - t1)
+            z0 = H - eave_drop + rise * t0
+            z1 = H - eave_drop + rise * t1
+            inset0 = hip * t0
+            inset1 = hip * t1
+            ntiles = max(4, int(W * 3.2))
+            for k in range(ntiles):
+                u0 = k / ntiles
+                u1 = (k + 1) / ntiles
+                x0 = -hx * (1.0 - inset0) + 2 * hx * (1.0 - inset0) * u0
+                x1 = -hx * (1.0 - inset0) + 2 * hx * (1.0 - inset0) * u1
+                x0b = -hx * (1.0 - inset1) + 2 * hx * (1.0 - inset1) * u0
+                x1b = -hx * (1.0 - inset1) + 2 * hx * (1.0 - inset1) * u1
+                drop = rng.uniform(0.0, 0.06)
+                col = cols[(k + r) % len(cols)]
+                col = L.mix(col, L.srgb("#2E241E"), rng.uniform(0.0, 0.2))
+                lip = 0.045
+                a = m.vert((x0 + 0.01, y0, z0 - drop), col, L.BARK, 0.2)
+                b = m.vert((x1 - 0.01, y0, z0 - drop), col, L.BARK, 0.2)
+                c = m.vert((x1b - 0.01, y1, z1), L.mix(col, THATCH_DARK, 0.25), L.BARK)
+                d = m.vert((x0b + 0.01, y1, z1), L.mix(col, THATCH_DARK, 0.25), L.BARK)
+                a2 = m.vert((x0 + 0.01, y0, z0 - drop - lip), L.scale(col, 0.6), L.BARK)
+                b2 = m.vert((x1 - 0.01, y0, z0 - drop - lip), L.scale(col, 0.6), L.BARK)
+                if side > 0:
+                    m.face([a, b, c, d])
+                    m.face([a2, b2, b, a])
+                else:
+                    m.face([d, c, b, a])
+                    m.face([a, b, b2, a2])
+    # the ridge cap
+    m.tube([Vector((-hx * (1.0 - hip), 0, H - eave_drop + rise + 0.04)), Vector((hx * (1.0 - hip), 0, H - eave_drop + rise + 0.04))],
+           [0.11, 0.11], 6, L.scale(cols[0], 0.75), L.BARK, cap_top=True, cap_bottom=True)
+    # gable ends: the wall's triangle up under the roof (plaster), unless hipped
+    return hx, hy
+
+
+def gable_wall(m, W, D, H, rise, wall):
+    for side in (-1, 1):
+        x = side * W * 0.5
+        a = m.vert((x, -D * 0.5, H), wall, L.BARK)
+        b = m.vert((x, D * 0.5, H), wall, L.BARK)
+        c = m.vert((x, 0, H + rise * 0.96), L.mix(wall, DAMP, 0.15), L.BARK)
+        m.face([a, b, c] if side > 0 else [c, b, a])
+
+
+def chimney_stack(m, x, y, z0, h, kind, seed):
+    """Three different chimneys: a crooked fieldstone stack with a clay pot,
+    a brick stack with a corbelled lip, a stone stack leaning with age."""
+    rng = m.rng
+    if kind == "brick":
+        n = int(h / 0.22)
+        for k in range(n):
+            m.box((x + 0.01 * k * (1 if seed % 2 else -1), y, z0 + 0.22 * k + 0.11), (0.62, 0.55, 0.22),
+                  BRICK if k % 2 else L.mix(BRICK, BRICK_HI, 0.35), L.BARK, bevel=0.02)
+        top = z0 + 0.22 * n
+        m.box((x + 0.01 * n * (1 if seed % 2 else -1), y, top + 0.06), (0.76, 0.68, 0.12), L.mix(BRICK, STONE, 0.4), L.BARK, bevel=0.03)
+        return Vector((x + 0.01 * n * (1 if seed % 2 else -1), y, top + 0.12))
+    stones = int(h / 0.32)
+    lean = 0.0
+    for k in range(stones):
+        lean += rng.uniform(0.0, 0.025)
+        w = 0.7 - 0.012 * k
+        m.box((x + lean, y + rng.uniform(-0.02, 0.02), z0 + 0.32 * k + 0.16), (w, w * 0.92, 0.34),
+              L.mix(STONE, STONE_HI, 0.35 * ((k + seed) % 2)), L.BARK, bevel=0.07, rot=Matrix.Rotation(rng.uniform(-0.06, 0.06), 3, 'Z'))
+    top = z0 + 0.32 * stones
+    if kind == "pot":
+        m.lathe([(0.16, 0.0), (0.18, 0.12), (0.14, 0.3), (0.17, 0.36), (0.13, 0.36)], 8, CLAY, L.BARK, center=(x + lean, y, top),
+                close_top=False, close_bottom=True)
+        return Vector((x + lean, y, top + 0.36))
+    return Vector((x + lean, y, top))
+
+
 def cottage(name, seed, variant, W=3.6, D=3.0, H=2.3, lean=0.0, chimney=True, windows=2):
     """A plastered cottage with carved, layered thatch, round lit windows, a
     round plank door, a crooked chimney and the curse's roots climbing over it."""
@@ -168,6 +260,7 @@ def cottage(name, seed, variant, W=3.6, D=3.0, H=2.3, lean=0.0, chimney=True, wi
         m.box(wc + Vector((0, -0.15, -0.5)), (0.78, 0.22, 0.16), WOOD, L.BARK, bevel=0.02)
     if chimney:
         cx = (W * 0.28) * (1 if variant != 1 else -1) + lean * H
+        print("%s chimney top" % name, (round(cx + 0.05 * 3 * (1 if seed % 2 else -1), 3), 0.55, round(H + 1.0 + 0.42 * 3 + 0.22, 3)))
         for k in range(4):
             m.box((cx + 0.05 * k * (1 if seed % 2 else -1), 0.55, H + 1.0 + 0.42 * k), (0.62 - 0.03 * k, 0.6 - 0.03 * k, 0.44), STONE, L.BARK,
                   bevel=0.06, rot=Matrix.Rotation(0.05 * k, 3, 'Y'))
@@ -187,82 +280,147 @@ def cottage(name, seed, variant, W=3.6, D=3.0, H=2.3, lean=0.0, chimney=True, wi
     return m.finish()
 
 
-def lodge(name="lodge", seed=48):
-    """The landmark: the old keeper's lodge, a round two-storey house of stone
-    and plaster under a tall cone of carved thatch, with a crooked stone
-    chimney taller than anything in the village (it smokes, in the game), a
-    lantern by the door and roots wrapped round its drum."""
+def pitched_cottage(name, seed, wall, roof, W, D, H, rise, over, chimney_kind, hip=0.0, lean=0.0, windows=2, door_x=0.0):
+    """A plastered cottage under a pitched roof of shingles or slates with deep
+    overhanging eaves, timber corners and a sill under each round lit window,
+    a round plank door, its own kind of chimney, damp at the foot of the walls
+    and the curse's roots climbing over it."""
     m = L.Model(name, seed)
     rng = m.rng
-    R, H = 2.5, 3.4
-    # a stone plinth, then the plastered drum
-    m.lathe([(R + 0.25, 0.0), (R + 0.28, 0.25), (R + 0.2, 0.55), (R, 0.6)], 16, STONE, L.BARK, close_top=False, close_bottom=False,
-            wobble=0.03, color_fn=lambda t, k: L.mix(STONE, STONE_HI, 0.35 * ((k + int(t * 3)) % 2)))
-    rings = m.lathe([(R, 0.55), (R * 1.01, 1.4), (R * 0.99, 2.4), (R * 0.97, H)], 16, PLASTER[0], L.BARK, close_top=False, close_bottom=False,
-                    wobble=0.02, color_fn=lambda t, k: L.mix(DAMP, PLASTER[0], min(1.0, t * 2.2)))
-    # a timber band between the storeys
-    m.lathe([(R * 1.0 + 0.04, 1.85), (R + 0.07, 1.95), (R + 0.04, 2.05)], 16, TIMBER, L.BARK, close_top=False, close_bottom=False)
-    # the cone of thatch: carved bands, each jutting out at its lip, a ragged eave
-    bands, per = 5, 3
-    prof = []
-    top_z = H + 4.2
-    for b in range(bands):
-        for p in range(per + 1):
-            f = p / per
-            t = (b + f) / bands
-            r = (R + 0.9) * (1.0 - t) ** 1.05 + 0.08
-            z = H - 0.3 + (top_z - H + 0.3) * t ** 0.9
-            r += f * 0.12 * (1.0 - t)
-            z -= f * 0.06
-            prof.append((r, z, f))
-    prof = list(reversed(prof))
-    sides = 20
-    rings2 = []
-    for i, (r, z, f) in enumerate(prof):
-        ring = []
-        for k in range(sides):
-            a = 2 * math.pi * k / sides
-            rr = r * (1.0 + 0.03 * math.sin(a * 5 + i))
-            zz = z + (0.05 * math.sin(a * 7 + i) if i == len(prof) - 1 else 0.0)
-            ring.append(m.vert((math.cos(a) * rr, math.sin(a) * rr, zz), thatch_color(THATCH[0], f), L.BARK))
-        rings2.append(ring)
-    for i in range(len(rings2) - 1):
-        a, b = rings2[i], rings2[i + 1]
-        for k in range(sides):
-            k2 = (k + 1) % sides
-            m.face([a[k], a[k2], b[k2], b[k]])
-    tip = m.vert((0, 0, top_z + 0.25), THATCH_HI, L.BARK)
-    for k in range(sides):
-        m.face([tip, rings2[0][(k + 1) % sides], rings2[0][k]])
-    # a finial knot of straw on top
-    m.blob(Vector((0, 0, top_z + 0.3)), 0.22, THATCH[2], L.BARK, subdiv=1, rough=0.3, seed=3)
-    # door and windows round the front (-Y), upstairs too
-    front = Vector((0, -1, 0))
-    round_door(m, Vector((0.0, -R - 0.04, 0.55)), w=0.55, h=1.15)
-    for a, z, r in ((-0.55, 1.35, 0.34), (0.6, 1.3, 0.3), (0.25, 2.65, 0.3), (-0.95, 2.7, 0.26)):
-        d = Vector((math.sin(a), -math.cos(a), 0))
-        round_window(m, d * (R + 0.02) + Vector((0, 0, z)), r, facing=Vector((0, -1, 0)) if abs(a) < 0.7 else d)
+    vs = m.box((0, 0, H * 0.5), (W, D, H), wall, L.BARK, bevel=0.22, smooth=True)
+    for v in vs:
+        v.co.x += lean * v.co.z
+    m.recolor(vs, wall_color(wall))
+    m.box((0, 0, 0.2), (W + 0.3, D + 0.3, 0.4), STONE, L.BARK, bevel=0.12, smooth=True)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            m.box((sx * (W * 0.5 - 0.02) + lean * H * 0.5, sy * (D * 0.5 - 0.02), H * 0.5 + 0.1), (0.18, 0.18, H - 0.1), TIMBER, L.BARK,
+                  bevel=0.03, rot=Matrix.Rotation(-lean, 3, 'Y'))
+    m.box((lean * H, -D * 0.5 - 0.03, H - 0.12), (W + 0.12, 0.16, 0.18), TIMBER, L.BARK, bevel=0.03)
+    if hip <= 0.0:
+        gable_wall(m, W, D, H, rise, wall)
+    hx, hy = gable_roof(m, W, D, H, rise, over, roof, seed, rows=8, hip=hip)
+    # carved bargeboards along the eaves, a scalloped fascia
+    for side in (-1, 1):
+        y = side * hy
+        pts = [Vector((-hx, y, H - 0.06)), Vector((hx, y, H - 0.06))]
+        m.tube(pts, [0.06, 0.06], 4, TIMBER, L.BARK, cap_top=True, cap_bottom=True)
+    round_door(m, Vector((door_x, -D * 0.5 - 0.06, 0.05)), w=0.52, h=1.25)
+    for k in range(windows):
+        sx = (1 if k == 0 else -1) * (W * 0.3) + (0.25 if door_x * (1 if k == 0 else -1) > 0 else 0.0)
+        wc = Vector((sx + lean * 1.5, -D * 0.5 - 0.07, 1.55))
+        round_window(m, wc, 0.42)
+        m.box(wc + Vector((0, -0.16, -0.58)), (0.95, 0.24, 0.16), WOOD, L.BARK, bevel=0.02)
+    if chimney_kind:
+        cx = (W * 0.3) * (1 if seed % 2 else -1)
+        top = chimney_stack(m, cx, D * 0.18, H + rise * 0.45, rise * 0.75 + 1.0, chimney_kind, seed)
+        print("%s chimney top" % name, tuple(round(c, 3) for c in top))
+    for k in range(2):
+        side = -1 if k % 2 == 0 else 1
+        x0 = side * rng.uniform(0.6, W * 0.5)
+        pts = [Vector((x0 + side * 0.8, D * 0.5 + 1.6, -0.2)), Vector((x0 + side * 0.4, D * 0.5 + 0.6, 1.0)),
+               Vector((x0, D * 0.25, H + rise * 0.6)), Vector((x0 * 0.9, -D * 0.2, H + rise * 0.5))]
+        root(m, pts, rng.uniform(0.18, 0.26), 0.03)
+    m.bake(ao_dist=1.6, ao_rays=20, ao_strength=0.75, grad=(0.75, 1.05), wear=0.35, grime=0.45, paint=0.16, paint_scale=1.4)
+    print(name, m.tri_count(), "tris")
+    return m.finish()
+
+
+def lodge(name="lodge", seed=48):
+    """The landmark: the old keeper's lodge. A stone ground floor and a
+    timber-framed upper floor jettied out over it (dark beams, braces, plaster
+    between), a steep, deep thatch with a dormer, a porch roof on two crooked
+    posts over the door, a great fieldstone chimney up the gable end (it
+    smokes, in the game), window boxes, a lantern by the door and the curse's
+    roots wrapped round the corner."""
+    m = L.Model(name, seed)
+    rng = m.rng
+    W, D = 5.6, 4.6
+    H0, H1 = 2.4, 2.3          # ground floor, upper floor
+    # the stone ground floor, laid in courses
+    for row in range(6):
+        z = 0.2 + row * 0.4
+        n = 9
+        for side in range(4):
+            length = W if side % 2 == 0 else D
+            for k in range(n):
+                u = (k + 0.5 * (row % 2)) / n
+                if u > 1.0:
+                    continue
+                w = length / n * rng.uniform(0.85, 1.05)
+                t = -length * 0.5 + length * u + w * 0.5
+                if side == 0:
+                    c = (t, -D * 0.5, z)
+                    sz = (w, 0.36, 0.4)
+                elif side == 1:
+                    c = (W * 0.5, t, z)
+                    sz = (0.36, w, 0.4)
+                elif side == 2:
+                    c = (t, D * 0.5, z)
+                    sz = (w, 0.36, 0.4)
+                else:
+                    c = (-W * 0.5, t, z)
+                    sz = (0.36, w, 0.4)
+                m.box(c, sz, L.mix(STONE, STONE_HI, rng.uniform(0.0, 0.45)), L.BARK)
+    m.box((0, 0, H0 * 0.5), (W - 0.2, D - 0.2, H0), L.scale(STONE, 0.6), L.BARK)            # the core behind the stones
+    # the jettied, timber-framed upper floor
+    J = 0.35
+    uw, ud = W + J * 2, D + J * 2
+    vs = m.box((0, 0, H0 + H1 * 0.5 + 0.1), (uw, ud, H1), PLASTER[2], L.BARK, bevel=0.06)
+    m.recolor(vs, lambda v: (L.mix(PLASTER[2], DAMP, 0.15 if v.co.z < H0 + 0.6 else 0.0), L.BARK))
+    m.box((0, 0, H0 + 0.05), (uw + 0.1, ud + 0.1, 0.22), TIMBER, L.BARK, bevel=0.03)          # the jetty beam
+    m.box((0, 0, H0 + H1 + 0.12), (uw + 0.1, ud + 0.1, 0.18), TIMBER, L.BARK, bevel=0.03)
+    for side in (-1, 1):
+        for k in range(6):
+            x = -uw * 0.5 + uw * k / 5
+            m.box((x, side * (ud * 0.5 + 0.03), H0 + H1 * 0.5 + 0.1), (0.16, 0.08, H1), TIMBER, L.BARK, bevel=0.02)
+        for k in range(5):
+            x = -uw * 0.5 + uw * (k + 0.5) / 5
+            if k == 2:
+                continue
+            a = 0.85 * (1 if k % 2 else -1)
+            m.box((x, side * (ud * 0.5 + 0.04), H0 + H1 * 0.45), (0.12, 0.06, H1 * 0.95), TIMBER, L.BARK, bevel=0.02,
+                  rot=Matrix.Rotation(a * 0.6, 3, 'Y'))
+    for side in (-1, 1):
+        for k in range(4):
+            y = -ud * 0.5 + ud * k / 3
+            m.box((side * (uw * 0.5 + 0.03), y, H0 + H1 * 0.5 + 0.1), (0.08, 0.16, H1), TIMBER, L.BARK, bevel=0.02)
+    # the steep thatch over it all, deep and carved (the loaf roof, made tall), and a dormer
+    top = H0 + H1 + 0.2
+    roof = loaf_roof(m, uw - 0.6, ud - 0.6, top, 3.4, THATCH[0], seed, bands=5, nv=12)
+    dc = Vector((0.9, -ud * 0.5 - 0.1, top + 1.0))
+    m.box(dc + Vector((0, 0.35, -0.2)), (1.3, 1.0, 1.3), PLASTER[0], L.BARK, bevel=0.08)
+    round_window(m, dc + Vector((0, -0.17, -0.25)), 0.32)
+    m.lathe([(0.95, -0.1), (0.85, 0.3), (0.5, 0.6), (0.0, 0.7)], 10, thatch_color(THATCH[1], 0.5), L.BARK, center=tuple(dc + Vector((0, 0.3, 0.35))),
+            squash=(0.9, 1.0), close_bottom=False)
+    # the door under a porch roof on two crooked posts
+    round_door(m, Vector((-0.6, -D * 0.5 - 0.2, 0.0)), w=0.6, h=1.4)
+    for sx in (-1.5, 0.3):
+        m.tube([Vector((sx, -D * 0.5 - 1.3, 0)), Vector((sx + rng.uniform(-0.05, 0.05), -D * 0.5 - 1.3, 2.0))], [0.09, 0.08], 6, WOOD, L.BARK)
+    m.box((-0.6, -D * 0.5 - 0.8, 2.15), (2.4, 1.4, 0.1), L.srgb("#5A3E2A"), L.BARK, bevel=0.02, rot=Matrix.Rotation(-0.35, 3, 'X'))
+    # windows below and above, with boxes of flowers under the upper ones
+    for (x, z, r) in ((1.5, 1.35, 0.38), (-2.3, 1.3, 0.3), (-1.6, H0 + 1.25, 0.36), (1.8, H0 + 1.2, 0.36)):
+        y = -D * 0.5 - 0.2 if z < H0 else -ud * 0.5 - 0.07
+        round_window(m, Vector((x, y, z)), r)
+        if z > H0:
+            m.box(Vector((x, y - 0.18, z - r - 0.15)), (0.95, 0.26, 0.2), WOOD, L.BARK, bevel=0.02)
+            for f in range(4):
+                m.blob(Vector((x - 0.33 + f * 0.22, y - 0.18, z - r - 0.02)), 0.07, L.srgb("#D9483B") if f % 2 else L.srgb("#EFE3C8"),
+                       L.BARK, subdiv=0, rough=0.2, seed=f)
     # a lantern on a bracket by the door
-    lc = Vector((0.85, -R - 0.35, 1.9))
-    m.tube([Vector((0.75, -R + 0.05, 2.15)), Vector((0.8, -R - 0.3, 2.2)), lc + Vector((0, 0, 0.32))], [0.03, 0.025, 0.02], 4, IRON, L.BARK)
+    lc = Vector((0.55, -D * 0.5 - 0.55, 1.9))
+    m.tube([Vector((0.55, -D * 0.5 - 0.15, 2.15)), Vector((0.55, -D * 0.5 - 0.45, 2.2)), lc + Vector((0, 0, 0.32))], [0.03, 0.025, 0.02], 4, IRON, L.BARK)
     m.lathe([(0.0, 0.3), (0.12, 0.24), (0.15, 0.18), (0.04, 0.18)], 6, IRON, L.BARK, center=lc, close_bottom=False)
     m.lathe([(0.1, -0.1), (0.115, 0.05), (0.1, 0.18)], 6, WINDOW, L.GLOW, center=lc, close_top=False, close_bottom=True)
-    # the tall crooked chimney up the side, through the eave
-    cx, cy = R * 0.78, R * 0.62
-    for k in range(16):
-        lean = 0.012 * k * k * 0.25
-        m.box((cx + 0.06 * math.sin(k * 0.9) - lean, cy + 0.02 * k, 0.6 + 0.5 * k), (0.82 - 0.015 * k, 0.76 - 0.015 * k, 0.52),
-              L.mix(STONE, STONE_HI, 0.3 * (k % 2)), L.BARK, bevel=0.07, rot=Matrix.Rotation(0.05 * math.sin(k), 3, 'Y'))
-    m.box((cx + 0.04 - 0.012 * 15 * 15 * 0.25, cy + 0.32, 0.6 + 0.5 * 16 - 0.15), (0.84, 0.78, 0.14), L.scale(STONE, 0.6), L.BARK, bevel=0.03)
-    # roots wrapped round the drum
-    for k in range(3):
-        a0 = 2.2 + k * 1.3
-        pts = []
-        for i in range(7):
-            a = a0 + i * 0.32
-            pts.append(Vector((math.cos(a) * (R + 0.15), math.sin(a) * (R + 0.15), 0.1 + i * 0.45 + 0.2 * math.sin(i + k))))
-        root(m, [Vector((math.cos(a0) * (R + 1.6), math.sin(a0) * (R + 1.6), -0.2))] + pts, 0.24, 0.03)
-    m.bake(ao_dist=1.6, ao_rays=20, ao_strength=0.75, grad=(0.72, 1.05), wear=0.35, grime=0.45, paint=0.16, paint_scale=1.4)
+    # the great chimney up the gable end
+    ctop = chimney_stack(m, W * 0.5 + 0.55, 0.6, 0.0, top + 3.6, "stone", seed)
+    print("lodge chimney top", tuple(round(c, 3) for c in ctop))
+    # roots round the corner
+    for k in range(2):
+        pts = [Vector((-W * 0.5 - 1.8, -D * 0.5 + 1.0 * k, -0.2)), Vector((-W * 0.5 - 0.3, -D * 0.5 + 0.6 * k, 1.2)),
+               Vector((-W * 0.5 - 0.1, -D * 0.2 + 0.5 * k, H0 + 1.4)), Vector((-W * 0.3, 0.3 * k, top + 1.6))]
+        root(m, pts, 0.26 - 0.05 * k, 0.03)
+    m.bake(ao_dist=1.8, ao_rays=20, ao_strength=0.75, grad=(0.72, 1.05), wear=0.35, grime=0.45, paint=0.16, paint_scale=1.2)
     print(name, m.tri_count(), "tris")
     return m.finish()
 
@@ -281,18 +439,14 @@ def woodshed(name="woodshed", seed=49):
         z0, z1 = 2.1, 1.55
         m.box((x, 0.0, (z0 + z1) * 0.5 + 0.05), (0.43, 1.75, 0.05), L.mix(L.srgb("#5A3E2A"), MOSS, 0.25 * (k % 3)), L.BARK, bevel=0.01,
               rot=Matrix.Rotation(-math.atan2(z0 - z1, 1.4), 3, 'X') @ Matrix.Rotation(rng.uniform(-0.04, 0.04), 3, 'Z'))
-    for row in range(3):
-        for k in range(5 - row % 2):
-            x = -0.95 + k * 0.42 + (0.21 if row % 2 else 0.0) + rng.uniform(-0.04, 0.04)
-            r = rng.uniform(0.12, 0.17)
-            ln = rng.uniform(0.9, 1.2)
-            pts = [Vector((x, -ln * 0.5, 0.16 + row * 0.27)), Vector((x + rng.uniform(-0.05, 0.05), ln * 0.5, 0.16 + row * 0.27))]
-            rings = m.tube(pts, [r, r], 7, WOOD, L.BARK, cap_top=False, cap_bottom=False,
-                           color_fn=lambda t, kk: L.mix(WOOD, L.srgb("#4E3424"), 0.4 * (kk % 2)))
-            for end, ring, rev in ((pts[0], rings[0], True), (pts[1], rings[1], False)):
-                c = m.vert(end, WOOD_HI, L.BARK)
-                for i in range(len(ring)):
-                    m.face([ring[(i + 1) % len(ring)], ring[i], c] if rev else [ring[i], ring[(i + 1) % len(ring)], c])
+    # split logs stacked inside, pale split faces out (not a pile of round ends)
+    for row in range(4):
+        for k in range(7 - row % 2):
+            x = -1.0 + (k + 0.5 * (row % 2)) * 0.3 + rng.uniform(-0.03, 0.03)
+            z = 0.12 + row * 0.22 + rng.uniform(-0.02, 0.02)
+            frac = 0.5 if rng.random() < 0.6 else 0.27
+            R = Matrix.Rotation(rng.uniform(-0.1, 0.1), 3, 'Y') @ Matrix.Rotation(math.pi * 0.5, 3, 'Z')
+            split_log(m, (x, rng.uniform(-0.05, 0.05), z), rng.uniform(0.9, 1.15), rng.uniform(0.11, 0.15), frac, R, rng)
     m.bake(ao_dist=0.8, ao_strength=0.75, wear=0.3, grime=0.4, paint=0.15, paint_scale=3.0)
     print(name, m.tri_count(), "tris")
     return m.finish()
@@ -318,10 +472,10 @@ def flagstone(name, seed):
     bev = []
     bot = []
     for (x, y) in pts:
-        bot.append(m.vert((x * 1.02, y * 1.02, -0.06), L.mix(base, MOSS, 0.7), L.BARK))
-        bev.append(m.vert((x, y, 0.06), L.mix(base, MOSS, 0.35 * rng.random()), L.BARK))
-        top.append(m.vert((x * 0.84, y * 0.84, 0.1), L.mix(base, STONE_HI, 0.12), L.BARK))
-    centre = m.vert((rng.uniform(-0.05, 0.05), rng.uniform(-0.05, 0.05), 0.115), L.mix(base, STONE_HI, 0.25), L.BARK)
+        bot.append(m.vert((x * 1.02, y * 1.02, -0.1), L.mix(base, MOSS, 0.7), L.BARK))
+        bev.append(m.vert((x, y, 0.025), L.mix(base, MOSS, 0.5 * rng.random()), L.BARK))
+        top.append(m.vert((x * 0.86, y * 0.86, 0.055 + rng.uniform(-0.012, 0.012)), L.mix(base, STONE_HI, 0.12), L.BARK))
+    centre = m.vert((rng.uniform(-0.05, 0.05), rng.uniform(-0.05, 0.05), 0.065), L.mix(base, STONE_HI, 0.25), L.BARK)
     for k in range(n):
         k2 = (k + 1) % n
         m.face([bot[k], bot[k2], bev[k2], bev[k]])
@@ -332,19 +486,49 @@ def flagstone(name, seed):
 
 
 def well(name="well", seed=61):
+    """The village well: a ring of fieldstones laid in courses (each stone its
+    own size and shade, mossy low down), a dark water hole, two posts holding
+    a little shingled roof, a windlass with a crank handle and its rope wound
+    on, and the bucket left on the rim."""
     m = L.Model(name, seed)
-    prof = [(0.95, 0.0), (1.0, 0.25), (1.0, 0.75), (0.92, 0.82), (0.75, 0.82), (0.72, 0.3)]
-    m.lathe(prof, 12, STONE, L.BARK, close_top=False, close_bottom=False, wobble=0.04,
-            color_fn=lambda t, k: L.mix(STONE, STONE_HI, 0.35 * ((k + int(t * 4)) % 2)))
-    m.lathe([(0.72, 0.3), (0.0, 0.3)], 12, L.srgb("#141018"), L.BARK, close_top=False, close_bottom=False)
+    rng = m.rng
+    R = 0.95
+    for row in range(4):
+        n = 11
+        z = 0.12 + row * 0.22
+        for k in range(n):
+            a0 = 2 * math.pi * (k + 0.5 * (row % 2)) / n
+            a1 = a0 + 2 * math.pi / n * rng.uniform(0.82, 0.95)
+            am = (a0 + a1) * 0.5
+            w = R * (a1 - a0)
+            col = L.mix(STONE, STONE_HI, rng.uniform(0.0, 0.5))
+            if row == 0:
+                col = L.mix(col, MOSS, 0.45)
+            m.box((math.cos(am) * R, math.sin(am) * R, z), (0.3, w, 0.22 + rng.uniform(-0.02, 0.03)), col, L.BARK,
+                  rot=Matrix.Rotation(am, 3, 'Z'))
+    # the capstones on the rim
+    for k in range(9):
+        am = 2 * math.pi * k / 9 + 0.2
+        m.box((math.cos(am) * R, math.sin(am) * R, 0.98), (0.38, R * 0.72, 0.1), L.mix(STONE_HI, STONE, rng.uniform(0.2, 0.6)), L.BARK,
+              bevel=0.04, rot=Matrix.Rotation(am, 3, 'Z'))
+    m.lathe([(0.82, 0.92), (0.82, 0.3), (0.0, 0.3)], 12, L.srgb("#141018"), L.BARK, close_top=False, close_bottom=False)
+    # posts, a shingled roof, the windlass and its crank
     for sx in (-1, 1):
-        m.box((sx * 0.85, 0, 1.25), (0.14, 0.14, 1.9), WOOD, L.BARK, bevel=0.03)
-    for sy in (-1, 1):
-        rot = Matrix.Rotation(sy * 0.75, 3, 'X')
-        m.box((0, sy * 0.42, 2.25), (2.1, 1.05, 0.08), L.srgb("#5A3E2A"), L.BARK, bevel=0.02, rot=rot)
-    m.box((0, 0, 1.75), (1.6, 0.1, 0.1), WOOD, L.BARK)
-    m.lathe([(0.16, 0.0), (0.19, 0.28), (0.2, 0.3)], 8, WOOD, L.BARK, center=(0.15, 0, 1.15))
-    m.bake(ao_dist=1.0, ao_strength=0.75)
+        m.tube([Vector((sx * 0.98, 0.0, 0.2)), Vector((sx * 0.96, 0.02, 2.3))], [0.08, 0.07], 6, WOOD, L.BARK)
+    gable_roof(m, 1.7, 1.1, 2.25, 0.75, 0.2, SHINGLE, seed, rows=4)
+    m.tube([Vector((-1.1, 0, 1.7)), Vector((1.1, 0, 1.7))], [0.07, 0.07], 8, WOOD, L.BARK, cap_top=True, cap_bottom=True)
+    rope = []
+    for k in range(10):
+        rope.append(Vector((-0.4 + k * 0.08, math.cos(k * 2.4) * 0.11, 1.7 + math.sin(k * 2.4) * 0.11)))
+    m.tube(rope, [0.03] * len(rope), 5, L.srgb("#B9935E"), L.BARK)
+    m.tube([Vector((0.0, 0, 1.6)), Vector((0.0, 0, 0.95))], [0.012, 0.012], 3, L.srgb("#B9935E"), L.BARK, cap_top=False)
+    m.tube([Vector((1.1, 0, 1.7)), Vector((1.25, 0, 1.7)), Vector((1.25, -0.28, 1.55)), Vector((1.38, -0.28, 1.55))],
+           [0.035, 0.035, 0.035, 0.04], 5, IRON, L.BARK)
+    # the bucket on the rim
+    m.lathe([(0.0, 0.0), (0.15, 0.0), (0.18, 0.26), (0.16, 0.26)], 10, WOOD, L.BARK, center=(0.55, -0.6, 1.0), close_top=False,
+            color_fn=lambda t, k: L.mix(WOOD, L.srgb("#4E3424"), 0.4 * (k % 2)))
+    m.lathe([(0.182, 0.06), (0.19, 0.08), (0.182, 0.1)], 10, IRON, L.BARK, center=(0.55, -0.6, 1.0), close_top=False, close_bottom=False)
+    m.bake(ao_dist=1.0, ao_strength=0.75, wear=0.3, grime=0.4, paint=0.15, paint_scale=3.0)
     print(name, m.tri_count(), "tris")
     return m.finish()
 
@@ -384,35 +568,58 @@ def signpost(name="signpost", seed=63):
     return m.finish()
 
 
+def split_log(m, c, length, r, frac, rot, rng):
+    """One split log: a wedge of round (a half or a quarter), pale split faces,
+    bark on its back, growth rings on its end."""
+    a0 = rng.uniform(0, 6.28)
+    a1 = a0 + 2 * math.pi * frac
+    n = 6 if frac < 0.4 else 9
+    R = rot
+    ends = []
+    for side in (-1, 1):
+        ring = [m.vert(Vector(c) + R @ Vector((side * length * 0.5, 0, 0)), WOOD_HI, L.BARK)]
+        for k in range(n + 1):
+            a = a0 + (a1 - a0) * k / n
+            ring.append(m.vert(Vector(c) + R @ Vector((side * length * 0.5 + rng.uniform(-0.02, 0.02), math.cos(a) * r, math.sin(a) * r)),
+                               L.mix(WOOD, L.srgb("#4E3424"), 0.4 * (k % 2)), L.BARK))
+        ends.append(ring)
+    a, b = ends
+    for k in range(1, n + 1):
+        m.face([a[k], a[k + 1], b[k + 1], b[k]])                      # the bark
+    m.face([a[0], a[1], b[1], b[0]])                                  # the split faces
+    m.face([a[n + 1], a[0], b[0], b[n + 1]])
+    m.face(list(reversed(a)))                                          # the ends
+    m.face(list(b))
+
+
 def woodpile(name="woodpile", seed=64):
-    """Firewood stacked the way people stack it: uneven rows of logs of
-    different lengths and thicknesses, a few split, one rolled off, and a
-    chopping block with the axe left in it."""
+    """Firewood stacked the way people stack it: split logs (halves and
+    quarters, pale split faces out) in rows between two stakes under a little
+    plank roof, uneven, one fallen off, and the chopping block with the axe
+    left in it."""
     m = L.Model(name, seed)
     rng = m.rng
-    counts = [5, 4, 4, 2]
-    for row, cnt in enumerate(counts):
+    for sx in (-1.0, 1.0):
+        m.tube([Vector((sx * 1.0, 0, -0.1)), Vector((sx * 1.0 + rng.uniform(-0.04, 0.04), 0, 1.35))], [0.06, 0.05], 5, WOOD, L.BARK)
+    rows = 5
+    for row in range(rows):
+        cnt = 7 - (row % 2)
         for k in range(cnt):
-            x = (k - (cnt - 1) * 0.5) * 0.33 + rng.uniform(-0.05, 0.05) + (0.12 if row == 3 else 0.0)
-            r = rng.uniform(0.11, 0.17)
-            z = 0.15 + row * 0.27 + rng.uniform(-0.02, 0.02)
-            ln = rng.uniform(1.0, 1.45)
-            off = rng.uniform(-0.12, 0.12)
-            pts = [Vector((x, -ln * 0.5 + off, z)), Vector((x + rng.uniform(-0.04, 0.04), ln * 0.5 + off, z + rng.uniform(-0.03, 0.03)))]
-            split = rng.random() < 0.3
-            rings = m.tube(pts, [r, r * 0.95], 7, WOOD, L.BARK, cap_top=False, cap_bottom=False, squash=(1.0, 0.6) if split else None,
-                           color_fn=lambda t, kk: L.mix(WOOD, L.srgb("#4E3424"), 0.4 * (kk % 2)))
-            for end, ring, rev in ((pts[0], rings[0], True), (pts[1], rings[1], False)):
-                c = m.vert(end, WOOD_HI, L.BARK)
-                for i in range(len(ring)):
-                    m.face([ring[(i + 1) % len(ring)], ring[i], c] if rev else [ring[i], ring[(i + 1) % len(ring)], c])
-    # one rolled off on the ground
-    m.tube([Vector((1.05, -0.4, 0.13)), Vector((1.25, 0.55, 0.13))], [0.13, 0.13], 7, WOOD, L.BARK, cap_top=True, cap_bottom=True)
+            x = -0.85 + (k + 0.5 * (row % 2)) * 0.28 + rng.uniform(-0.03, 0.03)
+            z = 0.12 + row * 0.22 + rng.uniform(-0.02, 0.02)
+            r = rng.uniform(0.11, 0.15)
+            ln = rng.uniform(0.75, 0.95)
+            frac = 0.5 if rng.random() < 0.6 else 0.27
+            R = Matrix.Rotation(math.pi * 0.5, 3, 'Z') @ Matrix.Rotation(rng.uniform(-0.1, 0.1), 3, 'Y')
+            split_log(m, (x, rng.uniform(-0.06, 0.06), z), ln, r, frac, R, rng)
+    m.box((0, 0, 1.4), (2.3, 1.1, 0.06), L.mix(L.srgb("#5A3E2A"), MOSS, 0.3), L.BARK, bevel=0.01, rot=Matrix.Rotation(0.1, 3, 'X'))
+    # one fallen off
+    split_log(m, (1.3, -0.5, 0.1), 0.85, 0.13, 0.5, Matrix.Rotation(0.6, 3, 'Z') @ Matrix.Rotation(1.2, 3, 'X'), rng)
     # the chopping block and the axe
-    m.lathe([(0.32, 0.0), (0.34, 0.25), (0.31, 0.5), (0.0, 0.5)], 10, WOOD, L.BARK, center=(-1.25, 0.2, 0), close_bottom=False,
+    m.lathe([(0.32, 0.0), (0.34, 0.25), (0.31, 0.5), (0.0, 0.5)], 10, WOOD, L.BARK, center=(-1.55, 0.2, 0), close_bottom=False,
             color_fn=lambda t, k: WOOD_HI if t > 0.9 else L.mix(WOOD, L.srgb("#4E3424"), 0.3 * (k % 2)))
-    m.tube([Vector((-1.2, 0.2, 0.55)), Vector((-1.05, 0.25, 1.15))], [0.03, 0.028], 5, WOOD_HI, L.BARK)
-    m.box(Vector((-1.21, 0.2, 0.58)), (0.18, 0.04, 0.14), IRON, L.BARK, bevel=0.01, rot=Matrix.Rotation(-0.25, 3, 'Y'))
+    m.tube([Vector((-1.5, 0.2, 0.55)), Vector((-1.35, 0.25, 1.15))], [0.03, 0.028], 5, WOOD_HI, L.BARK)
+    m.box(Vector((-1.51, 0.2, 0.58)), (0.18, 0.04, 0.14), IRON, L.BARK, bevel=0.01, rot=Matrix.Rotation(-0.25, 3, 'Y'))
     m.bake(ao_dist=0.5, ao_strength=0.8, wear=0.3, grime=0.35, paint=0.12, paint_scale=4.0)
     print(name, m.tri_count(), "tris")
     return m.finish()
@@ -483,7 +690,13 @@ def root_arch(name="root_arch", seed=67):
 
 def main():
     L.reset()
-    obs = [lodge(), cottage("cottage_mid", 42, 1), cottage("cottage_small", 43, 2, W=2.5, D=2.3, H=1.95, lean=0.06, windows=1),
+    # cottages at a size people live in (the keeper is about 2.3 m tall in the game): three roofs, three chimneys
+    obs = [lodge(),
+           cottage("cottage_mid", 42, 1, W=5.4, D=4.4, H=3.3, windows=2),
+           pitched_cottage("cottage_small", 43, PLASTER[1], SHINGLE, W=4.4, D=3.8, H=3.0, rise=2.6, over=0.55, chimney_kind="brick",
+                           lean=0.04, windows=1, door_x=-0.6),
+           pitched_cottage("cottage_slate", 44, PLASTER[2], SLATE, W=5.0, D=4.0, H=3.1, rise=2.2, over=0.45, chimney_kind="pot",
+                           hip=0.35, windows=2, door_x=0.2),
            woodshed(), well(), lantern_post(), signpost(), woodpile(), fence(), ground_roots(), root_arch()]
     obs += [flagstone("flagstone_%d" % k, 300 + k) for k in range(6)]
     L.export(obs, "village.glb")

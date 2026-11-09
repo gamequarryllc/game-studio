@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- meteor: drawn by art/icons/make_icons.py -->
-  <path d="M 7.83 55.88 C 6.70 54.78 24.92 32.80 29.69 29.51 C 34.45 26.21 40.08 31.72 36.43 36.11 C 32.79 40.51 8.95 56.98 7.83 55.88 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 13.92 41.70 L 26.21 31.85" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 22.30 53.62 L 31.72 42.31" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 42.00 5.58 L 45.82 16.32 L 57.54 16.67 L 49.13 24.59 L 50.91 35.05 L 42.24 29.28 L 32.86 35.28 L 35.71 24.40 L 26.70 17.36 L 37.89 16.66 Z" fill="#FFC15E" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 7.98 55.61 C 6.93 54.54 25.14 32.87 29.84 29.61 C 34.53 26.35 39.78 31.70 36.14 36.03 C 32.49 40.36 9.04 56.68 7.98 55.61 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 13.75 41.77 L 26.17 32.36" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 21.86 53.61 L 31.87 42.05" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 42.31 5.80 L 46.35 16.62 L 57.44 17.43 L 48.75 24.59 L 51.09 34.60 L 42.39 29.47 L 32.21 34.68 L 35.76 24.30 L 26.59 16.75 L 37.84 16.09 Z" fill="#FFC15E" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

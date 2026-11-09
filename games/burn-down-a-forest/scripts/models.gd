@@ -18,16 +18,16 @@ const VARIANTS := {
 	Balance.GRASS: ["grass"],
 	Balance.BUSH: ["bush"],
 	Balance.PINE: ["pine_s", "pine_m", "pine_l"],
-	Balance.OAK: ["oak_s", "oak_m", "oak_l"],
+	Balance.OAK: ["oak_round", "oak_tall", "oak_lean", "oak_weep"],   # four silhouettes, not one cushion copied
 	Balance.GIANT: ["giant_a", "giant_b"],
 	Balance.ELDER: ["elder"],
 }
 const VARIANT_HEIGHT := {
 	Balance.PINE: [0.78, 1.0, 1.3],
-	Balance.OAK: [0.8, 1.0, 1.24],
+	Balance.OAK: [1.0, 1.08, 0.96, 1.16],
 	Balance.GIANT: [1.0, 1.1],
 }
-const FLOWERS := ["poppy", "oxeye_daisy", "buttercup", "harebell", "sage_tuft"]
+const FLOWERS := ["poppy", "oxeye_daisy", "buttercup", "harebell", "sage_tuft", "tall_grass", "yarrow", "sprout"]
 
 static var _cache := {}
 static var _files := {}
@@ -74,8 +74,10 @@ static func variant_count(kind: int) -> int:
 static func variant_of(kind: int, vary: float) -> int:
 	## Which size a cell grows: mostly medium, some small, a few big old ones.
 	match kind:
-		Balance.PINE, Balance.OAK:
+		Balance.PINE:
 			return 0 if vary < 0.3 else (1 if vary < 0.78 else 2)
+		Balance.OAK:
+			return 0 if vary < 0.34 else (1 if vary < 0.58 else (2 if vary < 0.8 else 3))
 		Balance.GIANT:
 			return 0 if vary < 0.55 else 1
 	return 0
@@ -94,6 +96,10 @@ static func plant_mesh(kind: int, variant: int = 0) -> Mesh:
 
 static func flower_mesh(species: int) -> Mesh:
 	return mesh("meadow", FLOWERS[species])
+
+
+static func forest_mesh(name: String) -> Mesh:
+	return mesh("forest", name)
 
 
 static func boulder_mesh() -> Mesh:

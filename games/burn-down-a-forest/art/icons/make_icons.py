@@ -465,18 +465,25 @@ def tick(i):
 
 
 @icon
-def heart(i):
-    """A cursed heart set free: mint, like the knots in the trees, with two carved lines."""
-    pts = []
-    for k in range(24):
-        t = 2 * math.pi * k / 24
-        x = 16 * math.sin(t) ** 3
-        y = -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t))
-        pts.append((32 + x * 1.5, 30 + y * 1.5))
-    i.shape(pts, MINT, wob=0.4)
-    i.line([(19, 21), (16, 28)], color=CREAM, width=2.4)
-    i.line([(26, 40), (32, 46)], color="#5FB89A", width=2.0)
-    i.line([(38, 38), (42, 33)], color="#5FB89A", width=2.0)
+def seed(i):
+    """The curse's seed set free: a pod split open, its two ridged husks peeled
+    back from a glowing mint seed, with a few ink lines of glow round it (not a
+    heart: nothing here is a health pickup)."""
+    # the glow: short broken strokes radiating, in pale mint
+    for k in range(8):
+        a = 2 * math.pi * k / 8 + 0.2
+        r0, r1 = 21, 27 + (k % 2) * 3
+        i.line([(32 + math.cos(a) * r0, 33 + math.sin(a) * r0 * 1.1), (32 + math.cos(a) * r1, 33 + math.sin(a) * r1 * 1.1)],
+               color="#5FB89A", width=2.0)
+    # the husks, curling back on either side
+    i.shape([(31, 52), (22, 46), (16, 36), (17, 24), (23, 15), (27, 22), (25, 33), (28, 44)], WOOD_DARK, wob=0.4)
+    i.shape([(33, 52), (42, 46), (48, 36), (47, 24), (41, 15), (37, 22), (39, 33), (36, 44)], WOOD_DARK, wob=0.4)
+    i.line([(20, 30), (23, 40)], color="#4E3424", width=1.6)
+    i.line([(44, 30), (41, 40)], color="#4E3424", width=1.6)
+    # the seed: an almond of mint light
+    i.shape([(32, 12), (37, 20), (39, 32), (36, 44), (32, 50), (28, 44), (25, 32), (27, 20)], MINT, wob=0.3)
+    i.line([(30, 20), (29, 30)], color=CREAM, width=2.2)
+
 
 @icon
 def finger(i):

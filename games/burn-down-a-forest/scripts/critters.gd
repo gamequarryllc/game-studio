@@ -1,7 +1,7 @@
 class_name Critters
 extends Node3D
 ## Forest critters bolt out of trees as they catch, hop away from the fire,
-## and pop out of sight with a little drawn heart: always unharmed. Now and then
+## and pop out of sight with a little drawn seed of mint light (the curse let go): always unharmed. Now and then
 ## a golden one turns up and drops a pouch of embers. Models: rabbit, fox and
 ## hedgehog from models/creatures.glb.
 
@@ -103,7 +103,7 @@ func _process(delta: float) -> void:
 
 func _pop(at: Vector3, golden: bool) -> void:
 	var s := Sprite3D.new()
-	s.texture = UiTheme.icon("hare" if golden else "heart")
+	s.texture = UiTheme.icon("hare" if golden else "seed")
 	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	s.pixel_size = 0.006
 	s.no_depth_test = true
