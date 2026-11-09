@@ -138,6 +138,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: Dig to the Core builder handed back (10 streamed zones, 7 tools, lift, 16 finds, full stubbed money set, 18 Blender models, 51 SVG icons, brass-and-enamel UI; 52 smoke checks). Held at `building` until the fresh-eyes critic and a QA playthrough are done.
 - 2026-11-09: Burn Down a Forest reached first playable (fire spread with wind, 6 tools, notebook shop, stubbed ads/IAPs, save, sound, ending; 45 smoke checks). Next: pacing bot, music, fix the odd pink blocks near spawn, finds, real-phone test.
 - 2026-11-09: Privacy pass: personal details removed from the repo and its history; privacy check added (pre-push and CI).
 - 2026-11-08: Studio set up. Started Burn Down a Forest and Dig to the Core.
