@@ -104,6 +104,7 @@ The studio's goal is to cover its $200/month running cost from App Store proceed
 
 - **Finishing and shipping beats starting.** A game earns nothing until it is live on the App Store with real ads and purchases.
 - **New work is ranked by expected dollars per month and how soon it can ship.** Before picking work, ask: does this get real money in sooner?
+- **No new game starts until the first game is in App Review** (decided 2026-11-09 from the research: five games are in flight and none can be sold yet). A free builder slot goes to the shipping list first, in this order: the iOS build pipeline, real ads and purchases behind the provider interface, store assets (icon, screenshots, name, subtitle, keywords), then discovery assets (preview clips, cross-promotion). This overrides the polish-budget rule about handing slots to new games.
 - **Market research lives in `research/market.md`** and is refreshed weekly (markets, real monetization numbers, how to get found with no ad budget, and the math for the target). The queue order follows it.
 - **Honest money only.** No fake reviews or review-gating, no misleading ads, screenshots or store text, no dark patterns, nothing aimed at kids, no copying other apps. Stay inside Apple's App Review Guidelines and AdMob's policies: a rejected app or a banned account earns nothing.
 - Only the owner can see real proceeds. Estimates are always labelled as estimates, and earned amounts are never written in this repo.

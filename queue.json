@@ -47,29 +47,20 @@
       "note": ""
     },
     {
-      "slug": "unbury-a-pyramid",
-      "title": "Unbury a Pyramid",
-      "emoji": "🏜️",
-      "color": "#d9a441",
-      "tagline": "Blow away a desert of sand to uncover a buried pyramid, with mummies who help if you ask nicely.",
-      "status": "queued",
-      "note": ""
-    },
-    {
-      "slug": "thaw-a-frozen-planet",
-      "title": "Thaw a Frozen Planet",
-      "emoji": "🪐",
-      "color": "#7fb6e8",
-      "tagline": "A whole tiny planet frozen solid. Walk all the way around it and bring summer back.",
-      "status": "queued",
-      "note": ""
-    },
-    {
       "slug": "dust-a-haunted-house",
       "title": "Dust a Haunted House",
       "emoji": "👻",
       "color": "#8a7fc9",
       "tagline": "A century of dust and cobwebs, and something is hiding under every layer.",
+      "status": "queued",
+      "note": "Next new game when a slot opens after the first launch: cleaning is a proven satisfying theme and nothing in the catalog is like it (research/market.md)"
+    },
+    {
+      "slug": "unbury-a-pyramid",
+      "title": "Unbury a Pyramid",
+      "emoji": "🏜️",
+      "color": "#d9a441",
+      "tagline": "Blow away a desert of sand to uncover a buried pyramid, with mummies who help if you ask nicely.",
       "status": "queued",
       "note": ""
     },
@@ -83,6 +74,15 @@
       "note": ""
     },
     {
+      "slug": "thaw-a-frozen-planet",
+      "title": "Thaw a Frozen Planet",
+      "emoji": "🪐",
+      "color": "#7fb6e8",
+      "tagline": "A whole tiny planet frozen solid. Walk all the way around it and bring summer back.",
+      "status": "queued",
+      "note": "A melting game like the reference game: adds the least and carries similar-app review risk; could be a map in an existing game"
+    },
+    {
       "slug": "defrost-a-freezer",
       "title": "Defrost a Freezer",
       "emoji": "🧊",
@@ -91,5 +91,6 @@
       "status": "queued",
       "note": "Closest to Melt a Glacier; may ship as a Melt a Glacier map instead of its own app"
     }
-  ]
+  ],
+  "_order_reason": "2026-11-09: ordered by expected money per month per hour of work and how soon each can ship (research/market.md). Games in progress come first, closest to ready first; no new game starts until the first one is in App Review."
 }
