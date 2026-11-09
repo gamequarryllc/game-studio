@@ -150,6 +150,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: daily backstop: all three games in progress had commits in the last 6 h, so it started the next queued game, Drain an Ocean (in progress in the backstop session; if `games/drain-an-ocean/` is still missing after 2026-11-09 16:00 UTC, treat it as abandoned and start it fresh).
 - 2026-11-09: Burn Down a Forest art pass done: all 12 review items (41 SVG icons, charred-plank HUD, paper notebook, IM Fell/Alegreya/Caveat Brush, 48 Blender models, inked cartoon flames, composed village spawn, measured palette, meadow drifts, phone-first hints, sentence-case copy). Next: second critic review, then fixes + full QA playthrough.
 - 2026-11-09: Burn a Cardboard City builder handed back (giant first-person view, collapsing buildings with chain bonuses, toy fire trucks, fan wind, 4 tools, cardboard-box shop, stubbed money set, 29 Blender models, SVG icons; 63 smoke checks). Held at `building` until the critic and a QA playthrough are done.
 - 2026-11-09: In progress in the conversation loop (don't start these elsewhere): critic + fixes + QA for Burn a Cardboard City and Burn Down a Forest; Dig to the Core critic fixes + full QA playthrough.
