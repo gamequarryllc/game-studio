@@ -6,8 +6,9 @@
 models/flames.png: six flames side by side (each 128 x 256), cut from layers of
 coloured paper with torn edges: a darker red base (#b8321c) and rim, an orange
 body, a yellow tongue and a pale core, each layer throwing a thin shadow on the
-one under it. They differ in shape (tall and thin, fat, forked, leaning, ragged,
-a double tongue).
+one under it. 0-1 are whole fires (a full body with four or five tongues of
+different heights, for the one big cluster each building gets), 2-3 single licking
+tongues (window and edge flames), 4-5 low wide fires (rubble and scraps).
 
 models/smoke.png: four torn pieces of grey tissue paper (each 128 x 128), soft
 and see-through, with a slightly darker torn edge and fibres.
@@ -56,7 +57,7 @@ def tongue(cx, base_y, top_y, width, lean, bend):
     for i in range(steps + 1):
         t = i / steps
         y = base_y - H * t
-        hw = width * 0.5 * (math.sin(min(1.0, t / 0.28) * math.pi * 0.5) * 0.55 + 0.45) * (1.0 - t) ** 1.25
+        hw = width * 0.5 * (math.sin(min(1.0, t / 0.3) * math.pi * 0.5) * 0.5 + 0.5) * (1.0 - t) ** 0.95
         sway = lean * t * t * H + math.sin(t * math.pi * 1.4) * bend * H * t
         right.append((cx + hw + sway, y))
         left.append((cx - hw + sway, y))
@@ -69,13 +70,15 @@ def tongue(cx, base_y, top_y, width, lean, bend):
 
 SHAPES = {
     # main tongue (x offset, height, width, lean, bend) followed by side tongues
-    "tall": [(0.0, 0.95, 0.5, 0.03, 0.04), (0.14, 0.45, 0.24, 0.2, -0.05)],
-    "fat": [(0.0, 0.8, 0.72, -0.02, 0.05), (-0.18, 0.55, 0.34, -0.25, 0.04), (0.2, 0.42, 0.3, 0.3, -0.04)],
-    "fork": [(-0.1, 0.92, 0.42, -0.12, 0.05), (0.14, 0.78, 0.38, 0.2, -0.06), (0.0, 0.5, 0.6, 0.0, 0.0)],
-    "lean": [(0.0, 0.93, 0.52, 0.26, -0.03), (-0.16, 0.48, 0.28, 0.1, 0.06)],
-    "ragged": [(0.0, 0.86, 0.56, 0.05, -0.08), (-0.2, 0.62, 0.26, -0.18, 0.05), (0.22, 0.7, 0.24, 0.25, -0.04),
-               (0.08, 0.4, 0.3, 0.3, 0.0)],
-    "double": [(-0.13, 0.9, 0.44, -0.04, 0.06), (0.15, 0.82, 0.42, 0.12, -0.05)],
+    "mass_a": [(0.0, 0.95, 0.56, 0.04, 0.05), (-0.24, 0.62, 0.4, -0.18, 0.05), (0.25, 0.72, 0.38, 0.22, -0.05),
+               (-0.06, 0.42, 0.9, 0.0, 0.0), (0.12, 0.5, 0.34, 0.12, 0.06)],
+    "mass_b": [(-0.08, 0.9, 0.5, -0.06, 0.06), (0.18, 0.82, 0.44, 0.16, -0.06), (-0.3, 0.5, 0.34, -0.3, 0.04),
+               (0.0, 0.38, 0.95, 0.0, 0.0)],
+    "lick_a": [(0.0, 0.93, 0.62, 0.24, -0.06), (-0.14, 0.5, 0.42, 0.05, 0.06)],
+    "lick_b": [(0.0, 0.88, 0.6, -0.08, 0.09), (0.16, 0.56, 0.38, 0.28, -0.04)],
+    "low_a": [(0.0, 0.5, 0.7, 0.05, 0.05), (-0.26, 0.36, 0.42, -0.2, 0.04), (0.26, 0.42, 0.4, 0.22, -0.05),
+              (0.0, 0.26, 1.0, 0.0, 0.0)],
+    "low_b": [(-0.12, 0.46, 0.56, -0.08, 0.06), (0.16, 0.4, 0.52, 0.18, -0.06), (0.0, 0.24, 1.0, 0.0, 0.0)],
 }
 
 
@@ -84,7 +87,7 @@ def flame_polys(w, h, kind, scale, lean_all):
     base_y = h * 0.9
     for (dx, hh, ww, lean, bend) in SHAPES[kind]:
         top_y = base_y - h * 0.86 * hh * scale
-        polys.append(tongue(w / 2 + dx * w * (0.6 + 0.4 * scale), base_y, top_y, ww * w * scale, lean + lean_all, bend))
+        polys.append(tongue(w / 2 + dx * w * (0.5 + 0.35 * scale), base_y, top_y, ww * w * scale, lean + lean_all, bend))
     return polys
 
 
@@ -112,7 +115,7 @@ def flame(kind, seed):
             draw_layer(img, torn(poly, amp, 3.0), col, shadow=k > 0)
     # The darker red base: a deep red band across the bottom, following the shape.
     band = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    yb = h * 0.8
+    yb = h * 0.83
     pts = [(x * SS, (yb + math.sin(x * 0.17 + seed) * 4 + rng.uniform(-1.5, 1.5)) * SS) for x in range(0, w + 1, 4)]
     ImageDraw.Draw(band).polygon(pts + [(w * SS, h * SS), (0, h * SS)], fill=BASE + (255,))
     inner = Image.new("L", img.size, 0)
@@ -163,7 +166,7 @@ def tissue(seed):
 
 
 def main():
-    kinds = ["tall", "fat", "fork", "lean", "ragged", "double"]
+    kinds = ["mass_a", "mass_b", "lick_a", "lick_b", "low_a", "low_b"]
     sheet = Image.new("RGBA", (128 * len(kinds), 256), (0, 0, 0, 0))
     for k, kind in enumerate(kinds):
         sheet.alpha_composite(flame(kind, 100 + k), (128 * k, 0))

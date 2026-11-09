@@ -16,7 +16,7 @@ const TABS := [
 	["upgrades", "heat", "Tricks", 0],
 	["helpers", "windup", "Helpers", 30],
 	["extras", "tv", "Extras", 10],
-	["finds", "duck", "Finds", 22],
+	["finds", "finds", "Finds", 22],
 ]
 const NOTES := {
 	"tools": "Each one burns hotter. Thicker card needs a hotter tool.",
@@ -42,6 +42,8 @@ var _content: Control
 var _inside: BoxInside
 var _card_seed := 100
 var _title_hold := 0.0
+var featured_title: Label             # the next tool's name in the big slot (tests)
+var tool_slots := 0                   # how many tools are laid in cut-outs (tests)
 var _title_down := false
 
 
@@ -190,8 +192,21 @@ func _ready() -> void:
 	strip.color = Craft.KRAFT_PALE
 	strip.custom_minimum_size = Vector2(0, 5)
 	v.add_child(strip)
-	_note = Craft.body(21, Color(Craft.PAPER, 0.88))
-	v.add_child(_note)
+	# The tab's caption, inked on a strip of masking tape (cream on brown was too faint).
+	var note_strip := PanelContainer.new()
+	var ns := Craft.card(Craft.TAPE, 97)
+	ns.lines = false
+	ns.shadow_alpha = 0.18
+	ns.wobble = 1.5
+	ns.content_margin_top = 4
+	ns.content_margin_bottom = 4
+	note_strip.add_theme_stylebox_override("panel", ns)
+	note_strip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	note_strip.rotation = -0.006
+	_note = Craft.body(23, Craft.INK)
+	_note.autowrap_mode = TextServer.AUTOWRAP_OFF
+	note_strip.add_child(_note)
+	v.add_child(note_strip)
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -369,10 +384,20 @@ func _extra(card: Dictionary, text: String) -> void:
 
 
 func _section(text: String) -> void:
-	var l := Craft.label(22, Craft.PAPER)
+	var strip := PanelContainer.new()
+	var st := Craft.card(Craft.TAPE, 120 + _list.get_child_count())
+	st.lines = false
+	st.shadow_alpha = 0.18
+	st.wobble = 1.5
+	st.content_margin_top = 3
+	st.content_margin_bottom = 3
+	strip.add_theme_stylebox_override("panel", st)
+	strip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	strip.rotation = -0.015
+	var l := Craft.label(22, Craft.INK)
 	l.text = text.to_upper()
-	l.rotation = -0.015
-	_list.add_child(l)
+	strip.add_child(l)
+	_list.add_child(strip)
 
 
 func _buy_feedback(ok: bool, what: String) -> void:
@@ -384,15 +409,87 @@ func _buy_feedback(ok: bool, what: String) -> void:
 	refresh()
 
 
-func _tool_row(i: int, big: bool) -> void:
+const TOOL_SLOT := {
+	# how tall each tool's cut-out is when it isn't the featured one (they're different shapes)
+	"magnifier": 104, "candle": 92, "blowtorch": 100, "rockets": 96,
+}
+
+
+func _insert(i: int, big: bool, parent: Control) -> Dictionary:
+	## One tool laid in its own cut-out in the card insert: the next one to buy in a big
+	## slot with its price tag; the others in smaller slots of their own shapes.
 	var t: Dictionary = Balance.TOOLS[i]
-	var title := ("Next: the %s" % str(t.name).to_lower()) if big else str(t.name)
-	var card := _card(str(t.key), title, str(t.desc), big)
+	var hole := PanelContainer.new()
+	var st := Craft.card(Craft.KRAFT.darkened(0.38), 400 + i * 7)
+	st.recess = true
+	st.wobble = 3.5
+	st.edge = Craft.KRAFT.darkened(0.15)
+	st.content_margin_left = 22 if big else 18
+	st.content_margin_right = 16
+	st.content_margin_top = 18 if big else 10
+	st.content_margin_bottom = 12 if big else 8
+	hole.add_theme_stylebox_override("panel", st)
+	hole.custom_minimum_size = Vector2(0, 300 if big else int(TOOL_SLOT.get(str(t.key), 118)))
+	hole.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hole.size_flags_vertical = Control.SIZE_EXPAND_FILL if big else Control.SIZE_SHRINK_BEGIN
+	parent.add_child(hole)
+	var box: BoxContainer = VBoxContainer.new() if big else HBoxContainer.new()
+	box.add_theme_constant_override("separation", 6 if big else 12)
+	hole.add_child(box)
+	var ic := Craft.icon_rect(str(t.key), 170 if big else 62)
+	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	ic.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if big else Control.SIZE_FILL
+	ic.rotation = -0.12 if big else 0.06 * float(i % 2 * 2 - 1)
+	ic.pivot_offset = ic.custom_minimum_size * 0.5
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	if big:
+		box.add_child(row)
+		row.add_child(ic)
+	else:
+		box.add_child(ic)
+	var v := VBoxContainer.new()
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	v.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	v.add_theme_constant_override("separation", 0)
+	(row if big else box).add_child(v)
+	var tl := Craft.label(34 if big else 23, Craft.PAPER)
+	tl.text = ("Next: the %s" % str(t.name).to_lower()) if big else str(t.name)
+	v.add_child(tl)
+	tool_slots += 1
+	if big:
+		featured_title = tl
+	var dl := Craft.body(23 if big else 21, Color(Craft.PAPER, 0.95))
+	dl.text = str(t.desc)
+	dl.custom_minimum_size = Vector2(180, 0)
+	dl.visible = big
+	v.add_child(dl)
+	var xl := Craft.body(22 if big else 19, Craft.TAPE)
+	xl.custom_minimum_size = Vector2(160, 0)
+	xl.visible = false
+	v.add_child(xl)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(190 if big else 140, 70 if big else 54)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.size_flags_horizontal = Control.SIZE_SHRINK_END if big else Control.SIZE_FILL
+	Craft.price_button(b, _card_seed + 300 + i)
+	if big:
+		b.add_theme_font_size_override("font_size", 32)
+		box.add_child(b)
+	else:
+		box.add_child(b)
+	return {"panel": hole, "title": tl, "desc": dl, "extra": xl, "button": b, "icon": ic}
+
+
+func _tool_row(i: int, big: bool, parent: Control = null) -> void:
+	var t: Dictionary = Balance.TOOLS[i]
+	var card := _insert(i, big, parent) if parent != null else _card(str(t.key), str(t.name), str(t.desc), big)
 	var idx := i
 	card.button.pressed.connect(func():
 		_buy_feedback(GameState.buy_tool(idx), "%s in hand" % t.name))
 	_refreshers.append(func():
 		_extra(card, "Lights %s" % t.lights)
+		(card.icon as TextureRect).modulate = Color.WHITE
 		if idx == GameState.tool_index:
 			_set_btn(card, "In hand", false, false, "check")
 		elif idx < GameState.tool_index:
@@ -409,17 +506,43 @@ func _tool_row(i: int, big: bool) -> void:
 				var can := GameState.coins >= cost
 				_set_btn(card, Fmt.num(cost), can, can, "coin")
 		else:
+			# Not yet: its shape is cut in the insert, the slot waiting for it.
+			(card.icon as TextureRect).modulate = Color(0.12, 0.1, 0.08, 0.55)
 			_set_btn(card, Fmt.num(float(t.cost)), false, false, "lock")
 			_extra(card, "Buy the %s first" % str(Balance.TOOLS[idx - 1].name).to_lower()))
 
 
 func _build_tools() -> void:
+	## The tools sit in a card insert, each in a cut-out of its own size; the next one to
+	## buy gets the big slot on the left.
 	var nt := GameState.next_tool_index()
+	tool_slots = 0
+	featured_title = null
+	var board := PanelContainer.new()
+	var bs := Craft.card(Craft.KRAFT.darkened(0.12), 333)
+	bs.content_margin_left = 14
+	bs.content_margin_right = 14
+	bs.content_margin_top = 14
+	bs.content_margin_bottom = 14
+	board.add_theme_stylebox_override("panel", bs)
+	board.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_list.add_child(board)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 14)
+	board.add_child(h)
 	if nt >= 0:
-		_tool_row(nt, true)
+		var left := VBoxContainer.new()
+		left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		left.size_flags_stretch_ratio = 1.25
+		h.add_child(left)
+		_tool_row(nt, true, left)
+	var right := VBoxContainer.new()
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.add_theme_constant_override("separation", 8)
+	h.add_child(right)
 	for i in Balance.TOOLS.size():
 		if i != nt:
-			_tool_row(i, false)
+			_tool_row(i, false, right)
 	if GameState.short_for_next_tool() and GameState.tool_gate_text(nt) == "":
 		_section("Short of coins?")
 		_packs()

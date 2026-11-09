@@ -24,6 +24,7 @@ var _spot_mat: StandardMaterial3D
 var _held_flame: MeshInstance3D
 var _held_mat: ShaderMaterial
 var _jet: Node3D
+var _roar := 0.0
 var _stream: CPUParticles3D
 var _impact: CPUParticles3D
 var _wisp: CPUParticles3D
@@ -63,17 +64,17 @@ func _ready() -> void:
 	_jet.top_level = true
 	for k in 2:
 		var jc := CylinderMesh.new()
-		jc.top_radius = 0.0
-		jc.bottom_radius = 0.011 if k == 0 else 0.006
-		jc.height = 0.16 if k == 0 else 0.07
-		jc.radial_segments = 12
-		jc.rings = 1
-		var m := StandardMaterial3D.new()
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		m.cull_mode = BaseMaterial3D.CULL_DISABLED
-		m.albedo_color = Color(0.25, 0.5, 1.0, 0.75) if k == 0 else Color(0.85, 0.95, 1.0, 0.9)
+		jc.top_radius = 0.002
+		jc.bottom_radius = 0.021 if k == 0 else 0.009
+		jc.height = 0.26 if k == 0 else 0.1
+		jc.radial_segments = 16
+		jc.rings = 8
+		var m := ShaderMaterial.new()
+		m.shader = load("res://shaders/torch_flame.gdshader")
+		m.set_shader_parameter("height", jc.height)
+		m.set_shader_parameter("color", Color(0.2, 0.42, 1.0) if k == 0 else Color(0.75, 0.92, 1.0))
+		m.set_shader_parameter("tip_color", Color(0.48, 0.28, 0.9) if k == 0 else Color(0.4, 0.65, 1.0))
+		m.set_shader_parameter("strength", 0.9 if k == 0 else 1.3)
 		var mi := MeshInstance3D.new()
 		mi.mesh = jc
 		mi.material_override = m

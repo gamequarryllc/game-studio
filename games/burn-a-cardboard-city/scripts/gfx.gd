@@ -6,6 +6,7 @@ extends RefCounted
 static var _dot: Texture2D
 static var _chip: Texture2D
 static var _star: Texture2D
+static var _speck: Texture2D
 
 
 static func soft_dot() -> Texture2D:
@@ -37,6 +38,20 @@ static func chip() -> Texture2D:
 		img.generate_mipmaps()
 		_chip = ImageTexture.create_from_image(img)
 	return _chip
+
+
+static func speck() -> Texture2D:
+	## A hard little round speck (sparks: orange specks, never soft white blobs).
+	if _speck == null:
+		var n := 16
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		for y in n:
+			for x in n:
+				var d := Vector2(x + 0.5 - n * 0.5, y + 0.5 - n * 0.5).length() / (n * 0.5)
+				img.set_pixel(x, y, Color(1, 1, 1, clampf((1.0 - d) * 4.0, 0.0, 1.0)))
+		img.generate_mipmaps()
+		_speck = ImageTexture.create_from_image(img)
+	return _speck
 
 
 static func star() -> Texture2D:
@@ -104,3 +119,4 @@ static func clear() -> void:
 	_dot = null
 	_chip = null
 	_star = null
+	_speck = null

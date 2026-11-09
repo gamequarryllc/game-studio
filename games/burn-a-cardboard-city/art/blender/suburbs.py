@@ -14,7 +14,7 @@ import math
 
 from kit import (CARD, CEREAL_IN, CREAM, INK, INSIDE, KRAFT, KRAFT_DARK, KRAFT_EDGE, PAPER, SHINY, TAPE_COL, WHITE_BOARD,
                  Model, srgb)
-from mathutils import Vector
+from mathutils import Vector, noise
 
 FRONT = (0, -1, 0)
 BACK = (0, 1, 0)
@@ -108,7 +108,9 @@ def house_cereal(seed=1):
     m._paint(faces_facing(body, LEFT), PRINT_BLUE, CARD)
     gable_solid(m, w, d, h, 0.26, TEAL)
     folded_roof(m, w, d, h, 0.26, PRINT_ORANGE, CEREAL_IN, "x", 0.07)
-    roof_decal(m, "cer_crunch", w, d, h, 0.26, -1, 0.44, 0.55, 0.06, rot=-3)
+    roof_decal(m, "cer_crunch", w, d, h, 0.26, -1, 0.7, 0.5, 0.02, rot=-3)
+    roof_decal(m, "cer_burst", w, d, h, 0.26, 1, 0.3, 0.5, -0.16, rot=8)
+    roof_decal(m, "cer_bowl", w, d, h, 0.26, 1, 0.28, 0.52, 0.2, rot=-4)
     m.decal("cer_nutri", (-w / 2, 0.08, 0.25), LEFT, 0.17)
     m.decal("cer_bowl", (-w / 2, -0.12, 0.33), LEFT, 0.14)
     m.decal("door_red", (-0.2, -d / 2, 0.15), FRONT, 0.14)
@@ -157,7 +159,8 @@ def house_tissue(seed=3):
     m.decal("tissue_print", (0, -d / 2, h * 0.5), FRONT, w * 0.97, h * 0.94, lift=0.004)
     m.decal("tissue_print", (0, d / 2, h * 0.5), BACK, w * 0.97, h * 0.94, lift=0.004)
     # The oval slot on top, and the tissue.
-    m.decal("win_round", (0.05, 0.0, h + 0.002), UP, 0.3, 0.18, up=(0, 1, 0))
+    m.decal("tissue_print", (-0.02, 0.0, h + 0.002), UP, w * 0.94, d * 0.9, up=(0, 1, 0))
+    m.decal("win_round", (0.05, 0.0, h + 0.004), UP, 0.3, 0.18, up=(0, 1, 0))
     t = m.ball((0.05, 0.0, h + 0.15), 0.12, srgb("#f6f4ef"), PAPER, 2, 0.2, smooth=True)
     m.transform(t, ((1, 0, 0, 0), (0, 0.5, 0, 0), (0, 0, 1.3, -0.05), (0, 0, 0, 1)))
     m.crumple(t, 0.03, 12.0)
@@ -188,6 +191,8 @@ def house_insideout(seed=4):
     m.decal("win_lit", (-0.13, -d / 2, 0.46), FRONT, 0.13, rot=-3)
     m.decal("win_round", (0.13, -d / 2, 0.47), FRONT, 0.11)
     m.decal("smiley", (w / 2, -0.1, 0.48), RIGHT, 0.08)
+    # A big felt-tip sun drawn on the front roof flap (someone small helped with this one).
+    m.decal("sun", (0.02, -d / 2 + 0.108, h + 0.104), (0, -0.695, 0.719), 0.26, lift=0.012)
     m.decal("win_plain", (w / 2, 0.08, 0.25), RIGHT, 0.14)
     m.decal("lbl_no7", (-w / 2, 0.0, 0.3), LEFT, 0.2, rot=-6)
     m.decal("win_sky", (0, d / 2, 0.4), BACK, 0.14)
@@ -205,6 +210,7 @@ def house_shoebox(seed=5):
           sag=0.008)
     m.box((0.22, 0, h + 0.068), (0.18, d + 0.044, 0.004), srgb("#f2efe6"), bevel=0.0, cuts=(1, 1, 0), jitter=0.001,
           rot=(0, 0, 0.03))
+    m.decal("lbl_shoes", (-0.12, 0.0, h + 0.069), UP, 0.5, up=(0, 1, 0), rot=3)
     m.decal("garage", (-0.22, -d / 2, 0.12), FRONT, 0.24)
     m.decal("door_red", (0.08, -d / 2, 0.13), FRONT, 0.12)
     m.decal("win_lit", (0.3, -d / 2, 0.19), FRONT, 0.14)
@@ -227,7 +233,8 @@ def house_stack(seed=6):
     m.streaks(up, CHALK, 0.1, under=PRINT_ORANGE, misses=0.08)
     gable_solid(m, w2, d2, h1 + h2, 0.22, CHALK, ridge="y")
     folded_roof(m, w2, d2, h1 + h2, 0.22, PRINT_BLUE, CEREAL_IN, "y", 0.06)
-    roof_decal(m, "cer_oat", w2, d2, h1 + h2, 0.22, 1, 0.34, 0.5, -0.02, ridge="y", rot=2)
+    roof_decal(m, "cer_oat", w2, d2, h1 + h2, 0.22, 1, 0.5, 0.5, -0.02, ridge="y", rot=2)
+    roof_decal(m, "cer_honey", w2, d2, h1 + h2, 0.22, -1, 0.48, 0.5, 0.02, ridge="y", rot=-3)
     m.decal("door_blue", (0.15, -d / 2, 0.15), FRONT, 0.14)
     m.decal("win_curtain", (-0.15, -d / 2, 0.22), FRONT, 0.14)
     m.decal("win_blue", (-0.12, -d2 / 2 + 0.005, h1 + 0.16), FRONT, 0.13)
@@ -241,78 +248,144 @@ def house_stack(seed=6):
 
 
 # =====================================================================================
-# Trees: crumpled tissue on pencils, stuck in a blob of clay
+# Trees: crumpled tissue paper pushed onto hexagonal pencils stuck in a blob of clay
 # =====================================================================================
-TISSUE = srgb("#6fa553")
-TISSUE_LIGHT = srgb("#9cc46a")
-TISSUE_DARK = srgb("#4c8442")
+# Tissue greens pulled toward the palette (sage and olive, not lime), with the creases paler.
+TISSUE = srgb("#7d9a58")
+TISSUE_LIGHT = srgb("#a2b878")
+TISSUE_DARK = srgb("#5a7848")
+TISSUE_OLIVE = srgb("#8a9248")
 
 
-def pencil(m, base, length, color):
-    """A hexagonal pencil standing on its eraser, sharpened point up."""
+def pencil(m, base, length, color, lean=(0.0, 0.0)):
+    """A hexagonal pencil standing in the clay, sharpened end up into the tissue: six
+    flat painted faces (each catches the light differently), a thin gold band."""
     x, y, z = base
-    m.cylinder((x, y, z), 0.016, 0.018, srgb("#e79aa2"), 10, CARD, cuts=0, jitter=0.0)          # eraser
-    m.cylinder((x, y, z + 0.018), 0.0165, 0.02, srgb("#b9bec3"), 10, SHINY, cuts=0, jitter=0.0)  # ferrule
-    m.cylinder((x, y, z + 0.038), 0.016, length, color, 6, CARD, cuts=1, smooth=False, jitter=0.0)
-    m.cylinder((x, y, z + 0.038 + length), 0.016, 0.04, srgb("#e2c290"), 6, CARD, radius_top=0.004, cuts=0,
-               smooth=False, jitter=0.0)
+    shaft = m.cylinder((x, y, z), 0.024, length, color, 6, CARD, cuts=2, smooth=False, jitter=0.0)
+    m.paint_by(shaft, lambda p, n: [color[i] * (0.82 + 0.18 * (0.5 + 0.5 * math.sin(math.atan2(n.y, n.x) * 3.0)))
+                                    for i in range(3)])
+    band = m.cylinder((x, y, z + length * 0.12), 0.0245, 0.012, srgb("#c9a040"), 6, SHINY, cuts=0, smooth=False, jitter=0.0)
+    wood = m.cylinder((x, y, z + length), 0.024, 0.05, srgb("#e2c290"), 6, CARD, radius_top=0.005, cuts=0, smooth=False,
+                      jitter=0.0)
+    parts = shaft + band + wood
+    if lean != (0.0, 0.0):
+        from mathutils import Matrix
+        m.transform(parts, Matrix.Translation((x, y, z)) @ Matrix.Rotation(lean[0], 4, "X") @ Matrix.Rotation(lean[1], 4, "Y")
+                    @ Matrix.Translation((-x, -y, -z)))
+    return parts
 
 
-def clay(m, r=0.06, color=srgb("#5c7b3e")):
-    b = m.ball((0, 0, 0.0), r, color, CARD, 2, 0.2)
-    m.squash(b, (0, 0, 0), 0.45)
+def clay(m, r=0.075, color=srgb("#b5603e")):
+    """A blob of modelling clay, pressed down by a thumb."""
+    b = m.ball((0, 0, 0.0), r, color, CARD, 2, 0.18, smooth=True)
+    m.squash(b, (0, 0, 0), 0.5, 0.12)
+    for v in m._verts(b):
+        d = Vector((v.co.x - r * 0.3, v.co.y + r * 0.2, 0)).length
+        if d < r * 0.45 and v.co.z > 0.0:
+            v.co.z -= (r * 0.45 - d) * 0.35            # the thumbprint
+    return b
 
 
-def tissue_ball(m, c, r, color, seed_off=0, subdiv=2):
-    """Crumpled tissue: soft, with sharp little folds, paler on the creases."""
-    b = m.ball(c, r, color, PAPER, subdiv, 0.16, smooth=True)
-    m.crumple(b, r * 0.3, 1.1 / r + seed_off * 0.1)
-    m.crumple(b, r * 0.1, 3.2 / r)
+def tissue_ball(m, c, r, color, seed_off=0, corners=3):
+    """A scrunched sheet of tissue: soft lumps cut by sharp folds, a lumpy silhouette with
+    a few corners of the sheet poking out; the ridges catch the light (paler), the valleys
+    between them sit in shadow (darker), the way thin paper does."""
+    b = m.ball(c, r, color, PAPER, 3, 0.1, smooth=True)
     cc = Vector(c)
-    m.paint_by(b, lambda p, n: [color[i] * (0.85 + 0.35 * max(0.0, min(1.0, ((p - cc).length / r - 0.75) * 2.0)))
-                                for i in range(3)])
+    m.crumple(b, r * 0.3, 1.5 / r + seed_off * 0.13)
+    m.crumple(b, r * 0.1, 4.5 / r)
+    verts = m._verts(b)
+    for k in range(corners):
+        tip = m.rng.choice(verts)
+        d0 = (tip.co - cc)
+        if d0.length < 1e-4:
+            continue
+        dirn = d0.normalized()
+        if dirn.z < -0.4:
+            continue
+        pull = r * m.rng.uniform(0.35, 0.6)
+        for v in verts:
+            dd = (v.co - tip.co).length
+            if dd < r * 0.45:
+                v.co += dirn * pull * (1.0 - dd / (r * 0.45)) ** 2
+    m.bm.normal_update()
+    # How far each corner stands out from its neighbours: ridges > 0, valleys < 0.
+    relief = {}
+    for v in verts:
+        nb = [e.other_vert(v) for e in v.link_edges]
+        if not nb:
+            relief[v] = 0.0
+            continue
+        avg = sum((u.co for u in nb), Vector((0, 0, 0))) / len(nb)
+        relief[v] = (v.co - avg).dot(v.normal) / (r * 0.06)
+    off = Vector((m.seed * 0.7 + seed_off, 3.1, 1.7))
+    for f in b:
+        for l in f.loops:
+            v = l.vert
+            rel = max(-1.0, min(1.0, relief.get(v, 0.0)))
+            tone = 0.9 + 0.12 * noise.noise(v.co * (6.0 / r) + off)
+            k = tone + rel * 0.2 + 0.06 * max(0.0, v.normal.z)
+            l[m.col] = (min(1.0, color[0] * k), min(1.0, color[1] * k), min(1.0, color[2] * k), PAPER)
     return b
 
 
 def tree_tissue(seed=51):
     m = Model("tree_tissue", seed)
     clay(m)
-    pencil(m, (0, 0, 0.0), 0.2, srgb("#f0c440"))
-    tissue_ball(m, (0, 0, 0.4), 0.17, TISSUE)
-    tissue_ball(m, (0.07, -0.05, 0.33), 0.1, TISSUE_LIGHT, 3)
+    pencil(m, (0, 0, 0.02), 0.2, srgb("#f0c440"))
+    tissue_ball(m, (0, 0, 0.4), 0.16, TISSUE, 0, 4)
+    tissue_ball(m, (0.08, -0.06, 0.33), 0.1, TISSUE_LIGHT, 3, 2)
+    tissue_ball(m, (-0.08, 0.05, 0.36), 0.09, TISSUE_DARK, 5, 2)
     return m.build()
 
 
 def tree_tuft(seed=52):
-    """Three little tissue balls on a red pencil."""
+    """Three scrunches of tissue on a red pencil, one olive."""
     m = Model("tree_tuft", seed)
-    clay(m, 0.055, srgb("#7a5a3e"))
-    pencil(m, (0, 0, 0.0), 0.16, srgb("#c8402f"))
-    for (x, y, z, r, col) in [(0, 0, 0.34, 0.12, TISSUE_DARK), (0.08, 0.03, 0.42, 0.09, TISSUE), (-0.06, 0.04, 0.45, 0.085,
-                                                                                                  TISSUE_LIGHT)]:
-        tissue_ball(m, (x, y, z), r, col)
+    clay(m, 0.07, srgb("#4f7a8c"))
+    pencil(m, (0, 0, 0.02), 0.17, srgb("#c8402f"), lean=(0.05, -0.04))
+    for k, (x, y, z, r, col) in enumerate([(0, 0, 0.33, 0.12, TISSUE_DARK), (0.09, 0.03, 0.42, 0.095, TISSUE),
+                                           (-0.06, 0.05, 0.46, 0.085, TISSUE_OLIVE)]):
+        tissue_ball(m, (x, y, z), r, col, k * 2, 2)
     return m.build()
 
 
 def tree_cone(seed=53):
-    """Tissue twisted into a cone round a blue pencil (a fir)."""
+    """Tissue twisted round a blue pencil into a fir: one spiral of paper, ragged at the hem."""
     m = Model("tree_cone", seed)
-    clay(m, 0.05, srgb("#5c7b3e"))
-    pencil(m, (0, 0, 0.0), 0.12, srgb("#3d6fb8"))
-    for k, (z, r, hh, col) in enumerate([(0.15, 0.18, 0.3, TISSUE_DARK), (0.27, 0.14, 0.26, TISSUE), (0.38, 0.1, 0.22,
-                                                                                                      TISSUE_LIGHT)]):
-        c = m.cylinder((0, 0, z), r, hh, col, 14, PAPER, caps=True, radius_top=0.012, cuts=3, smooth=True, jitter=0.0)
-        m.crumple(c, 0.03, 14.0 + k * 3)
+    clay(m, 0.065, srgb("#6b8a3e"))
+    pencil(m, (0, 0, 0.02), 0.12, srgb("#3d6fb8"))
+    z0, hh, r = 0.13, 0.46, 0.19
+    c = m.cylinder((0, 0, z0), r, hh, TISSUE_DARK, 30, PAPER, caps=True, radius_top=0.01, cuts=10, smooth=False, jitter=0.0)
+    for v in m._verts(c):
+        t = (v.co.z - z0) / hh
+        a = math.atan2(v.co.y, v.co.x)
+        k = 1.0 + 0.2 * math.sin(a * 3.0 + t * 11.0) * (1.0 - t * 0.6)   # the twist: three spiralling folds
+        if t < 0.05:
+            k *= 1.0 + 0.12 * math.sin(a * 9.0 + m.seed)                 # a ragged hem
+            v.co.z += 0.02 * math.sin(a * 5.0)
+        v.co.x *= k
+        v.co.y *= k
+    m.crumple(c, 0.018, 16.0)
+    cen = Vector((0, 0, z0))
+
+    def fn(p, n):
+        a = math.atan2(p.y, p.x)
+        t = (p.z - z0) / hh
+        ridge = 0.5 + 0.5 * math.sin(a * 3.0 + t * 11.0)
+        base = [TISSUE_DARK[i] * (1 - ridge * 0.5) + TISSUE[i] * ridge * 0.5 for i in range(3)]
+        return [min(1.0, base[i] * (0.88 + 0.28 * ridge + 0.1 * max(0.0, n.z))) for i in range(3)]
+    m.paint_by(c, fn, PAPER)
     return m.build()
 
 
 def tree_blossom(seed=54):
     """Pink tissue on a green pencil: someone ran out of green."""
     m = Model("tree_blossom", seed)
-    clay(m, 0.055, srgb("#8a6a52"))
-    pencil(m, (0, 0, 0.0), 0.18, srgb("#4f8a3c"))
-    tissue_ball(m, (0, 0, 0.38), 0.15, srgb("#e79ab0"))
-    tissue_ball(m, (-0.07, 0.04, 0.32), 0.09, srgb("#f2bccb"), 5)
+    clay(m, 0.07, srgb("#e0c46a"))
+    pencil(m, (0, 0, 0.02), 0.18, srgb("#4f8a3c"), lean=(-0.04, 0.06))
+    tissue_ball(m, (0, 0, 0.38), 0.15, srgb("#d993a6"), 1, 4)
+    tissue_ball(m, (-0.08, 0.04, 0.32), 0.09, srgb("#ebb6c4"), 5, 2)
     return m.build()
 
 

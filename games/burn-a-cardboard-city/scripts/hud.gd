@@ -43,6 +43,7 @@ var chain_label: Label
 var find_tag: PanelContainer
 var popups: Control
 var rotate_overlay: Control
+var floats_layer: Control             # the coin numbers that pop off burning buildings (World fills it)
 
 var _offer_text: RichTextLabel
 var _offer_bar: MarkerBar
@@ -95,55 +96,71 @@ class Crosshair:
 
 class WindRibbon:
 	extends Control
-	## The breeze: a little desk fan drawn in marker with a ribbon tied to its guard,
-	## streaming the way the wind blows (relative to where you look). The longer and
-	## livelier the ribbon, the stronger the wind.
+	## The breeze: a desk fan drawn in marker in the middle of its paper tag, a striped
+	## ribbon tied to its guard streaming the way the wind blows (relative to where you
+	## look; longer and livelier the harder it blows), and the breeze written underneath.
 	var angle := 0.0
 	var strength := 0.5
 	var t := 0.0
 
+	static func words(k: float) -> String:
+		if k < 0.45:
+			return "light breeze"
+		if k < 0.68:
+			return "steady breeze"
+		return "strong wind"
+
 	func _draw() -> void:
-		var c := Vector2(size.y * 0.5 + 2.0, size.y * 0.5)
-		var r := size.y * 0.42
-		# The fan: a guard, three blades turning with the wind, a stand.
-		draw_line(c + Vector2(0, r), c + Vector2(0, r + 6), Craft.INK, 3.0, true)
-		draw_line(c + Vector2(-8, r + 6), c + Vector2(8, r + 6), Craft.INK, 3.0, true)
+		var c := Vector2(size.x * 0.5, size.y * 0.39)
+		var r := size.y * 0.27
+		# The fan: a stand, a guard, three blades turning with the wind.
+		draw_line(c + Vector2(0, r), c + Vector2(0, r + 8), Craft.INK, 3.5, true)
+		draw_line(c + Vector2(-12, r + 8), c + Vector2(12, r + 8), Craft.INK, 3.5, true)
+		draw_circle(c, r, Color("#dfe4e6"))
 		for k in 3:
 			var a := t * (2.0 + strength * 10.0) + TAU * k / 3.0
-			var p0 := c + Vector2(cos(a), sin(a)) * 2.0
-			var p1 := c + Vector2(cos(a + 0.5), sin(a + 0.5)) * r * 0.85
-			var p2 := c + Vector2(cos(a - 0.15), sin(a - 0.15)) * r * 0.85
-			draw_colored_polygon(PackedVector2Array([p0, p1, p2]), Color("#7d8a96"))
-		draw_arc(c, r, 0, TAU, 24, Craft.INK, 2.5, true)
-		draw_circle(c, 2.5, Craft.INK)
-		# The ribbon, tied on at the guard, streaming downwind.
+			var p0 := c + Vector2(cos(a), sin(a)) * 2.5
+			var p1 := c + Vector2(cos(a + 0.55), sin(a + 0.55)) * r * 0.88
+			var p2 := c + Vector2(cos(a - 0.2), sin(a - 0.2)) * r * 0.88
+			draw_colored_polygon(PackedVector2Array([p0, p1, p2]), Color("#6f8090"))
+		draw_arc(c, r, 0, TAU, 28, Craft.INK, 3.0, true)
+		draw_circle(c, 3.0, Craft.INK)
+		# The ribbon, tied to the middle of the guard, streaming downwind over everything
+		# (it may run a little past the tag's edge rather than shrink to nothing).
 		var d := Vector2(sin(angle), -cos(angle))
 		var side := d.orthogonal()
-		var root := c + d * r
-		var length := 14.0 + strength * 52.0
-		# Keep it on the tag: shorten it if it would run off an edge.
+		var root := c
+		var length := 36.0 + strength * 64.0
 		var room := 999.0
 		if absf(d.x) > 0.01:
-			room = minf(room, ((size.x - 4.0 - root.x) if d.x > 0.0 else (root.x - 2.0)) / absf(d.x))
+			room = minf(room, ((size.x + 8.0 - root.x) if d.x > 0.0 else (root.x + 8.0)) / absf(d.x))
 		if absf(d.y) > 0.01:
-			room = minf(room, ((size.y - 2.0 - root.y) if d.y > 0.0 else (root.y - 2.0)) / absf(d.y))
-		length = clampf(minf(length, room), 6.0, 70.0)
+			room = minf(room, ((size.y + 6.0 - root.y) if d.y > 0.0 else (root.y + 8.0)) / absf(d.y))
+		length = clampf(minf(length, room), 30.0, 110.0)
+		var n := 14
 		var pts_a := PackedVector2Array()
 		var pts_b := PackedVector2Array()
-		var n := 10
 		for k in n + 1:
 			var u := float(k) / n
-			var wave := sin(t * (5.0 + strength * 8.0) - u * 6.0) * (2.0 + 5.0 * u) * (0.4 + strength)
+			var wave := sin(t * (5.0 + strength * 9.0) - u * 6.5) * (1.5 + 6.0 * u) * (0.4 + strength)
 			var p := root + d * length * u + side * wave
-			var w := 4.5 * (1.0 - u * 0.4)
+			var w := 10.0 * (1.0 - u * 0.35)
 			pts_a.append(p + side * w * 0.5)
 			pts_b.append(p - side * w * 0.5)
 		var poly := pts_a.duplicate()
 		for k in range(pts_b.size() - 1, -1, -1):
 			poly.append(pts_b[k])
 		draw_colored_polygon(poly, Craft.RED_INK)
-		draw_polyline(pts_a, Color(Craft.INK, 0.6), 1.5, true)
-		draw_polyline(pts_b, Color(Craft.INK, 0.6), 1.5, true)
+		for k in range(3, n, 3):
+			draw_line(pts_a[k], pts_b[k], Color(Craft.PAPER, 0.9), 3.0, true)
+		draw_polyline(pts_a, Craft.INK, 2.0, true)
+		draw_polyline(pts_b, Craft.INK, 2.0, true)
+		draw_circle(c, 5.0, Craft.INK)
+		# The breeze, in words.
+		var f := Craft.hand()
+		var wd := words(strength)
+		var ws := f.get_string_size(wd, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
+		draw_string(f, Vector2((size.x - ws) * 0.5, size.y - 4.0), wd, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Craft.INK)
 
 
 class MarkerBar:
@@ -152,6 +169,7 @@ class MarkerBar:
 	var value := 0.0
 	var color := Craft.FLAME
 	var gate := -1.0              # a notch where the next tool goes on sale
+	var gate_icon: Texture2D      # ...and that tool's icon, drawn on the notch
 
 	func _draw() -> void:
 		var r := Rect2(Vector2.ZERO, size)
@@ -167,7 +185,12 @@ class MarkerBar:
 		if gate > 0.0:
 			var gx := size.x * gate
 			draw_line(Vector2(gx, -5), Vector2(gx, size.y + 5), Craft.INK, 3.0, true)
-			draw_colored_polygon(PackedVector2Array([Vector2(gx - 6, -9), Vector2(gx + 6, -9), Vector2(gx, -2)]), Craft.INK)
+			if gate_icon != null:
+				draw_circle(Vector2(gx, size.y * 0.5), 13.0, Craft.PAPER)
+				draw_arc(Vector2(gx, size.y * 0.5), 13.0, 0, TAU, 20, Craft.INK, 2.0, true)
+				draw_texture_rect(gate_icon, Rect2(Vector2(gx - 10, size.y * 0.5 - 10), Vector2(20, 20)), false)
+			else:
+				draw_colored_polygon(PackedVector2Array([Vector2(gx - 6, -9), Vector2(gx + 6, -9), Vector2(gx, -2)]), Craft.INK)
 
 
 class Matchbox:
@@ -234,6 +257,24 @@ class Matchbox:
 		draw_rect(sl, Craft.INK, false, 2.5)
 
 
+class Vignette:
+	extends Control
+	## The foreground sits darker: a soft shade up from the bottom of the screen and in from
+	## the sides, so the eye goes to the middle and the controls stand off the floor.
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		var clear := Color(0.03, 0.03, 0.04, 0.0)
+		var dark := Color(0.03, 0.03, 0.04, 0.34)
+		draw_polygon(PackedVector2Array([Vector2(0, h * 0.58), Vector2(w, h * 0.58), Vector2(w, h), Vector2(0, h)]),
+			PackedColorArray([clear, clear, dark, dark]))
+		var side := Color(0.03, 0.03, 0.04, 0.16)
+		draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w * 0.14, 0), Vector2(w * 0.14, h), Vector2(0, h)]),
+			PackedColorArray([side, clear, clear, side]))
+		draw_polygon(PackedVector2Array([Vector2(w * 0.86, 0), Vector2(w, 0), Vector2(w, h), Vector2(w * 0.86, h)]),
+			PackedColorArray([clear, side, side, clear]))
+
+
 class Scribble:
 	extends Button
 	## "not now", written small with a pen and underlined twice.
@@ -251,6 +292,14 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = Craft.make_theme()
 	add_child(root)
+	var vig := Vignette.new()
+	vig.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(vig)
+	floats_layer = Control.new()
+	floats_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	floats_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(floats_layer)
 	_build_top()
 	_build_center()
 	_build_bottom()
@@ -305,7 +354,7 @@ func _build_top() -> void:
 	coins_label = Craft.label(40, Craft.INK, Craft.marker())
 	coins_label.custom_minimum_size = Vector2(130, 0)
 	v.add_child(coins_label)
-	rate_label = Craft.label(20, Craft.INK, Craft.hand())
+	rate_label = Craft.label(23, Craft.INK, Craft.hand())
 	v.add_child(rate_label)
 	coins_label.pivot_offset = Vector2(0, 26)
 
@@ -316,19 +365,19 @@ func _build_top() -> void:
 	wh.add_theme_constant_override("separation", 6)
 	wt.add_child(wh)
 	wind = WindRibbon.new()
-	wind.custom_minimum_size = Vector2(150, 58)
+	wind.custom_minimum_size = Vector2(206, 104)
 	wind.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	wh.add_child(wind)
 	boosts = VBoxContainer.new()
-	boosts.position = Vector2(18, 160)
+	boosts.position = Vector2(18, 228)
 	boosts.add_theme_constant_override("separation", 6)
 	boosts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(boosts)
 
 	var zt := _panel(Craft.card(Craft.KRAFT_PALE, 13, 0), 0.012)
 	zt.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	zt.offset_left = -215
-	zt.offset_right = 215
+	zt.offset_left = -235
+	zt.offset_right = 235
 	zt.offset_top = 12
 	zt.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	root.add_child(zt)
@@ -340,10 +389,10 @@ func _build_top() -> void:
 	zone_label = Craft.label(23)
 	zone_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	zh.add_child(zone_label)
-	zone_pct = Craft.label(20, Craft.INK, Craft.hand())
+	zone_pct = Craft.label(23, Craft.INK, Craft.hand())
 	zh.add_child(zone_pct)
 	zone_bar = MarkerBar.new()
-	zone_bar.custom_minimum_size = Vector2(390, 14)
+	zone_bar.custom_minimum_size = Vector2(390, 16)
 	zone_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	zv.add_child(zone_bar)
 
@@ -418,19 +467,19 @@ func _build_center() -> void:
 	target_tag.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	target_tag.visible = false
 	root.add_child(target_tag)
-	target_label = Craft.rich(21)
+	target_label = Craft.rich(24)
 	target_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	target_tag.add_child(target_label)
 
 	coach = _panel(Craft.paper(17, 2), -0.012)
 	coach.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	coach.offset_left = -300
-	coach.offset_right = 300
-	coach.offset_top = 96
+	coach.offset_left = -310
+	coach.offset_right = 310
+	coach.offset_top = 104
 	coach.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	coach.visible = false
 	root.add_child(coach)
-	coach_label = Craft.body(25)
+	coach_label = Craft.body(28)
 	coach_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	coach.add_child(coach_label)
 
@@ -520,6 +569,9 @@ func _build_rotate_overlay() -> void:
 
 func set_touch_mode(on: bool) -> void:
 	touch_mode = on
+	if giant != null:
+		# The fist sits above the phone's buttons (the jump and fire caps), or lower down on a computer.
+		giant.grip_screen = Vector2(-335.0, -262.0) if on else Vector2(-285.0, -188.0)
 	touch.visible = on and shop == null
 	for b in touch.buttons:
 		(b.control as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE if on else Control.MOUSE_FILTER_STOP
@@ -566,7 +618,7 @@ func _process(delta: float) -> void:
 
 func _refresh() -> void:
 	var rate := GameState.income_per_second_now()
-	rate_label.text = "+%s a second" % Fmt.num(rate) if rate > 0.05 else "light something"
+	rate_label.text = "+%s a second" % Fmt.num(rate) if rate > 0.05 else "nothing burning"
 	if city != null:
 		var z := Balance.zone_for_cell(clampi(int((giant.position.x - city.origin.x) / Balance.CELL), 0, city.n - 1),
 			clampi(int((giant.position.z - city.origin.y) / Balance.CELL), 0, city.n - 1))
@@ -574,13 +626,21 @@ func _refresh() -> void:
 		# next tool goes on sale (in the castle, where the keep's walls are breached).
 		var zp: float = city.zone_progress(z)
 		zone_label.text = Balance.ZONES[z].name
-		zone_pct.text = "%d%% down" % int(zp * 100.0)
 		zone_bar.value = zp
 		zone_bar.gate = -1.0
+		zone_bar.gate_icon = null
+		var pct := "%d%% down" % int(zp * 100.0)
 		if z + 1 < Balance.TOOL_GATE.size() and GameState.tool_index <= z:
 			zone_bar.gate = float(Balance.TOOL_GATE[z + 1])
+			zone_bar.gate_icon = Craft.icon(str(Balance.TOOLS[z + 1].key))
+			if zp < zone_bar.gate:
+				pct = "%d%%, %s at %d%%" % [int(zp * 100.0), str(Balance.TOOLS[z + 1].name).to_lower(), int(round(zone_bar.gate * 100.0))]
 		elif z == 3:
 			zone_bar.gate = Balance.KEEP_GATE
+			zone_bar.gate_icon = Craft.icon("castle")
+			if zp < zone_bar.gate:
+				pct = "%d%%, the keep at %d%%" % [int(zp * 100.0), int(round(zone_bar.gate * 100.0))]
+		zone_pct.text = pct
 		zone_bar.queue_redraw()
 		var fwd := Vector2(-sin(giant.yaw), -cos(giant.yaw))
 		var right := Vector2(cos(giant.yaw), -sin(giant.yaw))
@@ -676,7 +736,8 @@ func _tool_for(thresh: float) -> String:
 
 
 func set_coach(text: String) -> void:
-	var show := text != "" and not is_blocking()
+	## The first-run hint shares one spot with the notes: a note takes it, then the hint comes back.
+	var show := text != "" and not is_blocking() and not (_note_panel != null and _note_panel.visible)
 	if show and not coach.visible:
 		coach.modulate.a = 0.0
 		coach.create_tween().tween_property(coach, "modulate:a", 1.0, 0.3)
@@ -689,13 +750,18 @@ func set_coach(text: String) -> void:
 # Chains, toasts
 # =====================================================================================
 const CHAIN_STAMPS := [3, 5, 8, 12, 20, 30, 50]
+var _chain_shown := 0
 
 
 func show_chain(n: int) -> void:
-	## Stamped only as a chain reaches a milestone (a big fire is one endless chain).
-	## Floating numbers clear out of the way: nothing prints over a stamp.
+	## Stamped only as a chain reaches a milestone (a big fire is one endless chain), and
+	## never a smaller number over a bigger one still on screen (two chains running at once
+	## used to flick x5 -> x8 -> x5). Floating numbers clear out of the way.
 	if not CHAIN_STAMPS.has(n):
 		return
+	if chain_label.visible and n <= _chain_shown:
+		return
+	_chain_shown = n
 	if world != null:
 		world.hide_floats()
 	chain_label.text = "chain x%d" % n
@@ -708,14 +774,18 @@ func _update_chain(delta: float) -> void:
 	if not chain_label.visible:
 		return
 	_chain_t += delta
-	# Stamped on: in big and crooked, settles, then fades out.
+	# Stamped on (in big and crooked, settles), held a moment, then lifted off: it swells,
+	# turns a little and fades, the way a stamp comes up off paper.
 	var u := minf(1.0, _chain_t / 0.22)
 	var e := 1.0 - pow(1.0 - u, 3.0)
-	chain_label.scale = Vector2.ONE * lerpf(1.7, 1.0, e)
-	chain_label.rotation = lerpf(-0.35, -0.08, e)
-	chain_label.modulate.a = 1.0 - clampf((_chain_t - 1.4) / 0.4, 0.0, 1.0)
-	if _chain_t > 1.8:
+	var out := clampf((_chain_t - 1.05) / 0.4, 0.0, 1.0)
+	var eo := out * out
+	chain_label.scale = Vector2.ONE * (lerpf(1.7, 1.0, e) + 0.35 * eo)
+	chain_label.rotation = lerpf(-0.35, -0.08, e) + 0.14 * eo
+	chain_label.modulate.a = 1.0 - eo
+	if _chain_t > 1.45:
 		chain_label.visible = false
+		_chain_shown = 0
 
 
 var _notes: Array = []                # queued lines, shown one at a time
@@ -746,7 +816,7 @@ func _update_notes(delta: float) -> void:
 	if _note_panel == null:
 		_note_panel = _panel(Craft.paper(41, 1), -0.015)
 		_note_panel.position = Vector2(18, 172)
-		_note_label = Craft.rich(22)
+		_note_label = Craft.rich(26)
 		_note_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 		_note_panel.add_child(_note_label)
 		toast_box.add_child(_note_panel)
@@ -763,12 +833,15 @@ func _update_notes(delta: float) -> void:
 	if _notes.is_empty():
 		return
 	var e: Array = _notes.pop_front()
-	_note_label.text = Craft.coins_bb(str(e[0]), 22)
+	_note_label.text = Craft.coins_bb(str(e[0]), 26)
 	_note_key = str(e[1])
 	_note_panel.reset_size()
-	_note_panel.position = Vector2(18, boosts.position.y + (boosts.size.y + 12.0 if boosts.get_child_count() > 0 else 6.0))
-	_note_panel.rotation = randf_range(-0.025, 0.02)
+	# The one note spot: top middle, under the district tag (the hint steps aside for it).
+	var vp := root.get_viewport_rect().size
+	_note_panel.position = Vector2((vp.x - _note_panel.size.x) * 0.5, 106.0)
+	_note_panel.rotation = randf_range(-0.02, 0.015)
 	_note_panel.visible = true
+	coach.visible = false
 	_note_panel.modulate.a = 0.0
 	_note_t = 0.0
 
@@ -1133,9 +1206,12 @@ func show_ending() -> void:
 	(note.get_theme_stylebox("panel") as CardStyle).content_margin_bottom = 22
 	# Pinned up in the middle, growing out from the centre (an absolute position here was
 	# measured before the dim had a size, so the screenshot run found the note off-screen).
-	note.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	note.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	# Pinned up on the right, so the ruins of the keep stay in view on the left as the
+	# camera cranes round them.
+	note.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	note.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	note.grow_vertical = Control.GROW_DIRECTION_BOTH
+	note.offset_right = -40.0
 	note.modulate.a = 0.0
 	dim.add_child(note)
 	var v := VBoxContainer.new()
@@ -1159,6 +1235,8 @@ func show_ending() -> void:
 	btn.custom_minimum_size = Vector2(0, 58)
 	btn.pressed.connect(func():
 		close_popup(p)
+		if world != null:
+			world.end_ending_camera()
 		for c in root.get_children():
 			if c != popups and c is Control and c != rotate_overlay and c != hint:
 				(c as Control).visible = true
@@ -1168,10 +1246,11 @@ func show_ending() -> void:
 	p["button"] = btn
 	var tw := dim.create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(dim, "color:a", 0.35, 2.0)
+	tw.tween_property(dim, "color:a", 0.22, 2.0)
 	tw.tween_property(bars[0], "offset_bottom", 64.0, 1.6).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(bars[1], "offset_top", -64.0, 1.6).set_trans(Tween.TRANS_SINE)
-	tw.chain().tween_interval(1.2)
+	# The camera cranes up over the ashes for a few seconds before the note is pinned up.
+	tw.chain().tween_interval(3.2)
 	tw.chain().tween_property(note, "modulate:a", 1.0, 0.6)
 	_last_popup = p
 

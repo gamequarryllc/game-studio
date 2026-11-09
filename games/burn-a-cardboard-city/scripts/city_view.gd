@@ -5,18 +5,24 @@ extends Node3D
 ##    holds how charred it is, whether it's burning, and when and which way it
 ##    fell; the shaders animate the burn and the collapse on their own, so the
 ##    CPU only touches an instance when something happens to it;
-##  - paper flames and smoke: MultiMeshes rebuilt every fire tick from what's burning;
+##  - paper flames, tissue smoke and sparks: MultiMeshes rebuilt every fire tick from
+##    what's burning (one big flame cluster per building rooted on its roof, licks on its
+##    edges and out of its windows; a smoke column leaning with the fans; orange specks);
 ##  - debris: scraps of burning card on the floor, appended as they land;
 ##  - the floor: kinds of paper per cell (static) and scorch / embers / contact
 ##    shadow per cell (updated as things burn and fall);
-##  - masking-tape road markings; splashes, bursts of sparks, a fire light.
+##  - hand-painted scorch decals where things burned down;
+##  - masking-tape road markings; the pallet deck under the castle; lifted lawn corners;
+##  - splashes, bursts of sparks, a fire light.
 
 const NEVER := 30000.0
 const REBASE_AT := 300.0           # custom data is half floats in Compatibility: keep times small
 const REBASE_BY := 240.0
 const MAX_FLAMES := 1500
-const MAX_SMOKE := 260
+const MAX_SMOKE := 900
+const MAX_SPARKS := 480
 const MAX_DEBRIS := 1600
+const YARD_LIFT := 0.16            # the castle stands on a pallet: its deck boards are this high
 const FLAME := {
 	Balance.HOUSE: Vector2(0.55, 0.85), Balance.CAR: Vector2(0.5, 0.7), Balance.TREE: Vector2(0.5, 0.75),
 	Balance.OFFICE: Vector2(0.75, 1.15), Balance.SKY: Vector2(1.0, 1.5), Balance.WALL: Vector2(1.0, 1.6),
@@ -48,6 +54,11 @@ var _hez := PackedFloat32Array()   # ...and along z
 var _char := PackedFloat32Array()
 var _flames: MultiMesh
 var _smoke: MultiMesh
+var _sparks: MultiMesh
+var _spark_buf := PackedFloat32Array()
+var spark_mat: ShaderMaterial
+var _scorch: MultiMesh
+var _scorch_n := 0
 var _debris: MultiMesh
 var _debris_at := {}               # cell -> instance
 var _debris_n := 0
@@ -73,6 +84,9 @@ func build(g: CityGrid) -> void:
 	_build_structures()
 	_build_rubble()
 	_build_floor()
+	_build_deck()
+	_build_lawn_corners()
+	_build_scorch()
 	_build_tape()
 	_build_fire()
 	_build_debris()
@@ -168,6 +182,179 @@ func _set_burn(c: int, scorch: float, glow: float) -> void:
 		col.g = glow
 	_burn_img.set_pixel(c % grid.n, c / grid.n, col)
 	_burn_dirty = true
+
+
+func lift_at(x: float, z: float) -> float:
+	## How high the floor is here: the castle's pallet deck, or the warehouse floor.
+	var c := grid.cell_at(x, z)
+	return YARD_LIFT if c >= 0 and grid.ground[c] == CityGrid.G_YARD else 0.0
+
+
+func _build_deck() -> void:
+	## The pallet the castle stands on: deck boards (with gaps you can see under) drawn with
+	## the floor's material, so the baked shadows, the soot and the fire light fall on them.
+	## The blocks under its edge are a Blender model (castle_pallet).
+	var c0 := Balance.block_start(3)
+	var sz := Balance.block_start(5) + Balance.BLOCK - c0
+	var x0 := grid.origin.x + c0 * Balance.CELL
+	var x1 := x0 + sz * Balance.CELL
+	var z0 := grid.origin.y + c0 * Balance.CELL - 0.04
+	var z1 := grid.origin.y + (c0 + sz) * Balance.CELL + 0.04
+	var top := YARD_LIFT
+	var bot := YARD_LIFT - 0.04
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var k0 := int(floor(x0 / 0.9)) - 1
+	var k1 := int(ceil(x1 / 0.9)) + 1
+	for k in range(k0, k1):
+		var bx0 := maxf(x0, k * 0.9 + 0.035)
+		var bx1 := minf(x1, k * 0.9 + 0.855)
+		if bx1 - bx0 < 0.05:
+			continue
+		var quads := [
+			[Vector3(bx0, top, z0), Vector3(bx1, top, z0), Vector3(bx1, top, z1), Vector3(bx0, top, z1), Vector3.UP],
+			[Vector3(bx0, bot, z0), Vector3(bx0, top, z0), Vector3(bx0, top, z1), Vector3(bx0, bot, z1), Vector3.LEFT],
+			[Vector3(bx1, top, z0), Vector3(bx1, bot, z0), Vector3(bx1, bot, z1), Vector3(bx1, top, z1), Vector3.RIGHT],
+			[Vector3(bx0, bot, z1), Vector3(bx0, top, z1), Vector3(bx1, top, z1), Vector3(bx1, bot, z1), Vector3.BACK],
+			[Vector3(bx1, bot, z0), Vector3(bx1, top, z0), Vector3(bx0, top, z0), Vector3(bx0, bot, z0), Vector3.FORWARD],
+		]
+		for q in quads:
+			st.set_normal(q[4])
+			for idx in [0, 1, 2, 0, 2, 3]:
+				st.add_vertex(q[idx])
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = floor_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(mi)
+
+
+func _build_lawn_corners() -> void:
+	## Construction paper doesn't lie flat: some corners of the lawn sheets have lifted.
+	## Small curled triangles at the sheets' outside corners, drawn with the floor's
+	## material so they're the same paper.
+	var n := grid.n
+	var r := RandomNumberGenerator.new()
+	r.seed = Balance.WORLD_SEED + 31
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var count := 0
+	for y in range(1, n - 1):
+		for x in range(1, n - 1):
+			if grid.ground[x + y * n] != CityGrid.G_LAWN:
+				continue
+			for d in [Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]:
+				if grid.ground[x + d.x + y * n] == CityGrid.G_LAWN or grid.ground[x + (y + d.y) * n] == CityGrid.G_LAWN:
+					continue
+				if grid.sid[x + y * n] >= 0 or r.randf() > 0.5:
+					continue
+				# The corner point, and the two edges running back into the sheet from it.
+				var corner := grid.origin + Vector2(x + (1 if d.x > 0 else 0), y + (1 if d.y > 0 else 0)) * Balance.CELL
+				var ex := Vector2(-d.x, 0)
+				var ez := Vector2(0, -d.y)
+				var L := r.randf_range(0.22, 0.34)
+				var lift := r.randf_range(0.025, 0.06)
+				var g := 4
+				var pts := {}
+				for i in g + 1:
+					for j in g + 1 - i:
+						var u := float(i) / g
+						var v := float(j) / g
+						var p := corner + (ex * u + ez * v) * L
+						var t := maxf(0.0, 1.0 - (u + v))
+						pts[Vector2i(i, j)] = Vector3(p.x, 0.003 + lift * t * t, p.y)
+				for i in g:
+					for j in g - i:
+						var tris := [[Vector2i(i, j), Vector2i(i + 1, j), Vector2i(i, j + 1)]]
+						if i + j + 1 < g:
+							tris.append([Vector2i(i + 1, j), Vector2i(i + 1, j + 1), Vector2i(i, j + 1)])
+						for tri in tris:
+							var a: Vector3 = pts[tri[0]]
+							var b: Vector3 = pts[tri[1]]
+							var c: Vector3 = pts[tri[2]]
+							var nrm := (b - a).cross(c - a).normalized()
+							if nrm.y < 0.0:
+								var tmp := b
+								b = c
+								c = tmp
+								nrm = -nrm
+							st.set_normal(nrm)
+							st.add_vertex(a)
+							st.add_vertex(b)
+							st.add_vertex(c)
+				count += 1
+	if count == 0:
+		return
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = floor_mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+
+
+func _build_scorch() -> void:
+	## The hand-painted scorch decals burnt buildings leave on the floor (one per building,
+	## two for a tower that fell: its footprint and the long mark along its fall).
+	_scorch = MultiMesh.new()
+	_scorch.transform_format = MultiMesh.TRANSFORM_3D
+	_scorch.use_colors = true
+	_scorch.use_custom_data = true
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(1, 1)
+	_scorch.mesh = plane
+	_scorch.instance_count = grid.count * 2 + 8
+	_scorch.visible_instance_count = 0
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/scorch_decal.gdshader")
+	mat.set_shader_parameter("atlas", load("res://models/scorch.png"))
+	mat.render_priority = -1
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = _scorch
+	mmi.material_override = mat
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.custom_aabb = AABB(Vector3(grid.origin.x - 8, -1, grid.origin.y - 8), Vector3(grid.n * Balance.CELL + 16, 3, grid.n * Balance.CELL + 16))
+	add_child(mmi)
+
+
+func _scorch_decal(at: Vector2, yaw: float, sx: float, sz: float, variant: int) -> void:
+	if _scorch_n >= _scorch.instance_count:
+		return
+	var i := _scorch_n
+	_scorch_n += 1
+	var y := lift_at(at.x, at.y) + 0.007 + i * 0.000004
+	_scorch.set_instance_transform(i, Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3(sx, 1.0, sz)), Vector3(at.x, y, at.y)))
+	_scorch.set_instance_color(i, Color.WHITE)
+	_scorch.set_instance_custom_data(i, Color(float(variant), 0, 0, 0))
+	_scorch.visible_instance_count = _scorch_n
+
+
+func _add_scorch(s: int) -> void:
+	var k := grid.s_kind[s]
+	var c: Vector2 = grid.s_center[s]
+	var v := grid.s_vary[s]
+	var foot := maxf(_he[s], _hez[s]) * 2.0
+	var yaw := v * TAU * 3.0
+	if grid.s_fall[s] == CityGrid.CRUMPLE:
+		var small := k in [Balance.CAR, Balance.TREE, Balance.TRUCK]
+		var size := foot / (0.42 if small else 0.62)
+		var variant := (6 + int(v * 7.0) % 2) if small else int(v * 13.0) % 4
+		var stretch := Vector2(_he[s], _hez[s]) / maxf(0.01, maxf(_he[s], _hez[s]))
+		if small:
+			stretch = Vector2.ONE
+		_scorch_decal(c, yaw if small else float(grid.s_rot[s]) * PI * 0.5 + (v - 0.5) * 0.4,
+			size * maxf(stretch.x, 0.7), size * maxf(stretch.y, 0.7), variant)
+		return
+	# A tower that fell: a mark where it stood, and a long one along the way it fell.
+	var d: Vector2i = CityGrid.FALL_DIRS[grid.s_fall[s]]
+	var r: Rect2i = grid.s_rect[s]
+	var along := (r.size.x if d.x != 0 else r.size.y) * Balance.CELL
+	var across := (r.size.y if d.x != 0 else r.size.x) * Balance.CELL
+	_scorch_decal(c, yaw, foot / 0.62, foot / 0.62, int(v * 13.0) % 4)
+	var start := c - Vector2(d) * along * 0.5
+	var stop := c + Vector2(d) * (along * 0.5 + grid.s_height[s])
+	var mid := (start + stop) * 0.5
+	var fyaw := -atan2(float(d.y), float(d.x)) + (v - 0.5) * 0.1
+	_scorch_decal(mid, fyaw, start.distance_to(stop) * 1.05, across * 2.1, 4 + int(v * 7.0) % 2)
 
 
 # =====================================================================================
@@ -294,13 +481,15 @@ func _place_rubble(s: int, landed: float) -> void:
 		var size: Vector2 = Balance.FALL_SIZE.get(key, Vector2(2.2, 1.3))
 		var sx := grid.s_height[s] / size.x
 		var sz := across / size.y
-		var sy := clampf(along * 0.3 / maxf(box.size.y, 0.1), 0.45, 1.25)
+		var sy := clampf(along * 0.3 / 0.5, 0.45, 1.25)
 		var yaw: float = [0.0, PI, -PI * 0.5, PI * 0.5][f]
 		var pivot := c + Vector2(d) * along * 0.5
 		xf = Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(sx, sy, sz)), Vector3(pivot.x, 0.0, pivot.y))
+	xf.origin.y = lift_at(xf.origin.x, xf.origin.z) if grid.s_zone[s] == 3 else 0.0
 	mm.set_instance_transform(at, xf)
 	mm.set_instance_color(at, Color.WHITE)
 	mm.set_instance_custom_data(at, Color(landed, grid.s_vary[s], 0.0, 0.0))
+	_add_scorch(s)
 
 
 func rubble_transform(s: int) -> Transform3D:
@@ -363,14 +552,28 @@ func show_loaded_state() -> void:
 	_burn_tex.update(_burn_img)
 
 
+func raze(list: Array) -> void:
+	## Lay the rubble of things razed at once (the ending's stragglers, out of shot).
+	for s in list:
+		_char[s] = 1.0
+		_write(s, now - 60.0)
+		_scorch_fall(s)
+		_place_rubble(s, now - 999.0)
+	_refresh_heights(Rect2i(0, 0, grid.n, grid.n))
+	for i in grid.n * grid.n:
+		_update_shadow(i)
+	_burn_tex.update(_burn_img)
+
+
 func _scorch_fall(s: int) -> void:
+	# Only a faint soot here: the painted decal (_add_scorch) is the scorch mark itself.
 	for c in grid.s_cells[s]:
-		_set_burn(c, 0.9, -1.0)
+		_set_burn(c, 0.4, -1.0)
 	if grid.s_fall[s] != CityGrid.CRUMPLE:
 		var strip := grid.fall_strip(s)
 		for y in range(maxi(0, strip.position.y), mini(grid.n, strip.end.y)):
 			for x in range(maxi(0, strip.position.x), mini(grid.n, strip.end.x)):
-				_set_burn(x + y * grid.n, 0.75, -1.0)
+				_set_burn(x + y * grid.n, 0.3, -1.0)
 
 
 func apply_events(ignited: Array, collapsed: Array, impacts: Array, extinguished: Array, debris_new: Array, debris_out: Array) -> void:
@@ -391,7 +594,7 @@ func apply_events(ignited: Array, collapsed: Array, impacts: Array, extinguished
 		_pending.append([s, now + (0.3 if grid.s_fall[s] != CityGrid.CRUMPLE else 0.04)])
 	for c in debris_new:
 		_add_debris(c)
-		_set_burn(c, 0.55, 1.0)
+		_set_burn(c, 0.5, 1.0)
 		_glow.erase(c)
 	for c in debris_out:
 		_glow[c] = now
@@ -403,7 +606,7 @@ func impact_point(s: int) -> Vector3:
 	if grid.s_fall[s] != CityGrid.CRUMPLE:
 		var d: Vector2i = CityGrid.FALL_DIRS[grid.s_fall[s]]
 		c += Vector2(d) * grid.s_height[s] * 0.55
-	return Vector3(c.x, 0.15, c.y)
+	return Vector3(c.x, 0.15 + lift_at(c.x, c.y), c.y)
 
 
 func _update_chars() -> void:
@@ -472,8 +675,8 @@ func _add_debris(c: int) -> void:
 	_debris_n += 1
 	_debris_at[c] = at
 	var p := grid.cell_center(c) + Vector2(_rng.randf_range(-0.12, 0.12), _rng.randf_range(-0.12, 0.12))
-	var s := _rng.randf_range(0.9, 1.5)
-	_debris.set_instance_transform(at, Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(s, s, s)), Vector3(p.x, 0.0, p.y)))
+	var s := _rng.randf_range(0.55, 0.95)
+	_debris.set_instance_transform(at, Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(s, s, s)), Vector3(p.x, lift_at(p.x, p.y), p.y)))
 	_debris.set_instance_color(at, Color.WHITE)
 	_debris.set_instance_custom_data(at, Color(0.92, _rng.randf(), NEVER, 8.0))
 	_debris.visible_instance_count = _debris_n
@@ -577,8 +780,23 @@ func _build_fire() -> void:
 	sm.custom_aabb = whole
 	sm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(sm)
+	spark_mat = ShaderMaterial.new()
+	spark_mat.shader = load("res://shaders/sparks.gdshader")
+	_sparks = MultiMesh.new()
+	_sparks.transform_format = MultiMesh.TRANSFORM_3D
+	_sparks.use_custom_data = true
+	_sparks.mesh = quad
+	_sparks.instance_count = MAX_SPARKS
+	_sparks.visible_instance_count = 0
+	var kmi := MultiMeshInstance3D.new()
+	kmi.multimesh = _sparks
+	kmi.material_override = spark_mat
+	kmi.custom_aabb = whole
+	kmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(kmi)
 	_buf.resize(MAX_FLAMES * 16)
 	_smoke_buf.resize(MAX_SMOKE * 16)
+	_spark_buf.resize(MAX_SPARKS * 16)
 	for _i in 4:
 		lights.append([Vector3(0, -100, 0), 0.0])
 	_push_lights()
@@ -587,6 +805,7 @@ func _build_fire() -> void:
 func set_wind(w: Vector2) -> void:
 	flame_mat.set_shader_parameter("wind", w)
 	smoke_mat.set_shader_parameter("wind", w)
+	spark_mat.set_shader_parameter("wind", w)
 
 
 func _put(buf: PackedFloat32Array, i: int, pos: Vector3, sx: float, sy: float, custom: Color) -> void:
@@ -609,83 +828,169 @@ func _put(buf: PackedFloat32Array, i: int, pos: Vector3, sx: float, sy: float, c
 	buf[o + 15] = custom.a
 
 
+static func _vseed(variant: int, r: float) -> float:
+	## The flame shader picks its shape from the seed (floor(seed * 6)): pick one on purpose,
+	## keeping the rest of the seed free so neighbours don't flicker in step.
+	return (float(variant) + 0.06 + 0.88 * fmod(absf(r), 1.0)) / 6.0
+
+
+static func _h(x: float) -> float:
+	return fmod(absf(sin(x * 12.9898) * 43758.5453), 1.0)
+
+
 func update_fire(cam: Vector3) -> void:
-	## Rebuild the flames and smoke from what's burning (once per fire tick): one tall
-	## flame per building leaning with the wind, smaller ones over the cells that are
-	## alight, some climbing the walls of tall ones; a few pieces of tissue smoke each.
+	## Rebuild the flames, smoke and sparks from what's burning (once per fire tick).
+	## Each building gets ONE big flame cluster rooted on its roof where it's alight (two or
+	## three along a long wall), a few licks on its roof edges and, once it's well alight,
+	## out of the windows on the side facing you; a column of tissue smoke leaning with
+	## the fans; sparks. Burning scraps on the floor get fewer, larger, low flames.
 	var nf := 0
 	var ns := 0
+	var nk := 0
 	var n := grid.n
 	var cands: Array = []
+	var cam2 := Vector2(cam.x, cam.z)
 	for s in grid.burning:
 		var k := grid.s_kind[s]
-		var fs: Vector2 = FLAME[k]
 		var fire := grid.s_fire[s]
-		var grow := 0.5 + 0.5 * fire
+		var grow := 0.45 + 0.55 * fire
+		var base := lift_at(grid.s_center[s].x, grid.s_center[s].y) if grid.s_zone[s] == 3 else 0.0
 		var h := grid.s_height[s] * (0.6 + 0.4 * grid.s_integ[s])
-		var r: Rect2i = grid.s_rect[s]
 		var order: PackedInt32Array = grid.s_order[s]
 		var on := grid.flames_on(s)
+		var frac := float(on) / float(maxi(1, order.size()))
 		var sc: Vector2 = grid.s_center[s]
 		var vary := grid.s_vary[s]
-		# The lead flame: tall, in the middle of what's alight, leaning hardest.
-		if nf < MAX_FLAMES - 2:
-			var lead_c := sc.lerp(grid.cell_center(order[mini(on - 1, order.size() - 1) / 2]), 0.5)
-			var tall_f := fs.y * (1.15 + 0.45 * fire) * grow
-			_put(_buf, nf, Vector3(lead_c.x, h - tall_f * 0.15, lead_c.y), fs.x * 1.1 * grow, tall_f,
-				Color(fmod(vary * 7.31, 1.0), fire, flame_style, 1.0))
-			nf += 1
-		var tall := h > 1.2
-		var step := 2 if order.size() <= 8 else 3
-		var i := 0
-		while i < on:
-			if nf >= MAX_FLAMES - 2:
+		var hx: float = _he[s]
+		var hz: float = _hez[s]
+		var foot := maxf(hx, hz) * 2.0
+		var thin := minf(hx, hz) * 2.0
+		var style := flame_style
+		var mid := sc
+		if on > 0:
+			mid = sc.lerp(grid.cell_center(order[mini(on - 1, order.size() - 1) / 2]), 0.6)
+		mid.x = clampf(mid.x, sc.x - hx * 0.6, sc.x + hx * 0.6)
+		mid.y = clampf(mid.y, sc.y - hz * 0.6, sc.y + hz * 0.6)
+		var small := k in [Balance.HOUSE, Balance.CAR, Balance.TREE, Balance.TRUCK]
+		var size_k := 0.82 if small else 0.95
+		# 1. The cluster: one big flame; a long wall gets two or three along its length.
+		var clusters := 1 if foot < thin * 1.8 else (2 if foot < thin * 3.2 else 3)
+		var main_w := clampf(minf(foot / clusters * 1.15, thin * 1.6) * (0.78 + 0.32 * frac), 0.45, 6.0) * grow * size_k
+		var long_x := hx >= hz
+		for ci in clusters:
+			if nf >= MAX_FLAMES - 8:
 				break
-			var c := order[i]
-			var cx := c % n
-			var cy := c / n
-			var seed := fmod(float(c) * 0.6180339, 1.0)
-			var cp := grid.cell_center(c) + Vector2(seed - 0.5, fmod(seed * 7.3, 1.0) - 0.5) * 0.25
-			var top := h * (0.84 + 0.16 * seed)
-			var size := 0.4 + 0.45 * fmod(seed * 3.3, 1.0)
-			_put(_buf, nf, Vector3(cp.x, top - fs.y * 0.15, cp.y), fs.x * grow * size, fs.y * grow * size * (0.8 + 0.5 * seed),
-				Color(seed, fire, flame_style, 0.0))
+			var t := 0.0 if clusters == 1 else (float(ci) / float(clusters - 1) - 0.5) * 1.3
+			var p := mid if clusters == 1 else sc + (Vector2(hx * t, 0.0) if long_x else Vector2(0.0, hz * t))
+			var w := main_w * (1.0 if ci == 0 else 0.86)
+			var sy := w * 1.62
+			_put(_buf, nf, Vector3(p.x, base + h - sy * 0.11, p.y), w, sy, Color(_vseed(int(vary * 7.0 + ci) % 2, vary * 3.1 + ci * 0.37), fire, style, 1.0 if ci == 0 else 0.6))
 			nf += 1
-			if tall and (cx == r.position.x or cy == r.position.y or cx == r.end.x - 1 or cy == r.end.y - 1) and seed > 0.35:
-				var out := Vector2(cx + 0.5, cy + 0.5) - Vector2(r.position) - Vector2(r.size) * 0.5
-				out = out.normalized() * 0.3
-				var hy := h * (0.2 + 0.55 * fmod(seed * 3.7, 1.0))
-				_put(_buf, nf, Vector3(cp.x + out.x, hy, cp.y + out.y), fs.x * grow * 0.7, fs.y * grow * 0.85,
-					Color(fmod(seed * 5.1, 1.0), fire * 0.8, flame_style, 0.0))
+		# 2. Licks on the roof edges where it's alight.
+		var licks := 1 + int(frac * 2.6)
+		for li in licks:
+			if nf >= MAX_FLAMES - 6:
+				break
+			var u := fmod(vary * 3.7 + li * 0.37, 1.0)
+			var per := 2.0 * (hx + hz)
+			var along := u * per
+			var e := Vector2.ZERO
+			if along < 2.0 * hx:
+				e = Vector2(-hx + along, -hz)
+			elif along < 2.0 * hx + 2.0 * hz:
+				e = Vector2(hx, -hz + (along - 2.0 * hx))
+			elif along < 4.0 * hx + 2.0 * hz:
+				e = Vector2(hx - (along - 2.0 * hx - 2.0 * hz), hz)
+			else:
+				e = Vector2(-hx, hz - (along - 4.0 * hx - 2.0 * hz))
+			var lw := main_w * (0.42 + 0.22 * _h(vary + li))
+			var lsy := lw * 1.9
+			var lp := sc + e * 0.96
+			_put(_buf, nf, Vector3(lp.x, base + h - lsy * 0.12, lp.y), lw, lsy, Color(_vseed(2 + (li + int(vary * 5.0)) % 2, vary * 5.3 + li * 0.21), fire * 0.9, style, 0.0))
+			nf += 1
+		# 3. Once it's well alight, flames lick up the corners on the side facing the giant,
+		#    low down where the burn front starts (rooted on the edge, never floating off a
+		#    flat wall).
+		if h > 1.3 and fire > 0.6 and grid.s_integ[s] < 0.75:
+			var to_cam := cam2 - sc
+			var sx := signf(to_cam.x) if absf(to_cam.x) > 0.01 else 1.0
+			var sz := signf(to_cam.y) if absf(to_cam.y) > 0.01 else 1.0
+			var corners := [Vector2(sx * hx, sz * hz), Vector2(-sx * hx, sz * hz) if absf(to_cam.y) * hx > absf(to_cam.x) * hz else Vector2(sx * hx, -sz * hz)]
+			var n_c := 1 if fire < 0.75 else 2
+			for wi in n_c:
+				if nf >= MAX_FLAMES - 4:
+					break
+				var cp2: Vector2 = sc + (corners[wi] as Vector2) * 0.99
+				var wy := h * (0.03 + 0.14 * _h(vary * 4.3 + wi * 0.77))
+				var ww := main_w * (0.36 + 0.1 * _h(vary + wi * 2.0))
+				var wsy := ww * 1.9
+				_put(_buf, nf, Vector3(cp2.x, base + wy - wsy * 0.15, cp2.y), ww, wsy, Color(_vseed(2 + wi % 2, vary * 7.7 + wi * 0.29), fire * 0.85, style, 0.0))
 				nf += 1
-			i += step
-		var puffs := 1 + int(fs.x > 0.9) + int(fs.x > 1.3)
-		for p in puffs:
+		# The smoke: a column of torn tissue from the cluster, leaning the way the fans blow.
+		var puffs := 5 + 3 * int(foot > 1.2) + 4 * int(foot > 2.0) + 4 * int(foot > 3.5)
+		var g := clampf((0.32 + 0.3 * foot) * (0.55 + 0.45 * fire), 0.28, 2.4)
+		for pi in puffs:
 			if ns >= MAX_SMOKE:
 				break
-			var off := Vector2(fmod(vary * (3.1 + p), 1.0) - 0.5, fmod(vary * (5.7 + p), 1.0) - 0.5) * Vector2(r.size) * Balance.CELL * 0.6
-			_put(_smoke_buf, ns, Vector3(sc.x + off.x, h + 0.15, sc.y + off.y), 1.0, 1.0,
-				Color(fmod(vary + p * 0.37, 1.0), 0.55 + 0.4 * fs.x * fire, 0.65, 0.4 + vary))
+			var off := Vector2(_h(vary * 3.1 + pi) - 0.5, _h(vary * 5.7 + pi) - 0.5) * foot * 0.25
+			_put(_smoke_buf, ns, Vector3(mid.x + off.x, base + h + 0.1, mid.y + off.y), 1.0, 1.0,
+				Color(fmod(vary * 0.71 + float(pi) / float(puffs), 1.0), g * (0.8 + 0.4 * _h(vary + pi * 3.0)), 0.45 + 0.45 * fire, 0.25 + 0.5 * vary))
 			ns += 1
 		var d2 := Vector3(sc.x, h, sc.y).distance_squared_to(cam)
+		# Sparks for the fires near the giant.
 		if d2 < 900.0:
-			cands.append([Vector3(sc.x, h * 0.6 + 0.3, sc.y), (1.0 + fs.x) * fire, d2])
-	for c in grid.debris:
+			var sparks := clampi(3 + int(foot * 2.0), 3, 10)
+			for si in sparks:
+				if nk >= MAX_SPARKS:
+					break
+				_put(_spark_buf, nk, Vector3(mid.x, base + h * 0.92, mid.y), 1.0, 1.0,
+					Color(fmod(vary * 1.37 + si * 0.137, 1.0), 0.55 + 0.45 * fire, foot * 0.45, 1.1 + foot * 0.9))
+				nk += 1
+			cands.append([Vector3(sc.x, base + h * 0.6 + 0.3, sc.y), (1.0 + foot * 0.8) * fire, d2])
+	# Burning scraps on the floor: one low flame per 1.5 m patch, sized by how much is burning there.
+	var patches := {}
+	for dc in grid.debris:
+		var c: int = dc
+		var key: int = (c % n) / 3 + ((c / n) / 3) * 1000
+		var e: Array = patches.get(key, [])
+		if e.is_empty():
+			patches[key] = [c, 1, grid.deb_fuel[c]]
+		else:
+			e[1] = int(e[1]) + 1
+			e[2] = maxf(float(e[2]), grid.deb_fuel[c])
+	var pk := 0
+	for key in patches:
 		if nf >= MAX_FLAMES:
 			break
-		var fuel := clampf(grid.deb_fuel[c] / 3.0, 0.25, 1.0)
-		var seed := fmod(float(c) * 0.7548776, 1.0)
-		var cp := grid.cell_center(c) + Vector2(seed - 0.5, fmod(seed * 5.3, 1.0) - 0.5) * 0.25
-		_put(_buf, nf, Vector3(cp.x, 0.0, cp.y), 0.36 * fuel, 0.5 * fuel * (0.8 + 0.4 * seed), Color(seed, fuel * 0.7, flame_style, 0.0))
+		var e: Array = patches[key]
+		var c: int = e[0]
+		var fuel := clampf(float(e[2]) / 3.0, 0.3, 1.0)
+		if int(e[1]) < 2 and fuel < 0.6:
+			continue
+		var seed := _h(float(c) * 0.7548776)
+		var cp := grid.cell_center(c) + Vector2(0.25, 0.25) + Vector2(seed - 0.5, _h(seed * 5.3) - 0.5) * 0.3
+		var w := minf(1.4, (0.5 + 0.12 * float(e[1])) * fuel)
+		var lift := lift_at(cp.x, cp.y)
+		_put(_buf, nf, Vector3(cp.x, lift - w * 0.08, cp.y), w, w * 1.45, Color(_vseed(4 + (c % 2), seed), fuel * 0.75, flame_style, 0.0))
 		nf += 1
-		if ns < MAX_SMOKE and (c % 7) == 0:
-			_put(_smoke_buf, ns, Vector3(cp.x, 0.25, cp.y), 1.0, 1.0, Color(seed, 0.4, 0.9, 0.5))
+		pk += 1
+		if ns < MAX_SMOKE and pk % 3 == 0:
+			_put(_smoke_buf, ns, Vector3(cp.x, lift + 0.25, cp.y), 1.0, 1.0, Color(seed, 0.35 + 0.2 * fuel, 0.8, 0.5))
 			ns += 1
+		if nk < MAX_SPARKS and pk % 4 == 1 and Vector2(cp.x, cp.y).distance_squared_to(cam2) < 400.0:
+			_put(_spark_buf, nk, Vector3(cp.x, lift + 0.1, cp.y), 1.0, 1.0, Color(seed, 0.5 * fuel, 0.3, 0.8))
+			nk += 1
 	_flames.buffer = _buf
 	_flames.visible_instance_count = nf
 	_smoke.buffer = _smoke_buf
 	_smoke.visible_instance_count = ns
+	_sparks.buffer = _spark_buf
+	_sparks.visible_instance_count = nk
 	_pool_lights(cands)
+
+
+func spark_count() -> int:
+	return _sparks.visible_instance_count
 
 
 func _pool_lights(cands: Array) -> void:
@@ -741,7 +1046,7 @@ func flame_count() -> int:
 # =====================================================================================
 func _build_effects() -> void:
 	for _i in 8:
-		var p := Gfx.particles(40, 0.12, [Color(1, 0.95, 0.6, 1), Color(1, 0.5, 0.1, 0.9), Color(0.4, 0.12, 0.05, 0.0)])
+		var p := Gfx.particles(40, 0.07, [Color(1, 0.7, 0.3, 1), Color(1, 0.45, 0.1, 0.95), Color(0.6, 0.15, 0.05, 0.0)], false, Gfx.speck())
 		p.one_shot = true
 		p.explosiveness = 0.95
 		p.lifetime = 0.9

@@ -64,7 +64,8 @@ func fire_center() -> Vector2:
 
 
 func jump_center() -> Vector2:
-	return Vector2(size.x - 300.0, size.y - 76.0)
+	# Low and to the left of the fire cap, clear of the hand (which is framed above them both).
+	return Vector2(size.x - 312.0, size.y - 72.0)
 
 
 func stick_home() -> Vector2:
@@ -315,7 +316,7 @@ func _draw() -> void:
 		draw_line(p, tip, Color(Craft.INK, 0.55 * a), 3.0, true)
 	_cap(knob, 32.0, 1.0 if _stick_finger != NONE else 0.0, Color("#c8402f"), 30)
 	if _stick_finger == NONE:
-		_text(font, "WALK", base + Vector2(0, STICK_RADIUS + 22), 20, Color(Craft.PAPER, 0.9))
+		_text(font, "WALK", base + Vector2(0, STICK_RADIUS + 24), 23, Color(Craft.PAPER, 0.95))
 	# The fire cap: a big orange cap with a flame on it, pushed in while you hold it.
 	var fc := fire_center()
 	var press := Vector2(0, 4) if firing else Vector2.ZERO
@@ -325,7 +326,7 @@ func _draw() -> void:
 	if ic != null:
 		var sz := 74.0 + (6.0 * sin(_t * 9.0) if firing else 0.0)
 		draw_texture_rect(ic, Rect2(fc + press - Vector2(sz, sz) * 0.5 - Vector2(0, 10), Vector2(sz, sz)), false)
-	_text(font, "HOLD", fc + press + Vector2(0, 42), 20, Color("#3a1a10"), false)
+	_text(font, "HOLD", fc + press + Vector2(0, 44), 23, Color("#3a1a10"), false)
 	if firing:
 		var r := RandomNumberGenerator.new()
 		r.seed = int(_t * 8.0)
@@ -341,7 +342,7 @@ func _draw() -> void:
 	var tip2 := jc + jp + Vector2(0, -20)
 	draw_line(jc + jp + Vector2(0, 2), tip2, Craft.PAPER, 5.0, true)
 	draw_colored_polygon(PackedVector2Array([tip2 + Vector2(0, -6), tip2 + Vector2(-9, 6), tip2 + Vector2(9, 6)]), Craft.PAPER)
-	_text(font, "JUMP", jc + jp + Vector2(0, 20), 17, Craft.PAPER, false)
+	_text(font, "JUMP", jc + jp + Vector2(0, 21), 20, Craft.PAPER, false)
 
 
 func _text(font: Font, s: String, center: Vector2, font_size: int, color: Color, outline: bool = true) -> void:

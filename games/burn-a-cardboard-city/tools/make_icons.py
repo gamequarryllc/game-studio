@@ -149,12 +149,18 @@ def flame():
 
 
 def tv():
+    """A television made from a cardboard box: a screen drawn on in marker, a dial, two
+    bent drinking-straw aerials taped on top (the ads are watched on this)."""
     i = Icon()
-    i.shape([(8, 16), (56, 16), (56, 50), (8, 50)], SKY)
-    i.line((22, 4), (32, 15), 4.0)
-    i.line((42, 4), (32, 15), 4.0)
-    i.shape([(26, 26), (40, 33), (26, 41)], RED, width=3.5)
-    i.line((14, 56), (50, 56), 4.0)
+    i.shape([(8, 20), (56, 18), (57, 54), (7, 55)], KRAFT)
+    i.shape([(13, 25), (44, 24), (45, 49), (13, 50)], "#5b6f86")
+    i.ink([(16, 29), (21, 27)], False, False, 2.6, WHITE)
+    i.shape([(24, 31), (35, 37), (24, 43)], WHITE, width=3.0)
+    i.circle(51, 30, 3.6, YELLOW, 2.6, 10)
+    i.circle(51, 42, 3.0, RED, 2.6, 10)
+    i.line((26, 18), (17, 4), 3.6, RED)
+    i.line((36, 18), (47, 5), 3.6, BLUE)
+    i.ink([(24, 13), (30, 16), (36, 14)], False, False, 5.0, TAPE)
     return i
 
 
@@ -213,12 +219,13 @@ def rocket():
 
 
 def thermometer():
+    """A struck match (the hotter-flame trick): a wooden stick, a red head, a flame."""
     i = Icon()
-    i.shape([(27, 8), (37, 8), (37, 40), (27, 40)], WHITE, smooth=False)
-    i.circle(32, 48, 10, RED)
-    i.fill([(30, 22), (34, 22), (34, 42), (30, 42)], RED)
-    for y in (16, 24, 32):
-        i.line((40, y), (45, y), 3.0)
+    i.shape([(14, 58), (18, 60), (40, 26), (36, 23)], "#e2c290", width=4.0)
+    i.circle(40, 22, 6.5, RED, 4.0, 12)
+    flame = [(44, 2), (52, 12), (54, 20), (50, 27), (43, 28), (38, 22), (39, 14), (42, 16)]
+    i.shape(flame, ORANGE, smooth=True, width=3.5)
+    i.shape([(46, 14), (49, 20), (47, 25), (43, 24), (43, 19)], YELLOW, smooth=True, width=2.6)
     return i
 
 
@@ -524,6 +531,22 @@ def shoebox():
     return i
 
 
+def finds():
+    """The shoebox the finds go in, lid pushed back, a duck and a stripy sock poking out."""
+    i = Icon()
+    i.shape([(10, 30), (54, 30), (60, 16), (16, 12)], RED, width=4.0)
+    i.circle(26, 28, 8, YELLOW, 4.0, 12)
+    i.shape([(31, 27), (38, 28), (32, 31)], ORANGE, width=2.6)
+    i.dot(25, 26, 1.8)
+    i.shape([(40, 14), (48, 14), (48, 32), (40, 32)], WHITE, width=3.5)
+    i.line((40, 20), (48, 20), 3.0, RED)
+    i.line((40, 26), (48, 26), 3.0, RED)
+    i.shape([(8, 34), (56, 34), (54, 58), (10, 58)], KRAFT)
+    i.fill([(20, 42), (44, 42), (44, 50), (20, 50)], WHITE)
+    i.ink([(22, 46), (42, 46)], False, False, 2.4)
+    return i
+
+
 def sock_coins():
     i = sock()
     i.border = False
@@ -573,7 +596,7 @@ ICONS = {
     "speaker": speaker, "mute": mute, "gear": gear, "gift": gift, "lens": lens, "restore": restore,
     "noads": noads, "chain": chain, "house": house, "office": office, "skyscraper": skyscraper, "castle": castle,
     "duck": duck, "sock": sock, "robot": robot, "marbles": marbles, "yoyo": yoyo, "teddy": teddy, "ticket": ticket,
-    "jar": jar, "shoebox": shoebox, "sock_coins": sock_coins, "arrow": arrow, "hand": hand,
+    "jar": jar, "shoebox": shoebox, "finds": finds, "sock_coins": sock_coins, "arrow": arrow, "hand": hand,
     "citizen_0": lambda: citizen(0, BLUE), "citizen_1": lambda: citizen(1, GREEN),
     "citizen_2": lambda: citizen(2, ORANGE), "citizen_3": lambda: citizen(0, PINK),
     "citizen_4": lambda: citizen(1, RED), "citizen_5": lambda: citizen(2, SKY),

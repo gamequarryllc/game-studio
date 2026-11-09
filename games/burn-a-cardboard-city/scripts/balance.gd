@@ -227,11 +227,11 @@ const STARTER_AFTER := 600.0       # the starter pack is offered once, after 10 
 const STARTER_COINS := 2500.0
 
 # Timed offer tag: rare, gentle, goes away by itself, backs off when ignored.
-const OFFER_FIRST_AFTER := 150.0
-const OFFER_GAP := 200.0
-const OFFER_GAP_MAX := 480.0
+const OFFER_FIRST_AFTER := 240.0
+const OFFER_GAP := 300.0
+const OFFER_GAP_MAX := 600.0
 const OFFER_GAP_GROWTH := 1.5
-const OFFER_LIFETIME := 40.0
+const OFFER_LIFETIME := 30.0
 const AD_REWARDS = {
 	"instant": {"icon": "coin", "title": "Free coins", "placement": "instant_coins"},
 	"boost": {"icon": "flame", "title": "2x fire for 5 minutes", "placement": "boost_2x_fire"},

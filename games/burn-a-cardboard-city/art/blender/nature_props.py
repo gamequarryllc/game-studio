@@ -185,22 +185,81 @@ def mug(seed=69):
 
 
 def castle_pallet(seed=70):
-    """The edge of the pallet the castle stands on: stringers and blocks round a 15 m square."""
+    """What holds up the pallet the castle stands on: the blocks round its edge and down
+    its middle lines, with bottom boards linking them, so you can see under the deck
+    between them. (The deck boards themselves are drawn by the game with the floor's
+    material, so the scorch and the fire light fall on them.) Top of the blocks: 0.12."""
     m = Model("castle_pallet", seed)
     wood = srgb("#b98a55")
-    wood2 = srgb("#c79c66")
-    s = 7.6
-    for k, (cx, cy, lx, ly) in enumerate([(0, -s, 2 * s + 0.5, 0.5), (0, s, 2 * s + 0.5, 0.5), (-s, 0, 0.5, 2 * s),
-                                           (s, 0, 0.5, 2 * s)]):
-        m.box((cx, cy, 0.22), (lx, ly, 0.12), wood2 if k % 2 else wood, cuts=(8, 1, 0) if lx > ly else (1, 8, 0), bevel=0.02,
-              jitter=0.01)
-        for j in range(5):
-            t = -s + j * s / 2
-            p = (t, cy, 0.08) if lx > ly else (cx, t, 0.08)
-            m.box(p, (0.62, 0.58, 0.16), srgb("#a97b48"), cuts=(1, 1, 0), bevel=0.02, jitter=0.01)
+    wood2 = srgb("#a97b48")
+    end_grain = srgb("#8a6236")
+    s = 7.25
+    spots = [-7.25, -4.85, -2.4, 0.0, 2.4, 4.85, 7.25]
+    for a in spots:
+        for b in (-s, 0.0, s):
+            for (x, y) in ((a, b), (b, a)):
+                f = m.box((x, y, 0.06), (0.52, 0.52, 0.12), wood2 if (int(a * 3) + int(b)) % 2 else wood, cuts=(1, 1, 1),
+                          bevel=0.015, jitter=0.008, rot=(0, 0, m.rng.uniform(-0.03, 0.03)))
+                m.paint_by([g for g in f if abs(g.normal.z) < 0.5],
+                           lambda p, n: [end_grain[i] * (0.9 + 0.2 * ((p.x * 7.3 + p.y * 5.1 + p.z * 31.0) % 1.0))
+                                         for i in range(3)])
+    for b in (-s, 0.0, s):
+        for horiz in (True, False):
+            size = (2 * s + 0.5, 0.5, 0.025) if horiz else (0.5, 2 * s + 0.5, 0.025)
+            pos = (0.0, b, 0.0125) if horiz else (b, 0.0, 0.0125)
+            m.box(pos, size, wood, cuts=(8, 1, 0) if horiz else (1, 8, 0), bevel=0.006, jitter=0.006)
+    return m.build()
+
+
+def glue_gun(seed=71):
+    """The builder's hot-glue gun, lying on its side, a stick of glue in the back and a
+    dribble of glue gone hard by the nozzle."""
+    m = Model("glue_gun", seed)
+    body = srgb("#e0682c")
+    dark = srgb("#3a3532")
+    m.box((0.0, 0.0, 0.11), (0.62, 0.2, 0.22), body, SHINY, cuts=(3, 1, 1), bevel=0.06, jitter=0.0)
+    m.box((-0.2, 0.0, 0.11), (0.24, 0.205, 0.16), dark, SHINY, cuts=(1, 1, 1), bevel=0.03, jitter=0.0)
+    m.box((0.1, -0.05, 0.11), (0.18, 0.12, 0.42), body, SHINY, cuts=(1, 1, 2), bevel=0.05, jitter=0.0,
+          rot=(math.pi / 2 - 0.2, 0, 0))
+    m.box((0.08, 0.0, 0.1), (0.07, 0.06, 0.13), dark, SHINY, cuts=(0, 0, 0), bevel=0.02, jitter=0.0, rot=(math.pi / 2 - 0.3, 0, 0))
+    m.cylinder((0.31, 0.0, 0.13), 0.04, 0.16, srgb("#b9bec3"), 12, SHINY, rot=(0, math.pi / 2, 0), cuts=0, radius_top=0.012,
+               jitter=0.0)
+    m.cylinder((-0.6, 0.0, 0.12), 0.035, 0.4, srgb("#f2efe6"), 12, PAPER, rot=(0, math.pi / 2, 0), cuts=1, jitter=0.0)
+    blob = m.ball((0.5, 0.06, 0.01), 0.05, srgb("#f4f1e6"), SHINY, 2, 0.3, smooth=True)
+    m.squash(blob, (0, 0, 0), 0.3)
+    return m.build()
+
+
+def stepladder(seed=72):
+    """A wooden stepladder folded flat and laid down by the wall, paint on its steps."""
+    m = Model("stepladder", seed)
+    wood = srgb("#c79c66")
+    for y in (-0.32, 0.32):
+        m.box((0.0, y, 0.03), (2.4, 0.07, 0.06), wood, cuts=(6, 0, 0), bevel=0.01, jitter=0.004)
+    for k in range(6):
+        x = -1.0 + k * 0.4
+        f = m.box((x, 0.0, 0.065), (0.11, 0.62, 0.025), srgb("#b98a55"), cuts=(0, 2, 0), bevel=0.006, jitter=0.004)
+        if k % 2 == 0:
+            m.box((x + 0.01, 0.12, 0.08), (0.06, 0.12, 0.004), srgb("#d3a640") if k else srgb("#4f8a86"), PAPER, cuts=(0, 0, 0),
+                  bevel=0.0, jitter=0.002)
+    m.box((1.25, 0.0, 0.04), (0.1, 0.7, 0.08), srgb("#9a7044"), cuts=(0, 1, 0), bevel=0.01, jitter=0.004)
+    return m.build()
+
+
+def offcuts(seed=73):
+    """Offcuts of card the builder cut windows and doors out of, in a little drift."""
+    m = Model("offcuts", seed)
+    cols = [KRAFT, KRAFT_PALE, srgb("#ece2c8"), srgb("#4f8a86"), KRAFT_DARK, srgb("#d3a640")]
+    for k in range(9):
+        w, d = m.rng.uniform(0.12, 0.38), m.rng.uniform(0.08, 0.26)
+        x, y = m.rng.uniform(-0.5, 0.5), m.rng.uniform(-0.35, 0.35)
+        f = m.box((x, y, 0.006 + k * 0.004), (w, d, 0.008), cols[k % len(cols)], CARD, cuts=(1, 1, 0), bevel=0.0,
+                  jitter=0.002, rot=(0, 0, m.rng.uniform(0, math.tau)), edge=KRAFT_EDGE)
+        if k % 3 == 0:
+            m.curl(f, (x, y, 0.01), (0, 1, 0), (1, 0, 0), 0.12)
     return m.build()
 
 
 def build_props():
     return [fan_body(), fan_blades(), pallet(), card_stack(), tape_roll(), marker_pen(), scissors(), paint_can(), mug(),
-            castle_pallet()]
+            castle_pallet(), glue_gun(), stepladder(), offcuts()]

@@ -17,6 +17,7 @@ extends StyleBox
 @export var shadow_alpha := 0.32
 @export var hole := false                # a luggage tag: a punched hole at the left
 @export var notch := false               # and its corners clipped
+@export var recess := false              # a hole cut into an insert: shadowed along the top and left, a lit lip at the bottom and right
 
 
 func _init() -> void:
@@ -56,6 +57,9 @@ func _outline(rect: Rect2) -> PackedVector2Array:
 func _draw(to_canvas_item: RID, rect: Rect2) -> void:
 	var rs := RenderingServer
 	var pts := _outline(rect)
+	if recess:
+		_draw_recess(to_canvas_item, rect, pts)
+		return
 	if shadow_alpha > 0.0:
 		var sp := PackedVector2Array()
 		for q in pts:
@@ -81,6 +85,36 @@ func _draw(to_canvas_item: RID, rect: Rect2) -> void:
 		_tape(to_canvas_item, rect.position + Vector2(6, 2), -0.62 + r.randf_range(-0.12, 0.12), r)
 	if tape_corners == 2 or tape_corners == 3:
 		_tape(to_canvas_item, Vector2(rect.end.x - 6, rect.position.y + 2), 0.62 + r.randf_range(-0.12, 0.12), r)
+
+
+func _draw_recess(ci: RID, rect: Rect2, pts: PackedVector2Array) -> void:
+	## A shape cut out of a thick card insert, seen from above: the floor of the hole, the
+	## cut wall in shadow along the top and left, a pale cut lip catching the light along
+	## the bottom and right.
+	var rs := RenderingServer
+	rs.canvas_item_add_polygon(ci, pts, PackedColorArray([fill]))
+	var depth := 9.0
+	var inner := PackedVector2Array()
+	for q in pts:
+		inner.append(q + Vector2(depth, depth))
+	# The cut wall: the band between the outline and the outline pushed down-right, kept
+	# where it's inside the hole (the top and left sides).
+	var c := rect.get_center()
+	for k in pts.size():
+		var a := pts[k]
+		var b := pts[(k + 1) % pts.size()]
+		var mid := (a + b) * 0.5
+		var lit := (mid - c).x > 0.0 and absf((mid - c).x) / rect.size.x > absf((mid - c).y) / rect.size.y \
+			or (mid - c).y > 0.0 and absf((mid - c).y) / rect.size.y >= absf((mid - c).x) / rect.size.x
+		if lit:
+			rs.canvas_item_add_line(ci, a, b, edge.lightened(0.55), 3.0, true)
+		else:
+			var a2 := a + (c - a).normalized() * depth
+			var b2 := b + (c - b).normalized() * depth
+			rs.canvas_item_add_polygon(ci, PackedVector2Array([a, b, b2, a2]), PackedColorArray([fill.darkened(0.42)]))
+	var closed := pts.duplicate()
+	closed.append(pts[0])
+	rs.canvas_item_add_polyline(ci, closed, PackedColorArray([edge.darkened(0.25)]), 2.0, true)
 
 
 func _tape(ci: RID, at: Vector2, angle: float, r: RandomNumberGenerator) -> void:

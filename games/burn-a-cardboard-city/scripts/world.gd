@@ -243,6 +243,7 @@ func _process(delta: float) -> void:
 		_update_slow()
 	_coach_t += d
 	_update_coach()
+	_update_ending_camera(delta)
 
 
 func _after_tick() -> void:
@@ -411,30 +412,20 @@ func _update_wind(d: float) -> void:
 
 
 func _build_float_pool() -> void:
+	## Coin numbers are drawn flat on the screen over where they came from (in marker, with a
+	## paper outline), so they're always big enough to read on a phone however far away the
+	## building is.
 	for _i in FLOAT_POOL:
-		var root := Node3D.new()
-		var coin := Sprite3D.new()
-		coin.texture = Craft.icon3d("coin")
-		coin.pixel_size = 0.0028
-		coin.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		coin.no_depth_test = true
-		coin.render_priority = 5
-		root.add_child(coin)
-		var l := Label3D.new()
-		l.font = Craft.marker()
-		l.font_size = 72
-		l.outline_size = 16
-		l.pixel_size = 0.006
-		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		l.no_depth_test = true
-		l.render_priority = 6
-		l.modulate = Craft.INK
-		l.outline_modulate = Craft.TAPE
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		root.add_child(l)
-		root.visible = false
-		add_child(root)
-		_floats.append({"node": root, "coin": coin, "label": l, "t": 9.0})
+		var box := HBoxContainer.new()
+		box.add_theme_constant_override("separation", 2)
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var coin := Craft.icon_rect("coin", 34)
+		box.add_child(coin)
+		var l := Craft.label(40, Craft.INK, Craft.marker(), 11, Craft.PAPER)
+		box.add_child(l)
+		box.visible = false
+		hud.floats_layer.add_child(box)
+		_floats.append({"node": box, "coin": coin, "label": l, "t": 9.0, "at": Vector3.ZERO, "rise": 0.0})
 
 
 func _show_burn_pay() -> void:
@@ -468,33 +459,42 @@ func _show_burn_pay() -> void:
 
 func _float_text(at: Vector3, text: String, v: float) -> void:
 	# One number at a time, from either stream (burning pay, things hitting the ground), so
-	# two never pile up on each other; and none bigger than it would be 9 m away.
+	# two never pile up on each other.
 	if _float_clock < _next_float_t:
 		return
 	_next_float_t = _float_clock + 1.0
 	var f: Dictionary = _floats[_float_i]
 	_float_i = (_float_i + 1) % _floats.size()
-	var root: Node3D = f.node
-	var l: Label3D = f.label
-	var coin: Sprite3D = f.coin
-	var big := clampf(0.8 + log(v + 1.0) * 0.12, 0.8, 1.9)
+	var box: HBoxContainer = f.node
+	var l: Label = f.label
 	l.text = text
-	l.font_size = int(64 * big)
-	l.position = Vector3(0.0, 0.0, 0.0)
-	l.offset = Vector2(l.font_size * 0.55, 0)
-	coin.pixel_size = 0.0026 * big
-	coin.offset = Vector2(-40, 0)
-	root.position = at
-	root.visible = true
-	f.k = clampf(at.distance_to(giant.camera.global_position) / 9.0, 0.3, 1.0)
-	root.scale = Vector3.ONE * 0.4 * float(f.k)
+	var big := clampf(0.9 + log(v + 1.0) * 0.06, 0.9, 1.3)
+	l.add_theme_font_size_override("font_size", int(40 * big))
+	(f.coin as TextureRect).custom_minimum_size = Vector2(34, 34) * big
+	box.reset_size()
+	box.pivot_offset = box.size * 0.5
+	f.at = at
 	f.t = 0.0
+	f.rise = 0.0
+	box.visible = true
+	_place_float(f)
+
+
+func _place_float(f: Dictionary) -> void:
+	var box: Control = f.node
+	var cam := giant.camera
+	var at: Vector3 = f.at
+	if cam.is_position_behind(at):
+		box.visible = false
+		return
+	var p := cam.unproject_position(at)
+	box.position = p - box.size * 0.5 - Vector2(0.0, float(f.rise))
 
 
 func hide_floats() -> void:
 	for f in _floats:
 		f.t = 9.0
-		(f.node as Node3D).visible = false
+		(f.node as Control).visible = false
 
 
 func _update_floats(d: float) -> void:
@@ -503,19 +503,21 @@ func _update_floats(d: float) -> void:
 		if float(f.t) >= 1.7:
 			continue
 		f.t = float(f.t) + d
-		var root: Node3D = f.node
+		var box: Control = f.node
 		var t := float(f.t) / 1.7
-		root.position.y += d * 0.9 * (1.0 - t)
+		f.rise = 46.0 * (1.0 - pow(1.0 - t, 2.0))
 		# Pops in with a little overshoot, then fades.
 		var pop := minf(1.0, float(f.t) / 0.18)
-		var s := 1.0 + 0.25 * sin(pop * PI) if pop < 1.0 else 1.0
-		root.scale = Vector3.ONE * lerpf(0.4, 1.0, pop) * s * float(f.get("k", 1.0))
-		var a := 1.0 - clampf((t - 0.6) / 0.4, 0.0, 1.0)
-		(f.label as Label3D).modulate.a = a
-		(f.label as Label3D).outline_modulate.a = a
-		(f.coin as Sprite3D).modulate.a = a
+		var sc := 1.0 + 0.22 * sin(pop * PI) if pop < 1.0 else 1.0
+		box.scale = Vector2.ONE * lerpf(0.55, 1.0, pop) * sc
+		box.modulate.a = 1.0 - clampf((t - 0.6) / 0.4, 0.0, 1.0)
 		if float(f.t) >= 1.7:
-			root.visible = false
+			box.visible = false
+		elif giant.cinematic or not giant.hand_visible:
+			box.visible = false
+		else:
+			box.visible = true
+			_place_float(f)
 
 
 func _on_find(key: String, golden: bool, amount: float, at: Vector3) -> void:
@@ -555,7 +557,61 @@ func _on_won() -> void:
 	Sound.play("reward", 0.0)
 	if hud.shop != null:
 		hud.close_shop()
+	# Nothing's left standing: the last of the castle comes down round the keep, and any
+	# stragglers elsewhere are already ash.
+	view.raze(city.raze_rest(3))
+	_start_ending_camera()
 	hud.show_ending()
+
+
+# --- The ending's camera: the hand goes, and the view cranes up and round over the ashes -----
+var _cine_t := -1.0
+var _cine_from := Transform3D()
+var _cine_a0 := 0.0
+const CINE_TIME := 16.0
+
+
+func _start_ending_camera() -> void:
+	giant.firing = false
+	giant.hand_visible = false
+	_cine_from = giant.camera.global_transform
+	var gp := giant.global_position
+	_cine_a0 = atan2(gp.z, gp.x) if Vector2(gp.x, gp.z).length() > 1.0 else PI * 0.5
+	_cine_t = 0.0
+	giant.cine_xf = _cine_from
+	giant.cinematic = true
+
+
+func end_ending_camera() -> void:
+	## "Walk around the ashes": back to the giant's own eyes, tool in hand.
+	_cine_t = -1.0
+	giant.cinematic = false
+	giant.hand_visible = true
+
+
+func ending_camera_running() -> bool:
+	return _cine_t >= 0.0
+
+
+func _update_ending_camera(d: float) -> void:
+	if _cine_t < 0.0:
+		return
+	_cine_t += d
+	# A slow crane up and round: the castle's ruins low in frame, the burnt city round them,
+	# the trusses and the light through the skylights above.
+	var u := clampf(_cine_t / CINE_TIME, 0.0, 1.0)
+	var e := u * u * (3.0 - 2.0 * u)
+	var a := _cine_a0 + 0.6 * e + maxf(0.0, _cine_t - CINE_TIME) * 0.012
+	var r := lerpf(19.0, 13.5, e)
+	var p := Vector3(cos(a) * r, lerpf(8.0, 5.4, e), sin(a) * r)
+	# Aim a little to the right of the keep, so its ruins sit left of centre and the
+	# delivery note (pinned up on the right) doesn't cover them.
+	var toward := (Vector3(0.0, 1.0, 0.0) - p).normalized()
+	var right := toward.cross(Vector3.UP).normalized()
+	var target := Vector3(0.0, 1.0, 0.0) + right * r * 0.32
+	var path := Transform3D(Basis.looking_at(target - p, Vector3.UP), p)
+	var blend := smoothstep(0.0, 3.2, _cine_t)
+	giant.cine_xf = _cine_from.interpolate_with(path, blend)
 
 
 func _update_coach() -> void:

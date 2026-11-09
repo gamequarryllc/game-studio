@@ -45,7 +45,7 @@ void fragment() {
 	if (glass > 0.5 && bottle > 0.5) {
 		// Bottle glass: green, see-through, bright on its edges.
 		ALBEDO = v_col.rgb * 1.6 * lit + vec3(0.85, 1.0, 0.9) * (rim * 0.45 + pow(max(ndl, 0.0), 30.0) * 0.8);
-		ALPHA = 0.42 + rim * 0.5;
+		ALPHA = 0.78 + rim * 0.2;
 	} else if (glass > 0.5) {
 		vec2 q = (v_obj.xy - lens_local.xy) / lens_radius;
 		q *= 1.0 - 0.12 * dot(q, q);   // a little barrel distortion toward the rim

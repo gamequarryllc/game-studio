@@ -29,10 +29,10 @@ func build() -> void:
 	_props()
 
 
-const KEY_ELEVATION := 28.0         # degrees: low late-afternoon light, long shadows
+const KEY_ELEVATION := 26.0         # degrees: low late-afternoon light, long shadows
 const KEY_YAW := -141.5             # from the west-north-west: shadows fall to the east-south-east
-const AMBIENT := 0.4
-const FOG := Color(0.42, 0.47, 0.55)
+const AMBIENT := 0.34
+const FOG := Color(0.36, 0.4, 0.47)
 const FOG_SMOKE := Color(0.24, 0.21, 0.19)
 
 var fill: DirectionalLight3D
@@ -44,10 +44,10 @@ func _environment() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.08, 0.09, 0.11)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color("#7f93b0")
+	env.ambient_light_color = Color("#7488aa")
 	env.ambient_light_energy = AMBIENT
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.12
+	env.tonemap_exposure = 1.1
 	env.fog_enabled = true
 	env.fog_light_color = FOG
 	env.fog_density = 0.012
@@ -61,8 +61,8 @@ func _environment() -> void:
 	add_child(we)
 	# The key: warm late-afternoon light through the high west windows.
 	sun = DirectionalLight3D.new()
-	sun.light_color = Color("#ffe2b0")
-	sun.light_energy = 1.55
+	sun.light_color = Color("#ffcf92")
+	sun.light_energy = 1.75
 	sun.rotation = Vector3(deg_to_rad(-KEY_ELEVATION), deg_to_rad(KEY_YAW), 0.0)
 	# Real shadows on computers; phones get the long shadows baked into the floor.
 	sun.shadow_enabled = not DisplayServer.is_touchscreen_available()
@@ -75,7 +75,7 @@ func _environment() -> void:
 	# A cool fill from the other side (sky bouncing off the far wall).
 	fill = DirectionalLight3D.new()
 	fill.light_color = Color("#7f93b0")
-	fill.light_energy = 0.38
+	fill.light_energy = 0.3
 	fill.rotation = Vector3(deg_to_rad(-22.0), deg_to_rad(KEY_YAW + 180.0), 0.0)
 	fill.shadow_enabled = false
 	add_child(fill)
@@ -94,9 +94,9 @@ func set_haze(k: float, glow: float) -> void:
 	env.fog_light_color = FOG.lerp(FOG_SMOKE, k)
 	env.fog_density = 0.012 + 0.016 * k
 	env.ambient_light_energy = AMBIENT * (1.0 - 0.4 * k)
-	sun.light_energy = 1.55 * (1.0 - 0.3 * k)
-	fill.light_energy = 0.38 * (1.0 - 0.35 * k)
-	env.tonemap_exposure = 1.12 + 0.08 * k - minf(glow, 4.0) * 0.015
+	sun.light_energy = 1.75 * (1.0 - 0.3 * k)
+	fill.light_energy = 0.3 * (1.0 - 0.35 * k)
+	env.tonemap_exposure = 1.1 + 0.08 * k - minf(glow, 4.0) * 0.015
 
 
 func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
@@ -148,7 +148,7 @@ func _roof() -> void:
 	_box(Vector3(HALF * 2 + 1, 0.3, HALF * 2 + 1), Vector3(0, WALL_H + 2.4, 0), roof)
 	var glass := StandardMaterial3D.new()
 	glass.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	glass.albedo_color = Color(1.6, 1.55, 1.42)
+	glass.albedo_color = Color(1.12, 1.02, 0.86)
 	for z in SKYLIGHT_Z:
 		_box(Vector3(HALF * 1.8, 0.05, 3.0), Vector3(0, WALL_H + 2.22, z), glass)
 	# Trusses: a bottom chord and a top chord with diagonals, every 11 m.
@@ -272,5 +272,12 @@ func _props() -> void:
 	_place("paint_can", Vector3(-6.5, 0, -24.0), 2.0, 0.85, 0.5)
 	_place("mug", Vector3(24.0, 0, -18.0), -0.6, 0.95, 0.52)
 	_place("tape_roll", Vector3(-16.6, 0, -9.0), 0.2, 2.2)
+	# More of the builder's things round the edges: a hot-glue gun, a stepladder laid down,
+	# drifts of offcuts where windows and doors were cut out.
+	_place("glue_gun", Vector3(-34.5, 0, 12.5), 0.6, 2.2)
+	_place("stepladder", Vector3(36.0, 0, 8.0), 1.45, 1.8)
+	_place("offcuts", Vector3(-3.2, 0, 31.9), 0.4, 1.6)
+	_place("offcuts", Vector3(34.5, 0, -26.0), 2.1, 1.8)
+	_place("offcuts", Vector3(-34.0, 0, 26.5), 1.0, 1.7)
 	# The castle stands on a pallet.
-	_place("castle_pallet", Vector3.ZERO, 0.0, 0.965)
+	_place("castle_pallet", Vector3.ZERO, 0.0, 1.0)

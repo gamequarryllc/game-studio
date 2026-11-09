@@ -5,7 +5,10 @@ extends Node3D
 ## Balance.STEP_OVER), jumping clears downtown, skyscrapers and the castle you
 ## have to walk round. Your tool works where the crosshair (the middle of the
 ## screen) lands, out to its range; aim further and it falls short on the floor.
-## The tool you hold is drawn at the bottom right of the view.
+## The tool you hold is drawn at the bottom right of the view, framed above the phone's
+## buttons: its grip is pinned to a point measured from the screen's bottom-right corner
+## (`grip_screen`, in HUD units), so it sits in the same place on phones, tablets and
+## computers whatever the shape of the screen.
 
 const TOOL_POSE := [
 	# camera-space position of the grip, rotation (x, y, z), tip in the model's space.
@@ -13,11 +16,11 @@ const TOOL_POSE := [
 	# (the giant's body keeps 0.32 m off), so it's depth-tested normally and never clips.
 	[Vector3(0.128, -0.088, -0.24), Vector3(0.1, -0.38, 0.12), Vector3(0, 0.25, -0.012)],
 	[Vector3(0.118, -0.098, -0.24), Vector3(0.12, -0.2, 0.06), Vector3(0, 0.205, 0)],
-	[Vector3(0.112, -0.09, -0.23), Vector3(0.0, -0.22, 0.04), Vector3(0, 0.19, -0.235)],
+	[Vector3(0.112, -0.09, -0.23), Vector3(0.12, 0.62, 0.06), Vector3(0, 0.19, -0.235)],
 	[Vector3(0.112, -0.1, -0.24), Vector3(0.1, -0.25, 0.08), Vector3(0, 0.245, 0)],
 ]
 const TOOL_MODELS := ["hand_magnifier", "hand_candle", "hand_blowtorch", "hand_bottle"]
-const TOOL_SCALE := 0.3
+const TOOL_SCALE := 0.28
 
 var grid: CityGrid
 var camera: Camera3D
@@ -34,6 +37,10 @@ var landed := 0
 var fx: ToolFx
 var obstacles: Array = []            # [Vector2 centre, radius]: the warehouse props too tall to step over
 var held_rocket: MeshInstance3D
+var grip_screen := Vector2(-300.0, -205.0)   # where the fist is, from the screen's bottom-right corner (HUD units)
+var hand_visible := true             # the ending hides the hand
+var cinematic := false               # the ending's camera move drives the camera instead
+var cine_xf := Transform3D()
 var _reload := 0.0
 var focus := 0.0                      # 0..1 how well the tool is focused on what it's pointed at
 var _focus_sid := -2
@@ -122,6 +129,11 @@ func _apply_view() -> void:
 # =====================================================================================
 func _process(delta: float) -> void:
 	var d := minf(delta, 0.05)
+	_hold.visible = hand_visible
+	fx.visible = hand_visible
+	if cinematic:
+		camera.global_transform = cine_xf
+		return
 	_move(d)
 	_shake = move_toward(_shake, 0.0, d * 1.6)
 	_apply_view()
@@ -336,12 +348,31 @@ func _update_tool(d: float) -> void:
 	var lean := Vector3(0, 0, 0)
 	if active:
 		lean = Vector3(-0.05, 0.03, 0.03)
-	var pos: Vector3 = pose[0] + Vector3(_sway.x, _sway.y, 0) * 0.45 + Vector3(0, 0, _kick * 0.035) + (Vector3(-0.012, 0.012, -0.015) if active else Vector3.ZERO)
+	var pos: Vector3 = _grip_target(pose) + Vector3(_sway.x, _sway.y, 0) * 0.45 + Vector3(0, 0, _kick * 0.035) + (Vector3(-0.012, 0.012, -0.015) if active else Vector3.ZERO)
 	_hold.position = _hold.position.lerp(pos, 1.0 - exp(-d * 14.0))
 	var rot: Vector3 = pose[1] + lean + Vector3(_kick * 0.35, 0, 0)
 	_hold.rotation = _hold.rotation.lerp(rot, 1.0 - exp(-d * 12.0))
 	if _shown_tool == 0 and _tool != null:
 		_aim_lens()
+
+
+func _grip_target(pose: Array) -> Vector3:
+	## The grip's place in camera space, so that it lands on `grip_screen` (measured from the
+	## bottom-right corner of the screen) at the pose's depth.
+	var base: Vector3 = pose[0]
+	var vp := camera.get_viewport().get_visible_rect().size
+	if vp.x < 10.0 or vp.y < 10.0:
+		return base
+	var depth := -base.z
+	var t := tan(deg_to_rad(camera.fov * 0.5))
+	var sx := clampf(vp.x + grip_screen.x, vp.x * 0.55, vp.x - 60.0)
+	var sy := clampf(vp.y + grip_screen.y, vp.y * 0.45, vp.y - 40.0)
+	return Vector3((sx / vp.x * 2.0 - 1.0) * t * (vp.x / vp.y) * depth, -(sy / vp.y * 2.0 - 1.0) * t * depth, base.z)
+
+
+func grip_screen_point() -> Vector2:
+	## Where the fist is drawn on screen (HUD units; tests).
+	return camera.unproject_position(_hold.global_position) if _hold != null else Vector2.ZERO
 
 
 func _aim_lens() -> void:

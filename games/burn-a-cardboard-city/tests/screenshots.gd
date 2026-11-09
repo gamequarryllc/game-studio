@@ -1,6 +1,7 @@
 extends SceneTree
 ## Renders screenshots of key moments, for checking the look by eye:
-##   xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- /tmp/city-shots
+##   xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- /tmp/city-shots [844x390]
+## (an optional window size renders the same shots at a phone's size)
 ## The fire is fast-forwarded tick by tick between shots. (Untyped on purpose:
 ## this compiles before the GameState autoload exists.)
 
@@ -13,6 +14,10 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		out_dir = args[0]
+	if args.size() > 1 and "x" in args[1]:
+		var wh: PackedStringArray = args[1].split("x")
+		DisplayServer.window_set_size(Vector2i(int(wh[0]), int(wh[1])))
+		root.size = Vector2i(int(wh[0]), int(wh[1]))
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	_run.call_deferred()
 
@@ -115,7 +120,10 @@ func _run() -> void:
 			break
 	world.move_giant_to(Vector3(city.s_center[h1].x - 1.2, 0, city.s_center[h1].y + 3.8), _center3(h1, 0.4))
 	world.force_fire = true
-	await _frames(100)   # the glass has to gather the light (Balance.FOCUS) before it smokes
+	await _frames(6)
+	giant._focus_sid = giant.aim.sid   # the glass has gathered the light (Balance.FOCUS): it smokes
+	giant.focus = 0.97
+	await _frames(8)
 	await _shot("02_magnifier")
 	world.force_fire = false
 	world.ignite_at(_center3(h1, 0.4))
@@ -163,7 +171,7 @@ func _run() -> void:
 	gs.coins = 1800.0
 	gs.tool_index = 1
 	hud.open_shop("tools")
-	await _frames(40)
+	await _frames(24)
 	await _shot("07_shop_box")
 	hud.shop.select("extras")
 	await _frames(6)
@@ -200,7 +208,7 @@ func _run() -> void:
 				s1 = s
 	world.move_giant_to(Vector3(1.0, 0, 18.5), _center3(s1, 2.4))
 	world.force_fire = true
-	await _frames(40)
+	await _frames(18)
 	await _shot("09_blowtorch")
 	world.force_fire = false
 	city.ignite(s1)
@@ -215,7 +223,7 @@ func _run() -> void:
 	await _frames(6)
 	await _shot("11_castle")
 	world.force_fire = true
-	for _i in 30:
+	for _i in 18:
 		await process_frame
 	await _shot("12_rockets")
 	world.force_fire = false
@@ -246,7 +254,7 @@ func _run() -> void:
 	await _shot("13_blaze_chain")
 
 	hud.show_starter_offer()
-	await _frames(70)
+	await _frames(40)
 	await _shot("14_starter_popup")
 	_close_popups()
 	gs.wipe_save(false)

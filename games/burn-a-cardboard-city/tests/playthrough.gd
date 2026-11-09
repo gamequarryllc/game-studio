@@ -932,7 +932,15 @@ func _after_ending() -> void:
 	world.bot_move = Vector2.ZERO
 	if not gs.has_won:
 		return
-	await _frames(int(FPS * 4.0))
+	# The camera cranes over the ashes first; the note is pinned up after a few seconds.
+	for _i in int(FPS * 12.0):
+		await process_frame
+		if not hud._last_popup.is_empty() and hud._last_popup.has("note") and (hud._last_popup.note as Control).modulate.a > 0.95:
+			break
+	if not giant.cinematic or giant.hand_visible:
+		fail("the ending kept the hand up or didn't move the camera")
+	if city.standing_count() > 0:
+		fail("%d buildings still standing at the ending" % city.standing_count())
 	var p: Dictionary = hud._last_popup
 	if p.is_empty() or not p.has("button"):
 		fail("the ending's delivery note didn't appear")

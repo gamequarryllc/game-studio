@@ -368,8 +368,9 @@ func _run() -> void:
 	check(hud.shop.tab == "dev", "dev tools still open in playtest builds")
 	hud.shop.select("tools")
 	await _frames(1)
-	var featured: Label = hud.shop._list.get_child(0).get_child(0).get_child(0).get_child(1).get_child(0)
-	check(featured.text.begins_with("Next: the"), "the next tool is the one propped up at the front (\"%s\")" % featured.text)
+	var featured: Label = hud.shop.featured_title
+	check(featured != null and featured.text.begins_with("Next: the"), "the next tool is the one in the big slot (\"%s\")" % (featured.text if featured != null else "none"))
+	check(hud.shop.tool_slots == Balance.TOOLS.size(), "every tool is laid in its own cut-out in the insert")
 	hud.close_shop()
 	await _frames(2)
 
@@ -400,15 +401,39 @@ func _run() -> void:
 	world._float_text(Vector3(1.0, 0.0, 0.0), "+6", 6.0)
 	var shown := 0
 	for f in world._floats:
-		if (f.node as Node3D).visible:
+		if (f.node as Control).visible:
 			shown += 1
 	check(shown == 1, "two coin numbers at once: only one shows")
 	hud.show_chain(3)
 	var any_float := false
 	for f in world._floats:
-		if (f.node as Node3D).visible:
+		if (f.node as Control).visible:
 			any_float = true
 	check(not any_float, "a chain stamp clears the floating numbers out of its way")
+
+	# The stamp never jumps back to a smaller chain while a bigger one is still on screen.
+	hud.show_chain(8)
+	hud.show_chain(5)
+	check(hud.chain_label.text == "chain x8", "a smaller chain doesn't stamp over a bigger one (%s)" % hud.chain_label.text)
+	for _k in 30:
+		hud._update_chain(0.06)
+	check(not hud.chain_label.visible, "the chain stamp lifts off and goes")
+	# One note spot: a note takes the hint's place; the hint comes back after.
+	hud._notes.clear()
+	hud._note_panel.visible = false
+	hud.set_coach("a hint")
+	check(hud.coach.visible, "the first-run hint shows when no note is up")
+	hud.toast("a note")
+	hud._update_notes(0.016)
+	hud.set_coach("a hint")
+	check(hud._note_panel.visible and not hud.coach.visible, "a note and the hint never show at once")
+	hud._note_panel.visible = false
+	hud.set_coach("")
+	# Coin numbers are drawn flat on the screen, big enough to read on a phone.
+	var fl: Label = world._floats[0].label
+	check(fl.get_theme_font_size("font_size") >= 34 and world._floats[0].node.get_parent() == hud.floats_layer,
+		"floating coin numbers are screen text at 34 px or more")
+	check(hud.rate_label.text != "light something", "no placeholder copy on the coin tag")
 
 	# Phone wording on phones.
 	hud.set_touch_mode(true)
@@ -429,6 +454,15 @@ func _run() -> void:
 	check(not hud._find_text.text.to_lower().contains("click") and not hud._find_text.text.contains("press G"), "the golden ticket says tap on a phone")
 	hud.find_tag.visible = false
 	gs.tutorial_step = 9
+
+	# The hand is framed above the phone's buttons: the fist sits above the fire cap and
+	# clear of the jump cap (it used to sit under JUMP, and under the fire cap on 4:3 tablets).
+	hud.set_touch_mode(true)
+	await _frames(40)
+	var grip: Vector2 = giant.grip_screen_point()
+	var tc = hud.touch
+	check(grip.y < tc.fire_center().y - tc.FIRE_RADIUS + 10.0 and grip.distance_to(tc.jump_center()) > tc.JUMP_RADIUS + 60.0,
+		"the hand is framed above the fire and jump caps (%s)" % str(grip))
 
 	# The starter pack: a matchbox with a price tag on a string and a scribbled "not now".
 	hud.show_starter_offer()
@@ -547,6 +581,11 @@ func _run() -> void:
 	check(gs.has_won, "bringing down the keep ends the game")
 	check(hud.popups.get_child_count() > 0, "the ending shows its stats")
 	check(not hud.coin_tag.visible and not hud.shop_button.visible, "the HUD steps aside for the ending")
+	check(not giant.hand_visible and giant.cinematic, "the ending hides the hand and moves the camera itself")
+	for _k in 80:
+		city.tick(0.1)
+	world._after_tick()
+	check(city.standing_count() == 0, "nothing is left standing at the ending (%d)" % city.standing_count())
 	await _frames(3)
 	var note_rect: Rect2 = (hud._last_popup.note as Control).get_global_rect()
 	check(Rect2(Vector2.ZERO, hud.root.get_viewport_rect().size).encloses(note_rect),
@@ -554,6 +593,7 @@ func _run() -> void:
 	hud._last_popup.button.pressed.emit()
 	await _frames(2)
 	check(hud.coin_tag.visible and not hud.is_blocking(), "\"Walk around the ashes\" brings the HUD back")
+	check(giant.hand_visible and not giant.cinematic, "and the giant's own eyes and hand")
 
 	gs.wipe_save(false)
 	world.queue_free()

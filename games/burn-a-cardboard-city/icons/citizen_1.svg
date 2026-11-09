@@ -1,24 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
-<path d="M 40.4 18.7 C 39.8 19.7 39.0 20.8 38.2 21.6 C 37.3 22.4 36.4 23.3 35.4 23.6 C 34.4 23.8 33.1 23.6 32.0 23.3 C 30.8 23.0 29.5 22.4 28.5 21.7 C 27.5 21.1 26.6 20.2 26.2 19.2 C 25.7 18.2 25.9 16.9 25.9 15.7 C 25.9 14.6 25.5 13.2 26.0 12.1 C 26.5 11.0 27.8 9.8 28.9 9.1 C 29.9 8.5 31.1 8.2 32.2 8.0 C 33.3 7.8 34.5 7.7 35.6 7.9 C 36.7 8.2 37.9 8.8 38.7 9.5 C 39.5 10.2 39.9 11.1 40.4 12.1 C 40.9 13.2 41.8 14.7 41.8 15.8 Z" fill="#fbf8ef" stroke="#fbf8ef" stroke-width="10" stroke-linejoin="round"/>
-<path d="M 25.2 24.1 L 41.7 24.2 L 41.4 45.5 L 25.3 45.7 Z" fill="#fbf8ef" stroke="#fbf8ef" stroke-width="10" stroke-linejoin="round"/>
-<path d="M 43.1 35.2 L 52.1 35.0 L 51.6 43.0 L 42.6 43.6 Z" fill="#fbf8ef" stroke="#fbf8ef" stroke-width="10" stroke-linejoin="round"/>
-<path d="M 38.9 17.0 C 38.4 18.0 38.0 19.9 37.1 20.6 C 36.2 21.4 34.7 21.3 33.5 21.5 C 32.3 21.6 30.9 21.4 29.9 21.3 C 28.8 21.2 28.0 21.5 27.2 20.8 C 26.4 20.2 25.7 18.5 25.2 17.3 C 24.7 16.1 24.2 14.7 24.2 13.5 C 24.2 12.3 24.8 11.3 25.2 10.3 C 25.6 9.4 25.7 8.6 26.4 7.9 C 27.2 7.2 28.6 6.2 29.8 5.9 C 30.9 5.6 32.0 5.8 33.3 6.1 C 34.5 6.5 36.2 7.3 37.1 8.1 C 38.0 8.9 38.1 9.9 38.7 10.9 C 39.2 11.9 40.2 13.1 40.2 14.1 Z" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 23.7 23.4 L 40.4 23.0 L 39.4 44.3 L 23.4 44.0 Z" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 27.9 43.5 L 27.7 52.3 L 27.1 59.9" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 36.0 44.1 L 36.2 52.4 L 37.6 60.4" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 41.3 33.9 L 49.8 33.6 L 49.9 41.7 L 40.6 42.3 Z" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 41.0 19.4 C 40.5 20.4 39.2 20.9 38.3 21.6 C 37.4 22.3 36.6 23.1 35.6 23.4 C 34.5 23.7 33.3 23.8 32.1 23.5 C 30.9 23.1 29.4 22.1 28.4 21.4 C 27.3 20.7 26.4 20.1 25.9 19.1 C 25.4 18.0 25.2 16.3 25.3 15.2 C 25.5 14.0 26.3 13.0 26.9 12.1 C 27.4 11.1 27.9 10.0 28.7 9.3 C 29.5 8.6 30.8 8.2 31.9 7.8 C 33.0 7.4 34.1 7.0 35.2 7.2 C 36.2 7.3 37.2 7.9 38.2 8.7 C 39.1 9.4 40.2 10.5 40.7 11.6 C 41.2 12.7 41.1 13.9 41.1 15.2 Z" fill="#fbf8ef" stroke="#fbf8ef" stroke-width="10" stroke-linejoin="round"/>
+<path d="M 25.8 24.5 L 41.8 24.1 L 41.2 45.0 L 26.1 45.3 Z" fill="#fbf8ef" stroke="#fbf8ef" stroke-width="10" stroke-linejoin="round"/>
+<path d="M 42.9 35.1 L 51.3 35.1 L 51.5 43.3 L 42.7 43.4 Z" fill="#fbf8ef" stroke="#fbf8ef" stroke-width="10" stroke-linejoin="round"/>
+<path d="M 39.8 17.7 C 39.3 18.8 37.8 20.0 36.7 20.6 C 35.7 21.2 34.5 21.1 33.4 21.3 C 32.3 21.5 31.0 21.9 30.0 21.7 C 29.0 21.5 28.1 21.0 27.2 20.2 C 26.4 19.4 25.5 18.0 25.1 17.0 C 24.6 15.9 24.5 15.0 24.5 13.8 C 24.5 12.6 24.7 11.0 25.2 10.0 C 25.7 8.9 26.5 8.0 27.4 7.4 C 28.3 6.8 29.5 6.8 30.6 6.6 C 31.7 6.3 33.0 5.8 34.0 5.9 C 34.9 6.1 35.4 6.7 36.4 7.4 C 37.4 8.1 39.2 9.0 39.7 10.1 C 40.2 11.2 39.5 12.7 39.5 14.0 Z" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 24.2 23.1 L 39.7 22.5 L 39.4 44.4 L 23.6 44.6 Z" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 27.8 44.3 L 27.1 52.3 L 26.7 59.8" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 36.0 43.5 L 36.2 52.4 L 36.7 59.9" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 41.4 33.5 L 50.2 34.4 L 49.7 41.4 L 40.9 41.5 Z" fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="29.0" cy="13.0" r="1.6" fill="#221d1b"/>
 <circle cx="35.0" cy="13.0" r="1.6" fill="#221d1b"/>
-<path d="M 29.0 16.9 C 29.5 17.2 30.7 18.8 31.6 18.7 C 32.6 18.7 34.1 17.1 34.6 16.7 " fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 40.4 18.7 C 39.8 19.7 39.0 20.8 38.2 21.6 C 37.3 22.4 36.4 23.3 35.4 23.6 C 34.4 23.8 33.1 23.6 32.0 23.3 C 30.8 23.0 29.5 22.4 28.5 21.7 C 27.5 21.1 26.6 20.2 26.2 19.2 C 25.7 18.2 25.9 16.9 25.9 15.7 C 25.9 14.6 25.5 13.2 26.0 12.1 C 26.5 11.0 27.8 9.8 28.9 9.1 C 29.9 8.5 31.1 8.2 32.2 8.0 C 33.3 7.8 34.5 7.7 35.6 7.9 C 36.7 8.2 37.9 8.8 38.7 9.5 C 39.5 10.2 39.9 11.1 40.4 12.1 C 40.9 13.2 41.8 14.7 41.8 15.8 Z" fill="#ecdcb8"/>
-<path d="M 25.2 24.1 L 41.7 24.2 L 41.4 45.5 L 25.3 45.7 Z" fill="#5f9a4a"/>
-<path d="M 43.1 35.2 L 52.1 35.0 L 51.6 43.0 L 42.6 43.6 Z" fill="#a77a4a"/>
-<path d="M 38.9 17.0 C 38.4 18.0 38.0 19.9 37.1 20.6 C 36.2 21.4 34.7 21.3 33.5 21.5 C 32.3 21.6 30.9 21.4 29.9 21.3 C 28.8 21.2 28.0 21.5 27.2 20.8 C 26.4 20.2 25.7 18.5 25.2 17.3 C 24.7 16.1 24.2 14.7 24.2 13.5 C 24.2 12.3 24.8 11.3 25.2 10.3 C 25.6 9.4 25.7 8.6 26.4 7.9 C 27.2 7.2 28.6 6.2 29.8 5.9 C 30.9 5.6 32.0 5.8 33.3 6.1 C 34.5 6.5 36.2 7.3 37.1 8.1 C 38.0 8.9 38.1 9.9 38.7 10.9 C 39.2 11.9 40.2 13.1 40.2 14.1 Z" fill="none" stroke="#221d1b" stroke-width="5.0" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 23.7 23.4 L 40.4 23.0 L 39.4 44.3 L 23.4 44.0 Z" fill="none" stroke="#221d1b" stroke-width="5.0" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 27.9 43.5 L 27.7 52.3 L 27.1 59.9" fill="none" stroke="#221d1b" stroke-width="4.0" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 36.0 44.1 L 36.2 52.4 L 37.6 60.4" fill="none" stroke="#221d1b" stroke-width="4.0" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M 41.3 33.9 L 49.8 33.6 L 49.9 41.7 L 40.6 42.3 Z" fill="none" stroke="#221d1b" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 29.0 17.3 C 29.4 17.4 30.5 18.1 31.5 18.0 C 32.5 17.9 34.4 16.8 35.0 16.6 " fill="none" stroke="#fbf8ef" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 41.0 19.4 C 40.5 20.4 39.2 20.9 38.3 21.6 C 37.4 22.3 36.6 23.1 35.6 23.4 C 34.5 23.7 33.3 23.8 32.1 23.5 C 30.9 23.1 29.4 22.1 28.4 21.4 C 27.3 20.7 26.4 20.1 25.9 19.1 C 25.4 18.0 25.2 16.3 25.3 15.2 C 25.5 14.0 26.3 13.0 26.9 12.1 C 27.4 11.1 27.9 10.0 28.7 9.3 C 29.5 8.6 30.8 8.2 31.9 7.8 C 33.0 7.4 34.1 7.0 35.2 7.2 C 36.2 7.3 37.2 7.9 38.2 8.7 C 39.1 9.4 40.2 10.5 40.7 11.6 C 41.2 12.7 41.1 13.9 41.1 15.2 Z" fill="#ecdcb8"/>
+<path d="M 25.8 24.5 L 41.8 24.1 L 41.2 45.0 L 26.1 45.3 Z" fill="#5f9a4a"/>
+<path d="M 42.9 35.1 L 51.3 35.1 L 51.5 43.3 L 42.7 43.4 Z" fill="#a77a4a"/>
+<path d="M 39.8 17.7 C 39.3 18.8 37.8 20.0 36.7 20.6 C 35.7 21.2 34.5 21.1 33.4 21.3 C 32.3 21.5 31.0 21.9 30.0 21.7 C 29.0 21.5 28.1 21.0 27.2 20.2 C 26.4 19.4 25.5 18.0 25.1 17.0 C 24.6 15.9 24.5 15.0 24.5 13.8 C 24.5 12.6 24.7 11.0 25.2 10.0 C 25.7 8.9 26.5 8.0 27.4 7.4 C 28.3 6.8 29.5 6.8 30.6 6.6 C 31.7 6.3 33.0 5.8 34.0 5.9 C 34.9 6.1 35.4 6.7 36.4 7.4 C 37.4 8.1 39.2 9.0 39.7 10.1 C 40.2 11.2 39.5 12.7 39.5 14.0 Z" fill="none" stroke="#221d1b" stroke-width="5.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 24.2 23.1 L 39.7 22.5 L 39.4 44.4 L 23.6 44.6 Z" fill="none" stroke="#221d1b" stroke-width="5.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 27.8 44.3 L 27.1 52.3 L 26.7 59.8" fill="none" stroke="#221d1b" stroke-width="4.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 36.0 43.5 L 36.2 52.4 L 36.7 59.9" fill="none" stroke="#221d1b" stroke-width="4.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 41.4 33.5 L 50.2 34.4 L 49.7 41.4 L 40.9 41.5 Z" fill="none" stroke="#221d1b" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round"/>
 <circle cx="29.0" cy="13.0" r="1.6" fill="#221d1b"/>
 <circle cx="35.0" cy="13.0" r="1.6" fill="#221d1b"/>
-<path d="M 29.0 16.9 C 29.5 17.2 30.7 18.8 31.6 18.7 C 32.6 18.7 34.1 17.1 34.6 16.7 " fill="none" stroke="#221d1b" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 29.0 17.3 C 29.4 17.4 30.5 18.1 31.5 18.0 C 32.5 17.9 34.4 16.8 35.0 16.6 " fill="none" stroke="#221d1b" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

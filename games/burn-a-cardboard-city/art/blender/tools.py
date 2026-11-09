@@ -50,49 +50,59 @@ def blob(m, c, size, color, flag=CARD, rot=(0, 0, 0)):
     return f
 
 
-def fist(m, rc, z_top=0.07, fr=0.02, sleeve=True):
-    """A right fist closed round a vertical handle of radius rc at the origin. The
-    fingers curl from the back of the hand (+X) round the front (+Y) to the inside (-X);
-    the thumb closes over them; the wrist runs back toward the giant (-Y)."""
+def fist(m, rc, z_top=0.07, fr=0.02, sleeve=True, spread=1.0, thumb_up=0.0):
+    """A right fist closed round a vertical handle of radius rc at the origin (a hammer
+    grip). The four fingers curl from the palm (+X) round the far side (+Y) to the
+    inside (-X), their tips tucked against the handle; the thumb comes round the near
+    side (-Y) and rests over the index and middle fingers, its tip stopping at the
+    handle's edge (never sticking out past it); a row of knuckles across the top; the
+    wrist runs back and down toward the giant (-Y), into a denim cuff.
+    `spread` spaces the fingers out on a fat handle; `thumb_up` lifts the thumb."""
     parts = []
-    R = rc + fr * 0.95
-    zs = [z_top, z_top - fr * 2.05, z_top - fr * 4.1, z_top - fr * 6.0]
-    sizes = [1.0, 1.04, 0.98, 0.84]
-    for z, s in zip(zs, sizes):
+    R = rc + fr * 0.92
+    step = fr * 2.02 * spread
+    zs = [z_top - step * k for k in range(4)]
+    sizes = [1.0, 1.05, 0.98, 0.85]
+    for fi, (z, s) in enumerate(zip(zs, sizes)):
         r = fr * s
-        pts = []
-        for a, rad in ((-0.55, R + 0.034), (0.25, R + 0.006), (1.25, R), (2.25, R), (3.05, R - 0.002)):
-            pts.append(Vector((math.cos(a) * rad, math.sin(a) * rad, z + (0.004 if a > 2 else 0.0))))
+        # knuckle (back of the hand, +X) -> over the far side -> tip tucked in on the inside
+        angs = [(-0.5, R + 0.036), (0.2, R + 0.012), (1.15, R + 0.002), (2.1, R - 0.001), (2.75, R - 0.004)]
+        pts = [Vector((math.cos(a) * rad, math.sin(a) * rad, z + (0.003 if a > 2 else 0.0))) for a, rad in angs]
         for k in range(len(pts) - 1):
-            parts += capsule(m, pts[k], pts[k + 1], r * (1.0 if k < 2 else 0.93), r * (0.97 if k < 2 else 0.9), SKIN)
-    # The palm and the back of the hand.
+            parts += capsule(m, pts[k], pts[k + 1], r * (1.0 if k < 2 else 0.94), r * (0.97 if k < 2 else 0.9), SKIN)
+        # The knuckle bump.
+        parts += blob(m, pts[0] + Vector((0.006, 0.0, 0.003)), (r * 1.15, r * 1.05, r * 1.0), SKIN)
+    # The palm and the back of the hand: one rounded lump behind the knuckles.
     zc = (zs[0] + zs[-1]) / 2
-    parts += blob(m, (R + 0.045, -0.035, zc), (0.05, 0.055, 0.085), SKIN, rot=(0, 0, -0.5))
-    # The thumb: from the heel of the palm, round the inside, over the index finger.
-    t0 = Vector((R * 0.6 + 0.02, -R - 0.045, zs[1] - 0.01))
-    t1 = Vector((-R * 0.35, -R - 0.02, zs[0] + 0.006))
-    t2 = Vector((-R - 0.012, R * 0.15, zs[0] + fr * 0.95))
-    parts += capsule(m, t0, t1, fr * 1.25, fr * 1.12, SKIN)
-    parts += capsule(m, t1, t2, fr * 1.12, fr * 1.0, SKIN)
+    parts += blob(m, (R + 0.05, -0.03, zc), (0.052, 0.058, (zs[0] - zs[-1]) * 0.62 + fr), SKIN, rot=(0, 0, -0.45))
+    # The thumb: from the heel of the palm, round the near side, resting over the index and
+    # middle fingers; its tip stops on the handle's near-inside edge.
+    t0 = Vector((R * 0.75 + 0.02, -R - 0.04, zs[1] - 0.012 + thumb_up))
+    t1 = Vector((R * 0.15, -R - 0.026, zs[1] + fr * 0.35 + thumb_up))
+    t2 = Vector((-R * 0.62, -R * 0.78, zs[1] + fr * 0.55 + thumb_up))
+    parts += capsule(m, t0, t1, fr * 1.32, fr * 1.16, SKIN)
+    parts += capsule(m, t1, t2, fr * 1.16, fr * 1.02, SKIN)
+    # The thumbnail, a little paler.
+    parts += blob(m, t2 + Vector((0.004, -fr * 0.55, fr * 0.35)), (fr * 0.62, fr * 0.3, fr * 0.5), srgb("#efc2a8"),
+                  rot=(0.3, 0, -0.6))
     # The wrist, and a denim cuff.
-    w0 = Vector((R + 0.05, -0.07, zc - 0.01))
-    w1 = Vector((R + 0.09, -0.2, zc - 0.07))
-    parts += capsule(m, w0, w1, 0.048, 0.05, SKIN)
+    w0 = Vector((R + 0.055, -0.07, zc - 0.012))
+    w1 = Vector((R + 0.095, -0.2, zc - 0.075))
+    parts += capsule(m, w0, w1, 0.05, 0.052, SKIN)
     if sleeve:
         d = (w1 - w0).normalized()
         c0 = w0 + d * 0.06
         q = d.to_track_quat("Z", "Y")
         m._begin()
-        bmesh.ops.create_cone(m.bm, cap_ends=False, segments=16, radius1=0.066, radius2=0.075, depth=0.2,
-                              matrix=Matrix.Translation(c0 + d * 0.1) @ q.to_matrix().to_4x4())
+        bmesh.ops.create_cone(m.bm, cap_ends=False, segments=16, radius1=0.068, radius2=0.082, depth=0.5,
+                              matrix=Matrix.Translation(c0 + d * 0.25) @ q.to_matrix().to_4x4())
         sl = m._new()
         m._paint(sl, DENIM, CARD, smooth=True)
         m._begin()
-        bmesh.ops.create_cone(m.bm, cap_ends=False, segments=16, radius1=0.072, radius2=0.072, depth=0.03,
+        bmesh.ops.create_cone(m.bm, cap_ends=False, segments=16, radius1=0.074, radius2=0.074, depth=0.03,
                               matrix=Matrix.Translation(c0 + d * 0.012) @ q.to_matrix().to_4x4())
         cuff = m._new()
         m._paint(cuff, srgb("#33506f"), CARD, smooth=True)
-        # Topstitching on the cuff.
         parts += sl + cuff
     m.outline(parts, 0.0035)
     return parts
@@ -148,26 +158,39 @@ def hand_candle(seed=72):
 
 
 def hand_blowtorch(seed=73):
+    """A gas canister held in the fist: a domed top, a printed paper label wrapped round
+    it (a red band, a flame mark), a brass valve with a big knurled knob, a red igniter
+    button, and a brass nozzle with a flared mouth."""
     m = Model("hand_blowtorch", seed)
     rc = 0.05
     blue = srgb("#2f66ad")
-    can = m.cylinder((0, 0, -0.12), rc, 0.24, blue, 22, SHINY, cuts=2, smooth=True, jitter=0.0)
-    can += m.cylinder((0, 0, 0.12), rc, 0.035, blue, 22, SHINY, cuts=0, radius_top=rc * 0.55, smooth=True, jitter=0.0)
-    m.box((0, -rc * 0.97, 0.0), (0.06, 0.004, 0.1), srgb("#f2efe6"), SHINY, cuts=(0, 0, 0), bevel=0.0, jitter=0.0)
+    can = m.cylinder((0, 0, -0.12), rc, 0.24, blue, 24, SHINY, cuts=4, smooth=True, jitter=0.0)
+    can += lathe(m, (0, 0, 0.12), [(rc, 0.0), (rc * 0.96, 0.012), (rc * 0.8, 0.026), (rc * 0.5, 0.036), (0.022, 0.04)], blue,
+                 SHINY, 24)
+    can += m.cylinder((0, 0, -0.125), rc * 1.02, 0.012, srgb("#24508a"), 24, SHINY, cuts=0, jitter=0.0)
     m.outline(can, 0.003)
-    valve = m.cylinder((0, 0, 0.155), 0.022, 0.03, BRASS, 14, SHINY, cuts=0, jitter=0.0)
-    valve += m.box((0, 0.012, 0.185), (0.036, 0.05, 0.036), BRASS, SHINY, cuts=(0, 0, 0), bevel=0.006, jitter=0.0)
-    knob = m.cylinder((0.03, 0.01, 0.185), 0.018, 0.022, srgb("#2a2624"), 12, SHINY, rot=(0, math.pi / 2, 0), cuts=0,
+    # The label: a paper band, cream with a red stripe and the flame mark, its seam overlapping.
+    label = m.cylinder((0, 0, -0.07), rc * 1.012, 0.13, srgb("#f2ead6"), 24, PAPER, caps=False, cuts=6, smooth=True,
+                       jitter=0.0)
+    m.paint_by(label, lambda p, n: srgb("#c8402f") if 0.03 < p.z + 0.07 < 0.06 else
+               (srgb("#2a2624") if 0.095 < p.z + 0.07 < 0.103 else srgb("#f2ead6")))
+    m.decal("lbl_fire", (0, -rc * 1.03, -0.035), (0, -1, 0), 0.07, lift=0.002)
+    valve = m.cylinder((0, 0, 0.155), 0.024, 0.03, BRASS, 16, SHINY, cuts=0, jitter=0.0)
+    valve += m.box((0, 0.012, 0.188), (0.04, 0.056, 0.04), BRASS, SHINY, cuts=(0, 0, 0), bevel=0.008, jitter=0.0)
+    knob = m.cylinder((0.022, 0.012, 0.188), 0.026, 0.03, srgb("#2a2624"), 16, SHINY, rot=(0, math.pi / 2, 0), cuts=0,
                       jitter=0.0)
-    for k in range(10):
-        a = k * math.tau / 10
-        knob += m.box((0.04, 0.01 + math.cos(a) * 0.018, 0.185 + math.sin(a) * 0.018), (0.02, 0.004, 0.004), srgb("#1e1b19"),
-                      SHINY, cuts=(0, 0, 0), bevel=0.0, jitter=0.0, rot=(a, 0, 0))
-    nozzle = m.cylinder((0, 0.03, 0.19), 0.01, 0.17, BRASS, 12, SHINY, rot=(-math.pi / 2, 0, 0), cuts=1, jitter=0.0)
-    nozzle += m.cylinder((0, 0.2, 0.19), 0.01, 0.035, srgb("#b38a34"), 12, SHINY, rot=(-math.pi / 2, 0, 0), cuts=0,
-                         radius_top=0.016, jitter=0.0)
-    m.outline(valve + knob + nozzle, 0.003)
-    fist(m, rc, z_top=0.05, fr=0.022)
+    for k in range(14):
+        a = k * math.tau / 14
+        knob += m.box((0.037, 0.012 + math.cos(a) * 0.026, 0.188 + math.sin(a) * 0.026), (0.028, 0.006, 0.006),
+                      srgb("#1e1b19"), SHINY, cuts=(0, 0, 0), bevel=0.0, jitter=0.0, rot=(a, 0, 0))
+    knob += m.cylinder((0.052, 0.012, 0.188), 0.012, 0.004, srgb("#c8402f"), 12, SHINY, rot=(0, math.pi / 2, 0), cuts=0,
+                       jitter=0.0)
+    igniter = m.box((-0.026, 0.0, 0.17), (0.016, 0.022, 0.018), srgb("#c8402f"), SHINY, cuts=(0, 0, 0), bevel=0.005, jitter=0.0)
+    nozzle = m.cylinder((0, 0.03, 0.19), 0.011, 0.17, BRASS, 12, SHINY, rot=(-math.pi / 2, 0, 0), cuts=1, jitter=0.0)
+    nozzle += m.cylinder((0, 0.2, 0.19), 0.011, 0.035, srgb("#b38a34"), 12, SHINY, rot=(-math.pi / 2, 0, 0), cuts=0,
+                         radius_top=0.017, jitter=0.0)
+    m.outline(valve + knob + nozzle + igniter, 0.003)
+    fist(m, rc, z_top=0.04, fr=0.023, spread=1.08)
     return m.build()
 
 
@@ -178,8 +201,8 @@ def hand_bottle(seed=74):
     body = lathe(m, (0, 0, -0.1), [(0.04, 0.0), (0.046, 0.01), (0.046, 0.17), (0.04, 0.2), (0.018, 0.25), (0.016, 0.31),
                                     (0.02, 0.32), (0.02, 0.33)], green, GLASS, 18)
     m.cylinder((0, 0, -0.1), 0.04, 0.004, srgb("#4d7a52"), 18, GLASS, cuts=0, jitter=0.0)
-    m.decal("st_lot", (0, -0.047, -0.02), (0, -1, 0), 0.07, lift=0.003)
-    fist(m, rc, z_top=0.04, fr=0.022)
+    m.decal("st_lot", (0, -0.047, 0.1), (0, -1, 0), 0.06, lift=0.003)
+    fist(m, rc, z_top=0.03, fr=0.023, spread=1.04)
     return m.build()
 
 

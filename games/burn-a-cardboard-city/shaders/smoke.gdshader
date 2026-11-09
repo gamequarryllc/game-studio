@@ -7,8 +7,8 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabl
 
 uniform vec2 wind = vec2(0.6, -0.4);
 uniform sampler2D tissue : source_color, filter_linear_mipmap, repeat_disable;
-uniform vec3 pale : source_color = vec3(0.74, 0.73, 0.72);
-uniform vec3 soot : source_color = vec3(0.3, 0.28, 0.27);
+uniform vec3 pale : source_color = vec3(0.46, 0.44, 0.43);
+uniform vec3 soot : source_color = vec3(0.13, 0.12, 0.115);
 
 varying float v_t;
 varying float v_dark;
@@ -22,7 +22,7 @@ void vertex() {
 	v_dark = INSTANCE_CUSTOM.b;
 	v_piece = floor(fract(seed * 7.13) * 3.999);
 	vec3 o = MODEL_MATRIX[3].xyz;
-	float size = INSTANCE_CUSTOM.g * (0.5 + 1.5 * t);
+	float size = INSTANCE_CUSTOM.g * (0.6 + 2.0 * t);
 	o.y += t * (2.2 + 2.6 * INSTANCE_CUSTOM.g);
 	o.xz += wind * (t * 2.0 + t * t * 4.0) + vec2(sin(seed * 40.0 + t * 3.0), cos(seed * 31.0 + t * 2.0)) * t * 0.4;
 	float a = seed * 6.28 + t * (seed - 0.5) * 2.0;
@@ -36,7 +36,7 @@ void vertex() {
 
 void fragment() {
 	vec4 t = texture(tissue, vec2((v_piece + UV.x) / 4.0, UV.y));
-	vec3 col = mix(soot, pale, clamp(v_t * 1.5 - v_dark * 0.5, 0.0, 1.0));
+	vec3 col = mix(soot, pale, clamp(v_t * 1.2 - v_dark * 0.45, 0.0, 1.0));
 	ALBEDO = col * (0.75 + 0.35 * t.r);
-	ALPHA = t.a * smoothstep(0.0, 0.12, v_t) * (1.0 - v_t) * 0.85 * v_near;
+	ALPHA = min(1.0, t.a * 1.35) * smoothstep(0.0, 0.08, v_t) * (1.0 - smoothstep(0.55, 1.0, v_t)) * 0.95 * v_near;
 }

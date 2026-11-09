@@ -8,7 +8,7 @@ render_mode diffuse_lambert_wrap, specular_schlick_ggx, cull_disabled;
 
 uniform float now = 0.0;
 uniform vec3 ember_color : source_color = vec3(1.0, 0.4, 0.08);
-uniform float cool_time = 26.0;
+uniform float cool_time = 40.0;
 
 varying vec4 v_col;
 varying vec3 v_world;
@@ -37,7 +37,7 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 col = v_col.rgb;
+	vec3 col = v_col.rgb * 1.3 + vec3(0.012, 0.01, 0.009);
 	float n = vnoise(v_world.xz * 9.0 + v_world.y * 4.0 + v_vary * 7.0);
 	float n2 = vnoise(v_world.xz * 31.0 - v_world.y * 13.0);
 	col *= 0.9 + 0.2 * n2;
@@ -51,9 +51,16 @@ void fragment() {
 	vec3 em = ember_color * spot * low * v_heat * 2.4 * flick;
 	// Still hot right after it lands: the whole heap glows a little.
 	em += ember_color * 0.18 * v_heat * v_heat * low;
+	// Toasted card (the curled lips, the torn tops of the walls left standing) catches the
+	// light along its edges; char has a dull sheen; ash stays matte.
+	float warm = clamp((v_col.r - v_col.b) * 6.0 - 0.15, 0.0, 1.0) * step(0.05, v_col.r);
+	float rim = pow(1.0 - clamp(abs(dot(NORMAL, VIEW)), 0.0, 1.0), 3.0);
+	// A light dusting of ash on whatever faces up, however the heap landed.
+	vec3 wup = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	col = mix(col, vec3(0.26, 0.25, 0.235) * (0.85 + 0.3 * n2), smoothstep(0.55, 0.95, wup.y) * 0.4 * (1.0 - warm));
 	ALBEDO = col;
-	ROUGHNESS = 0.95;
-	SPECULAR = 0.12;
+	ROUGHNESS = mix(0.95, 0.7, warm);
+	SPECULAR = 0.04 + warm * 0.18;
 	vec3 wn = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
-	EMISSION = em + col * fire_light(v_world, wn);
+	EMISSION = em + col * fire_light(v_world, wn) * 1.2 + vec3(0.9, 0.62, 0.38) * rim * warm * 0.12;
 }

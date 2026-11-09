@@ -9,12 +9,17 @@ them, char (#2a2420, never black) with a little scorched brown card low down.
   fall_turret      a castle turret that toppled: squashed rolls and a crushed cone
   rub_castle_0..2  crushed egg box and rolls where a castle piece stood
 
+Every building leaves one wall standing (torn off ragged at the top, windows burned
+through, the colour it was painted still showing low down) so you can still tell
+what stood there; trees leave their pencil standing in the clay.
+
 The fallen pieces are modelled at a typical size (see FALL_SIZE); the game scales
 them to the real tower (length = its height, width = its footprint).
 """
 import math
 
-from kit import (ASH, ASH_LIGHT, CARD, CHAR, CHAR_LIGHT, PAPER, PAPER_SHADE, SCORCH, Model, srgb)
+from kit import (ASH, ASH_LIGHT, CARD, CHAR, CHAR_LIGHT, EGG_PULP, KRAFT, PAPER, PAPER_SHADE, PAPER_WHITE, ROLL, SCORCH,
+                 Model, srgb)
 from mathutils import Matrix, Vector
 
 # length along +X, width along Y, of each fallen piece as modelled (the game reads these
@@ -27,6 +32,117 @@ FLUTE_LIGHT = srgb("#6a4e34")
 
 def rot_z(a):
     return Matrix.Rotation(a, 4, "Z")
+
+
+TOASTED = srgb("#7a5536")        # the curled lip of a flap: browned, not burnt through, it catches the light
+TOASTED_LIGHT = srgb("#9a6c44")
+HOUSE_PAINT = srgb("#4f8a86")    # what's left of the poster paint low on a house wall (teal)
+
+
+def mix3(a, b, t):
+    t = max(0.0, min(1.0, t))
+    return [a[i] * (1 - t) + b[i] * t for i in range(3)]
+
+
+def standing_wall(m, at, yaw, w, h, low_col, holes=(), lean=0.07, gable=False, window=None, bend=0.0):
+    """The one wall left standing: a panel of board torn off ragged at the top, its
+    windows burned through, scorched from the top down with the paint it had still
+    showing low down, the torn lip toasted brown (it catches the light), ash on top."""
+    import bmesh
+    t = 0.016
+    cols = max(8, int(w / 0.075))
+    rows = max(7, int(h / 0.065))
+    rng = m.rng
+    # A jagged top: a random walk with a few deep bites out of it.
+    tops = []
+    v = rng.uniform(0.7, 0.95)
+    for i in range(cols):
+        v += rng.uniform(-0.12, 0.12)
+        if rng.random() < 0.08:
+            v -= rng.uniform(0.15, 0.3)
+        v = max(0.35, min(1.0, v))
+        ridge = 1.0 - abs(i / (cols - 1) - 0.5) * 2.0 if gable else 1.0
+        tops.append(v * (0.75 + 0.25 * ridge) if gable else v)
+    m._begin()
+    bm = m.bm
+    grid = {}
+    for i in range(cols + 1):
+        for j in range(rows + 1):
+            grid[(i, j)] = bm.verts.new((-w / 2 + w * i / cols, 0.0, h * j / rows))
+    def in_hole(x, z):
+        for (hx, hz, hw, hh) in holes:
+            if abs(x - hx) < hw / 2 and abs(z - hz) < hh / 2:
+                return True
+        return False
+    for i in range(cols):
+        for j in range(rows):
+            zc = h * (j + 0.5) / rows
+            xc = -w / 2 + w * (i + 0.5) / cols
+            if zc > tops[i] * h or in_hole(xc, zc):
+                continue
+            bm.faces.new((grid[(i, j)], grid[(i + 1, j)], grid[(i + 1, j + 1)], grid[(i, j + 1)]))
+    for vv in [vv for vv in bm.verts if not vv.link_faces and vv in grid.values()]:
+        bm.verts.remove(vv)
+    faces = m._new()
+    for f in faces:
+        f.normal_update()
+    # Tear the free edges (the top and the window holes) so nothing is cut straight.
+    for vv in {vv for f in faces for vv in f.verts if vv.is_boundary}:
+        if vv.co.z > 0.01:
+            vv.co.x += rng.uniform(-0.3, 0.3) * w / cols
+            vv.co.z += rng.uniform(-0.45, 0.25) * h / rows
+    res = bmesh.ops.solidify(bm, geom=faces, thickness=t)
+    faces = m._new()
+    if bend > 0.0:
+        # Rolled round into what's left of a tube.
+        for vv in {vv for f in faces for vv in f.verts}:
+            a = vv.co.x / bend
+            r = bend + vv.co.y
+            vv.co.x, vv.co.y = r * math.sin(a), -r * math.cos(a)
+        for f in faces:
+            f.normal_update()
+    m.crumple(faces, 0.008, 9.0, ridged=False)
+    line_ph = rng.uniform(0, 6.3)
+
+    def fn(p, n):
+        k = p.z / h
+        line = 0.4 + 0.1 * math.sin(p.x * 7.0 + line_ph) + 0.05 * math.sin(p.x * 19.0 + line_ph * 2.0)
+        if k < line - 0.16:
+            c = [low_col[i] * 0.72 for i in range(3)]
+        elif k < line:
+            c = mix3([low_col[i] * 0.72 for i in range(3)], SCORCH, (k - (line - 0.16)) / 0.16)
+        elif k < line + 0.12:
+            c = mix3(SCORCH, CHAR_LIGHT, (k - line) / 0.12)
+        else:
+            c = mix3(CHAR_LIGHT, CHAR, (k - line - 0.12) / 0.3)
+        if (abs(n.y) < 0.35 if bend <= 0.0 else abs(n.z) > 0.3 and n.z < 0.45) and k > 0.15:
+            # The torn lip and the burned-through window edges: toasted card that catches the light.
+            c = mix3(TOASTED, TOASTED_LIGHT, 0.5 + 0.5 * math.sin(p.x * 31.0))
+        if n.z > 0.45:
+            c = mix3(c, ASH_LIGHT if math.sin(p.x * 23.0 + p.z * 7.0) > 0.0 else ASH, 0.75)
+        return c
+    m.paint_by(faces, fn, CARD)
+    if window is not None:
+        name, wx, wz, ww = window
+        faces = faces + m.decal(name, (wx, -t * 0.5 - 0.004, wz), (0, -1, 0), ww, lift=0.003)
+    m.transform(faces, Matrix.Translation(Vector(at)) @ rot_z(yaw) @ Matrix.Rotation(lean, 4, "X"))
+    return faces
+
+
+def toast_edges(m, faces, hinge, out, length):
+    """Brown the far end of a curled flap (it toasted but didn't burn): its lip catches the light."""
+    hinge, out = Vector(hinge), Vector(out).normalized()
+
+    def fn(p, n):
+        d = (p - hinge).dot(out) / max(length, 0.01)
+        if d > 0.55:
+            return mix3(CHAR_LIGHT, TOASTED_LIGHT if d > 0.85 else TOASTED, (d - 0.55) / 0.3)
+        return None
+    for f in faces:
+        for l in f.loops:
+            c = fn(l.vert.co, f.normal)
+            if c is not None:
+                l[m.col] = (c[0], c[1], c[2], l[m.col][3])
 
 
 def shell(m, c, w, d, h, squash, crumple=0.05, tilt=(0.0, 0.0), yaw=0.0, cuts=(5, 5, 3), bulge=0.12, holes=0.07):
@@ -60,11 +176,15 @@ def shell(m, c, w, d, h, squash, crumple=0.05, tilt=(0.0, 0.0), yaw=0.0, cuts=(5
     return faces
 
 
+LIPS = []
+
+
 def curled_flap(m, hinge, along, out, length, width, radius, crumple=0.015):
-    """A flap that curled up in the heat; its torn edge shows the flutes."""
+    """A flap that curled up in the heat; its torn edge shows the flutes, its lip is toasted brown."""
     f = m.plate(hinge, along, out, length, width, CHAR, 0.012, CARD, edge=FLUTE_LIGHT, cuts=6)
     m.curl(f, hinge, along, out, radius)
     m.crumple(f, crumple, 9.0)
+    LIPS.append((f, hinge, out, width))
     return f
 
 
@@ -113,9 +233,13 @@ def sheet(m, c, size, yaw, burnt_edge=True):
 
 
 def finish(m, keep=()):
-    """Char everything that isn't ash or a sheet of paper."""
+    """Char everything that isn't ash, a sheet of paper or the wall left standing; toast
+    the curled lips so they catch the light."""
     keep = set(f for f in keep if f.is_valid)
-    m.burnt([f for f in m.bm.faces if f not in keep], ash_top=0.85, scorch_low=0.4)
+    m.burnt([f for f in m.bm.faces if f not in keep], ash_top=1.0, scorch_low=0.4)
+    for (f, hinge, out, width) in LIPS:
+        toast_edges(m, [x for x in f if x.is_valid], hinge, out, width)
+    LIPS.clear()
 
 
 # =====================================================================================
@@ -129,6 +253,8 @@ def rub_house(k):
         curled_flap(m, (0.0, -0.3, 0.16), (1, 0, 0), (0, -0.6, 0.8), 0.6, 0.3, 0.12)
         flutes(m, (0.3, 0.2, 0.2), (0, 1, 0), (0.7, 0, 0.7), 0.4, 0.12)
         keep += ash_heap(m, (-0.2, 0.25), 0.22)
+        keep += standing_wall(m, (0.04, 0.33, 0.0), 0.0, 0.72, 0.42, HOUSE_PAINT, holes=((0.16, 0.24, 0.13, 0.11),),
+                              lean=0.08, window=("win_curtain", -0.17, 0.2, 0.13))
     elif k == 1:
         shell(m, (0.05, 0.0, 0), 0.76, 0.7, 0.5, 0.38, 0.06, (-0.08, 0.1), -0.15)
         # The roof slid off and lies crumpled against one side.
@@ -136,13 +262,14 @@ def rub_house(k):
         m.crumple(f, 0.03, 8.0)
         curled_flap(m, (0.3, 0.32, 0.18), (1, 0, 0), (0, 0.4, 0.9), 0.4, 0.22, 0.08)
         keep += ash_heap(m, (0.3, -0.25), 0.2)
+        keep += standing_wall(m, (0.36, 0.0, 0.0), math.pi / 2, 0.62, 0.48, srgb("#d3a640"), holes=((0.0, 0.2, 0.12, 0.12),),
+                              lean=-0.06, gable=True)
     elif k == 2:
         # Mostly ash, with one corner still standing.
         keep += ash_heap(m, (0, 0), 0.4, 0.3, 4)
-        f1 = m.plate((-0.3, -0.25, 0.0), (1, 0, 0), (0, 0, 1), 0.4, 0.34, CHAR, 0.012, CARD, edge=FLUTE_LIGHT, cuts=4)
-        f2 = m.plate((-0.5, -0.05, 0.0), (0, 1, 0), (0, 0, 1), 0.4, 0.3, CHAR, 0.012, CARD, edge=FLUTE_LIGHT, cuts=4)
-        m.crumple(f1 + f2, 0.025, 9.0)
-        m.transform(f1 + f2, Matrix.Rotation(-0.12, 4, "X"))
+        keep += standing_wall(m, (-0.12, -0.34, 0.0), 0.0, 0.5, 0.4, srgb("#b4523c"), holes=((0.08, 0.22, 0.12, 0.1),),
+                              lean=-0.05, window=("door_blue", -0.12, 0.1, 0.12))
+        keep += standing_wall(m, (-0.37, -0.08, 0.0), math.pi / 2, 0.5, 0.34, srgb("#b4523c"), lean=0.06)
         curled_flap(m, (0.2, 0.2, 0.08), (0, 1, 0), (0.8, 0, 0.6), 0.36, 0.22, 0.07)
     else:
         # Folded in on itself like a stamped-on box: two halves in a V.
@@ -150,6 +277,8 @@ def rub_house(k):
         b = shell(m, (0.22, 0.02, 0), 0.42, 0.72, 0.5, 0.36, 0.05, (0.0, -0.3), 0.05, (3, 5, 3))
         flutes(m, (0.0, -0.36, 0.12), (0, 0, 1), (1, 0, 0), 0.2, 0.18)
         keep += ash_heap(m, (0.0, 0.3), 0.18)
+        keep += standing_wall(m, (0.05, -0.4, 0.0), 0.0, 0.56, 0.34, srgb("#ece2c8"), holes=((-0.12, 0.12, 0.1, 0.2),),
+                              lean=-0.1, window=("win_lit", 0.12, 0.2, 0.12))
     finish(m, keep)
     return m.build()
 
@@ -163,10 +292,18 @@ def rub_small(k):
         for x in (-0.12, 0.16):
             m.cylinder((x, -0.14, 0.03), 0.045, 0.02, srgb("#4a4642"), 12, 0.25, rot=(math.pi / 2, 0, 0), cuts=0, jitter=0.0)
     else:
-        # A burnt pencil stub lying in the ash.
-        m.cylinder((-0.15, 0.0, 0.025), 0.016, 0.24, CHAR_LIGHT, 6, CARD, rot=(0, math.pi / 2 - 0.1, 0.3), cuts=0,
-                   smooth=False, jitter=0.0)
-        m.cylinder((0.1, 0.07, 0.03), 0.017, 0.03, srgb("#9aa0a6"), 10, 0.25, rot=(0, math.pi / 2 - 0.1, 0.3), cuts=0, jitter=0.0)
+        # The pencil still standing in its blob of clay, charred black at the top where the
+        # tissue burned, yellow paint still showing at the bottom; a curl of burnt tissue.
+        clay = m.ball((0, 0, 0.0), 0.075, srgb("#4a4a32"), CARD, 2, 0.22)
+        m.squash(clay, (0, 0, 0), 0.5)
+        keep += clay
+        pen = m.cylinder((0, 0, 0.0), 0.02, 0.3, srgb("#f0c440"), 6, CARD, cuts=6, smooth=False, jitter=0.0)
+        m.paint_by(pen, lambda p, n: mix3(srgb("#c79a2c"), CHAR, (p.z - 0.08) / 0.12))
+        tip = m.cylinder((0, 0, 0.3), 0.02, 0.045, CHAR_LIGHT, 6, CARD, radius_top=0.004, cuts=0, smooth=False, jitter=0.0)
+        m.transform(pen + tip, Matrix.Rotation(0.12, 4, "Y") @ Matrix.Rotation(0.05, 4, "X"))
+        keep += pen + tip
+        curl = m.plate((0.03, 0.0, 0.26), (0, 1, 0), (1, 0, -0.4), 0.06, 0.07, CHAR_LIGHT, 0.004, PAPER, edge=TOASTED, cuts=2)
+        m.curl(curl, (0.03, 0.0, 0.26), (0, 1, 0), (1, 0, -0.4), 0.025)
     finish(m, keep)
     return m.build()
 
@@ -185,18 +322,24 @@ def fall_office(k):
         curled_flap(m, (L * 0.98, 0.0, 0.25), (0, 1, 0), (0.6, 0, 0.8), W * 0.8, 0.4, 0.15)
         flutes(m, (L * 0.55, -W * 0.46, 0.22), (1, 0, 0), (0, -0.4, 0.9), 0.5, 0.16)
         keep += ash_heap(m, (L * 0.5, W * 0.5), 0.3)
+        keep += standing_wall(m, (0.06, 0.0, 0.0), math.pi / 2, W * 0.86, 0.72, KRAFT, holes=((0.2, 0.42, 0.2, 0.16),),
+                              lean=0.08, window=("win_blue", -0.24, 0.34, 0.2))
     elif k == 1:
         # Broke in two: the base crumpled by its pivot, the top half skidded on.
         shell(m, (L * 0.22, 0, 0), L * 0.42, W * 0.95, 0.95, 0.55, 0.06, (0.0, 0.06), 0.08, (4, 4, 3))
         shell(m, (L * 0.74, -0.08, 0), L * 0.46, W * 0.85, 0.9, 0.4, 0.07, (0.1, -0.05), -0.35, (4, 4, 3))
         curled_flap(m, (L * 0.45, W * 0.45, 0.2), (1, 0, 0), (0, 0.7, 0.7), 0.6, 0.3, 0.12)
         keep += ash_heap(m, (L * 0.5, -W * 0.3), 0.32, 0.3, 4)
+        keep += standing_wall(m, (0.04, -0.1, 0.0), math.pi / 2, W * 0.7, 0.62, KRAFT, holes=((-0.18, 0.36, 0.18, 0.16),),
+                              lean=-0.07, gable=True, window=("win_lit", 0.2, 0.3, 0.2))
     else:
         # Flattened like it was stamped on: low, wide and wavy.
         shell(m, (L * 0.5, 0, 0), L * 0.95, W * 1.05, 0.7, 0.32, 0.08, (0.0, 0.0), 0.0, (6, 4, 2), bulge=0.2)
         flutes(m, (L * 0.2, W * 0.5, 0.12), (1, 0, 0), (0, 0.6, 0.8), 0.6, 0.14)
         curled_flap(m, (L * 0.85, -W * 0.48, 0.15), (1, 0, 0), (0, -0.5, 0.86), 0.5, 0.28, 0.1)
         keep += ash_heap(m, (L * 0.15, -W * 0.45), 0.28)
+        keep += standing_wall(m, (0.05, 0.05, 0.0), math.pi / 2, W * 0.8, 0.5, srgb("#a77a4a"), lean=0.1,
+                              window=("win_plain", 0.0, 0.26, 0.2))
     finish(m, keep)
     return m.build()
 
@@ -226,6 +369,9 @@ def fall_sky(k):
             keep += sheet(m, (m.rng.uniform(0.2, L), m.rng.uniform(-W * 0.9, W * 0.9), 0.0), m.rng.uniform(0.26, 0.36),
                           m.rng.uniform(0, math.tau))
         keep += ash_heap(m, (L * 0.45, 0.0), 0.5, 0.25, 4)
+        keep += standing_wall(m, (0.1, 0.0, 0.0), math.pi / 2, W * 0.8, 1.1, PAPER_WHITE,
+                              holes=((-0.3, 0.55, 0.22, 0.18), (0.3, 0.6, 0.22, 0.18)), lean=0.06,
+                              window=("win_plain", 0.0, 0.3, 0.26))
     else:
         # One long crushed tube or box, kinked twice.
         for j, (x0, x1, t) in enumerate([(0.0, 2.0, 0.04), (2.0, 3.9, -0.07), (3.9, 5.5, 0.1)]):
@@ -234,6 +380,7 @@ def fall_sky(k):
         for j in range(5):
             keep += sheet(m, (m.rng.uniform(0.5, L), m.rng.uniform(-W, W), 0.0), 0.3, m.rng.uniform(0, math.tau))
         keep += ash_heap(m, (L * 0.3, W * 0.5), 0.45, 0.25, 3)
+        keep += standing_wall(m, (0.0, 0.0, 0.0), math.pi / 2, math.pi * 0.55, 1.0, PAPER_WHITE, lean=0.0, bend=0.55)
     finish(m, keep)
     for f in m.bm.faces:
         pass
@@ -254,6 +401,7 @@ def fall_turret():
     m.squash(c, (0, 0, 0), 0.5)
     m.crumple(c, 0.04, 6.0)
     keep += ash_heap(m, (2.0, 0.6), 0.5, 0.25, 4)
+    keep += standing_wall(m, (-0.2, 0.0, 0.0), math.pi / 2, math.pi * 0.8, 1.1, ROLL, lean=0.0, bend=0.8)
     finish(m, keep)
     return m.build()
 
@@ -289,6 +437,15 @@ def rub_castle(k):
         m.transform(f, Matrix.Translation((0, 0, 0.08)))
     keep += ash_heap(m, (0.5, 0.3), 0.8 if k < 2 else 1.6, 0.22, 4)
     m.paint_by(keep, lambda p, n: pulp_ash if (p.x * 7.1 + p.y * 3.3) % 1.0 > 0.5 else ASH_LIGHT)
+    if k == 0:
+        keep += standing_wall(m, (-0.7, 0.25, 0.0), 0.0, 1.7, 0.95, EGG_PULP, holes=((0.3, 0.6, 0.1, 0.24),), lean=0.05)
+    elif k == 1:
+        keep += standing_wall(m, (0.0, -0.5, 0.0), 0.0, 2.0, 1.3, EGG_PULP, holes=((0.0, 0.42, 0.7, 0.84),), lean=-0.04,
+                              gable=True)
+    else:
+        keep += standing_wall(m, (-0.4, -1.8, 0.0), 0.0, 2.4, 1.5, EGG_PULP, holes=((0.4, 0.5, 0.5, 0.7),), lean=-0.05)
+        keep += standing_wall(m, (-1.8, -0.7, 0.0), math.pi / 2, 1.9, 1.2, EGG_PULP, lean=0.05)
+        keep += standing_wall(m, (1.75, 1.75, 0.0), 0.0, math.pi * 0.5, 1.4, ROLL, lean=0.0, bend=0.5)
     finish(m, keep)
     return m.build()
 

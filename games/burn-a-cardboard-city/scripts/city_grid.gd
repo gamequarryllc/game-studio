@@ -1025,6 +1025,41 @@ func load_save_string(text: String) -> void:
 	ignited.clear()
 
 
+func raze_rest(cascade_zone: int) -> Array:
+	## The ending: nothing is left standing. Whatever still stands in `cascade_zone` (round
+	## the keep, in shot) catches and comes down in a quick cascade, and whatever is already
+	## burning is nearly through; anything left anywhere else (out of shot) turns to rubble
+	## at once. Returns the structures razed at once (the view lays their rubble).
+	var razed: Array = []
+	for s in count:
+		if s_state[s] != STANDING:
+			continue
+		if s_zone[s] == cascade_zone:
+			ignite(s)
+			s_fire[s] = 1.0
+			s_integ[s] = rng.randf_range(0.004, 0.05)
+		else:
+			s_state[s] = RUBBLE
+			s_fall[s] = CRUMPLE
+			s_integ[s] = 0.0
+			fallen += 1
+			zone_fallen[s_zone[s]] += 1
+			hot.erase(s)
+			razed.append(s)
+	for s in burning.keys():
+		s_integ[s] = minf(s_integ[s], 0.06)
+		s_fire[s] = 1.0
+	return razed
+
+
+func standing_count() -> int:
+	var t := 0
+	for s in count:
+		if s_state[s] <= BURNING:
+			t += 1
+	return t
+
+
 func burn_zone(z: int) -> void:
 	## Developer tool: everything in a district catches at once (not the keep).
 	for s in count:

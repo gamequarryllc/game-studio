@@ -22,7 +22,7 @@ screen so the fire always pops against the cool warehouse):
 | Kraft shadow | `#8e6236` | Cut edges, panel outlines, the empty part of progress strips |
 | Marker ink | `#221d1b` | All lettering, icon outlines, drawn windows |
 | Masking tape | `#e8d8a8` | Tape on tags and buildings, road markings, highlights |
-| Warehouse steel | `#5c6b7a` | Concrete floor, walls, dim overlays: the cool backdrop |
+| Warehouse steel | `#5c6b7a` | Walls, dim overlays: the cool backdrop (the concrete floor is a darker, matte `#3a3d42`-ish grey so kraft and fire stand off it) |
 | Flame | `#ef7a28` | Fire, the crosshair when it can light, the one call-to-action colour |
 | Paper | `#f7f1e3` | Notes, price tags, luggage tags, item cards |
 | Char | `#2a2420` | Everything burnt (never `#000`), with grey ash `#8a8580` on top |
@@ -30,12 +30,20 @@ screen so the fire always pops against the cool warehouse):
 District materials (the city is a recycling-bin craft project): the suburbs are cereal
 boxes painted in chalky poster paint (teal, mustard, brick, chalk) with the print left
 showing on the back panels and the roofs folded from other boxes print side up, plus
-milk and juice cartons, a tissue box and an inside-out cereal box; trees are crumpled
-tissue on pencils in a blob of clay; lawns are green construction paper. Downtown is
+milk and juice cartons, a tissue box and an inside-out cereal box, with big cereal-box
+prints on their roofs so they read at play distance; trees are scrunched sage tissue on
+six-sided painted pencils in a thumb-pressed blob of clay (the fir is one spiral of
+twisted tissue); lawns are sage construction paper with fibres, a pale cut edge and
+lifted corners. Downtown is
 printed shipping boxes (made-up brands: Kestrel, Parcelo, Tinworks, Mossy, Bluefin,
 No. 9; stencilled handling marks, barcode labels, the box maker's round stamp).
 Skyscraper row is white copy-paper boxes with lids, stacked 2-3x downtown's height.
-The castle is egg boxes and toilet / kitchen rolls on a wooden pallet.
+Box stock varies per building in the shader (kraft, white-lined, dark brown, sun-faded,
+grey board; copy-paper in cream, cool and bright whites), and so do the felt-tip pairs
+the windows were coloured with. The castle is egg boxes on a wooden pallet (deck boards
+you can see under): toilet and kitchen rolls with the spiral seam of the wound paper
+showing, cones rolled from printed cereal card with a taped overlap seam, battlements
+of egg cups cut from a grey carton with gaps between them.
 
 **Type.** Headers: *Saira Stencil One* (OFL, `fonts/SairaStencilOne-OFL.txt`), stencilled
 like the markings on a shipping box: district names, the box's title and tabs, card
@@ -66,17 +74,27 @@ bottle caps. Windows, doors and box labels ("KITCHEN", "BOOKS", "FRAGILE") are f
 drawings with overshooting corners and scribbled fills (`models/marker_sheet.png`, drawn
 by `art/textures/make_marker_sheet.py`, which also prints the boxes' brands, stencils and
 labels). Fire is cut paper too: six flame shapes from layers of coloured paper with torn
-edges and a deep red base, one tall leading flame per building leaning with the fans,
-flipping at a stop-motion 8 frames a second; smoke is torn grey tissue. Burning creeps up
-the board as one dark-brown scorch front with a thin glowing edge. Things fall with
+edges and a deep red base (two whole fires, two licks, two low fires); each building gets
+ONE big flame cluster rooted on its roof where it's alight (two or three along a long
+wall), a few licks on the roof edges and, once well alight, up the corners facing you,
+leaning with the fans and flipping at a stop-motion 8 frames a second; burning scraps get
+one low flame per 1.5 m patch. Smoke is a column of torn grey tissue, sooty low down,
+leaning downwind; sparks are hard orange specks. Burning creeps up the board as one
+dark-brown scorch front with a thin glowing edge. Things fall with
 weight: towers lean back before they go (anticipation), accelerate, bounce and squash
 flat on impact; houses fold down like a box being stamped on; what's left is a crumpled,
-torn shell or a fallen tower lying along its fall, in char and ash, embers cooling to grey.
-The giant's tools are held in a chunky cartoon hand with an ink outline.
+torn shell or a fallen tower lying along its fall, in matte char with soft ash on top,
+toasted curled lips catching the light, embers cooling to grey, and one wall left
+standing (the paint still showing low down) so you can tell what stood there; on the
+floor round it, a hand-painted scorch decal (`models/scorch.png`, brush strokes, soot
+dragged outward, no noise). The giant's tools are held in a chunky cartoon hand with an
+ink outline, a hammer grip with the thumb wrapped round, framed above the phone's buttons.
 
-**Light.** Late afternoon in a dim warehouse: a warm `#ffe2b0` key low through the west
-windows (28 degrees, long shadows: real shadow maps on computers, baked along the key
-into the floor on phones), a cool `#7f93b0` fill, low ambient (0.4), dusty light shafts.
+**Light.** Late afternoon in a dim warehouse: a warm `#ffcf92` key low through the west
+windows (26 degrees, long shadows: real shadow maps on computers, baked along the key
+into the floor on phones), a cool `#7488aa` fill, low ambient (0.34), dusty light shafts,
+skylights that glow without blowing out. The floor darkens near the giant's feet and a
+soft vignette frames the foreground.
 Four pooled fire lights (the biggest fires near you) are added in the shaders themselves,
 so phones get them too. The haze browns and thickens as the city burns.
 
@@ -91,16 +109,18 @@ shiny, glass) and a "decal" surface (marker drawings from the marker sheet).
 
     python3 art/textures/make_marker_sheet.py     # the felt-tip drawings
     python3 art/textures/make_fire_sheets.py      # models/flames.png, models/smoke.png
+    python3 art/textures/make_scorch_decals.py    # models/scorch.png (the painted scorch marks)
     python3 art/blender/build_all.py              # every model -> models/*.glb (about a minute)
     godot --headless --import                     # always re-import after building models
     python3 art/blender/contact_sheet.py /tmp/sheet.png houses.glb offices.glb   # Cycles review render
     BACKFACE=1 python3 art/blender/contact_sheet.py /tmp/tools.png tools.glb     # (culls the hand's outline hull)
     python3 tools/make_icons.py                   # icons/*.svg and icon.svg
 
-## Status: first playable, art pass 2 and QA done
+## Status: first playable, polish pass (review 2) and QA done
 
-Art pass 2 answered all 12 items of `ART_REVIEW.md`; the QA block played every profile start
-to finish (see QA). Loads, phone and desktop controls work, fire spreads building to building, buildings
+Art pass 2 answered all 12 items of review 1, and the polish pass all 10 items of review 2
+(plus its phone-readability notes) in `ART_REVIEW.md`; the QA blocks played every profile
+start to finish (see QA). Next: the third fresh-eyes critic. Loads, phone and desktop controls work, fire spreads building to building, buildings
 collapse and topple onto their neighbours in chains, coins come in (with chain bonuses),
 4 tools, 5 upgrades, 2 helpers, a working shop (the box), the 2x rewarded boost and
 the other rewarded ads, Remove Ads + permanent 2x, the timed offer tag, the starter pack,
@@ -162,8 +182,10 @@ bonus, up to 3x.
 **First person, as the giant** (`scripts/giant.gd`). Eye height 3.3 m, looking down at the
 streets. You stride over anything below 1.25 m (houses, cars), jumping clears downtown;
 skyscrapers and the castle you walk round. The tool works where the crosshair lands, out
-to its range. The held tool is drawn at the bottom right, on top of the world, bobbing with
-your stride. Big collapses near you shake the view.
+to its range. The held tool is drawn at the bottom right, its grip pinned to a point measured
+from the screen's bottom-right corner (`Giant.grip_screen`: above the jump and fire caps
+on phones, lower on computers), so it sits in the same place on any screen shape, bobbing
+with your stride. Big collapses near you shake the view.
 
 | Phone | Desktop |
 |---|---|
@@ -230,8 +252,8 @@ the first 5 min, at most every 4 min, never right after a rewarded ad, never wit
 
 **Timed offer tag** (`scripts/ad_offers.gd`): a luggage tag hanging off the shop button
 that names what it buys ("Free: +[coin]1.20K, enough for the blowtorch"). Gentle rules:
-none in the first 2.5 min, one at a time, gone after 40 s, the wait grows 1.5x each time
-one is ignored (200 s up to 8 min), only offers worth having right now, never one whose ad
+none in the first 4 min, one at a time, gone after 30 s, the wait grows 1.5x each time
+one is ignored (5 min up to 10 min; it used to feel permanent on a phone), only offers worth having right now, never one whose ad
 isn't loaded, the clock only runs while you play. Free coins that would buy the next tool
 come first.
 
@@ -252,7 +274,27 @@ For the QA block's playthrough bot, every action is a call: `world.ignite_at(poi
 "helper:windup")`, `world.skip_to_district(z)`, `hud.open_shop(tab)`, `hud.watch_ad(kind)`,
 `Monetization.buy(id)`.
 
-## What's done (art pass 2 + QA block)
+## What's done (polish pass, review 2)
+
+- Floor and light for phones: darker matte concrete with joints, tape scraps, spills and
+  splashes; darker card roads; a warmer, lower key; tamer skylights; a darker foreground
+  (floor and a HUD vignette); craft props round the edges (glue gun, stepladder, offcuts).
+- Burnt aftermath: painted scorch decals, matte char (no more white glints), ash on top,
+  toasted lips, slower embers, one wall left standing per building, a pencil per tree.
+- Fire: one rooted cluster per building, edge licks, corner flames, low flames per patch of
+  scraps, denser leaning smoke columns, orange-speck sparks, a stronger fire light pool.
+- Castle: spiral-seamed rolls, printed-card cones with taped seams, cut egg-cup battlements,
+  a pallet deck you can see under. Trees and lawns rebuilt (tissue, hex pencils, clay;
+  fibre paper with cut edges and lifted corners).
+- Hand: a hammer grip per tool with the thumb wrapped round, framed above the buttons on any
+  screen; the blowtorch with label, knurled knob, igniter and a roaring blue cone.
+- Shop: tools in cut-out inserts (next tool big), in-world tab icons, ink-on-tape captions.
+- HUD: a filled breeze tag, a labelled district notch, one note spot, screen-space coin
+  numbers, a stamp that never jumps back, no placeholder copy, rarer offer tags.
+- Variety: box stock and window pens per building, big roof prints.
+- Ending: the hand goes, a 16 s crane over the ashes, nothing left standing.
+
+## What was done in art pass 2 + its QA block
 
 - Light: dimmer cool ambient, a warm low key with long shadows, cool fill, four pooled fire
   lights in the shaders, haze that thickens as the city burns.
@@ -268,7 +310,7 @@ For the QA block's playthrough bot, every action is a call: `world.ignite_at(poi
   starter pack, bottle-cap controls, the wind ribbon on a fan.
 - Dev access without a tab (F1, hold THE BOX, Settings); the playthrough bot and the six
   balance passes; the bugs it found (QA).
-- Tests: `tests/smoke_test.gd` (passes, 93 checks), `tests/playthrough.gd`, `tests/screenshots.gd`,
+- Tests: `tests/smoke_test.gd` (passes, 104 checks after the polish pass), `tests/playthrough.gd`, `tests/screenshots.gd`,
   `tests/quick_shot.gd`, `tests/fire_bench.gd`.
 
 ## What was done in the first block
@@ -319,9 +361,6 @@ For the QA block's playthrough bot, every action is a call: `world.ignite_at(poi
 - The held tool draws on top of everything (depth test off), so in rare poses it can show
   through a wall you're pressed against; it never clips into one, which was the point.
 - The giant can walk through rubble (it has no collision), including fallen towers.
-- On 4:3 tablets the fire cap sits on top of the giant's hand (on phones the hand passes
-  between the jump and fire caps). The caps draw over it, so nothing is hidden, but the
-  hand could move up and left on squarer screens.
 - The bots finish in about 22-25 / 50 minutes against a 30 / 60 target (see QA).
 - A big blaze is one endless chain (chain stamps show only at 3, 5, 8, 12, 20, 30, 50).
 - MultiMesh custom data is stored as half floats by the Compatibility renderer, so the
@@ -343,6 +382,7 @@ the child's output (only the two known exit-teardown lines are ignored).
 
 ```
 godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- keen|casual|boosted|chaos|castle [ads]
+xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- /tmp/city-shots [844x390]
 xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 --fixed-fps 20 \
     -s res://tests/playthrough.gd -- boosted visual /tmp/city-visual
 python3 tools/browser_check.py games/burn-a-cardboard-city      (from the studio root)
@@ -356,7 +396,21 @@ flow that doesn't pay out (three rewarded ads from the Extras tab, double-a-find
 interstitial and its 5-minute rule, all six products, no interstitials after Remove Ads,
 restore); the ending's delivery note not showing, or the HUD not coming back after it.
 
-**Results (final balance):**
+**Results (polish pass, review 2):**
+
+| Run | Game time | Real time | Result |
+|---|---|---|---|
+| smoke test (`tests/smoke_test.gd`) | | 5 s | passed, 104 checks |
+| keen | 21m 18s | 92 s | passed |
+| boosted (keen with dev income x10) | 17m 27s / 18m 03s | 60-72 s | passed (twice) |
+| screenshots (`tests/screenshots.gd`, 1280x720 and 844x390) | | 5 min | 20 shots each, judged at phone size |
+| browser (`tools/browser_check.py`) | | 9 min | passed: loads at 844x390, 932x430 and 1024x768, taps work, no console errors; on the 4:3 tablet the fist sits above the fire cap |
+
+One boosted attempt crashed in the engine at startup ("Caller thread can't call this function
+in this node" on the scene root, then signal 11) before the city had loaded, while other studio jobs were
+running; the rerun and every run after passed. If it comes back, look at threaded loading.
+
+**Results (art pass 2, final balance):**
 
 | Run | Game time | Real time | Result |
 |---|---|---|---|
@@ -368,6 +422,10 @@ restore); the ending's delivery note not showing, or the HUD not coming back aft
 | browser (`tools/browser_check.py`: web export, headless Chromium as a phone with touch) | | | passed: loads at 844x390, 932x430 and 1024x768, taps work, no console errors |
 
 **Pacing (game time):**
+
+Polish pass keen run: candle on sale/bought 4m 31s / 4m 35s, suburbs 90% 5m 37s, blowtorch
+12m 44s / 14m 51s, downtown 90% 13m 09s, rockets 18m 22s / 19m 13s, skyscraper row 90% 18m 33s,
+the keep falls 21m 18s (the offer tags now wait 4 min, then 5-10 min between: 6 seen).
 
 | Milestone | keen | casual |
 |---|---|---|
@@ -431,6 +489,27 @@ never miss or hesitate, so people should take longer. It took six passes (keen 1
    so it was pinned up off the right edge of the screen; it's centred now. (Check: the
    delivery note is pinned up on screen.) It also said "1 buildings"; plurals fixed.
 
+Found and fixed in the polish pass (each with a smoke-test check):
+
+14. The "white blotches" on burnt ground were the burning scraps' char, glossy enough to mirror
+    the low sun at grazing angles; char is matte now. (The noise scorch is gone too: painted
+    decals.)
+15. Two chains at once flicked the stamp x5 -> x8 -> x5: a smaller chain never stamps over a
+    bigger one still showing, and the stamp lifts off. (Checks: both.)
+16. The first-run hint and a note could show together (and the note sat over the breeze tag):
+    one spot, the note takes it. (Check: never both.)
+17. Coin numbers were 3D labels that shrank with distance (unreadable on a phone): screen text
+    at 40 px. (Check: 34 px or more, screen layer.)
+18. The hand sat under the jump cap on phones and under the fire cap on 4:3 tablets: the grip is
+    pinned above the buttons from the screen's corner. (Check: fist above the fire cap, clear
+    of jump.)
+19. Castle pieces could still stand at the ending (the keep only needs 75% of the castle): the
+    rest comes down round the keep and stragglers turn to ash. (Checks: nothing standing; the
+    hand hidden and the camera moving; both back after "Walk around the ashes". The bot fails
+    the run on either too.)
+20. The smoke was there but too sparse and pale to read against the light boxes: denser,
+    sootier columns.
+
 The bot's own failures (stand spots inside the castle walls, interleaved logs from parallel
 runs, the interstitial check not knowing the 5-minute rule, and in the first visual run its
 shopping coroutine pressing a box the ending had already shut) were fixed in the bot.
@@ -459,7 +538,8 @@ project.godot / export_presets.cfg (preset "Web", playtest)   default_bus_layout
 scenes/main.tscn            the only scene; everything is built in code
 scripts/balance.gd          every number
 scripts/city_grid.gd        the city as data and the structure fire (spread, collapse, topple, debris, trucks, saving)
-scripts/city_view.gd        drawing it (MultiMeshes per model, flames, smoke, debris, floor, tape, bursts)
+scripts/city_view.gd        drawing it (MultiMeshes per model, flame clusters, smoke columns, sparks, scorch decals,
+                            debris, floor, the pallet deck, lifted lawn corners, tape, bursts)
 scripts/model_lib.gd        loads the Blender models and gives them their shaders
 scripts/warehouse.gd        the building, light, fans (the wind), props
 scripts/giant.gd            you: walking, stepping over, aiming, the held tool
@@ -477,12 +557,14 @@ scripts/game_state.gd       autoload: economy, purchases' effects, save/load, de
 scripts/ad_offers.gd        when the timed offer tag shows and what it offers
 scripts/monetization/       provider interface, stub, autoload facade (product and placement IDs)
 scripts/audio/sound.gd      autoload: effects, loops, volume
-shaders/                    cardboard + marker (+ collapse.gdshaderinc: the burn front), rubble (cooling embers), held_tool (drawn style, the lens),
-                            firelight.gdshaderinc (4 pooled fire lights as shader globals), paper_flame, smoke, floor, tape, light_shaft, metal_wall, prop
-models/                     *.glb from art/blender (rubble.glb: the burnt states), marker_sheet.png, flames.png, smoke.png
+shaders/                    cardboard (+ box stock) + marker (+ window pens; collapse.gdshaderinc: the burn front), rubble (cooling embers),
+                            held_tool (drawn style, the lens), firelight.gdshaderinc (4 pooled fire lights as shader globals),
+                            paper_flame, smoke, sparks, torch_flame, scorch_decal, floor (+ the pallet deck), tape, light_shaft, metal_wall, prop
+models/                     *.glb from art/blender (rubble.glb: the burnt states), marker_sheet.png, flames.png, smoke.png, scorch.png
 art/blender/                model scripts: kit.py, suburbs.py, downtown.py, skyline.py, castle.py, rubble.py, vehicles.py,
                             nature_props.py, tools.py, build_all.py, contact_sheet.py
-art/textures/               make_marker_sheet.py (+ the UV map it writes), make_fire_sheets.py (cut-paper flames, tissue smoke)
+art/textures/               make_marker_sheet.py (+ the UV map it writes), make_fire_sheets.py (cut-paper flames, tissue smoke),
+                            make_scorch_decals.py (hand-painted scorch marks)
 art/fonts/                  Archivo Black (OFL), only for baking box print into the marker sheet
 icons/                      drawn SVG icons (tools/make_icons.py)
 audio/                      generated by tools/make_audio.py

@@ -510,10 +510,14 @@ class Model:
                 c = [c[i] * 0.4 + CHAR_LIGHT[i] * 0.6 for i in range(3)]
             low = max(0.0, 1.0 - p.z / 0.12) * scorch_low * (0.6 + 0.4 * noise.noise(p * 5.0 + off))
             c = [c[i] * (1 - low) + SCORCH[i] * low for i in range(3)]
-            up = max(0.0, n.z) ** 2
-            a = up * ash_top * (0.55 + 0.45 * noise.noise(p * 7.0 + off * 1.3))
-            a = max(0.0, min(1.0, a))
-            ash = ASH_LIGHT if noise.noise(p * 23.0) > 0.3 else ASH
+            # Ash settles on whatever faces up: a soft powder, heavier on the flattest tops,
+            # mixing smoothly between two greys (never blotches, never white).
+            up = max(0.0, min(1.0, (n.z - 0.12) / 0.55))
+            up = up * up * (3.0 - 2.0 * up)
+            a = up * ash_top * (0.62 + 0.38 * noise.noise(p * 7.0 + off * 1.3))
+            a = max(0.0, min(0.92, a))
+            g = 0.5 + 0.5 * noise.noise(p * 13.0 + off)
+            ash = [ASH[i] * (1 - g) + ASH_LIGHT[i] * g for i in range(3)]
             return [c[i] * (1 - a) + ash[i] * a for i in range(3)]
         self.paint_by(faces, fn)
 

@@ -1,6 +1,6 @@
 extends SceneTree
 ## One screenshot of one view, for quick looks while working on the art:
-##   xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 -s res://tests/quick_shot.gd -- out.png [x z yaw pitch tool fire_s touch]
+##   xvfb-run -a -s "-screen 0 1280x720x24" godot --rendering-driver opengl3 -s res://tests/quick_shot.gd -- out.png [x z yaw pitch tool fire_s touch hold WxH]
 
 var gs
 
@@ -15,6 +15,10 @@ func _initialize() -> void:
 func _run() -> void:
 	var a := OS.get_cmdline_user_args()
 	var out := a[0] if a.size() > 0 else "/tmp/quick.png"
+	if a.size() > 9 and "x" in a[9]:
+		var wh: PackedStringArray = a[9].split("x")
+		DisplayServer.window_set_size(Vector2i(int(wh[0]), int(wh[1])))
+		root.size = Vector2i(int(wh[0]), int(wh[1]))
 	gs = root.get_node("GameState")
 	gs.wipe_save(false)
 	gs.tutorial_step = 9
