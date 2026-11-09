@@ -1,9 +1,15 @@
 class_name UiTheme
 extends RefCounted
-## The look of every panel and button (see the art bible in NOTES.md):
-## riveted brass and blackened iron like the dials on an old mine hoist, and
-## worn cream enamel signs. Plates are drawn in code (RivetBox), with grain,
-## scratches and chipped corners. Lettering: Rye, a woodtype face like old
+## The look of every panel and button (see the art bible in NOTES.md). Each
+## element's material follows its job:
+##  - riveted brass for money and instruments (the money plate, the depth
+##    gauge, the shop's title plate): RivetBox, the only thing with rivets;
+##  - chipped vitreous enamel for signs (hints, prompts, layer banners, plain
+##    buttons): EnamelBox;
+##  - paper for things you read and buy (ledger cards with stamped prices, the
+##    find's specimen card, the offer tag): PaperBox, TicketBox("stamp");
+##  - a cream ticket with a red play stamp for "watch a short ad": TicketBox;
+##  - blackened iron for the frames everything sits in. Lettering: Rye, a woodtype face like old
 ## mining-company signage, for signs and titles only; Zilla Slab for
 ## everything people read. Icons are the game's own SVGs in ui/icons/.
 
@@ -26,6 +32,9 @@ const ENAMEL_RED := Color(0.71, 0.2, 0.165)
 const LAMP_GREEN := Color(0.31, 0.639, 0.569)   # verdigris: "go" and "buy"
 const UMBER := Color(0.42, 0.29, 0.18)
 const DIM := Color(0.62, 0.58, 0.52)
+const PAPER := Color(0.93, 0.88, 0.76)
+const MANILA := Color(0.82, 0.72, 0.52)          # the shop's file-folder tabs
+const INK := Color(0.2, 0.14, 0.09)              # text printed on paper
 
 static var _soft_dot: Texture2D
 static var _display: Font
@@ -73,10 +82,16 @@ static func icon(name: String) -> Texture2D:
 	return _icons[name]
 
 
+static func is_brass(c: Color) -> bool:
+	## Brass, amber and their tints: the only plates that get rivets.
+	var h := c.h
+	return c.s > 0.35 and h > 0.07 and h < 0.15 and c.v > 0.45
+
+
 static func plate(color: Color = BRASS, rivets: bool = true, pad: Vector4 = Vector4(16, 10, 16, 12)) -> RivetBox:
 	var b := RivetBox.new()
 	b.color = color
-	b.rivets = rivets
+	b.rivets = rivets and is_brass(color)
 	b.content_margin_left = pad.x
 	b.content_margin_top = pad.y
 	b.content_margin_right = pad.z
@@ -85,12 +100,56 @@ static func plate(color: Color = BRASS, rivets: bool = true, pad: Vector4 = Vect
 
 
 static func iron_panel(pad: float = 22.0) -> RivetBox:
-	## A blackened iron panel in a brass frame (the shop, popups).
-	var b := plate(BRASS, true, Vector4(pad, pad, pad, pad))
-	b.inset = 9.0
+	## A blackened iron panel with a bevelled iron frame (the shop, popups).
+	var b := plate(Color(0.24, 0.21, 0.18), false, Vector4(pad, pad, pad, pad))
+	b.inset = 7.0
 	b.inset_color = IRON
-	b.chamfer = 14.0
-	b.rivet_inset = 5.5
+	b.chamfer = 12.0
+	return b
+
+
+static func enamel(color: Color = CREAM, pad: Vector4 = Vector4(18, 8, 18, 10), seed: int = 0, edge: Color = Color(-1, 0, 0)) -> EnamelBox:
+	var b := EnamelBox.new()
+	b.color = color
+	b.seed = seed
+	if edge.r >= 0.0:
+		b.edge = edge
+	else:
+		b.edge = SOOT if color.get_luminance() > 0.5 else CREAM
+	b.content_margin_left = pad.x
+	b.content_margin_top = pad.y
+	b.content_margin_right = pad.z
+	b.content_margin_bottom = pad.w
+	return b
+
+
+static func paper(pad: Vector4 = Vector4(18, 10, 18, 10), seed: int = 0, ledger: bool = false, color: Color = PAPER) -> PaperBox:
+	var b := PaperBox.new()
+	b.color = color
+	b.seed = seed
+	b.ledger = ledger
+	b.content_margin_left = pad.x
+	b.content_margin_top = pad.y
+	b.content_margin_right = pad.z
+	b.content_margin_bottom = pad.w
+	return b
+
+
+static func ticket(pad: Vector4 = Vector4(18, 8, 22, 9)) -> TicketBox:
+	var b := TicketBox.new()
+	b.content_margin_left = pad.x
+	b.content_margin_top = pad.y
+	b.content_margin_right = pad.z
+	b.content_margin_bottom = pad.w
+	return b
+
+
+static func stamp(seed: int = 0, ink: Color = ENAMEL_RED, pad: Vector4 = Vector4(14, 6, 14, 7)) -> TicketBox:
+	var b := ticket(pad)
+	b.kind = "stamp"
+	b.ink = ink
+	b.seed = seed
+	b.tilt = (float((seed * 37) % 7) - 3.0) * 0.012
 	return b
 
 
@@ -155,13 +214,74 @@ static func style_button(b: Button, color: Color = BRASS, size: int = 24) -> voi
 	b.add_theme_color_override("font_outline_color", Color(1, 1, 1, 0.25) if dark_text else SOOT)
 	b.add_theme_constant_override("outline_size", 2 if dark_text else 5)
 	var pad := Vector4(18, 8, 18, 10)
-	b.add_theme_stylebox_override("normal", plate(color, true, pad))
-	b.add_theme_stylebox_override("hover", plate(color.lightened(0.1), true, pad))
-	var pr := plate(color.darkened(0.15), true, Vector4(pad.x, pad.y + 2, pad.z, pad.w - 2))
+	var seed := b.get_instance_id() % 97
+	if is_brass(color):
+		b.add_theme_stylebox_override("normal", plate(color, true, pad))
+		b.add_theme_stylebox_override("hover", plate(color.lightened(0.1), true, pad))
+		var pr := plate(color.darkened(0.15), true, Vector4(pad.x, pad.y + 2, pad.z, pad.w - 2))
+		pr.pressed = true
+		b.add_theme_stylebox_override("pressed", pr)
+		b.add_theme_stylebox_override("hover_pressed", pr)
+	else:
+		b.add_theme_stylebox_override("normal", enamel(color, pad, seed))
+		b.add_theme_stylebox_override("hover", enamel(color.lightened(0.08), pad, seed))
+		var pe := enamel(color.darkened(0.12), Vector4(pad.x, pad.y + 2, pad.z, pad.w - 2), seed)
+		pe.pressed = true
+		b.add_theme_stylebox_override("pressed", pe)
+		b.add_theme_stylebox_override("hover_pressed", pe)
+	var dis := enamel(IRON_LIGHT, pad, seed, Color(0.4, 0.36, 0.32))
+	dis.chips = 1
+	b.add_theme_stylebox_override("disabled", dis)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+
+static func style_ticket(b: Button, size: int = 21) -> void:
+	## "Watch a short ad": a cream ticket, the red play stamp as its icon.
+	no_keyboard(b)
+	b.icon = icon("ad")
+	b.add_theme_font_override("font", bold_font())
+	b.add_theme_font_size_override("font_size", size)
+	b.add_theme_constant_override("icon_max_width", int(size * 1.6))
+	b.add_theme_constant_override("h_separation", 14)
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(st, INK)
+	b.add_theme_color_override("font_disabled_color", Color(0.45, 0.4, 0.34))
+	b.add_theme_constant_override("outline_size", 0)
+	b.add_theme_stylebox_override("normal", ticket())
+	var hv := ticket()
+	hv.color = CREAM.lightened(0.05)
+	b.add_theme_stylebox_override("hover", hv)
+	var pr := ticket(Vector4(18, 10, 22, 7))
 	pr.pressed = true
 	b.add_theme_stylebox_override("pressed", pr)
 	b.add_theme_stylebox_override("hover_pressed", pr)
-	b.add_theme_stylebox_override("disabled", plate(IRON_LIGHT, true, pad))
+	var dis := ticket()
+	dis.color = Color(0.62, 0.58, 0.5)
+	dis.ink = Color(0.4, 0.36, 0.3)
+	b.add_theme_stylebox_override("disabled", dis)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+
+static func style_stamp(b: Button, size: int = 22, ink: Color = ENAMEL_RED) -> void:
+	## A price stamped on a ledger card, in ink.
+	no_keyboard(b)
+	var seed := b.get_instance_id() % 89
+	b.add_theme_font_override("font", bold_font())
+	b.add_theme_font_size_override("font_size", size)
+	b.add_theme_constant_override("icon_max_width", int(size * 1.3))
+	b.add_theme_constant_override("h_separation", 8)
+	b.add_theme_constant_override("outline_size", 0)
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(st, ink.darkened(0.1))
+	b.add_theme_color_override("font_disabled_color", Color(0.5, 0.45, 0.38))
+	b.add_theme_stylebox_override("normal", stamp(seed, ink))
+	var hv := stamp(seed, ink.lightened(0.1))
+	b.add_theme_stylebox_override("hover", hv)
+	var pr := stamp(seed, ink)
+	pr.pressed = true
+	b.add_theme_stylebox_override("pressed", pr)
+	b.add_theme_stylebox_override("hover_pressed", pr)
+	b.add_theme_stylebox_override("disabled", stamp(seed, Color(0.5, 0.45, 0.38)))
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 

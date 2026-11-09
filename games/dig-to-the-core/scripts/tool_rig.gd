@@ -2,23 +2,27 @@ class_name ToolRig
 extends Node3D
 ## The tool in your hands and everything it throws about.
 ##
-## Sits on the camera. Builds a low-poly model of the current tool (shovel,
-## pickaxe, jackhammer, drill, dynamite, laser drill, earth-borer) and
-## animates it: shovels and pickaxes swing in time with their strikes (the
-## blow lands exactly when the strike happens), the jackhammer shakes, the
-## drill spins, the laser fires a beam. Where a strike lands: rock chips in
+## Sits on the camera. Shows the current tool (shovel, pickaxe, jackhammer,
+## drill, dynamite, laser drill, earth-borer) with the gloved hands holding it,
+## as composed in Blender (art/blender/tools.py: each model is framed in
+## camera space, so it goes at the eye as it is). Only the viewmodel camera
+## draws it (Player.VIEWMODEL_LAYER), so it never clips into the rock. It
+## animates: shovels and pickaxes swing from the shoulder in time with their
+## strikes (the blow lands exactly when the strike happens), the jackhammer
+## shakes, the drill bit spins, the laser fires a beam from its muzzle. Where a strike lands: rock chips in
 ## the rock's own colour, a dust puff, sparks on hard rock, clods of dirt
 ## from the shovel. Dynamite is thrown in an arc and goes off a moment later.
 
 var player: Player
 var _model: Node3D
 var _bit: Node3D            # the part that spins (drill bit, borer head)
+var _muzzle: Node3D         # where the laser beam starts
+var _idle_t := 0.0
 var _shown := -1
 var _shown_skin := "-"
 var _phase := 0.0
 var _vib := 0.0
 var _spin := 0.0
-var _rest := Transform3D()
 var _active := false
 var _hitting := false
 var _rock_color := Color(0.45, 0.32, 0.2)
@@ -35,12 +39,17 @@ var _beam_end: MeshInstance3D
 var _sticks: Array = []     # dynamite in flight: {node, from, to, t, fuse, damage, normal, landed}
 var _hand_stick_t := 0.0
 
-const HOLD := Vector3(0.37, -0.39, -0.7)
-const SCALE := 0.58
+# Where each tool swings from (camera space, Godot axes): the hands, so the
+# working end rises and falls and nothing swings back into your face.
+const PIVOTS := {
+	"shovel": Vector3(0.4, -0.24, -0.3),
+	"pickaxe": Vector3(0.26, -0.25, -0.32),
+	"dynamite": Vector3(0.3, -0.45, -0.3),
+}
 
 
 func _ready() -> void:
-	position = HOLD
+	position = Vector3.ZERO
 	_debris = _particles(true, 0.075, 70)
 	_debris.direction = Vector3(0, 1, 0)
 	_debris.spread = 55.0
@@ -91,6 +100,7 @@ func _ready() -> void:
 	_flash.omni_attenuation = 1.6
 	_flash.light_energy = 0.0
 	_flash.top_level = true
+	_flash.layers = 1 | Player.VIEWMODEL_LAYER
 	add_child(_flash)
 	# The laser beam: a thin glowing cylinder stretched to the target.
 	_beam = MeshInstance3D.new()
@@ -139,7 +149,12 @@ func _particles(shaded: bool, size: float, amount: int) -> CPUParticles3D:
 	p.top_level = true
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
+	# Nothing kicked up by the tool may cover the lens: fade out right in front of it.
+	mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+	mat.distance_fade_min_distance = 0.45
+	mat.distance_fade_max_distance = 1.3
 	if shaded:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		var box := BoxMesh.new()
 		box.size = Vector3(size, size * 0.8, size * 0.9)
 		mat.roughness = 0.9
@@ -204,29 +219,35 @@ func update(delta: float, active: bool, phase: float, target: Dictionary) -> voi
 	# Swing tools follow the strike clock; the rest settle to their rest pose.
 	_phase = phase if active else move_toward(_phase, 0.0, delta * 2.5)
 	_vib = move_toward(_vib, 1.0 if active else 0.0, delta * 8.0)
-	var xf := _rest
+	var xf := Transform3D()
+	_idle_t += delta
+	var pv: Vector3 = PIVOTS.get(k, Vector3(0.15, -0.4, 0.0))
 	match k:
 		"shovel":
+			# Wind up: pull back and lift; the blow: a thrust forward and down.
 			var a := _cock(_phase)
-			xf = xf.translated_local(Vector3(0.02 * a, 0.1 * a, 0.2 * a)).rotated_local(Vector3.RIGHT, 0.55 * a)
+			xf = Transform3D(Basis(), Vector3(0.0, 0.03 * a, 0.05 * a - 0.07 * (1.0 - a) * float(active))) * _about(pv, Vector3.RIGHT, 0.26 * a - 0.08 * float(active))
 		"pickaxe":
 			var a := _cock(_phase)
-			xf = xf.translated_local(Vector3(-0.04 * a, 0.14 * a, 0.1 * a)).rotated_local(Vector3.RIGHT, 1.25 * a - 0.15)
+			xf = Transform3D(Basis(), Vector3(0.0, 0.05 * a, 0.03 * a)) * _about(pv, Vector3.RIGHT, 0.55 * a - 0.2 * float(active))
 		"jackhammer", "borer":
-			var j := 0.012 if k == "jackhammer" else 0.008
+			var j := 0.009 if k == "jackhammer" else 0.006
 			if _vib > 0.0:
-				xf = xf.translated_local(Vector3(randf_range(-j, j), randf_range(-j, j), randf_range(-j, j) * 2.0 - 0.02) * _vib)
+				xf = xf.translated_local(Vector3(randf_range(-j, j), randf_range(-j, j), randf_range(-j, j) * 2.0 + 0.012) * _vib)
 		"drill", "laser":
 			if _vib > 0.0:
-				xf = xf.translated_local(Vector3(randf_range(-0.004, 0.004), randf_range(-0.004, 0.004), -0.02) * _vib)
+				xf = xf.translated_local(Vector3(randf_range(-0.003, 0.003), randf_range(-0.003, 0.003), 0.012) * _vib)
 		"dynamite":
 			_hand_stick_t = maxf(0.0, _hand_stick_t - delta)
 			var a := _cock(_phase)
-			xf = xf.translated_local(Vector3(0.0, 0.1 * a, 0.12 * a)).rotated_local(Vector3.RIGHT, 0.7 * a)
+			xf = Transform3D(Basis(), Vector3(0.0, 0.05 * a, 0.08 * a)) * _about(pv, Vector3.RIGHT, 0.4 * a)
 			if _model != null:
 				_model.visible = _hand_stick_t <= 0.0
+	# A slow breath when nothing's happening.
+	var calm := 1.0 - _vib
+	xf = xf.translated(Vector3(0.0, sin(_idle_t * 1.4) * 0.004 * calm, 0.0))
 	if _model != null:
-		_model.transform = xf.scaled_local(Vector3.ONE * SCALE)
+		_model.transform = xf
 	if _bit != null:
 		var spin_to := 30.0 if active else 0.0
 		_spin = move_toward(_spin, spin_to, delta * 40.0)
@@ -241,6 +262,11 @@ func update(delta: float, active: bool, phase: float, target: Dictionary) -> voi
 	_update_sticks(delta)
 	_flash.light_energy = move_toward(_flash.light_energy, 0.0, delta * 9.0)
 	_update_sound(k, active, _hitting)
+
+
+static func _about(pivot: Vector3, axis: Vector3, angle: float) -> Transform3D:
+	## A turn of `angle` about `axis` through `pivot` (camera space).
+	return Transform3D(Basis(), pivot) * Transform3D(Basis(axis, angle), Vector3.ZERO) * Transform3D(Basis(), -pivot)
 
 
 static func _cock(ph: float) -> float:
@@ -400,7 +426,7 @@ func _update_beam(k: String, active: bool, target: Dictionary) -> void:
 	_beam_end.visible = on and target.hit
 	if not on:
 		return
-	var from := global_transform * Vector3(0.0, 0.03, -0.42)
+	var from := _muzzle.global_position if _muzzle != null else global_transform * Vector3(0.12, -0.12, -0.6)
 	var to: Vector3 = target.pos if target.hit else player.eye_pos() + player.aim_dir() * GameState.tool_reach()
 	var mid := (from + to) * 0.5
 	var len := from.distance_to(to)
@@ -447,19 +473,8 @@ func _strike_sound(k: String, r: Dictionary, at: Vector3) -> void:
 # =====================================================================================
 # Models (Blender: art/blender/tools.py)
 # =====================================================================================
-const REST := {
-	"shovel": [Vector3(-0.35, 0.15, 0.1), Vector3(0.0, 0.0, 0.05)],
-	"pickaxe": [Vector3(-0.3, 0.3, -0.45), Vector3(0.04, -0.02, 0.08)],
-	"jackhammer": [Vector3(-0.05, 0.08, 0.0), Vector3(-0.04, 0.02, 0.0)],
-	"drill": [Vector3(-0.05, 0.05, 0.0), Vector3(0.0, 0.0, 0.0)],
-	"dynamite": [Vector3(-0.6, 0.2, 0.3), Vector3(0.02, 0.0, -0.1)],
-	"laser": [Vector3(-0.03, 0.04, 0.0), Vector3(0.0, 0.0, 0.0)],
-	"borer": [Vector3(-0.06, 0.08, 0.0), Vector3(-0.05, 0.02, 0.05)],
-}
-
-
 func _stick_mesh() -> Node3D:
-	return Models.instance("tool_dynamite")
+	return Models.instance("dynamite_stick")
 
 
 func _skin_material() -> Material:
@@ -485,9 +500,14 @@ func _skin_material() -> Material:
 
 
 func _apply_skin(n: Node, m: Material) -> void:
+	## The skin's material on the tool (never on the gloves), and every part on
+	## the viewmodel layer, so only the viewmodel camera draws it.
 	if n is MeshInstance3D:
-		(n as MeshInstance3D).material_override = m
-		(n as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var mi := n as MeshInstance3D
+		if not str(mi.name).begins_with("Glove") and not str(mi.get_parent().name).begins_with("Glove"):
+			mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.layers = Player.VIEWMODEL_LAYER
 	for c in n.get_children():
 		_apply_skin(c, m)
 
@@ -501,7 +521,6 @@ func _build_model() -> void:
 	_model = Models.instance("tool_" + k)
 	add_child(_model)
 	_bit = Models.find(_model, "Bit")
+	_muzzle = Models.find(_model, "Muzzle")
 	_apply_skin(_model, _skin_material())
-	var r: Array = REST.get(k, [Vector3.ZERO, Vector3.ZERO])
-	_rest = Transform3D(Basis.from_euler(r[0]), r[1])
-	_model.transform = _rest.scaled_local(Vector3.ONE * SCALE)
+	_model.transform = Transform3D()

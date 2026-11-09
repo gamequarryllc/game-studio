@@ -17,25 +17,25 @@ const WORLD_SEED := 20261109
 const ZONE_DEPTH := 24.0
 const ZONES = [
 	{"name": "Topsoil", "hp": 2.5, "worth": 1.0, "mats": [0, 1], "ores": [[1, 0.09]], "caves": 0,
-		"fog": Color(0.16, 0.11, 0.07), "band": Color(0.45, 0.3, 0.17)},
+		"fog": Color(0.15, 0.1, 0.06), "band": Color(0.45, 0.3, 0.17)},
 	{"name": "Clay", "hp": 15.0, "worth": 0.7, "mats": [2, 3], "ores": [[2, 0.09], [1, 0.05]], "caves": 1,
-		"fog": Color(0.2, 0.1, 0.06), "band": Color(0.72, 0.38, 0.2)},
+		"fog": Color(0.165, 0.086, 0.063), "band": Color(0.72, 0.38, 0.2)},
 	{"name": "Bedrock", "hp": 55.0, "worth": 0.92, "mats": [4, 5], "ores": [[3, 0.08], [4, 0.05]], "caves": 2,
-		"fog": Color(0.1, 0.1, 0.11), "band": Color(0.47, 0.46, 0.46)},
+		"fog": Color(0.08, 0.085, 0.095), "band": Color(0.47, 0.46, 0.46)},
 	{"name": "Fossil Bed", "hp": 220.0, "worth": 1.0, "mats": [6, 7], "ores": [[11, 0.08], [5, 0.05]], "caves": 2,
-		"fog": Color(0.2, 0.16, 0.1), "band": Color(0.8, 0.68, 0.46)},
+		"fog": Color(0.17, 0.135, 0.09), "band": Color(0.8, 0.68, 0.46)},
 	{"name": "Dinosaur Graveyard", "hp": 900.0, "worth": 1.0, "mats": [8, 9], "ores": [[11, 0.1], [5, 0.06]], "caves": 2,
-		"fog": Color(0.17, 0.12, 0.06), "band": Color(0.62, 0.46, 0.25)},
+		"fog": Color(0.15, 0.1, 0.05), "band": Color(0.62, 0.46, 0.25)},
 	{"name": "Crystal Caves", "hp": 3600.0, "worth": 1.05, "mats": [10, 11], "ores": [[6, 0.1], [7, 0.07]], "caves": 5,
-		"fog": Color(0.09, 0.06, 0.15), "band": Color(0.42, 0.3, 0.62)},
+		"fog": Color(0.08, 0.05, 0.14), "band": Color(0.42, 0.3, 0.62)},
 	{"name": "Lava Lakes", "hp": 14000.0, "worth": 1.05, "mats": [12, 13], "ores": [[8, 0.08], [5, 0.05]], "caves": 3,
-		"fog": Color(0.2, 0.06, 0.02), "band": Color(0.55, 0.16, 0.06)},
+		"fog": Color(0.18, 0.04, 0.015), "band": Color(0.55, 0.16, 0.06)},
 	{"name": "Mantle", "hp": 55000.0, "worth": 1.05, "mats": [14, 15], "ores": [[9, 0.08], [8, 0.05]], "caves": 2,
-		"fog": Color(0.24, 0.08, 0.03), "band": Color(0.78, 0.32, 0.1)},
+		"fog": Color(0.2, 0.07, 0.025), "band": Color(0.78, 0.32, 0.1)},
 	{"name": "Outer Core", "hp": 210000.0, "worth": 1.05, "mats": [16, 17], "ores": [[10, 0.07], [5, 0.06]], "caves": 1,
-		"fog": Color(0.3, 0.16, 0.04), "band": Color(0.93, 0.58, 0.18)},
+		"fog": Color(0.24, 0.12, 0.03), "band": Color(0.93, 0.58, 0.18)},
 	{"name": "Inner Core", "hp": 800000.0, "worth": 1.1, "mats": [18, 19], "ores": [[10, 0.1]], "caves": 0,
-		"fog": Color(0.34, 0.3, 0.2), "band": Color(1.0, 0.92, 0.66)},
+		"fog": Color(0.26, 0.21, 0.12), "band": Color(1.0, 0.92, 0.66)},
 ]
 
 # Rock. hp_mult: the pocket rock is a bit harder than the main one.
@@ -54,13 +54,13 @@ const MATERIALS = [
 	{"name": "Crystal Rock", "color": Color(0.3, 0.25, 0.42), "hp_mult": 1.0},
 	{"name": "Geode Shell", "color": Color(0.5, 0.38, 0.62), "hp_mult": 1.25},
 	{"name": "Basalt", "color": Color(0.16, 0.14, 0.14), "hp_mult": 1.0},
-	{"name": "Magma Rock", "color": Color(0.7, 0.2, 0.05), "hp_mult": 1.2, "glow": 0.55},
+	{"name": "Magma Rock", "color": Color(0.7, 0.2, 0.05), "hp_mult": 1.2, "glow": 0.45},
 	{"name": "Mantle Rock", "color": Color(0.62, 0.27, 0.1), "hp_mult": 1.0, "glow": 0.15},
 	{"name": "Peridotite", "color": Color(0.46, 0.52, 0.18), "hp_mult": 1.2},
-	{"name": "Liquid Iron", "color": Color(0.88, 0.52, 0.16), "hp_mult": 1.0, "glow": 0.5},
-	{"name": "Molten Nickel", "color": Color(0.95, 0.66, 0.3), "hp_mult": 1.2, "glow": 0.6},
-	{"name": "Core Iron", "color": Color(1.0, 0.88, 0.6), "hp_mult": 1.0, "glow": 0.75},
-	{"name": "Core Crystal", "color": Color(1.0, 0.98, 0.88), "hp_mult": 1.2, "glow": 0.9},
+	{"name": "Liquid Iron", "color": Color(0.88, 0.52, 0.16), "hp_mult": 1.0, "glow": 0.32},
+	{"name": "Molten Nickel", "color": Color(0.95, 0.66, 0.3), "hp_mult": 1.2, "glow": 0.4},
+	{"name": "Core Iron", "color": Color(0.95, 0.8, 0.5), "hp_mult": 1.0, "glow": 0.38},
+	{"name": "Core Crystal", "color": Color(0.97, 0.92, 0.78), "hp_mult": 1.2, "glow": 0.48},
 ]
 const WALL_NAME := "Shaft Wall"   # the edge of the dig site: too hard for any tool
 
@@ -134,12 +134,14 @@ const HELPERS = [
 const MAX_VISIBLE_HELPERS := 6    # per type; more helpers just dig harder
 
 # Rarity of finds: a bigger reveal and its colour on the card and in the collection.
+# Colours are tints of the art bible palette: worn cream, verdigris, hoist
+# brass, signal red, lamp amber.
 const RARITIES = [
-	{"name": "Common", "color": Color(0.72, 0.7, 0.66)},
-	{"name": "Uncommon", "color": Color(0.45, 0.8, 0.38)},
-	{"name": "Rare", "color": Color(0.35, 0.62, 1.0)},
-	{"name": "Epic", "color": Color(0.74, 0.45, 1.0)},
-	{"name": "Legendary", "color": Color(1.0, 0.7, 0.18)},
+	{"name": "Common", "color": Color(0.72, 0.68, 0.6)},
+	{"name": "Uncommon", "color": Color(0.36, 0.68, 0.6)},
+	{"name": "Rare", "color": Color(0.82, 0.6, 0.3)},
+	{"name": "Epic", "color": Color(0.82, 0.32, 0.26)},
+	{"name": "Legendary", "color": Color(0.95, 0.71, 0.27)},
 ]
 
 # Things buried in each zone, at a fixed spot (the same every game, see
@@ -168,9 +170,9 @@ const FINDS = [
 const LIFT_RANGE := 2.6           # how close you need to be to the lift (or the lift stop) to ride it
 const LIFT_STOP_STEP := 2.5       # the lift stop moves down once you stand this much deeper
 const LIFT_MIN_DEPTH := 4.0       # the lift won't take you down before you've dug this far
-const LIFT_RIDE_MIN := 1.6        # seconds
-const LIFT_RIDE_PER_M := 0.012    # extra seconds per metre ridden (capped below)
-const LIFT_RIDE_MAX := 3.4
+const LIFT_RIDE_MIN := 1.8        # seconds
+const LIFT_RIDE_PER_M := 0.014    # extra seconds per metre ridden (capped below)
+const LIFT_RIDE_MAX := 4.2
 
 # --- Ads and purchases ------------------------------------------------------------------
 # Nothing digs while the game is closed: it's played in sittings.

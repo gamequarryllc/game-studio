@@ -149,7 +149,8 @@ func _run() -> void:
 
 	# --- The 2x boost doubles income: dig a tunnel into the clay for the
 	# same time with and without it (the rock is put back in between).
-	_carve(field, Vector3(-4.0, -30.0, -4.0), 2.2)
+	# (Away from the Clay's landmark cave, which is on the west side.)
+	_carve(field, Vector3(5.0, -30.0, -5.0), 2.2)
 	field.flush()
 	var zone = field.zones[1]
 	var saved = zone.f.duplicate()
@@ -159,8 +160,8 @@ func _run() -> void:
 	var runs := []
 	for boosted in [false, true]:
 		zone.f = saved.duplicate()
-		player.position = Vector3(-3.0, -31.6, -4.0)
-		player.set_view(-PI / 2.0, -0.1)   # facing +x, towards the middle of the site
+		player.position = Vector3(4.0, -31.6, -5.0)
+		player.set_view(PI / 2.0, -0.1)   # facing -x, towards the middle of the site
 		player._update_tool(0.0)
 		if boosted:
 			hud.watch_ad("boost")
@@ -173,7 +174,9 @@ func _run() -> void:
 	check(runs[1][1] >= runs[0][1] * 1.8, "the boost swings twice as fast: %d vs %d strikes in 8 s" % [runs[1][1], runs[0][1]])
 	# Income follows the strikes, give or take the rock (the boosted run tunnels
 	# twice as far, into different ore and pockets).
-	check(runs[0][0] > 0.0 and ratio > 1.5 and ratio < 2.5, "the boost doubles income (give or take the rock): %.1f vs %.1f (x%.2f)" % [runs[1][0], runs[0][0], ratio])
+	var per: float = (runs[1][0] / maxf(runs[1][1], 1.0)) / maxf(runs[0][0] / maxf(runs[0][1], 1.0), 0.001)
+	check(runs[0][0] > 0.0 and ratio > 1.4 and ratio < 2.6 and per > 0.65 and per < 1.45,
+		"the boost doubles income, give or take the rock: %.1f vs %.1f (x%.2f, x%.2f a strike)" % [runs[1][0], runs[0][0], ratio, per])
 	hud.watch_ad("boost")
 	await _frames(3)
 	hud.watch_ad("boost")
@@ -196,8 +199,8 @@ func _run() -> void:
 	await _frames(2)
 	check(hud.shop != null, "the shop panel opens")
 	var money_before: float = gs.money
-	var row = hud.shop._list.get_child(1)
-	var buy_button = row.get_child(0).get_child(2)
+	var buy_button = hud.shop.button_for("pickaxe")
+	check(buy_button != null and not buy_button.disabled, "the pickaxe's price is stamped and payable")
 	buy_button.pressed.emit()
 	await _frames(2)
 	check(gs.tool_index == 1, "bought the %s" % gs.tool_def().name)
@@ -230,7 +233,7 @@ func _run() -> void:
 	check(gs.money >= before + gs.find_value(f) * 0.99, "the find paid out")
 
 	# --- Helpers: a mole digs on its own at the lift stop.
-	gs.lift_stop = Vector3(-4.0, field.floor_below(Vector3(-4.0, -30.0, -4.0), 10.0), -4.0)
+	gs.lift_stop = Vector3(5.0, field.floor_below(Vector3(5.0, -30.0, -5.0), 10.0), -5.0)
 	gs.grant_money(1000.0)
 	gs.buy_helper(0)
 	gs.buy_helper(0)
@@ -325,6 +328,7 @@ func _run() -> void:
 	check(world2.player.position.distance_to(Vector3(2.5, -13.0, 2.5)) < 1.5, "you're back where you saved (%s)" % world2.player.position)
 	check(not world2.player.collides(world2.player.position + Vector3(0, 0.05, 0)), "and not stuck in the rock")
 
-	gs.wipe_save()
+	gs.reset_state(false)   # purchases too: nothing from a test may leak into the next run
+	gs.save_game()
 	print("SMOKE TEST " + ("PASSED" if ok else "FAILED"))
 	quit(0 if ok else 1)

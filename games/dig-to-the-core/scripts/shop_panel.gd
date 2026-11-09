@@ -1,8 +1,11 @@
 class_name ShopPanel
 extends Control
-## The supply shack's counter: a riveted iron panel with tabs for tools,
-## upgrades, the crew, your collection of finds, and bonuses (free rewards
-## for a short ad, and the purchases). Opened from the shack at the top.
+## The supply shack's counter: a blackened iron panel under the brass title
+## plate, manila file-folder tabs (each cut to its label, so they're uneven)
+## for tools, upgrades, the crew, your collection of finds, and bonuses (free
+## rewards for a short ad, and the purchases). Items are paper ledger cards
+## with their price stamped in red ink; ads are cream tickets. Opened from the
+## shack at the top. `buttons` maps an item id to its buy button (bots, tests).
 
 signal closed
 signal bought(kind: String)
@@ -19,6 +22,8 @@ var _refreshers: Array = []
 var _refresh_t := 0.0
 var _banner: Control
 var _panel: PanelContainer
+var _banner_button: Button
+var buttons := {}                 # item id ("pickaxe", "power", "mole", "ad_cash", product id) -> Button
 
 
 func _ready() -> void:
@@ -66,16 +71,22 @@ func _ready() -> void:
 	UiTheme.style_button(close, UiTheme.ENAMEL_RED, 28)
 	close.pressed.connect(close_shop)
 	top.add_child(close)
-	# Tabs.
+	# Tabs: manila folder tabs, each as wide as its label (so they're uneven),
+	# set slightly apart and not quite in line.
 	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 8)
+	tabs.add_theme_constant_override("separation", 6)
+	tabs.alignment = BoxContainer.ALIGNMENT_BEGIN
 	v.add_child(tabs)
-	for t in TABS:
+	var lead := Control.new()
+	lead.custom_minimum_size = Vector2(14, 0)
+	tabs.add_child(lead)
+	for i in TABS.size():
+		var t: Array = TABS[i]
 		var b := Button.new()
 		b.text = t[1]
 		b.icon = UiTheme.icon(t[2])
-		b.custom_minimum_size = Vector2(0, 52)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.custom_minimum_size = Vector2(0, 50)
+		b.size_flags_vertical = Control.SIZE_SHRINK_END
 		b.pressed.connect(func():
 			Sound.play("click", -6.0)
 			show_tab(t[0]))
@@ -125,13 +136,41 @@ func _refresh() -> void:
 	_banner.visible = not GameState.owns_remove_ads
 
 
+func _style_tab(b: Button, active: bool, i: int) -> void:
+	UiTheme.no_keyboard(b)
+	b.add_theme_font_override("font", UiTheme.bold_font())
+	b.add_theme_font_size_override("font_size", 20)
+	b.add_theme_constant_override("icon_max_width", 28)
+	b.add_theme_constant_override("h_separation", 8)
+	b.add_theme_constant_override("outline_size", 0)
+	for st in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(st, UiTheme.INK if active else UiTheme.INK.lightened(0.15))
+	# The active tab stands taller and lighter; the others sit lower, in manila.
+	var lift := 8 if active else 2 + (i % 3) * 2
+	var pad := Vector4(18 + (i * 5) % 9, lift, 20 + (i * 3) % 7, 6)
+	var st := UiTheme.paper(pad, 40 + i, false, UiTheme.PAPER if active else UiTheme.MANILA.darkened(0.05 * (i % 2)))
+	st.shadow = Color(0, 0, 0, 0.0 if active else 0.25)
+	for key in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		b.add_theme_stylebox_override(key, st)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+
+func button_for(id: String) -> Button:
+	## The buy (or watch) button for an item on the current tab, or null.
+	var b: Button = buttons.get(id)
+	return b if b != null and is_instance_valid(b) else null
+
+
 func show_tab(t: String) -> void:
 	tab = t
+	var i := 0
 	for k in _tab_buttons:
-		UiTheme.style_button(_tab_buttons[k], UiTheme.BRASS if k == t else UiTheme.IRON_LIGHT, 21)
+		_style_tab(_tab_buttons[k], k == t, i)
+		i += 1
 	for c in _list.get_children():
 		c.queue_free()
 	_refreshers.clear()
+	buttons.clear()
 	match t:
 		"tools":
 			_build_tools()
@@ -157,44 +196,53 @@ func _icon(name: String, size: float) -> TextureRect:
 	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return t
 
-func _row(icon: String, title: String, desc: String, tint: Color = UiTheme.IRON_LIGHT) -> Dictionary:
+func _row(icon: String, title: String, desc: String, tint: Color = UiTheme.PAPER) -> Dictionary:
+	## A ledger card: the item's picture in the margin, its name and notes in
+	## ink, the price stamped on the right.
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiTheme.plate(tint, true, Vector4(18, 10, 14, 10)))
+	p.add_theme_stylebox_override("panel", UiTheme.paper(Vector4(14, 8, 16, 8), _list.get_child_count() * 7 + title.length(), true, tint))
 	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 16)
+	h.add_theme_constant_override("separation", 18)
 	p.add_child(h)
-	var ic := _icon(icon, 64)
+	var ic := _icon(icon, 62)
 	h.add_child(ic)
 	var v := VBoxContainer.new()
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_theme_constant_override("separation", 0)
 	h.add_child(v)
-	var tl := UiTheme.label(title, 25, UiTheme.CREAM, 5)
+	var tl := UiTheme.label(title, 24, UiTheme.INK, 0)
 	v.add_child(tl)
-	var dl := UiTheme.label(desc, 17, Color(0.9, 0.84, 0.72), 3, false)
+	var dl := UiTheme.label(desc, 17, UiTheme.INK.lightened(0.22), 0, false)
 	dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(dl)
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(200, 62)
+	b.custom_minimum_size = Vector2(190, 58)
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	UiTheme.style_button(b, UiTheme.BRASS, 22)
+	UiTheme.style_stamp(b, 22)
 	h.add_child(b)
 	_list.add_child(p)
 	return {"panel": p, "title": tl, "desc": dl, "button": b, "icon": ic}
 
 
 func _section(text: String) -> void:
-	var l := UiTheme.label(text, 20, UiTheme.BRASS_LIGHT, 5)
+	var l := UiTheme.label(text, 22, UiTheme.BRASS_LIGHT, 4)
+	UiTheme.sign_text(l, 22, UiTheme.BRASS_LIGHT, 4)
 	_list.add_child(l)
 
 
 func _set_buy(b: Button, cost: float, ok_text: String = "") -> void:
+	## The price, stamped in red when you can pay it, in grey pencil when you can't.
 	var afford := GameState.money >= cost
 	b.text = ok_text if ok_text != "" else Fmt.num(cost)
 	b.icon = null if ok_text != "" else UiTheme.icon("coin")
 	b.disabled = not afford
-	UiTheme.style_button(b, UiTheme.LAMP_GREEN.darkened(0.15) if afford else UiTheme.IRON_LIGHT, 22)
+
+
+func _set_owned(b: Button, text: String) -> void:
+	b.text = text
+	b.icon = UiTheme.icon("check")
+	b.disabled = true
 
 
 func _fail_sound() -> void:
@@ -220,47 +268,46 @@ func _build_tools() -> void:
 			var stats := "Power %s · %s hits a second · %.1f m wide" % [Fmt.num(float(t.damage)), Fmt.num(float(t.rate)), float(t.radius) * 2.0]
 			(r.desc as Label).text = "%s\n%s" % [t.desc, stats]
 			if idx <= GameState.tool_index:
-				b.text = "In hand" if idx == GameState.tool_index else "Owned"
-				b.icon = UiTheme.icon("check")
-				b.disabled = true
-				UiTheme.style_button(b, UiTheme.IRON_LIGHT, 22)
+				_set_owned(b, "In hand" if idx == GameState.tool_index else "Owned")
 			elif idx == GameState.next_tool_index():
 				_set_buy(b, float(t.cost))
 			else:
 				b.text = Fmt.num(float(t.cost))
 				b.icon = UiTheme.icon("lock")
-				b.disabled = true
-				UiTheme.style_button(b, UiTheme.IRON, 20))
+				b.disabled = true)
+		buttons[str(t.icon)] = b
 		# Short for the next tool: the free cash ad and the cash packs, right here.
 		if i == GameState.next_tool_index() and GameState.money < float(t.cost):
 			_build_short_strip(float(t.cost))
 
 
 func _build_short_strip(cost: float) -> void:
+	## Short for the next tool: a manila note pinned under it.
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiTheme.screen(Color(0.13, 0.09, 0.05, 1.0), 12.0))
+	p.add_theme_stylebox_override("panel", UiTheme.paper(Vector4(18, 6, 14, 6), 77, false, UiTheme.MANILA))
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 10)
+	h.add_theme_constant_override("separation", 12)
 	p.add_child(h)
-	var l := UiTheme.label("%s short." % Fmt.num(cost - GameState.money), 19, UiTheme.AMBER, 4)
+	var l := UiTheme.label("%s short." % Fmt.num(cost - GameState.money), 20, UiTheme.INK, 0)
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(l)
 	var ad := Button.new()
 	ad.text = "Free +%s" % Fmt.num(GameState.instant_cash_amount())
-	ad.icon = UiTheme.icon("ad")
-	ad.custom_minimum_size = Vector2(0, 50)
-	UiTheme.style_button(ad, Color(0.3, 0.55, 0.75), 18)
+	ad.custom_minimum_size = Vector2(0, 48)
+	UiTheme.style_ticket(ad, 18)
 	ad.pressed.connect(func(): _watch("cash"))
 	h.add_child(ad)
+	buttons["ad_cash_short"] = ad
 	for id in [Monetization.PRODUCT_CASH_SMALL, Monetization.PRODUCT_CASH_MEDIUM]:
 		var b := Button.new()
 		var pk: String = Monetization.PRODUCTS[id].pack
 		b.text = "+%s  %s" % [Fmt.num(GameState.cash_pack_amount(pk)), Monetization.price(id)]
-		b.custom_minimum_size = Vector2(0, 50)
-		UiTheme.style_button(b, UiTheme.COPPER, 18)
+		b.custom_minimum_size = Vector2(0, 48)
+		UiTheme.style_stamp(b, 18, UiTheme.UMBER)
 		var pid: String = id
 		b.pressed.connect(func(): Monetization.buy(pid))
 		h.add_child(b)
+		buttons[pid + "_short"] = b
 	_list.add_child(p)
 
 
@@ -279,11 +326,10 @@ func _build_upgrades() -> void:
 			var lv := int(GameState.upgrade_levels[key])
 			(r.title as Label).text = "%s  ·  Lv %d/%d" % [u.name, lv, int(u.max)]
 			if GameState.upgrade_maxed(key):
-				b.text = "Maxed"
-				b.disabled = true
-				UiTheme.style_button(b, UiTheme.IRON_LIGHT, 22)
+				_set_owned(b, "Maxed")
 			else:
 				_set_buy(b, GameState.upgrade_cost(key)))
+		buttons[key] = b
 
 
 func _build_crew() -> void:
@@ -304,7 +350,8 @@ func _build_crew() -> void:
 			(r.title as Label).text = "%s  ×%d" % [hd.name, n]
 			(r.desc as Label).text = "%s\nDigs %s power/s each%s" % [hd.desc, Fmt.num(float(hd.power)), "" if n == 0 else "  ·  crew total %s/s" % Fmt.num(GameState.helper_power(idx))]
 			_set_buy(b, GameState.helper_cost(idx)))
-	var note := UiTheme.label("The crew digs around the lift stop, even while you're up here shopping.", 17, Color(0.85, 0.8, 0.7), 3, false)
+		buttons[str(hd.key)] = b
+	var note := UiTheme.label("The crew digs around the lift stop, even while you're up here shopping.", 17, UiTheme.CREAM.darkened(0.1), 3, false)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_list.add_child(note)
 
@@ -324,7 +371,7 @@ func _build_finds() -> void:
 			count += 1
 		var rc: Color = Balance.rarity(f).color
 		var p := PanelContainer.new()
-		p.add_theme_stylebox_override("panel", UiTheme.plate(rc.darkened(0.45) if got else UiTheme.IRON_LIGHT, true, Vector4(10, 8, 10, 8)))
+		p.add_theme_stylebox_override("panel", UiTheme.paper(Vector4(10, 8, 10, 8), f * 13, false, UiTheme.PAPER if got else UiTheme.MANILA.darkened(0.25)))
 		p.custom_minimum_size = Vector2(240, 120)
 		p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var v := VBoxContainer.new()
@@ -337,12 +384,12 @@ func _build_finds() -> void:
 			ic.modulate = Color(0.6, 0.55, 0.5, 0.8)
 		v.add_child(ic)
 		var zone_name: String = Balance.ZONES[int(d.zone)].name
-		var nl := UiTheme.label(str(d.name) if got else "Somewhere in the " + zone_name.to_lower(), 17 if got else 15, UiTheme.CREAM if got else UiTheme.DIM, 4)
+		var nl := UiTheme.label(str(d.name) if got else "Somewhere in the " + zone_name.to_lower(), 17 if got else 15, UiTheme.INK if got else UiTheme.INK.lightened(0.3), 0)
 		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		v.add_child(nl)
 		if got:
-			var rl := UiTheme.label("%s · %s" % [Balance.rarity(f).name, Fmt.num(GameState.find_value(f))], 14, rc.lightened(0.3), 3)
+			var rl := UiTheme.label("%s · %s" % [Balance.rarity(f).name, Fmt.num(GameState.find_value(f))], 14, rc.darkened(0.35), 0)
 			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			v.add_child(rl)
 		grid.add_child(p)
@@ -373,9 +420,9 @@ func _build_bonus() -> void:
 			if k == "cash":
 				ok = true
 			b.text = "Watch"
-			b.icon = UiTheme.icon("ad")
-			b.disabled = not ok or Monetization.is_watching()
-			UiTheme.style_button(b, Color(0.3, 0.55, 0.75) if not b.disabled else UiTheme.IRON_LIGHT, 22))
+			b.disabled = not ok or Monetization.is_watching())
+		UiTheme.style_ticket(b, 21)
+		buttons["ad_" + k] = b
 	_section("For sale")
 	_product_row(Monetization.PRODUCT_REMOVE_ADS_2X, "noads", "No more ad breaks, and every tool swings twice as fast. For good.")
 	if not GameState.owns_starter:
@@ -415,6 +462,7 @@ func _build_bonus() -> void:
 	mute.custom_minimum_size = Vector2(0, 52)
 	mute.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	srow.add_child(mute)
+	buttons["mute"] = mute
 	var upd_mute := func():
 		mute.text = "Sound off" if Sound.muted else "Sound on"
 		mute.icon = UiTheme.icon("sound_off" if Sound.muted else "sound_on")
@@ -432,29 +480,29 @@ func _build_bonus() -> void:
 		Monetization.restore()
 		message.emit("Purchases restored"))
 	srow.add_child(restore)
+	buttons["restore"] = restore
 	if OS.has_feature("editor") or OS.has_feature("playtest"):
 		_build_dev()
 
 
 func _product_row(id: String, icon: String, desc: String) -> void:
-	var r := _row(icon, str(Monetization.PRODUCTS[id].title), desc, UiTheme.COPPER.darkened(0.35) if id == Monetization.PRODUCT_REMOVE_ADS_2X else UiTheme.IRON_LIGHT)
+	var r := _row(icon, str(Monetization.PRODUCTS[id].title), desc)
 	var b: Button = r.button
 	b.pressed.connect(func(): Monetization.buy(id))
+	buttons[id] = b
 	_refreshers.append(func():
 		if Monetization.owns(id):
-			b.text = "Owned"
-			b.icon = UiTheme.icon("check")
-			b.disabled = true
-			UiTheme.style_button(b, UiTheme.IRON_LIGHT, 22)
+			_set_owned(b, "Owned")
 		else:
 			b.text = Monetization.price(id)
-			b.disabled = false
-			UiTheme.style_button(b, UiTheme.COPPER, 20))
+			b.icon = null
+			b.disabled = false)
 
 
 func _make_banner() -> Control:
+	## The anchor offer: a signal-red enamel sign with a brass price plate.
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiTheme.plate(UiTheme.COPPER, true, Vector4(20, 8, 12, 8)))
+	p.add_theme_stylebox_override("panel", UiTheme.enamel(UiTheme.ENAMEL_RED, Vector4(20, 8, 12, 8), 19))
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 12)
 	p.add_child(h)
@@ -469,6 +517,7 @@ func _make_banner() -> Control:
 	UiTheme.style_button(b, UiTheme.BRASS, 20)
 	b.pressed.connect(func(): Monetization.buy(Monetization.PRODUCT_REMOVE_ADS_2X))
 	h.add_child(b)
+	_banner_button = b
 	return p
 
 
@@ -493,7 +542,7 @@ func _build_dev() -> void:
 		b.text = text
 		b.custom_minimum_size = Vector2(0, 46)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UiTheme.style_button(b, Color(0.45, 0.38, 0.6) if on else Color(0.3, 0.27, 0.36), 17)
+		UiTheme.style_button(b, UiTheme.UMBER.lightened(0.15) if on else UiTheme.IRON_LIGHT, 17)
 		b.pressed.connect(func():
 			cb.call()
 			show_tab("bonus"))

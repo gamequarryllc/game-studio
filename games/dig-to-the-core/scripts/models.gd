@@ -37,6 +37,31 @@ static func _fix(n: Node) -> void:
 		_fix(c)
 
 
+static var _flat := {}
+
+
+static func flat(c: Color, rough: float = 0.85, metal: float = 0.0, emit: float = 0.0) -> StandardMaterial3D:
+	## A plain palette material for small bits built in code (cables, plates).
+	var key := "%s/%s/%s/%s" % [c, rough, metal, emit]
+	if not _flat.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = c
+		m.roughness = rough
+		m.metallic = metal
+		if emit > 0.0:
+			m.emission_enabled = true
+			m.emission = c
+			m.emission_energy_multiplier = emit
+		_flat[key] = m
+	return _flat[key]
+
+
+static func clear_caches() -> void:
+	_scenes.clear()
+	_fixed.clear()
+	_flat.clear()
+
+
 static func find(n: Node, name: String) -> Node3D:
 	## A named part (a drill's "Bit", a mole's "Claws", the lift's "Sheave").
 	if n.name == name:

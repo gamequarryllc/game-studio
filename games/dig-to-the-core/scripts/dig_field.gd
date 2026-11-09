@@ -43,7 +43,7 @@ const REMESH_BUDGET_USEC := 5000   # per frame
 const GEN_BUDGET_USEC := 3500      # per frame, generating a zone in the background
 const CHUNK_MIN_INTERVAL := 0.08
 const WALL := 255                  # rock type of the shaft wall (outside the site)
-const GRASS := Color(0.34, 0.5, 0.21)
+const GRASS := Color(0.48, 0.55, 0.25)   # olive (the shader paints clumps over it)
 
 var nzones := 10
 var rows := 0
@@ -72,6 +72,9 @@ var _ore_colors: Array = []
 var _ore_glow := PackedFloat32Array()
 var _cell := PackedInt32Array()
 var _self_glow := 0.0              # set by _vertex_color: the rock's own glow (UV.x)
+var _is_grass := false             # set by _vertex_color: this vertex is the field's grass (UV.y)
+var _is_wall := false              # set by _vertex_color: this vertex is on the shaft wall
+var _vert_ore := 0                 # set by _vertex_color: the ore at this vertex (for nuggets)
 const B := CH + 2                  # block size: one point either side
 const BC := CH + 1                 # cells per axis in a block
 
@@ -91,6 +94,7 @@ class Zone:
 	var finds := {}                # point -> find, for finds still buried here
 	var changed := false           # dug since its save string was made
 	var dug_points := 0
+	var landmark: Node3D           # this layer's set piece (freed with the zone)
 
 	func dig(center: Vector3, r2: float, per: float, i0: int, i1: int, l0: int, l1: int, k0: int, k1: int,
 			out: Dictionary) -> void:
@@ -210,9 +214,7 @@ func setup(p_seed: int) -> void:
 		_ore_colors.append(Balance.ORES[oi].color)
 		_ore_glow[oi] = float(Balance.ORES[oi].glow)
 	_cell.resize(BC * BC * BC)
-	material = ShaderMaterial.new()
-	material.shader = load("res://shaders/rock.gdshader")
-	material.set_shader_parameter("detail_tex", detail_texture(seed_value))
+	material = make_rock_material()
 
 
 func zone_of_y(y: float) -> int:
@@ -438,6 +440,8 @@ func _begin_zone(z: int) -> Zone:
 		var rad := Vector3(rng.randf_range(1.6, 3.2), rng.randf_range(1.2, 2.2), rng.randf_range(1.6, 3.2))
 		var ctr := Vector3(rng.randf_range(-5.0, 5.0), rng.randf_range(zone_floor(z) + 4.0, zone_top(z) - 5.0), rng.randf_range(-5.0, 5.0))
 		_caves.append([ctr, rad])
+	if LANDMARKS.has(z):
+		_caves.append(landmark_cave(z))
 	return zone
 
 
@@ -472,6 +476,7 @@ func _generate_step(deadline: int) -> void:
 func _finish_zone(zone: Zone) -> void:
 	var z := zone.index
 	_gen = null
+	_protect_finds(zone)
 	if saves[z] != "":
 		if not _unpack(zone, saves[z]):
 			push_warning("Zone %d: save didn't match, starting it fresh" % z)
@@ -494,7 +499,85 @@ func _finish_zone(zone: Zone) -> void:
 				_dirty[Vector3i(cx, (nzones - 1 - z) * CROWS + cy, cz)] = true
 	_dirty_zone_edge(z - 1, false)
 	_dirty_zone_edge(z + 1, true)
+	_place_landmark(zone)
 	zone_ready.emit(z)
+
+
+# =====================================================================================
+# Landmarks: one set piece per layer, in a cave of its own near the middle
+# =====================================================================================
+const LANDMARKS := {
+	1: {"model": "old_timbers", "scale": 1.0, "light": Color(1.0, 0.7, 0.36), "energy": 0.9, "at": Vector3(0.2, 1.5, 0.0)},
+	2: {"model": "mine_cart", "scale": 1.0, "light": Color(1.0, 0.74, 0.4), "energy": 0.8, "at": Vector3(0.3, 1.0, -0.5)},
+	3: {"model": "ribcage", "scale": 0.6},
+	4: {"model": "ribcage", "scale": 1.0},
+	5: {"model": "crystal_big", "scale": 1.3, "light": Color(0.42, 0.85, 0.74), "energy": 1.4},
+	6: {"model": "lava_pool", "scale": 1.1, "light": Color(1.0, 0.32, 0.1), "energy": 3.2},
+	7: {"model": "basalt", "scale": 1.0, "light": Color(1.0, 0.42, 0.14), "energy": 2.2},
+	8: {"model": "lava_pool", "scale": 1.0, "light": Color(1.0, 0.62, 0.22), "energy": 2.6},
+	9: {"model": "core_spires", "scale": 1.0, "light": Color(1.0, 0.84, 0.5), "energy": 1.5},
+}
+
+
+func landmark_cave(z: int) -> Array:
+	## [centre, radii] of the cave a layer's landmark sits in: about 3 m from
+	## the middle of the site, so a shaft down the middle breaks into it.
+	var a := float(z) * 2.39996 + 0.7
+	var mid := (zone_top(z) + zone_floor(z)) * 0.5 + 1.5
+	return [Vector3(cos(a) * 3.3, mid, sin(a) * 3.3), Vector3(2.5, 1.8, 2.5)]
+
+
+func _place_landmark(zone: Zone) -> void:
+	var z := zone.index
+	if not LANDMARKS.has(z):
+		return
+	var d: Dictionary = LANDMARKS[z]
+	var cave: Array = landmark_cave(z)
+	var c: Vector3 = cave[0]
+	var n := Models.instance(str(d.model))
+	n.name = "Landmark"
+	n.scale = Vector3.ONE * float(d.get("scale", 1.0))
+	n.rotation.y = float(z) * 1.3
+	zone.node.add_child(n)
+	n.position = Vector3(c.x, floor_below(c, 6.0) - 0.05, c.z)
+	if d.has("light"):
+		var l := OmniLight3D.new()
+		l.light_color = d.light
+		l.light_energy = float(d.energy)
+		l.omni_range = 8.0
+		l.omni_attenuation = 1.4
+		l.position = (d.get("at", Vector3(0, 1.1, 0)) as Vector3) / n.scale
+		l.layers = 1 | Player.VIEWMODEL_LAYER
+		n.add_child(l)
+	zone.landmark = n
+
+
+func settle_landmarks() -> void:
+	## A landmark whose floor was dug out from under it drops to the new floor.
+	for zone in zones:
+		if zone == null or zone.landmark == null:
+			continue
+		var n: Node3D = zone.landmark
+		if not solid_at(n.position + Vector3(0, -0.25, 0)):
+			n.position.y = floor_below(n.position, 12.0) - 0.05
+
+
+func _protect_finds(zone: Zone) -> void:
+	## Caves never hollow out a find: the rock right round one is kept, so it
+	## can always be dug out (it shows as a lump if a cave runs past it).
+	for fi in Balance.finds_in(zone.index):
+		if found[fi]:
+			continue
+		var p := find_spot(fi)
+		var q := (p - Vector3(X0, zone.y0, X0)) / RES
+		var r := 1.3
+		for l in range(maxi(0, floori(q.y - r)), mini(ZN - 1, ceili(q.y + r)) + 1):
+			for k in range(maxi(0, floori(q.z - r)), mini(NX - 1, ceili(q.z + r)) + 1):
+				for i in range(maxi(0, floori(q.x - r)), mini(NX - 1, ceili(q.x + r)) + 1):
+					var dd := Vector3(i, l, k).distance_to(q)
+					if dd <= r:
+						var s := i + NX * k + PLANE * l
+						zone.f[s] = maxf(zone.f[s], clampf(1.0 - (dd - 0.6) * 0.5, 0.0, 1.0))
 
 
 func _dirty_zone_edge(z: int, top: bool) -> void:
@@ -776,6 +859,144 @@ func dug_volume() -> float:
 
 
 # =====================================================================================
+# Decoration: pebbles, ore nuggets and each layer's own bits, scattered over
+# every dug rock face (one MultiMesh per kind per chunk, rebuilt with it)
+# =====================================================================================
+const PEBBLE_EVERY := 7            # about one pebble cluster per this many surface vertices
+const NUGGET_CHANCE := 55          # percent of ore vertices that show a nugget
+# zone -> [model, one per this many vertices, where ("ceiling", "wall", "any"), colours]
+const ZONE_DECOR := {
+	0: ["root", 9, "ceiling", [Color(0.36, 0.25, 0.16), Color(0.3, 0.21, 0.14)]],
+	2: ["crystal_small", 45, "any", [Color(0.9, 0.86, 0.78)]],
+	3: ["shell", 20, "wall", [Color(0.86, 0.8, 0.69), Color(0.8, 0.72, 0.58)]],
+	4: ["bone", 14, "any", [Color(0.88, 0.82, 0.7), Color(0.8, 0.73, 0.6)]],
+	5: ["crystal_small", 8, "any", [Color(0.36, 0.72, 0.64), Color(0.9, 0.88, 0.8), Color(0.5, 0.42, 0.75)]],
+	6: ["magma_vent", 16, "any", [Color(1, 1, 1)]],
+	7: ["magma_vent", 22, "any", [Color(1, 1, 1)]],
+	8: ["magma_vent", 28, "any", [Color(1, 0.92, 0.75)]],
+	9: ["crystal_small", 10, "any", [Color(0.95, 0.72, 0.3), Color(0.95, 0.9, 0.78)]],
+}
+var decor_enabled := true
+var decor_mats := {}               # "matte" / "glint" / "glow" -> ShaderMaterial (World updates their lamp range)
+var _dv := PackedVector3Array()    # candidates gathered while meshing a chunk: position
+var _dn := PackedVector3Array()    # ...normal
+var _dc := PackedColorArray()      # ...the rock's colour there
+var _do := PackedByteArray()       # ...its ore (0 = none)
+static var _decor_meshes := {}
+
+
+static func decor_mesh(model: String) -> Mesh:
+	if not _decor_meshes.has(model):
+		var n := Models.instance(model)
+		var mesh: Mesh = null
+		var stack: Array = [n]
+		while not stack.is_empty() and mesh == null:
+			var c: Node = stack.pop_back()
+			if c is MeshInstance3D:
+				mesh = (c as MeshInstance3D).mesh
+			stack.append_array(c.get_children())
+		n.free()
+		_decor_meshes[model] = mesh
+	return _decor_meshes[model]
+
+
+func _decor_mat(kind: String) -> ShaderMaterial:
+	if not decor_mats.has(kind):
+		var m := ShaderMaterial.new()
+		m.shader = load("res://shaders/decor.gdshader")
+		m.set_shader_parameter("glint", 1.0 if kind == "glint" else 0.0)
+		m.set_shader_parameter("glow", 0.6 if kind == "glow" else 0.0)
+		decor_mats[kind] = m
+	return decor_mats[kind]
+
+
+func _build_decor(zone: Zone, z: int) -> Array:
+	var out: Array = []
+	var n := _dv.size()
+	if n == 0 or not decor_enabled:
+		return out
+	var peb_x: Array = []
+	var peb_c: Array = []
+	var nug_x: Array = []
+	var nug_c: Array = []
+	var zd: Array = ZONE_DECOR.get(z, [])
+	var zon_x: Array = []
+	var zon_c: Array = []
+	for i in n:
+		var p := _dv[i]
+		var nr := _dn[i]
+		var h := _hash(int(round(p.x * 8.0)) * 73856093 ^ int(round(p.y * 8.0)) * 19349663 ^ int(round(p.z * 8.0)) * 83492791 ^ 0x5bd1e995)
+		var ore := int(_do[i])
+		var ang := float(h & 1023) / 1023.0 * TAU
+		if ore > 0 and (h >> 10) % 100 < NUGGET_CHANCE:
+			var s := 0.9 + 0.7 * float((h >> 17) & 255) / 255.0
+			nug_x.append(_decor_xf(p, nr, ang, s, 0.02))
+			nug_c.append((Balance.ORES[ore].color as Color).lerp(Color.WHITE, 0.08))
+			continue
+		if not zd.is_empty() and (h >> 12) % int(zd[1]) == 0:
+			var ok := true
+			match str(zd[2]):
+				"ceiling":
+					ok = nr.y < -0.35
+				"wall":
+					ok = absf(nr.y) < 0.65
+			if ok:
+				var s := 0.8 + 0.6 * float((h >> 18) & 255) / 255.0
+				zon_x.append(_decor_xf(p, nr, ang, s, 0.015 if str(zd[0]) != "root" else 0.0))
+				var cl: Array = zd[3]
+				zon_c.append(cl[(h >> 5) % cl.size()])
+				continue
+		if (h >> 9) % PEBBLE_EVERY == 0:
+			var s := 0.7 + 1.0 * float((h >> 19) & 255) / 255.0
+			peb_x.append(_decor_xf(p, nr, ang, s, 0.03 * s))
+			var c := _dc[i]
+			var k := 0.95 + 0.35 * float((h >> 3) & 63) / 63.0
+			peb_c.append(Color(c.r * k, c.g * k, c.b * k).lerp(Color(0.62, 0.58, 0.52), 0.25))
+	if not peb_x.is_empty():
+		out.append(_multimesh(zone, "pebble", peb_x, peb_c, _decor_mat("matte")))
+	if not nug_x.is_empty():
+		out.append(_multimesh(zone, "nugget", nug_x, nug_c, _decor_mat("glint")))
+	if not zon_x.is_empty():
+		var model: String = zd[0]
+		var m: Material = null
+		if model == "crystal_small":
+			m = _decor_mat("glint" if z != 9 else "glow")
+		elif model != "magma_vent":
+			m = _decor_mat("matte")
+		out.append(_multimesh(zone, model, zon_x, zon_c, m))
+	return out
+
+
+static func _decor_xf(p: Vector3, nr: Vector3, ang: float, s: float, sink: float) -> Transform3D:
+	## Stands a piece on the rock: its +Y out of the wall, turned about it,
+	## pushed a little into the rock so it looks half buried.
+	var t := nr.cross(Vector3.UP)
+	if t.length_squared() < 0.01:
+		t = nr.cross(Vector3.RIGHT)
+	t = t.normalized().rotated(nr, ang)
+	var b := t.cross(nr)
+	return Transform3D(Basis(t * s, nr * s, b * s), p - nr * sink)
+
+
+func _multimesh(zone: Zone, model: String, xfs: Array, cols: Array, m: Material) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = decor_mesh(model)
+	mm.instance_count = xfs.size()
+	for i in xfs.size():
+		mm.set_instance_transform(i, xfs[i])
+		mm.set_instance_color(i, cols[i])
+	var mi := MultiMeshInstance3D.new()
+	mi.multimesh = mm
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if m != null:
+		mi.material_override = m
+	zone.node.add_child(mi)
+	return mi
+
+
+# =====================================================================================
 # Meshing
 # =====================================================================================
 func _zone_of_chunk_row(cy: int) -> int:
@@ -801,6 +1022,10 @@ func _remesh(key: Vector3i) -> void:
 	var local := key.x + NCX * (key.z + NCX * (key.y % CROWS))
 	var mesh := _build_chunk(key, z)
 	var ch: Dictionary = zone.chunks.get(local, {})
+	if not ch.is_empty():
+		for d in ch.get("decor", []):
+			(d as Node).queue_free()
+		ch.decor = []
 	if mesh == null:
 		if not ch.is_empty():
 			(ch.mesh as MeshInstance3D).queue_free()
@@ -821,6 +1046,7 @@ func _remesh(key: Vector3i) -> void:
 	var shape := mesh.create_trimesh_shape()
 	shape.backface_collision = true
 	(ch.shape as CollisionShape3D).shape = shape
+	ch.decor = _build_decor(zone, z)
 
 
 func _fill_block(gx0: int, gy0: int, gz0: int, z: int) -> int:
@@ -899,6 +1125,10 @@ func _build_chunk(key: Vector3i, z: int) -> ArrayMesh:
 	var cols := PackedColorArray()
 	var uvs := PackedVector2Array()
 	_cell.fill(-1)
+	_dv.clear()
+	_dn.clear()
+	_dc.clear()
+	_do.clear()
 	var sy := B
 	var sz := B * B
 	# The finds still buried near here sparkle through the rock around them.
@@ -1067,6 +1297,10 @@ func _vertex_color(cx: int, cy: int, cz: int, gx0: int, gz0: int, p: Vector3, n:
 	var glow := 0.0
 	var wall := false
 	_self_glow = 0.0
+	_is_grass = false
+	_is_wall = false
+	_vert_ore = 0
+	var ore_w := 0.0
 	for c in 8:
 		var bx := cx + (c & 1)
 		var by := cy + ((c >> 1) & 1)
@@ -1089,8 +1323,12 @@ func _vertex_color(cx: int, cy: int, cz: int, gx0: int, gz0: int, p: Vector3, n:
 			_self_glow = maxf(_self_glow, float(_mat_glow[mt]))
 			var ore := int(zone.o[s])
 			if ore > 0:
-				col = _ore_colors[ore]
-				glow = maxf(glow, float(_ore_glow[ore]))
+				# Veins tint the rock; the nuggets standing out of it carry the ore.
+				col = col.lerp(_ore_colors[ore], 0.3)
+				glow = maxf(glow, float(_ore_glow[ore]) * 0.6)
+				if v > ore_w:
+					ore_w = v
+					_vert_ore = ore
 		r += col.r * v
 		g += col.g * v
 		b += col.b * v
@@ -1098,16 +1336,12 @@ func _vertex_color(cx: int, cy: int, cz: int, gx0: int, gz0: int, p: Vector3, n:
 	var c := Color(r / w, g / w, b / w) if w > 0.0 else Color(0.3, 0.25, 0.2)
 	# Speckle: every spot of rock is a little lighter or darker.
 	var h := _hash(int(round(p.x * 4.0)) * 92837111 ^ int(round(p.y * 4.0)) * 689287499 ^ int(round(p.z * 4.0)) * 283923481)
-	var sp := 0.84 + 0.32 * float(h & 255) / 255.0
-	# Strata: soft darker bands that wander a little.
-	var band := 0.5 + 0.5 * sin(p.y * 5.5 + sin(p.x * 0.7) * 1.6 + sin(p.z * 0.9) * 1.6)
-	sp *= 1.0 - 0.2 * band * band
+	var sp := 0.92 + 0.16 * float(h & 255) / 255.0
 	c = Color(c.r * sp, c.g * sp, c.b * sp)
-	if ((h >> 16) & 31) == 0 and glow == 0.0:
-		c = c.lerp(Color(0.62, 0.6, 0.56), 0.45)   # a pebble
 	if p.y > -0.45 and n.y > 0.45:
-		c = GRASS * (0.85 + 0.3 * float((h >> 8) & 255) / 255.0)   # the field's grass on top
+		c = GRASS * (0.9 + 0.2 * float((h >> 8) & 255) / 255.0)   # the field's grass on top
 		wall = false
+		_is_grass = true
 	elif p.y > -1.2:
 		c = c.darkened(0.15)   # turf and roots
 	else:
@@ -1124,6 +1358,7 @@ func _vertex_color(cx: int, cy: int, cz: int, gx0: int, gz0: int, p: Vector3, n:
 	if wall:
 		glow = 0.0
 		_self_glow = 0.0
+		_is_wall = true
 	return Color(c.r, c.g, c.b, clampf(glow / 1.5, 0.0, 1.0))
 
 
@@ -1147,6 +1382,40 @@ func _block_density(x: float, y: float, z: float) -> float:
 
 
 static var _detail_cache := {}
+static var _strata: ImageTexture
+
+
+static func make_rock_material() -> ShaderMaterial:
+	## The rock shader with its painted texture and strata bands (also used by
+	## the field's grass and the lift shaft's walls).
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/rock.gdshader")
+	m.set_shader_parameter("paint_tex", load("res://textures/rock_paint.png"))
+	m.set_shader_parameter("strata_tex", strata_texture())
+	return m
+
+
+static func strata_texture() -> ImageTexture:
+	## textures/strata.png, read as raw data so no import setting can squash
+	## a 512 x 1 strip.
+	if _strata == null:
+		var img := Image.new()
+		var f := FileAccess.open("res://textures/strata.png", FileAccess.READ)
+		var ok := false
+		if f != null:
+			ok = img.load_png_from_buffer(f.get_buffer(f.get_length())) == OK
+		if not ok:
+			img = Image.create(8, 1, false, Image.FORMAT_RGB8)
+			img.fill(Color(0.8, 0.8, 0.8))
+		_strata = ImageTexture.create_from_image(img)
+	return _strata
+
+
+static func clear_caches() -> void:
+	## Tests call this before quitting so no texture outlives the scene tree.
+	_detail_cache.clear()
+	_strata = null
+	_decor_meshes.clear()
 
 
 static func detail_texture(seed_base: int) -> ImageTexture:

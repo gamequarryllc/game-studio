@@ -61,10 +61,8 @@ func _draw() -> void:
 	var amber := UiTheme.AMBER
 	var dtext := "%d m" % int(floor(depth)) if depth < 1000.0 else Fmt.num(depth) + " m"
 	UiTheme.draw_text_centered(self, _font, dtext, Vector2(W * 0.5, win.position.y + 20), 28, amber)
-	var zname := str(zone.name)
-	var zsize := 15 if zname.length() <= 11 else 11
-	var zc := (zone.band as Color).lightened(0.35).lerp(Color.WHITE, _zone_flash * 0.6)
-	UiTheme.draw_text_centered(self, _sign, zname, Vector2(W * 0.5, win.position.y + 45), zsize, zc)
+	var zc := UiTheme.CREAM.lerp(Color.WHITE, _zone_flash * 0.6)
+	UiTheme.draw_text_centered(self, _font, "layer %d of %d" % [zi + 1, Balance.zone_count()], Vector2(W * 0.5, win.position.y + 45), 15, zc)
 	# --- The tube -----------------------------------------------------------------------------
 	var tube := Rect2(0, HEADER_H + 6, W - 34, h - HEADER_H - 6)
 	_plate(tube, UiTheme.BRASS)
@@ -94,7 +92,10 @@ func _draw() -> void:
 	# Sky above the surface.
 	var sky_y := glass.position.y + (0.0 - top_m) * ppm
 	if sky_y > glass.position.y:
-		draw_rect(Rect2(glass.position.x, glass.position.y, glass.size.x, minf(sky_y, glass.end.y) - glass.position.y), Color(0.45, 0.68, 0.9))
+		# The late-afternoon sky over the field: warm cream fading to amber at the horizon.
+		var sky_h := minf(sky_y, glass.end.y) - glass.position.y
+		draw_rect(Rect2(glass.position.x, glass.position.y, glass.size.x, sky_h), UiTheme.CREAM.darkened(0.08))
+		draw_rect(Rect2(glass.position.x, glass.position.y + sky_h * 0.6, glass.size.x, sky_h * 0.4), UiTheme.AMBER.lerp(UiTheme.CREAM, 0.45))
 		if sky_y < glass.end.y:
 			draw_rect(Rect2(glass.position.x, sky_y - 3, glass.size.x, 3), DigField.GRASS)
 	# Ticks every 2 m, numbers every 10 m.
@@ -153,18 +154,36 @@ func _draw() -> void:
 	var py := pc.position.y + pc.size.y * clampf(depth / total, 0.0, 1.0)
 	draw_circle(Vector2(pc.get_center().x, py), 4.5, Color(0.95, 0.25, 0.15))
 	draw_circle(Vector2(pc.get_center().x, pc.end.y - 3), 4.0, Color(1.0, 0.95, 0.7))   # the core
-	# Zone names beside the tube, for the bands in view.
+	# Zone names beside the tube, on little enamel tags, for the bands in view.
+	var last_y := -100.0
 	for z in Balance.zone_count():
 		var y0 := glass.position.y + (z * Balance.ZONE_DEPTH - top_m) * ppm
 		var y1 := y0 + Balance.ZONE_DEPTH * ppm
-		var ymid := clampf(maxf(y0, glass.position.y) + 14.0, glass.position.y + 10, glass.end.y - 6)
+		var ymid := clampf(maxf(y0, glass.position.y) + 14.0, glass.position.y + 10, glass.end.y - 10)
 		if y1 < glass.position.y + 20 or y0 > glass.end.y - 10:
 			continue
-		var name := str(Balance.ZONES[z].name).to_lower()
 		if deepest < z * Balance.ZONE_DEPTH - Balance.ZONE_DEPTH * 0.5:
 			continue   # not reached yet: a mystery
-		draw_string_outline(_font, Vector2(W + 6, ymid), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, 4, Color(0, 0, 0, 0.75))
-		draw_string(_font, Vector2(W + 6, ymid), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, (Balance.ZONES[z].band as Color).lightened(0.4))
+		if ymid - last_y < 26.0:
+			ymid = last_y + 26.0
+		last_y = ymid
+		zone_tag(self, _font, sentence(str(Balance.ZONES[z].name)), Vector2(W + 4, ymid), Balance.ZONES[z].band, z == zi)
+
+
+static func sentence(t: String) -> String:
+	## "Dinosaur Graveyard" -> "Dinosaur graveyard" (sentence case, the house style).
+	return t.substr(0, 1) + t.substr(1).to_lower()
+
+
+static func zone_tag(ci: CanvasItem, font: Font, text: String, at: Vector2, band: Color, here: bool) -> void:
+	## A small cream enamel tag with a band-coloured swatch: readable on any rock.
+	var size := 15
+	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var r := Rect2(at.x, at.y - 11.0, w + 24.0, 22.0)
+	ci.draw_polygon(EnamelBox.rounded(r.grow(1.5), 5.0), PackedColorArray([UiTheme.SOOT]))
+	ci.draw_polygon(EnamelBox.rounded(r, 4.0), PackedColorArray([UiTheme.CREAM if here else UiTheme.CREAM.darkened(0.18)]))
+	ci.draw_rect(Rect2(r.position.x + 4.0, r.position.y + 5.0, 8.0, 12.0), band.darkened(0.1))
+	ci.draw_string(font, Vector2(r.position.x + 17.0, r.position.y + 16.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, UiTheme.INK)
 
 
 func _plate(r: Rect2, c: Color, rivets: bool = true) -> void:

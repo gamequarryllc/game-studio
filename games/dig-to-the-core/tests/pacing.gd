@@ -22,7 +22,8 @@ func _run() -> void:
 	var ads := args.has("ads")
 	var gs = root.get_node("GameState")
 	root.get_node("Monetization").provider.instant = true
-	gs.wipe_save()
+	gs.reset_state(false)
+	gs.save_game()
 	var world = load("res://scenes/world.tscn").instantiate()
 	root.add_child(world)
 	await process_frame
@@ -96,7 +97,8 @@ func _run() -> void:
 			var vol: float = gs.total_helper_power() * DT / hp * 0.06
 			gs.grant_money(vol * hp * float(Balance.ZONES[z].worth), true)
 	print("t=%s  end: depth %.0f m, %s, money %s, upgrades %s, moles %d" % [_clock(t), gs.deepest, gs.tool_def().name, Fmt.num(gs.money), gs.upgrade_levels, gs.helper_counts[0]])
-	gs.wipe_save()
+	gs.reset_state(false)
+	gs.save_game()
 	quit(0)
 
 

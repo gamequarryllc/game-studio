@@ -1,9 +1,11 @@
 """Helpers, buildings and props for Dig to the Core.
-Run: python3 art/blender/world_models.py
+Run: python3 art/blender/world_models.py [name ...]
 
 Shape language: chunky and a little top-heavy, bevelled, nothing perfectly
-straight (boards lean, roofs sag). Creatures face +Y (Godot's forward).
-Nodes that animate are named: "Claws" (helpers), "Sheave" (the lift wheel)."""
+straight (boards lean, roofs sag, posts tilt). Round only where it's alive.
+Creatures face +Y (Godot's forward). Nodes that animate are named: "Claws"
+(the crew), "Sheave" (the lift wheel). Colours: the art bible palette and
+tints of it only (kit.PAL); AO and edge wear are baked into vertex colours."""
 import math
 import os
 import random
@@ -12,103 +14,178 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
 import bmesh  # noqa: E402
-from kit import (box, cyl, sphere, torus, join, wear, wobble, export, reset, mat, taper, subdivide, bar, attach)  # noqa: E402
+from mathutils import Matrix, Vector, noise  # noqa: E402
+from kit import (box, cyl, sphere, torus, join, wear, wobble, export, reset, mat, taper, subdivide, bar, attach,  # noqa: E402
+                 lathe, place, strut, ao, smooth)
 
 R90 = math.radians(90)
 
 
-# --- Helpers ---------------------------------------------------------------------------------
-def _mole_body(m, robo=False):
-    body = sphere(0.2, (0, 0, 0.17), m, scale=(1.0, 1.35, 0.85), segs=18, rings=12, name="body")
-    # Plump at the back, narrowing to the snout.
-    for v in body.data.vertices:
-        t = v.co.y / 0.27
-        k = 1.0 - 0.18 * max(0.0, t)
-        v.co.x *= k
-        v.co.z = 0.17 + (v.co.z - 0.17) * (k if t > 0 else 1.0 + 0.06 * -t)
-    snout = cyl(0.075, 0.13, (0, 0.3, 0.17), m, (-R90, 0, 0), 12, r2=0.04)
-    return [body, snout]
+def bake(o):
+    bpy.context.view_layer.update()
+    o.data.transform(o.matrix_world)
+    o.matrix_world = Matrix.Identity(4)
+    return o
 
 
+def lump(r, loc, m, seed, scale=(1, 1, 1), sub=2, rough=0.25, flat_bottom=None, name="lump"):
+    """A lumpy faceted blob: an icosphere pushed about by noise."""
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=sub, radius=r, location=(0, 0, 0))
+    o = bpy.context.active_object
+    o.name = name
+    off = Vector((seed * 1.37, seed * 2.11, seed * 0.73))
+    for v in o.data.vertices:
+        n = noise.noise(v.co * (2.2 / r) + off)
+        v.co *= 1.0 + rough * n
+        v.co.x *= scale[0]
+        v.co.y *= scale[1]
+        v.co.z *= scale[2]
+        if flat_bottom is not None and v.co.z < flat_bottom:
+            v.co.z = flat_bottom
+    o.data.transform(Matrix.Translation(loc))
+    if m:
+        o.data.materials.append(m)
+    return o
+
+
+# --- The crew --------------------------------------------------------------------------------
 def mole():
+    """A pear-shaped mole standing up out of its hole: big spade hands with
+    claws, a long pink snout, squinty eyes and a miner's hard hat."""
     fur = mat("fur", rough=0.95)
+    belly = mat("fur_light", rough=0.95)
     pink = mat("pink", rough=0.7)
-    parts = _mole_body(fur)
-    parts.append(sphere(0.04, (0, 0.375, 0.17), pink, scale=(1.0, 0.7, 0.85), segs=12, rings=8))
-    for k in range(10):
-        a = k / 10 * math.tau
-        parts.append(cyl(0.008, 0.03, (math.cos(a) * 0.035, 0.392, 0.17 + math.sin(a) * 0.03), pink, (-R90, 0, 0), 5, r2=0.002))
+    claw = mat("bone", rough=0.5)
+    hat = mat("amber", rough=0.45)
+    parts = []
+    body = lathe([(0.0, 0.0), (0.15, 0.005), (0.205, 0.05), (0.215, 0.11), (0.2, 0.18), (0.168, 0.25),
+                  (0.135, 0.31), (0.112, 0.36), (0.085, 0.405), (0.04, 0.435), (0.0, 0.44)], 20, "body", fur)
+    for v in body.data.vertices:
+        # A pot belly at the front, a flatter back.
+        if v.co.y > 0:
+            v.co.y *= 1.0 + 0.18 * math.exp(-((v.co.z - 0.12) / 0.09) ** 2)
+        else:
+            v.co.y *= 0.9
+    parts.append(body)
+    parts.append(place(sphere(0.12, (0, 0, 0), belly, scale=(1.0, 0.45, 1.25), segs=14, rings=10), (0, 0.13, 0.14)))
+    # Snout: a tapering cone with a big pink nose.
+    sn = cyl(0.06, 0.16, (0, 0, 0), fur, verts=12, r2=0.028)
+    parts.append(place(sn, (0, 0.165, 0.33), (-R90 + 0.25, 0, 0)))
+    parts.append(place(sphere(0.036, (0, 0, 0), pink, scale=(1.15, 0.85, 0.9), segs=12, rings=8), (0, 0.245, 0.305)))
     for s in (-1, 1):
-        parts.append(sphere(0.012, (s * 0.07, 0.26, 0.24), mat("soot", rough=0.3), segs=8, rings=6))
-    parts.append(cyl(0.02, 0.06, (0, -0.27, 0.14), fur, (R90, 0, 0), 6, r2=0.004))
+        parts.append(place(sphere(0.007, (0, 0, 0), mat("soot"), segs=6, rings=4), (s * 0.014, 0.275, 0.307)))
+    # Squinty eyes: little dark slits under the hat brim.
     for s in (-1, 1):
-        parts.append(sphere(0.045, (s * 0.1, -0.15, 0.04), pink, scale=(1.0, 1.3, 0.5), segs=10, rings=6))
-    # Hard hat with a brim and a lamp.
-    hat = sphere(0.13, (0, 0.13, 0.28), mat("yellow", rough=0.45), scale=(1.0, 1.1, 0.75), segs=16, rings=8)
+        parts.append(place(box((0.032, 0.01, 0.008), (0, 0, 0), mat("soot", rough=0.4), bevel=0.003), (s * 0.055, 0.115, 0.38), (0, 0, s * 0.25)))
+    # Feet, tucked under the belly.
+    for s in (-1, 1):
+        parts.append(place(sphere(0.05, (0, 0, 0), pink, scale=(0.9, 1.4, 0.45), segs=10, rings=6), (s * 0.09, 0.12, 0.02)))
+    # Hard hat: a dome with a ridge, a brim and a lamp.
+    dome = sphere(0.115, (0, 0, 0), hat, scale=(1.0, 1.1, 0.9), segs=18, rings=10)
     bm = bmesh.new()
-    bm.from_mesh(hat.data)
-    bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.z < 0.0], context="VERTS")
-    bm.to_mesh(hat.data)
+    bm.from_mesh(dome.data)
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if v.co.z < -0.002], context="VERTS")
+    bm.to_mesh(dome.data)
     bm.free()
-    parts.append(hat)
-    parts.append(cyl(0.155, 0.014, (0, 0.14, 0.28), mat("yellow", rough=0.45), (0, 0, 0), 18))
-    parts.append(cyl(0.028, 0.03, (0, 0.27, 0.33), mat("soot", rough=0.6), (-R90, 0, 0), 10))
-    parts.append(cyl(0.022, 0.006, (0, 0.287, 0.33), mat("glass", rough=0.2, emit=3.0), (-R90, 0, 0), 10))
-    body = join(parts, "Mole")
-    wobble(body, 0.003, 21)
-    wear(body, 0.8, 0.2)
-    # Big digging paws, their own node.
+    parts.append(place(dome, (0, 0.01, 0.405), (-0.15, 0, 0)))
+    parts.append(place(cyl(0.13, 0.014, (0, 0, 0), hat, verts=20), (0, 0.025, 0.405), (-0.15, 0, 0)))
+    parts.append(place(box((0.025, 0.2, 0.02), (0, 0, 0), hat, bevel=0.006), (0, 0.0, 0.485), (-0.15, 0, 0)))
+    parts.append(place(cyl(0.03, 0.035, (0, 0, 0), mat("iron", metal=0.5), verts=10), (0, 0.115, 0.45), (-R90 - 0.15, 0, 0)))
+    parts.append(place(cyl(0.024, 0.006, (0, 0, 0), mat("glass", rough=0.2, emit=3.0), verts=10), (0, 0.134, 0.453), (-R90 - 0.15, 0, 0)))
+    o = join(parts, "Mole")
+    bake(o)
+    wobble(o, 0.002, 21)
+    ao(o, 0.12, edge=0.4, top=0.15)
+    # Spade hands: big flat palms with five long claws, held up in front.
     paws = []
     for s in (-1, 1):
-        paws.append(sphere(0.07, (s * 0.15, 0.06, 0.0), pink, scale=(1.0, 0.8, 0.45), segs=12, rings=8))
+        palm = sphere(0.075, (0, 0, 0), pink, scale=(1.0, 0.42, 0.85), segs=12, rings=8)
+        place(palm, (s * 0.13, 0.17, 0.2), (0.35, 0, s * 0.45))
+        paws.append(palm)
+        arm = strut((s * 0.15, 0.06, 0.22), (s * 0.13, 0.15, 0.2), 0.04, fur, sides=8)
+        paws.append(arm)
         for k in range(5):
-            x = s * 0.15 + (k - 2) * 0.022
-            paws.append(cyl(0.01, 0.06, (x, 0.12, -0.01), mat("cream", rough=0.5), (-R90 + 0.3, 0, 0), 5, r2=0.001))
+            a = (k - 2) * 0.32
+            base = Vector((s * 0.13 + math.sin(a) * 0.055 * s, 0.19, 0.2 + math.cos(a) * 0.055))
+            tip = base + Vector((math.sin(a) * 0.03 * s, 0.075, math.cos(a) * 0.03 - 0.02))
+            c = cyl(0.011, 1.0, (0, 0, 0), claw, verts=5, r2=0.002)
+            c.data.transform(Matrix.Translation((0, 0, 0.5)))
+            bake(c)
+            d = tip - base
+            q = Vector((0, 0, 1)).rotation_difference(d.normalized())
+            m = q.to_matrix().to_4x4() @ Matrix.Scale(d.length, 4, (0, 0, 1))
+            m.translation = base
+            c.data.transform(m)
+            paws.append(c)
     claws = join(paws, "Claws")
-    wear(claws, 0.6)
-    bpy.context.view_layer.objects.active = claws
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    attach(claws, body, (0, 0.08, 0.06))
-    return body
+    bake(claws)
+    ao(claws, 0.06, edge=0.4)
+    attach(claws, o, (0, 0.1, 0.21))
+    return o
 
 
 def robomole():
-    steel = mat("steel", metal=0.85, rough=0.4)
-    dark = mat("dark_steel", metal=0.8, rough=0.45)
-    parts = _mole_body(steel, True)
-    # Rivets in rings and a seam.
-    for ring in range(3):
-        y = -0.15 + ring * 0.13
-        for k in range(10):
-            a = k / 10 * math.tau
-            parts.append(sphere(0.008, (math.cos(a) * 0.19 * (1.0 - 0.1 * ring), y, 0.17 + math.sin(a) * 0.16), dark, segs=6, rings=4))
-    drill = cyl(0.045, 0.16, (0, 0.44, 0.17), mat("brass", metal=0.9, rough=0.3), (-R90, 0, 0), 8, r2=0.0)
-    parts.append(drill)
+    """The Robo-Mole: a riveted brass boiler on stubby iron legs, a drill for
+    a nose, glowing porthole eyes and a little smokestack."""
+    brass = mat("brass", metal=0.75, rough=0.35)
+    iron = mat("iron", metal=0.6, rough=0.5)
+    soot = mat("soot", rough=0.7)
+    parts = []
+    body = lathe([(0.0, 0.03), (0.17, 0.035), (0.2, 0.07), (0.205, 0.2), (0.195, 0.3), (0.17, 0.36),
+                  (0.12, 0.405), (0.0, 0.425)], 22, "boiler", brass)
+    parts.append(body)
+    # Riveted seams.
+    for z in (0.09, 0.2, 0.31):
+        rr = 0.207 if z < 0.3 else 0.198
+        parts.append(place(torus(rr, 0.009, (0, 0, 0), iron, (0, 0, 0), 22, 4), (0, 0, z)))
+        for k in range(16):
+            a = k / 16 * math.tau
+            parts.append(place(sphere(0.007, (0, 0, 0), brass, segs=6, rings=4), (math.cos(a) * (rr + 0.006), math.sin(a) * (rr + 0.006), z + 0.018)))
+    # Pressure gauge and a red valve wheel on the side.
+    parts.append(place(cyl(0.035, 0.02, (0, 0, 0), brass, verts=14), (0.2, 0.02, 0.25), (0, R90, 0)))
+    parts.append(place(cyl(0.028, 0.006, (0, 0, 0), mat("cream", rough=0.4), verts=14), (0.212, 0.02, 0.25), (0, R90, 0)))
+    parts.append(place(torus(0.03, 0.006, (0, 0, 0), mat("red", rough=0.5), (0, 0, 0), 12, 4), (-0.215, -0.02, 0.22), (0, R90, 0)))
+    # Porthole eyes.
     for s in (-1, 1):
-        parts.append(sphere(0.022, (s * 0.075, 0.26, 0.25), mat("laser", rough=0.2, emit=3.0), segs=10, rings=6))
-    parts.append(box((0.42, 0.34, 0.07), (0, -0.02, 0.03), dark, bevel=0.02))
+        parts.append(place(torus(0.032, 0.008, (0, 0, 0), iron, (0, 0, 0), 14, 4), (s * 0.075, 0.17, 0.33), (R90 - 0.35, 0, s * 0.35)))
+        parts.append(place(sphere(0.027, (0, 0, 0), mat("glass", rough=0.2, emit=3.0), scale=(1, 0.5, 1), segs=10, rings=6), (s * 0.075, 0.172, 0.33), (-0.35, 0, s * 0.35)))
+    # Smokestack with a flared cap, set back on the dome.
+    parts.append(place(cyl(0.024, 0.13, (0, 0, 0), iron, verts=10), (0.04, -0.09, 0.46)))
+    parts.append(place(cyl(0.04, 0.03, (0, 0, 0), iron, verts=10, r2=0.026), (0.04, -0.09, 0.53)))
+    # Stubby legs and big iron feet.
     for s in (-1, 1):
-        for k in range(5):
-            parts.append(cyl(0.035, 0.05, (s * 0.2, -0.15 + k * 0.075, 0.03), mat("rubber", rough=0.9), (0, R90, 0), 8))
-    parts.append(cyl(0.01, 0.12, (0.06, -0.12, 0.38), dark, (0.3, 0, 0), 6))
-    parts.append(sphere(0.018, (0.06, -0.14, 0.44), mat("amber", rough=0.3, emit=2.0), segs=8, rings=6))
-    body = join(parts, "RoboMole")
-    wobble(body, 0.002, 22)
-    wear(body, 1.0)
-    paws = []
+        parts.append(place(cyl(0.045, 0.06, (0, 0, 0), iron, verts=10), (s * 0.1, 0.0, 0.02)))
+        parts.append(place(box((0.09, 0.15, 0.035), (0, 0, 0), soot, bevel=0.012), (s * 0.1, 0.03, 0.0)))
+    # The drill nose.
+    parts.append(place(cyl(0.065, 0.06, (0, 0, 0), iron, verts=14), (0, 0.2, 0.22), (-R90, 0, 0)))
+    o = join(parts, "RoboMole")
+    bake(o)
+    wobble(o, 0.0015, 22)
+    ao(o, 0.12, edge=0.6)
+    nose = [cyl(0.055, 0.17, (0, 0, 0), mat("bright_steel", metal=0.8, rough=0.3), verts=10, r2=0.004)]
+    place(nose[0], (0, 0.31, 0.22), (-R90, 0, 0))
+    fl = bar(3, 0.012, 0.17, 12, (0, 0, 0), iron, name="flute")
+    for v in fl.data.vertices:
+        t = v.co.y / 0.17
+        rr = 0.052 * (1.0 - t) + 0.004
+        ang = t * 7.0
+        v.co.x += math.cos(ang) * rr
+        v.co.z += math.sin(ang) * rr
+    fl.data.transform(Matrix.Translation((0, 0.225, 0.22)))
+    nose.append(fl)
+    # Claws: two iron scoops either side of the nose.
     for s in (-1, 1):
-        paws.append(box((0.1, 0.09, 0.03), (s * 0.15, 0.08, 0.0), dark, bevel=0.01))
+        nose.append(place(box((0.08, 0.1, 0.025), (0, 0, 0), iron, bevel=0.01), (s * 0.14, 0.18, 0.13), (0.3, 0, s * 0.3)))
         for k in range(3):
-            paws.append(cyl(0.012, 0.06, (s * 0.15 + (k - 1) * 0.03, 0.15, -0.005), mat("steel", metal=0.9, rough=0.3), (-R90, 0, 0), 4, r2=0.0))
-    claws = join(paws, "Claws")
-    wear(claws, 0.8)
-    bpy.context.view_layer.objects.active = claws
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    attach(claws, body, (0, 0.08, 0.06))
-    return body
+            nose.append(place(cyl(0.011, 0.06, (0, 0, 0), mat("bright_steel", metal=0.8), verts=4, r2=0.0), (s * 0.14 + (k - 1) * 0.025, 0.24, 0.115), (-R90 + 0.3, 0, 0)))
+    claws = join(nose, "Claws")
+    bake(claws)
+    ao(claws, 0.06)
+    attach(claws, o, (0, 0.2, 0.18))
+    return o
 
 
-# --- Buildings -------------------------------------------------------------------------------
+# --- Buildings ---------------------------------------------------------------------------------
 def shack():
     rnd = random.Random(5)
     w, d, h = 6.0, 5.0, 3.2
@@ -221,206 +298,510 @@ def _corrugated(width, depth, amp, waves):
     return o
 
 
+def _corrugated(width, depth, amp, waves):
+    me = bpy.data.meshes.new("tin")
+    bm = bmesh.new()
+    nx = waves * 4
+    rows = []
+    for j in range(2):
+        row = []
+        for i in range(nx + 1):
+            x = -width / 2 + width * i / nx
+            z = amp * math.sin(i / 4 * math.tau)
+            row.append(bm.verts.new((x, -depth / 2 + depth * j, z)))
+        rows.append(row)
+    for i in range(nx):
+        bm.faces.new((rows[0][i], rows[0][i + 1], rows[1][i + 1], rows[1][i]))
+    bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.012)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new("tin", me)
+    bpy.context.collection.objects.link(o)
+    return o
+
+
 def headframe():
-    timber = mat("wood_dark", rough=0.85)
-    iron = mat("dark_steel", metal=0.7, rough=0.5)
-    red = mat("red", rough=0.6)
-    top, w = 9.0, 1.9
+    """A timber headframe: four heavy squared posts, two back legs raked out
+    behind to take the cable's pull, girts and X-braces, a big sheave wheel on
+    top, the cable down to the cage, and the back cable to a winding drum."""
+    timber = mat("wood_dark", rough=0.88)
+    old = mat("wood_grey", rough=0.9)
+    iron = mat("iron", metal=0.6, rough=0.5)
+    red = mat("red", rough=0.55)
+    cable = mat("dark_steel", metal=0.5, rough=0.5)
+    rnd = random.Random(41)
+    top = 8.2
     parts = []
-    feet = [(-w, -w), (w, -w), (w, w), (-w, w)]
-    for (x, y) in feet:
-        leg = bar(4, 0.15, 1.0, 1, (0, 0, 0), timber, name="leg")
-        foot = (x, y, 0.0)
-        head = (x * 0.26, y * 0.26, top)
-        import mathutils
-        dv = mathutils.Vector(head) - mathutils.Vector(foot)
-        leg.scale = (1.0, dv.length, 1.0)
-        leg.rotation_mode = "QUATERNION"
-        leg.rotation_quaternion = mathutils.Vector((0, 1, 0)).rotation_difference(dv.normalized())
-        leg.location = foot
-        bpy.context.view_layer.objects.active = leg
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-        parts.append(leg)
-        parts.append(box((0.5, 0.5, 0.25), (x, y, 0.12), mat("stone", rough=0.95), bevel=0.03))
-    # X bracing on each side at two heights.
-    import mathutils
-    for (z0, z1) in [(0.4, 4.4), (4.4, 8.2)]:
-        for side in range(4):
-            a = feet[side]
-            b = feet[(side + 1) % 4]
-            k0 = 1.0 - 0.74 * z0 / top
-            k1 = 1.0 - 0.74 * z1 / top
-            p0 = mathutils.Vector((a[0] * k0, a[1] * k0, z0))
-            p1 = mathutils.Vector((b[0] * k1, b[1] * k1, z1))
-            q0 = mathutils.Vector((b[0] * k0, b[1] * k0, z0))
-            q1 = mathutils.Vector((a[0] * k1, a[1] * k1, z1))
-            for (s, e) in [(p0, p1), (q0, q1), (p1, q1)]:
-                br = bar(4, 0.06, 1.0, 1, (0, 0, 0), timber, name="brace")
-                dv = e - s
-                br.scale = (1.0, dv.length, 1.0)
-                br.rotation_mode = "QUATERNION"
-                br.rotation_quaternion = mathutils.Vector((0, 1, 0)).rotation_difference(dv.normalized())
-                br.location = s
-                bpy.context.view_layer.objects.active = br
-                bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-                parts.append(br)
-    parts.append(box((1.6, 1.6, 0.14), (0, 0, top), timber, bevel=0.02))
-    parts.append(box((1.5, 0.22, 0.22), (0, 0, top + 0.18), iron, bevel=0.02))
-    parts.append(cyl(0.025, top - 2.6, (0, 0, 2.6 + (top - 2.6) / 2), iron, verts=6))
-    frame = join(parts, "Headframe")
-    wobble(frame, 0.01, 41)
-    wear(frame, 1.0)
-    wheel = [torus(0.8, 0.07, (0, 0, 0), red, (0, R90, 0), 24, 6)]
-    wheel.append(cyl(0.12, 0.2, (0, 0, 0), iron, (0, R90, 0), 12))
-    for k in range(6):
-        a = k / 6 * math.pi
-        wheel.append(box((0.05, 1.5, 0.06), (0, 0, 0), red, rot=(a, 0, 0)))
+    w0, w1 = 1.35, 1.0           # half-width at the foot and at the deck
+    corners = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+    for (cx, cy) in corners:
+        foot = Vector((cx * w0, cy * w0, 0.0))
+        head = Vector((cx * w1, cy * w1, top))
+        parts.append(strut(foot, head, 0.2, timber, name="post"))
+        parts.append(box((0.6, 0.6, 0.3), (foot.x, foot.y, 0.12), mat("stone", rough=0.95), bevel=0.05))
+    # Girts every couple of metres, X-braces between them on each face.
+    levels = [0.6, 3.8, top - 0.15]
+    def at(cx, cy, z):
+        k = 1.0 - (w0 - w1) / w0 * z / top
+        return Vector((cx * w0 * k, cy * w0 * k, z))
+    for li, z in enumerate(levels):
+        for i in range(4):
+            a, b = corners[i], corners[(i + 1) % 4]
+            if li == 0 and i == 3:
+                continue          # the side you walk in by stays open at the bottom
+            parts.append(strut(at(*a, z), at(*b, z), 0.14, old if li % 2 else timber, name="girt"))
+    for li in range(len(levels) - 1):
+        z0, z1 = levels[li], levels[li + 1]
+        for i in range(4):
+            if li == 0 and i == 3:
+                continue
+            a, b = corners[i], corners[(i + 1) % 4]
+            if li == 1 and i % 2 == 1:
+                continue          # the top tier is braced front and back only
+            parts.append(strut(at(*a, z0 + 0.15), at(*b, z1 - 0.15), 0.09, old, name="brace"))
+            if li == 0:
+                parts.append(strut(at(*b, z0 + 0.15), at(*a, z1 - 0.15), 0.09, old, name="brace"))
+    # Back legs, raked out behind (towards -y), with a tie halfway.
+    for cx in (-1, 1):
+        hd = at(cx, -1, top - 0.6)
+        ft = Vector((cx * 1.5, -5.6, 0.0))
+        parts.append(strut(ft, hd, 0.18, timber, name="backleg"))
+        parts.append(box((0.55, 0.55, 0.28), (ft.x, ft.y, 0.12), mat("stone", rough=0.95), bevel=0.05))
+        mid = ft.lerp(hd, 0.45)
+        parts.append(strut(mid, at(cx, -1, mid.z), 0.11, old))
+    parts.append(strut(Vector((-1.5, -5.6, 0.2)).lerp(at(-1, -1, top - 0.6), 0.45), Vector((1.5, -5.6, 0.2)).lerp(at(1, -1, top - 0.6), 0.45), 0.11, old))
+    # The deck and the bearing blocks the sheave turns in.
+    parts.append(box((2.4, 2.4, 0.16), (0, 0, top + 0.05), timber, bevel=0.03))
+    for i in range(7):
+        parts.append(box((2.5, 0.3, 0.05), (0, -1.05 + i * 0.35, top + 0.15), old if i % 2 else timber, rot=(0, 0, rnd.uniform(-0.02, 0.02)), bevel=0.01))
+    for s in (-1, 1):
+        parts.append(box((0.3, 0.8, 0.75), (s * 0.45, -1.3, top + 0.5), timber, bevel=0.03))
+        parts.append(box((0.34, 0.3, 0.14), (s * 0.45, -1.3, top + 0.94), iron, bevel=0.02))
+    # The cage cable: from the front of the sheave straight down to the cage.
+    parts.append(cyl(0.024, top + 1.05 - 2.62, (0, 0, (top + 1.05 + 2.62) / 2), cable, verts=6))
+    parts.append(place(cyl(0.05, 0.12, (0, 0, 0), iron, verts=8), (0, 0, 2.68)))
+    # The back cable: from the top of the sheave down to the winding drum.
+    drum_c = Vector((0, -9.5, 0.9))
+    parts.append(strut(Vector((0, -2.4, top + 1.7)), drum_c + Vector((0, 0.3, 0.3)), 0.024, cable, sides=6))
+    # Winding drum on a timber frame, with a brake lever.
+    parts.append(place(cyl(0.45, 1.1, (0, 0, 0), timber, verts=18), tuple(drum_c), (0, R90, 0)))
+    for s in (-1, 1):
+        parts.append(place(cyl(0.58, 0.06, (0, 0, 0), iron, verts=18), tuple(drum_c + Vector((s * 0.58, 0, 0))), (0, R90, 0)))
+        parts.append(box((0.18, 1.6, 0.18), (s * 0.78, drum_c.y, 0.12), timber, bevel=0.02))
+        parts.append(strut(Vector((s * 0.78, drum_c.y - 0.6, 0.2)), Vector((s * 0.72, drum_c.y, drum_c.z)), 0.08, timber))
+        parts.append(strut(Vector((s * 0.78, drum_c.y + 0.6, 0.2)), Vector((s * 0.72, drum_c.y, drum_c.z)), 0.08, timber))
+    parts.append(strut(Vector((0.95, drum_c.y + 0.3, 0.3)), Vector((1.15, drum_c.y - 0.2, 1.7)), 0.03, iron, sides=6))
+    parts.append(place(sphere(0.06, (0, 0, 0), red, segs=8, rings=6), (1.15, drum_c.y - 0.2, 1.75)))
+    frame_o = join(parts, "Headframe")
+    bake(frame_o)
+    wobble(frame_o, 0.012, 41)
+    ao(frame_o, 0.6, rays=10, edge=0.5)
+    # The sheave: a big spoked wheel, painted signal red.
+    R = 1.3
+    wheel = [place(torus(R, 0.085, (0, 0, 0), red, (0, 0, 0), 36, 6), (0, 0, 0), (0, R90, 0))]
+    wheel.append(place(torus(R - 0.1, 0.035, (0, 0, 0), red, (0, 0, 0), 32, 4), (0, 0, 0), (0, R90, 0)))
+    wheel.append(place(cyl(0.16, 0.26, (0, 0, 0), iron, verts=14), (0, 0, 0), (0, R90, 0)))
+    wheel.append(place(cyl(0.05, 1.2, (0, 0, 0), iron, verts=8), (0, 0, 0), (0, R90, 0)))
+    for k in range(8):
+        a = k / 8 * math.pi
+        wheel.append(place(box((0.045, 2 * R - 0.15, 0.07), (0, 0, 0), red), (0, 0, 0), (a, 0, 0)))
     sheave = join(wheel, "Sheave")
-    wear(sheave, 0.8)
-    for v in sheave.data.vertices:
-        v.co.z += top + 0.45
-    bpy.context.view_layer.objects.active = sheave
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    attach(sheave, frame, (0, 0, top + 0.45))
-    return frame
+    bake(sheave)
+    ao(sheave, 0.3, rays=8)
+    sheave.data.transform(Matrix.Translation((0, -1.3, top + 1.05)))
+    attach(sheave, frame_o, (0, -1.3, top + 1.05))
+    return frame_o
 
 
 def cage():
-    yellow = mat("yellow", rough=0.55)
-    bars_m = mat("dark_steel", metal=0.75, rough=0.45)
-    parts = [box((1.9, 1.9, 0.12), (0, 0, 0.06), mat("dark_steel", metal=0.6, rough=0.6), bevel=0.02)]
-    # Treadplate bumps.
+    """The lift cage: an iron frame with brass corner caps, a plank floor,
+    bars on three sides (open towards +y), a roof with the cable bail and a
+    caged lamp."""
+    iron = mat("iron", metal=0.6, rough=0.5)
+    brass = mat("brass", metal=0.8, rough=0.35)
+    plank = mat("wood", rough=0.85)
+    plank2 = mat("wood_dark", rough=0.85)
+    rnd = random.Random(42)
+    parts = [box((1.92, 1.92, 0.1), (0, 0, 0.05), iron, bevel=0.02)]
     for i in range(7):
-        for j in range(7):
-            parts.append(box((0.12, 0.03, 0.012), (-0.75 + i * 0.25, -0.75 + j * 0.25, 0.125), bars_m, rot=(0, 0, 0.8 if (i + j) % 2 else -0.8)))
-    parts.append(box((2.0, 2.0, 0.12), (0, 0, 2.5), yellow, bevel=0.02))
+        parts.append(box((1.84, 0.25, 0.04), (0, -0.78 + i * 0.26, 0.12), plank if i % 2 else plank2, rot=(0, 0, rnd.uniform(-0.01, 0.01)), bevel=0.008))
+    parts.append(box((2.0, 2.0, 0.1), (0, 0, 2.5), iron, bevel=0.02))
+    for i in range(5):
+        parts.append(box((1.9, 0.34, 0.03), (0, -0.7 + i * 0.35, 2.57), plank2, bevel=0.006))
     for cx in (-1, 1):
         for cy in (-1, 1):
-            parts.append(box((0.1, 0.1, 2.5), (cx * 0.93, cy * 0.93, 1.25), yellow, bevel=0.015))
-    # Bars on three sides; the side facing +y (towards the shack) is open.
+            parts.append(box((0.09, 0.09, 2.5), (cx * 0.93, cy * 0.93, 1.25), iron, bevel=0.015))
+            parts.append(box((0.12, 0.12, 0.08), (cx * 0.93, cy * 0.93, 2.6), brass, bevel=0.02))
     for side in range(3):
-        for i in range(6):
-            off = -0.75 + i * 0.3
-            ang = [0.0, R90, -R90][side]
+        for i in range(7):
+            off = -0.78 + i * 0.26
             pos = [(off, -0.93), (-0.93, off), (0.93, off)][side]
-            parts.append(cyl(0.018, 2.4, (pos[0], pos[1], 1.25), bars_m, verts=6))
+            parts.append(cyl(0.014, 2.36, (pos[0], pos[1], 1.3), iron, verts=6))
         rail = [(0, -0.93), (-0.93, 0), (0.93, 0)][side]
-        size = (1.9, 0.08, 0.08) if side == 0 else (0.08, 1.9, 0.08)
-        parts.append(box(size, (rail[0], rail[1], 1.05), yellow, bevel=0.01))
-    parts.append(box((0.3, 0.3, 0.06), (0, 0, 2.43), mat("soot")))
-    parts.append(sphere(0.08, (0, 0, 2.36), mat("glass", rough=0.2, emit=3.0), segs=10, rings=6))
+        for z in (0.95, 1.9):
+            size = (1.9, 0.07, 0.06) if side == 0 else (0.07, 1.9, 0.06)
+            parts.append(box(size, (rail[0], rail[1], z), iron, bevel=0.01))
+    # Bail and shackle for the cable.
+    for s in (-1, 1):
+        parts.append(strut((s * 0.9, 0, 2.55), (0, 0, 2.95), 0.03, iron, sides=6))
+    parts.append(place(torus(0.06, 0.015, (0, 0, 0), brass, (0, 0, 0), 10, 4), (0, 0, 3.0), (R90, 0, 0)))
+    # A caged lamp under the roof.
+    parts.append(box((0.24, 0.24, 0.05), (0, 0.4, 2.42), mat("soot")))
+    parts.append(place(sphere(0.07, (0, 0, 0), mat("glass", rough=0.2, emit=3.0), segs=10, rings=6), (0, 0.4, 2.33)))
+    for k in range(4):
+        a = k / 4 * math.tau
+        parts.append(strut((0, 0.4, 2.42), (math.cos(a) * 0.08, 0.4 + math.sin(a) * 0.08, 2.25), 0.006, iron, sides=4))
     o = join(parts, "Cage")
-    wobble(o, 0.004, 42)
-    wear(o, 1.0)
+    bake(o)
+    wobble(o, 0.003, 42)
+    ao(o, 0.35, rays=10)
     return o
 
 
 def liftstop():
-    timber = mat("wood_dark", rough=0.85)
+    """The bottom end of the lift: a timber post with a cross arm, a caged
+    lantern, a brass bell and a blank enamel plate (lettering in the game)."""
+    timber = mat("wood_dark", rough=0.88)
+    old = mat("wood_grey", rough=0.9)
+    iron = mat("iron", metal=0.5, rough=0.5)
     parts = [box((0.16, 0.16, 2.3), (0, 0, 1.15), timber, bevel=0.02)]
     parts.append(box((0.95, 0.12, 0.12), (0.32, 0, 2.18), timber, bevel=0.02))
-    parts.append(box((0.4, 0.06, 0.06), (0.2, 0, 1.95), timber, rot=(0, 0.8, 0)))
-    # Hazard base plate: yellow and black stripes.
-    for i in range(6):
-        parts.append(box((0.7 / 6, 0.7, 0.05), (-0.35 + (i + 0.5) * 0.7 / 6, 0, 0.025), mat("yellow" if i % 2 == 0 else "soot", rough=0.7)))
+    parts.append(strut((0.05, 0, 1.85), (0.45, 0, 2.12), 0.035, old))
+    # Sole plate and wedges where it stands on the rock.
+    parts.append(box((0.7, 0.24, 0.1), (0, 0, 0.05), old, bevel=0.02))
+    parts.append(box((0.24, 0.7, 0.1), (0, 0, 0.05), timber, bevel=0.02))
+    for s in (-1, 1):
+        parts.append(place(box((0.2, 0.08, 0.12), (0, 0, 0), old, bevel=0.01), (s * 0.15, 0.0, 0.15), (0, s * 0.5, 0)))
     # Hanging lantern.
-    parts.append(cyl(0.006, 0.18, (0.62, 0, 2.02), mat("dark_steel"), verts=4))
-    parts.append(box((0.18, 0.18, 0.24), (0.62, 0, 1.82), mat("glass", rough=0.2, emit=3.0), bevel=0.02))
+    parts.append(cyl(0.006, 0.18, (0.62, 0, 2.02), iron, verts=4))
+    parts.append(box((0.16, 0.16, 0.22), (0.62, 0, 1.82), mat("glass", rough=0.2, emit=3.0), bevel=0.02))
     for cx in (-1, 1):
         for cy in (-1, 1):
-            parts.append(box((0.02, 0.02, 0.28), (0.62 + cx * 0.09, cy * 0.09, 1.82), mat("soot")))
+            parts.append(box((0.02, 0.02, 0.27), (0.62 + cx * 0.085, cy * 0.085, 1.82), mat("soot")))
     parts.append(box((0.22, 0.22, 0.03), (0.62, 0, 1.96), mat("soot")))
-    # A signal bell and a cream enamel sign (lettering added in the game).
-    parts.append(cyl(0.09, 0.12, (-0.02, 0.12, 1.75), mat("brass", metal=0.9, rough=0.3), verts=12, r2=0.04))
-    parts.append(box((0.04, 0.5, 0.3), (0.0, -0.1, 1.45), mat("cream", rough=0.5), rot=(0, 0, 0), bevel=0.01))
+    parts.append(cyl(0.12, 0.04, (0.62, 0, 1.69), mat("soot"), verts=8, r2=0.08))
+    # Bell and the enamel plate.
+    parts.append(cyl(0.085, 0.12, (-0.02, 0.13, 1.75), mat("brass", metal=0.85, rough=0.3), verts=12, r2=0.04))
+    parts.append(box((0.03, 0.03, 0.08), (-0.02, 0.08, 1.85), iron))
+    parts.append(box((0.03, 0.5, 0.3), (0.095, -0.0, 1.42), mat("soot", rough=0.6), bevel=0.012))
+    parts.append(box((0.02, 0.46, 0.26), (0.105, -0.0, 1.42), mat("cream", rough=0.45), bevel=0.01))
     o = join(parts, "LiftStop")
+    bake(o)
     wobble(o, 0.003, 43)
-    wear(o, 1.0)
+    ao(o, 0.25, rays=10)
     return o
 
 
-# --- Props -----------------------------------------------------------------------------------------
+def timber_post():
+    """A weathered fence post: squared, chamfered top, an iron staple for the rope."""
+    old = mat("wood_grey", rough=0.92)
+    iron = mat("iron", metal=0.5, rough=0.6)
+    parts = [box((0.13, 0.13, 1.15), (0, 0, 0.575), old, bevel=0.02)]
+    cap = cyl(0.095, 0.08, (0, 0, 1.18), old, verts=4, r2=0.02)
+    cap.rotation_euler = (0, 0, math.radians(45))
+    parts.append(cap)
+    parts.append(place(torus(0.035, 0.007, (0, 0, 0), iron, (0, 0, 0), 8, 4), (0, 0.07, 0.92), (0, R90, 0)))
+    parts.append(box((0.135, 0.135, 0.06), (0, 0, 0.06), mat("wood_dark", rough=0.95), bevel=0.01))
+    o = join(parts, "TimberPost")
+    bake(o)
+    for v in o.data.vertices:
+        # Split and weathered: a little crooked, a crack down one face.
+        v.co.x += 0.012 * math.sin(v.co.z * 3.1)
+    wobble(o, 0.004, 61)
+    ao(o, 0.15, rays=8)
+    return o
+
+
+def shaft_sign():
+    """The enamel "Open shaft" sign on its own post (lettering in the game):
+    a cream plate with a red border, chipped to the iron at the corners."""
+    old = mat("wood_grey", rough=0.92)
+    parts = [box((0.13, 0.13, 1.5), (0, 0, 0.75), old, bevel=0.02)]
+    parts.append(box((0.9, 0.035, 0.52), (0.0, -0.09, 1.25), mat("soot", rough=0.6), bevel=0.015))
+    parts.append(box((0.86, 0.02, 0.48), (0.0, -0.105, 1.25), mat("red", rough=0.4), bevel=0.01))
+    parts.append(box((0.78, 0.02, 0.4), (0.0, -0.112, 1.25), mat("cream", rough=0.4), bevel=0.008))
+    for (x, z) in [(-0.4, 1.47), (0.4, 1.47), (-0.4, 1.03), (0.4, 1.03)]:
+        parts.append(place(sphere(0.014, (0, 0, 0), mat("brass", metal=0.8), segs=6, rings=4), (x, -0.12, z)))
+    # Chips: bare iron showing through at two corners.
+    parts.append(place(box((0.06, 0.01, 0.04), (0, 0, 0), mat("soot"), bevel=0.004), (0.36, -0.122, 1.44), (0, 0.3, 0)))
+    parts.append(place(box((0.04, 0.01, 0.05), (0, 0, 0), mat("soot"), bevel=0.004), (-0.37, -0.122, 1.06), (0, -0.2, 0)))
+    o = join(parts, "ShaftSign")
+    bake(o)
+    wobble(o, 0.002, 64)
+    ao(o, 0.15, rays=8)
+    return o
+
+
+# --- Trees and props --------------------------------------------------------------------------------
 def pine():
+    """Tiers of star-shaped boughs that droop at the tips, each turned a
+    little, on a bare trunk."""
     rnd = random.Random(7)
-    parts = [cyl(0.14, 1.4, (0, 0, 0.7), mat("wood_dark", rough=0.9), verts=7, r2=0.09)]
-    for k in range(4):
-        r = 1.45 - k * 0.32
-        c = cyl(r, 1.5, (rnd.uniform(-0.05, 0.05), rnd.uniform(-0.05, 0.05), 1.55 + k * 0.85), mat("pine", rough=0.9), verts=8, r2=0.05)
-        c.rotation_euler = (rnd.uniform(-0.05, 0.05), rnd.uniform(-0.05, 0.05), rnd.uniform(0, 1))
-        parts.append(c)
+    bark = mat("bark", rough=0.9)
+    needles = [mat("pine", rough=0.9), mat("leaf_dark", rough=0.9)]
+    parts = [cyl(0.15, 1.6, (0, 0, 0.8), bark, verts=7, r2=0.07)]
+    tiers = 6
+    for k in range(tiers):
+        t = k / (tiers - 1)
+        r = 1.55 * (1.0 - t * 0.78)
+        h = 1.25 + k * 0.78
+        pts = 9 if k < 4 else 7
+        me = bpy.data.meshes.new("bough")
+        bm = bmesh.new()
+        top_v = bm.verts.new((0, 0, h + 0.55 + 0.1 * (1 - t)))
+        rim = []
+        rot = rnd.uniform(0, math.tau)
+        for i in range(pts * 2):
+            a = rot + i / (pts * 2) * math.tau
+            rr = r * (1.0 if i % 2 == 0 else 0.62) * rnd.uniform(0.9, 1.08)
+            z = h - (0.28 if i % 2 == 0 else 0.05) * (r / 1.5)
+            rim.append(bm.verts.new((math.cos(a) * rr, math.sin(a) * rr, z)))
+        under = bm.verts.new((0, 0, h - 0.05))
+        for i in range(len(rim)):
+            bm.faces.new((top_v, rim[i], rim[(i + 1) % len(rim)]))
+            bm.faces.new((under, rim[(i + 1) % len(rim)], rim[i]))
+        bm.to_mesh(me)
+        bm.free()
+        ob = bpy.data.objects.new("bough", me)
+        bpy.context.collection.objects.link(ob)
+        ob.data.materials.append(needles[k % 2])
+        parts.append(ob)
+    parts.append(cyl(0.12, 0.7, (0, 0, 1.25 + tiers * 0.78 + 0.25), needles[0], verts=6, r2=0.0))
     o = join(parts, "Pine")
-    wobble(o, 0.06, 51)
-    wear(o, 0.6, 0.25)
+    bake(o)
+    wobble(o, 0.05, 51)
+    ao(o, 0.9, rays=10, strength=0.8, top=0.2)
     return o
 
 
 def oak():
+    """A broad oak: a forked trunk with a few limbs and a crown of lumpy,
+    flat-bottomed clumps (darker underneath), not a ball."""
     rnd = random.Random(8)
-    parts = [cyl(0.17, 2.0, (0, 0, 1.0), mat("wood_dark", rough=0.9), verts=7, r2=0.11)]
-    parts.append(cyl(0.06, 0.9, (0.25, 0, 1.8), mat("wood_dark", rough=0.9), (0, 0.7, 0), 5))
-    for k in range(5):
-        bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=rnd.uniform(0.75, 1.05),
-                                              location=(rnd.uniform(-0.6, 0.6), rnd.uniform(-0.6, 0.6), 2.4 + rnd.uniform(0, 0.9)))
-        s = bpy.context.active_object
-        s.data.materials.append(mat("leaf", rough=0.9))
-        parts.append(s)
+    bark = mat("bark", rough=0.9)
+    leaves = [mat("leaf", rough=0.9), mat("leaf_dark", rough=0.9)]
+    parts = [cyl(0.2, 2.2, (0, 0, 1.1), bark, verts=8, r2=0.13)]
+    limbs = [((0, 0, 1.8), (0.9, 0.3, 3.0)), ((0, 0, 1.9), (-0.8, 0.5, 3.1)), ((0, 0, 2.0), (0.1, -0.9, 3.2)), ((0, 0, 2.1), (0.2, 0.3, 3.6))]
+    for a, b in limbs:
+        parts.append(strut(a, b, 0.09, bark, sides=6))
+    clumps = []
+    for i in range(14):
+        a = i * 2.39996
+        ring = 0.35 + 0.85 * math.sqrt((i + 0.5) / 14)
+        z = 3.1 + 1.1 * (1.0 - ring / 1.2) + rnd.uniform(-0.15, 0.15)
+        clumps.append(((math.cos(a) * ring * 1.15, math.sin(a) * ring * 1.15, z), rnd.uniform(0.55, 0.8)))
+    for i, (c, r) in enumerate(clumps):
+        cl = lump(r, Vector(c), leaves[0 if c[2] > 3.6 else 1], i + 3, scale=(1.1, 1.1, 0.85), sub=2, rough=0.28, flat_bottom=-r * 0.55)
+        smooth(cl, 50)
+        parts.append(cl)
     o = join(parts, "Oak")
-    wobble(o, 0.07, 52)
-    wear(o, 0.6, 0.3)
-    return o
-
-
-def fence_post():
-    parts = [cyl(0.065, 1.0, (0, 0, 0.5), mat("yellow", rough=0.6), verts=8)]
-    for z in (0.62, 0.86):
-        parts.append(cyl(0.068, 0.1, (0, 0, z), mat("soot", rough=0.7), verts=8))
-    parts.append(cyl(0.075, 0.05, (0, 0, 1.02), mat("soot", rough=0.7), verts=8, r2=0.03))
-    o = join(parts, "FencePost")
-    wobble(o, 0.003, 61)
-    wear(o)
-    return o
-
-
-def crate():
-    wood = mat("wood", rough=0.85)
-    dark = mat("wood_dark", rough=0.85)
-    parts = [box((0.8, 0.8, 0.7), (0, 0, 0.35), wood, bevel=0.01)]
-    for (sx, sy) in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-        for z in (0.06, 0.64):
-            size = (0.06, 0.84, 0.1) if sx else (0.84, 0.06, 0.1)
-            parts.append(box(size, (sx * 0.41, sy * 0.41, z), dark, bevel=0.01))
-        size = (0.06, 0.1, 0.62) if sx else (0.1, 0.06, 0.62)
-        for t in (-0.36, 0.36):
-            loc = (sx * 0.41, t, 0.35) if sx else (t, sy * 0.41, 0.35)
-            parts.append(box(size, loc, dark, bevel=0.01))
-    o = join(parts, "Crate")
-    wobble(o, 0.004, 62)
-    wear(o)
+    bake(o)
+    wobble(o, 0.04, 52)
+    ao(o, 1.2, rays=12, strength=0.85, top=0.22)
     return o
 
 
 def barrel():
-    b = cyl(0.33, 0.9, (0, 0, 0.45), mat("wood", rough=0.85), verts=14)
-    subdivide(b, 3)
-    for v in b.data.vertices:
-        z = (v.co.z - 0.45) / 0.45
-        k = 1.0 + 0.1 * (1.0 - z * z)
-        v.co.x *= k
-        v.co.y *= k
-    parts = [b]
-    for z in (0.12, 0.45, 0.78):
-        zz = (z - 0.45) / 0.45
-        parts.append(torus(0.33 * (1.0 + 0.1 * (1.0 - zz * zz)) + 0.005, 0.015, (0, 0, z), mat("dark_steel", metal=0.6, rough=0.5), (0, 0, 0), 16, 4))
+    """A bulging stave barrel: sixteen staves with seams, four iron hoops that
+    follow the bulge, and a planked head."""
+    woods = [mat("wood", rough=0.85), mat("wood_dark", rough=0.85)]
+    iron = mat("iron", metal=0.5, rough=0.55)
+    H, R0, R1 = 0.9, 0.29, 0.345
+    def rad(z):
+        t = (z / H) * 2 - 1
+        return R0 + (R1 - R0) * (1 - t * t)
+    parts = []
+    n = 16
+    for k in range(n):
+        a0 = k / n * math.tau + 0.01
+        a1 = (k + 1) / n * math.tau - 0.01
+        me = bpy.data.meshes.new("stave")
+        bm = bmesh.new()
+        rows = []
+        for j in range(9):
+            z = H * j / 8
+            r = rad(z)
+            rows.append([bm.verts.new((math.cos(a) * r, math.sin(a) * r, z)) for a in (a0, (a0 + a1) / 2, a1)]
+                        + [bm.verts.new((math.cos(a) * (r - 0.025), math.sin(a) * (r - 0.025), z)) for a in (a1, a0)])
+        for j in range(8):
+            ra, rb = rows[j], rows[j + 1]
+            for i in range(5):
+                bm.faces.new((ra[i], ra[(i + 1) % 5], rb[(i + 1) % 5], rb[i]))
+        bm.faces.new(list(reversed(rows[0])))
+        bm.faces.new(rows[-1])
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        bm.to_mesh(me)
+        bm.free()
+        ob = bpy.data.objects.new("stave", me)
+        bpy.context.collection.objects.link(ob)
+        ob.data.materials.append(woods[k % 2 if k % 5 else 1])
+        parts.append(ob)
+    for z in (0.07, 0.25, H - 0.25, H - 0.07):
+        r = rad(z) + 0.006
+        parts.append(place(lathe([(r, -0.025), (r + 0.008, -0.02), (r + 0.008, 0.02), (r, 0.025)], 32, "hoop", iron), (0, 0, z)))
+    for i in range(5):
+        parts.append(box((0.11, 0.56, 0.03), (-0.22 + i * 0.11, 0, H - 0.04), woods[i % 2], bevel=0.005))
+    head = cyl(R0 - 0.01, 0.02, (0, 0, H - 0.045), woods[1], verts=24)
+    parts.append(head)
     o = join(parts, "Barrel")
-    wobble(o, 0.004, 63)
-    wear(o)
+    bake(o)
+    # Trim the head planks to the round.
+    for v in o.data.vertices:
+        if v.co.z > H - 0.07:
+            l = math.hypot(v.co.x, v.co.y)
+            if l > R0 - 0.012:
+                v.co.x *= (R0 - 0.012) / l
+                v.co.y *= (R0 - 0.012) / l
+    wobble(o, 0.003, 63)
+    ao(o, 0.2, rays=10)
     return o
 
 
+def crate():
+    """A planked crate: boards with gaps, edge battens, a diagonal brace,
+    nails, and a stencilled red band."""
+    rnd = random.Random(62)
+    woods = [mat("wood", rough=0.85), mat("wood_grey", rough=0.88)]
+    dark = mat("wood_dark", rough=0.88)
+    S, Hh = 0.8, 0.7
+    parts = [box((S - 0.06, S - 0.06, Hh - 0.06), (0, 0, Hh / 2), mat("soot", rough=0.9))]
+    for face in range(4):
+        rot = face * R90
+        for i in range(4):
+            z = 0.06 + i * (Hh - 0.04) / 4 + 0.08
+            b = box((S - 0.02, 0.025, (Hh - 0.04) / 4 - 0.02), (0, -S / 2 + 0.012, z), woods[(i + face) % 2], rot=(0, 0, 0), bevel=0.005)
+            b.rotation_euler = (rnd.uniform(-0.012, 0.012), 0, rnd.uniform(-0.01, 0.01))
+            bake(b)
+            b.data.transform(Matrix.Rotation(rot, 4, "Z"))
+            parts.append(b)
+        for x in (-1, 1):
+            bt = box((0.08, 0.035, Hh), (x * (S / 2 - 0.04), -S / 2 - 0.005, Hh / 2), dark, bevel=0.008)
+            bake(bt)
+            bt.data.transform(Matrix.Rotation(rot, 4, "Z"))
+            parts.append(bt)
+        for z in (0.04, Hh - 0.04):
+            bt = box((S, 0.035, 0.08), (0, -S / 2 - 0.005, z), dark, bevel=0.008)
+            bake(bt)
+            bt.data.transform(Matrix.Rotation(rot, 4, "Z"))
+            parts.append(bt)
+        if face % 2 == 0:
+            br = strut((-S / 2 + 0.08, -S / 2 - 0.015, 0.1), (S / 2 - 0.08, -S / 2 - 0.015, Hh - 0.1), 0.028, dark)
+            br.data.transform(Matrix.Rotation(rot, 4, "Z"))
+            parts.append(br)
+        else:
+            band = box((0.42, 0.01, 0.1), (0, -S / 2 - 0.016, Hh * 0.55), mat("red", rough=0.6))
+            bake(band)
+            band.data.transform(Matrix.Rotation(rot, 4, "Z"))
+            parts.append(band)
+        for x in (-1, 1):
+            for z in (0.04, Hh - 0.04):
+                nl = place(sphere(0.008, (0, 0, 0), mat("iron", metal=0.5), segs=6, rings=4), (x * (S / 2 - 0.04), -S / 2 - 0.025, z))
+                nl.data.transform(Matrix.Rotation(rot, 4, "Z"))
+                parts.append(nl)
+    for i in range(4):
+        parts.append(box((S - 0.02, S / 4 - 0.02, 0.025), (0, -S / 2 + S / 8 + i * S / 4, Hh + 0.01), woods[i % 2], bevel=0.005))
+    o = join(parts, "Crate")
+    bake(o)
+    wobble(o, 0.003, 62)
+    ao(o, 0.2, rays=10)
+    return o
+
+
+def spoil_heap():
+    """The pile of dirt by the dig site: a lumpy mound with stones in it."""
+    dirt = mat("umber", rough=0.95)
+    parts = [lump(1.0, Vector((0, 0, -0.1)), dirt, 9, scale=(2.0, 1.6, 1.25), sub=3, rough=0.22, flat_bottom=-0.05)]
+    parts.append(lump(0.7, Vector((1.5, 0.7, -0.1)), mat("wood_dark", rough=0.95), 10, scale=(1.4, 1.2, 0.9), sub=2, rough=0.25, flat_bottom=-0.05))
+    rnd = random.Random(9)
+    for i in range(14):
+        a = rnd.uniform(0, math.tau)
+        r = rnd.uniform(0.4, 2.4)
+        x, y = math.cos(a) * r, math.sin(a) * r * 0.75
+        z = max(0.0, 1.1 * (1 - (r / 2.2) ** 2)) - 0.05
+        parts.append(lump(rnd.uniform(0.08, 0.2), Vector((x, y, z)), mat("stone", rough=0.9), i + 30, sub=1, rough=0.3))
+    o = join(parts, "SpoilHeap")
+    bake(o)
+    ao(o, 0.6, rays=10, top=0.2)
+    return o
+
+
+def grass_tuft():
+    """A clump of grass blades leaning out, for scattering on the field."""
+    rnd = random.Random(11)
+    mats_ = [mat("leaf", rough=0.9), mat("leaf_dark", rough=0.9)]
+    parts = []
+    for i in range(9):
+        a = i / 9 * math.tau + rnd.uniform(-0.3, 0.3)
+        h = rnd.uniform(0.16, 0.3)
+        lean = rnd.uniform(0.04, 0.12)
+        me = bpy.data.meshes.new("blade")
+        bm = bmesh.new()
+        w = 0.016
+        base = Vector((math.cos(a) * 0.03, math.sin(a) * 0.03, 0))
+        side = Vector((-math.sin(a), math.cos(a), 0)) * w
+        out = Vector((math.cos(a), math.sin(a), 0))
+        v0 = bm.verts.new(base - side)
+        v1 = bm.verts.new(base + side)
+        v2 = bm.verts.new(base + out * lean * 0.5 + side * 0.6 + Vector((0, 0, h * 0.55)))
+        v3 = bm.verts.new(base + out * lean * 0.5 - side * 0.6 + Vector((0, 0, h * 0.55)))
+        v4 = bm.verts.new(base + out * lean + Vector((0, 0, h)))
+        bm.faces.new((v0, v1, v2, v3))
+        bm.faces.new((v3, v2, v4))
+        bm.to_mesh(me)
+        bm.free()
+        ob = bpy.data.objects.new("blade", me)
+        bpy.context.collection.objects.link(ob)
+        ob.data.materials.append(mats_[i % 2])
+        parts.append(ob)
+    o = join(parts, "GrassTuft")
+    bake(o)
+    me = o.data
+    if "Col" not in me.color_attributes:
+        me.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+    col = me.color_attributes["Col"]
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            z = me.vertices[me.loops[li].vertex_index].co.z
+            s = 0.45 + 0.55 * min(1.0, z / 0.25)
+            col.data[li].color = (s, s, s, 1.0)
+    return o
+
+
+def timber_set():
+    """One set of shaft timbering for the lift shaft: a square frame of heavy
+    timbers with lagging boards behind (seen from inside the shaft)."""
+    timber = mat("wood_dark", rough=0.9)
+    old = mat("wood_grey", rough=0.9)
+    rnd = random.Random(70)
+    parts = []
+    h = 1.45
+    for i in range(4):
+        rot = i * R90
+        b = box((2 * h + 0.3, 0.24, 0.24), (0, h, 0), timber, bevel=0.02)
+        bake(b)
+        b.data.transform(Matrix.Rotation(rot, 4, "Z"))
+        parts.append(b)
+        for k in range(6):
+            lg = box((0.4, 0.04, 1.4), (-h + 0.2 + k * 0.5 + rnd.uniform(-0.03, 0.03), h + 0.16, -0.75), old if k % 2 else timber, rot=(rnd.uniform(-0.02, 0.02), 0, 0), bevel=0.008)
+            bake(lg)
+            lg.data.transform(Matrix.Rotation(rot, 4, "Z"))
+            parts.append(lg)
+    o = join(parts, "TimberSet")
+    bake(o)
+    wobble(o, 0.008, 71)
+    ao(o, 0.4, rays=8)
+    return o
+
+
+MODELS_LIST = [("mole", mole), ("robomole", robomole), ("shack", shack), ("headframe", headframe), ("cage", cage),
+               ("liftstop", liftstop), ("pine", pine), ("oak", oak), ("timber_post", timber_post), ("shaft_sign", shaft_sign),
+               ("crate", crate), ("barrel", barrel), ("spoil_heap", spoil_heap), ("grass_tuft", grass_tuft), ("timber_set", timber_set)]
+
 if __name__ == "__main__":
-    for name, fn in [("mole", mole), ("robomole", robomole), ("shack", shack), ("headframe", headframe), ("cage", cage),
-                     ("liftstop", liftstop), ("pine", pine), ("oak", oak), ("fence_post", fence_post), ("crate", crate),
-                     ("barrel", barrel)]:
+    only = sys.argv[1:]
+    for name, fn in MODELS_LIST:
+        if only and name not in only:
+            continue
         reset()
         o = fn()
         export([o], name)

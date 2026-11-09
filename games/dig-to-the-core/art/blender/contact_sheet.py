@@ -12,7 +12,7 @@ import bpy  # noqa: E402
 from mathutils import Vector  # noqa: E402
 from kit import MODELS, reset  # noqa: E402
 
-TILE = 360
+TILE = int(os.environ.get("TILE", "320"))
 
 
 def render_one(path, out):
@@ -33,7 +33,13 @@ def render_one(path, out):
     cam_data.lens = 50
     cam = bpy.data.objects.new("cam", cam_data)
     scene.collection.objects.link(cam)
-    d = Vector((1.0, -1.25, 0.75)).normalized() * size * 1.55
+    name = os.path.basename(path)[:-4]
+    view = (1.0, -1.25, 0.75)
+    if name in ("mole", "robomole") or name.startswith("find_"):
+        view = (0.9, 1.3, 0.55)       # creatures and finds face +Y: look at their fronts
+    elif name in ("shack",):
+        view = (1.3, -0.9, 0.6)
+    d = Vector(view).normalized() * size * 1.55
     cam.location = center + d
     cam.rotation_euler = (center - cam.location).to_track_quat("-Z", "Y").to_euler()
     scene.camera = cam
@@ -53,7 +59,7 @@ def render_one(path, out):
     scene.world = world
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
-    scene.cycles.samples = 24
+    scene.cycles.samples = int(os.environ.get("SAMPLES", "16"))
     scene.cycles.use_denoising = True
     scene.render.resolution_x = TILE
     scene.render.resolution_y = TILE
@@ -65,8 +71,8 @@ def render_one(path, out):
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].endswith(".png") else os.path.join(tempfile.gettempdir(), "dig_models.png")
-    filt = sys.argv[2] if len(sys.argv) > 2 else ""
-    names = sorted(f for f in os.listdir(MODELS) if f.endswith(".glb") and filt in f)
+    filt = sys.argv[2].split(",") if len(sys.argv) > 2 else [""]
+    names = sorted(f for f in os.listdir(MODELS) if f.endswith(".glb") and any(x == f[:-4] or (x.endswith("*") and f.startswith(x[:-1])) or x == "" for x in filt))
     tmp = tempfile.mkdtemp()
     tiles = []
     for n in names:
@@ -74,7 +80,7 @@ def main():
         render_one(os.path.join(MODELS, n), p)
         tiles.append((n[:-4], p))
     from PIL import Image, ImageDraw
-    cols = 4
+    cols = int(os.environ.get("COLS", "5"))
     rows = (len(tiles) + cols - 1) // cols
     sheet = Image.new("RGB", (cols * TILE, rows * (TILE + 24)), (30, 24, 20))
     draw = ImageDraw.Draw(sheet)

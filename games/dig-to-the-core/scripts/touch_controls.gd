@@ -64,11 +64,12 @@ func dig_center() -> Vector2:
 
 
 func jump_center() -> Vector2:
-	return Vector2(size.x - 315.0, size.y - 78.0)
+	# Clear of DIG (rims at least 12 px apart) and of the bottom edge.
+	return Vector2(size.x - 335.0, size.y - 74.0)
 
 
 func action_center() -> Vector2:
-	return Vector2(size.x - 300.0, size.y - 230.0)
+	return Vector2(size.x - 330.0, size.y - 252.0)
 
 
 func stick_home() -> Vector2:
@@ -336,18 +337,17 @@ func _draw() -> void:
 	_icon(str(GameState.tool_def().icon), dc + off + Vector2(-2, -24), 64.0)
 	UiTheme.draw_text_centered(self, font, "Dig", dc + off + Vector2(0, 26), 34, UiTheme.CREAM, 6)
 	UiTheme.draw_text_centered(self, bold, "hold", dc + off + Vector2(0, 56), 17, Color(UiTheme.CREAM, 0.85), 4)
-	# JUMP
+	# JUMP: soot iron, so it doesn't compete with DIG.
 	var jc := jump_center()
-	_gauge_button(jc, JUMP_RADIUS, Color(0.24, 0.38, 0.5, 0.92), _jump_finger != NONE)
+	_gauge_button(jc, JUMP_RADIUS, Color(0.24, 0.21, 0.18, 0.95), _jump_finger != NONE)
 	UiTheme.draw_text_centered(self, font, "Jump", jc + (Vector2(0, 4) if _jump_finger != NONE else Vector2.ZERO), 22, UiTheme.CREAM, 5)
-	# Context button (lift / shop), pulsing gently so it's noticed.
+	# Context button (lift / shop): no halo; its icon nods now and then so it's noticed.
 	if action_text != "":
 		var ac := action_center()
-		var glow := 0.5 + 0.5 * sin(_pulse * 4.0)
-		draw_circle(ac, ACTION_RADIUS + 14.0 + glow * 4.0, Color(action_color, 0.18 + 0.12 * glow))
 		_gauge_button(ac, ACTION_RADIUS, action_color.darkened(0.15), _action_finger != NONE)
 		if action_icon != "":
-			_icon(action_icon, ac + Vector2(0, -20), 40.0)
+			var nod := maxf(0.0, sin(_pulse * 3.0)) ** 6 * 5.0
+			_icon(action_icon, ac + Vector2(0, -20 - nod), 40.0)
 		UiTheme.draw_text_centered(self, font, action_text, ac + Vector2(0, 12), 22, UiTheme.CREAM, 5)
 		if action_sub != "":
 			UiTheme.draw_text_centered(self, bold, action_sub, ac + Vector2(0, 36), 15, UiTheme.CREAM, 4)

@@ -21,10 +21,12 @@ var upgrade_levels := {}               # key -> level
 var helper_counts: Array = []          # per helper type
 var found: Array = []                  # per find: dug out yet?
 var deepest := 0.0                     # metres: the deepest you've stood
-var lift_stop := Vector3.INF           # the lift's bottom stop (INF = none yet)
+var lift_stop := Vector3.INF           # the lift's bottom stop: the lamp post (INF = none yet)
+var lift_spot := Vector3.INF           # where the lift sets you down, next to the post
 var dug_volume := 0.0                  # m³ dug, all zones
 var ore_points := 0                    # bits of ore dug
-var boost_until := 0.0                 # rewarded ad: 2x digging until then (unix time)
+var clock := 0.0                       # game seconds played (boosts run on this, so they only tick while you play)
+var boost_until := 0.0                 # rewarded ad: 2x digging until then (on `clock`)
 var helper_rush_until := 0.0
 var owns_remove_ads := false           # IAP: no ads + permanent 2x
 var owns_golden := false               # IAP: golden tools (cosmetic, +10%)
@@ -73,8 +75,10 @@ func reset_state(keep_purchases: bool = false) -> void:
 		found.append(false)
 	deepest = 0.0
 	lift_stop = Vector3.INF
+	lift_spot = Vector3.INF
 	dug_volume = 0.0
 	ore_points = 0
+	clock = 0.0
 	boost_until = 0.0
 	helper_rush_until = 0.0
 	owns_remove_ads = keep[0] if keep_purchases else false
@@ -96,13 +100,18 @@ func reset_state(keep_purchases: bool = false) -> void:
 
 
 func now() -> float:
-	return Time.get_unix_time_from_system()
+	## The game clock: boosts count down while you play, at the game's speed
+	## (the dev time scale and the playthrough bot speed them up too).
+	return clock
 
 
 func _process(delta: float) -> void:
+	# Long hitches (loading, a background tab) don't count as play.
+	var dt := minf(delta, 0.25 * maxf(1.0, Engine.time_scale))
+	clock += dt
 	if not has_won:
-		play_time += minf(delta, 1.0)
-	_income_t += minf(delta, 1.0)
+		play_time += dt
+	_income_t += dt
 	if _income.is_empty() or _income_t >= INCOME_BUCKET:
 		_income_t = 0.0
 		_income.append(0.0)
@@ -464,8 +473,10 @@ func to_dict() -> Dictionary:
 		"found": found,
 		"deepest": deepest,
 		"lift_stop": [lift_stop.x, lift_stop.y, lift_stop.z] if lift_stop.is_finite() else [],
+		"lift_spot": [lift_spot.x, lift_spot.y, lift_spot.z] if lift_spot.is_finite() else [],
 		"dug_volume": dug_volume,
 		"ore_points": ore_points,
+		"clock": clock,
 		"boost_until": boost_until,
 		"helper_rush_until": helper_rush_until,
 		"owns_remove_ads": owns_remove_ads,
@@ -529,10 +540,19 @@ func load_game() -> void:
 		found[i] = bool(fd[i]) if i < fd.size() else false
 	deepest = float(data.get("deepest", 0.0))
 	lift_stop = _vec(data.get("lift_stop", []))
+	lift_spot = _vec(data.get("lift_spot", []))
+	if lift_stop.is_finite() and not lift_spot.is_finite():
+		lift_spot = lift_stop
 	dug_volume = float(data.get("dug_volume", 0.0))
 	ore_points = int(data.get("ore_points", 0))
+	clock = float(data.get("clock", 0.0))
 	boost_until = float(data.get("boost_until", 0.0))
 	helper_rush_until = float(data.get("helper_rush_until", 0.0))
+	# Saves from before the game clock stored wall-clock times: drop those boosts.
+	if boost_until > clock + Balance.BOOST_STACK_MAX + 1.0:
+		boost_until = 0.0
+	if helper_rush_until > clock + Balance.HELPER_RUSH_DURATION * 5.0 + 1.0:
+		helper_rush_until = 0.0
 	starter_offered = bool(data.get("starter_offered", false))
 	play_time = float(data.get("play_time", 0.0))
 	has_won = bool(data.get("has_won", false))

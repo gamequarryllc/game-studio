@@ -16,6 +16,8 @@ const STEP_HEIGHT := 0.5
 const WORLD_LAYER := 1       # the field, the shack, the lift
 const ROCK_LAYER := 2        # the dig site
 const MAX_STRIKES_PER_FRAME := 3
+const VIEWMODEL_LAYER := 1 << 10   # the tool and hands: drawn only by the viewmodel camera
+const LAMP_COLOR := Color(1.0, 0.78, 0.47)   # lamp amber, a little whiter in the middle of the beam
 
 var field: DigField
 var bounds_min := Vector3(-36.0, -300.0, -36.0)
@@ -30,6 +32,9 @@ var on_floor := false
 var yaw := 0.0
 var pitch := -0.2
 var camera: Camera3D
+var vm_camera: Camera3D            # draws the tool on top of the world (its own SubViewport)
+var vm_viewport: SubViewport
+var vm_env: Environment
 var head: Node3D
 var rig: ToolRig
 var lamp: SpotLight3D
@@ -41,6 +46,7 @@ var fall_speed := 0.0                      # how fast we were falling when we la
 var landed := false
 
 var _shape: CollisionShape3D
+var _probe := CapsuleShape3D.new()
 var _cam_offset_y := 0.0
 var _bob_t := 0.0
 var _strike_acc := 0.0
@@ -63,6 +69,8 @@ func _ready() -> void:
 	_shape.shape = capsule
 	_shape.position = Vector3(0, HEIGHT * 0.5, 0)
 	add_child(_shape)
+	_probe.radius = RADIUS - 0.06
+	_probe.height = HEIGHT - 0.12
 
 	head = Node3D.new()
 	head.position = Vector3(0, EYE, 0)
@@ -72,24 +80,28 @@ func _ready() -> void:
 	camera.near = 0.06
 	camera.far = 400.0
 	camera.current = true
+	camera.cull_mask = 0xFFFFF & ~VIEWMODEL_LAYER
 	head.add_child(camera)
+	_build_viewmodel_camera()
 
 	lamp = SpotLight3D.new()
-	lamp.light_color = Color(1.0, 0.9, 0.72)
+	lamp.light_color = LAMP_COLOR
 	lamp.light_energy = 1.5
 	lamp.spot_range = Balance.HEADLAMP_RANGE
 	lamp.spot_angle = Balance.HEADLAMP_ANGLE
-	lamp.spot_angle_attenuation = 1.6
-	lamp.spot_attenuation = 1.1
-	lamp.light_specular = 0.8
+	lamp.spot_angle_attenuation = 1.3
+	lamp.spot_attenuation = 1.25
+	lamp.light_specular = 0.6
 	lamp.position = Vector3(0.0, 0.12, 0.0)
+	lamp.layers = 1 | VIEWMODEL_LAYER   # lights only reach cameras whose cull mask includes their layers
 	camera.add_child(lamp)
 	fill = OmniLight3D.new()
-	fill.light_color = Color(1.0, 0.85, 0.65)
+	fill.light_color = Color(1.0, 0.72, 0.42)
 	fill.light_energy = 0.3
-	fill.omni_range = 3.2
-	fill.omni_attenuation = 1.8
+	fill.omni_range = 3.4
+	fill.omni_attenuation = 1.6
 	fill.light_specular = 0.0
+	fill.layers = 1 | VIEWMODEL_LAYER
 	camera.add_child(fill)
 
 	rig = ToolRig.new()
@@ -98,6 +110,51 @@ func _ready() -> void:
 
 	rotation.y = yaw
 	head.rotation.x = pitch
+
+
+func _build_viewmodel_camera() -> void:
+	## The tool in your hands is drawn by a second camera into a transparent
+	## SubViewport laid over the 3D view (under the HUD). It shares the world,
+	## so the headlamp and the sun still light it, but it can never clip into
+	## the rock or the near plane.
+	var layer := CanvasLayer.new()
+	layer.layer = 1
+	add_child(layer)
+	var box := SubViewportContainer.new()
+	box.stretch = true
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(box)
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vm_viewport = SubViewport.new()
+	vm_viewport.transparent_bg = true
+	vm_viewport.handle_input_locally = false
+	vm_viewport.gui_disable_input = true
+	vm_viewport.audio_listener_enable_3d = false
+	box.add_child(vm_viewport)
+	vm_env = Environment.new()
+	vm_env.background_mode = Environment.BG_CLEAR_COLOR
+	vm_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	vm_env.ambient_light_color = Color(0.5, 0.5, 0.5)
+	vm_env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
+	vm_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	vm_env.tonemap_white = 6.0
+	vm_camera = Camera3D.new()
+	vm_camera.cull_mask = VIEWMODEL_LAYER
+	vm_camera.near = 0.01
+	vm_camera.far = 6.0
+	vm_camera.fov = camera.fov
+	vm_camera.environment = vm_env
+	vm_viewport.add_child(vm_camera)
+	vm_camera.current = true
+
+
+func sync_viewmodel(env: Environment, render_scale: float = -1.0) -> void:
+	## Keeps the tool lit like the world around it (called by World).
+	vm_env.ambient_light_color = env.ambient_light_color
+	vm_env.ambient_light_energy = env.ambient_light_energy
+	if render_scale > 0.0:
+		vm_viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+		vm_viewport.scaling_3d_scale = render_scale
 
 
 # --- Looking -------------------------------------------------------------------------
@@ -152,6 +209,9 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_animate_camera(minf(delta, 0.05))
+	if vm_camera != null and camera.is_inside_tree():
+		vm_camera.global_transform = camera.global_transform
+		vm_camera.fov = camera.fov
 
 
 func _move(delta: float) -> void:
@@ -238,8 +298,10 @@ func collides(p: Vector3) -> bool:
 				return true
 	if not is_inside_tree():
 		return false
+	# A slightly slimmer capsule than the real one: leaning on a wall isn't
+	# being stuck in it (and unstick() mustn't push you up the wall for it).
 	var q := PhysicsShapeQueryParameters3D.new()
-	q.shape = _shape.shape
+	q.shape = _probe
 	q.transform = Transform3D(Basis(), p + Vector3(0, HEIGHT * 0.5 + 0.06, 0))
 	q.collision_mask = WORLD_LAYER | ROCK_LAYER
 	q.exclude = [get_rid()]
@@ -295,11 +357,13 @@ func _update_tool(delta: float) -> void:
 	# Headlamp: brighter underground, reach from the upgrade.
 	var under := clampf(-position.y / 6.0, 0.0, 1.0)
 	lamp.spot_range = GameState.lamp_range()
-	lamp.light_energy = lerpf(0.4, 1.5, under)
-	fill.light_energy = lerpf(0.0, 0.3, under)
+	lamp.light_energy = lerpf(0.4, 1.7, under)
+	fill.light_energy = lerpf(0.0, 0.35, under)
 	if field != null and field.material != null:
 		field.material.set_shader_parameter("lamp_pos", eye_pos())
 		field.material.set_shader_parameter("lamp_range", lamp.spot_range)
+		for m in field.decor_mats.values():
+			(m as ShaderMaterial).set_shader_parameter("lamp_range", lamp.spot_range)
 
 
 func strike(damage: float) -> Dictionary:

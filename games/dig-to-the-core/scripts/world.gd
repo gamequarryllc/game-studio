@@ -10,7 +10,6 @@ extends Node3D
 ## controls, fades to the inside of the moving cage (bars, a swinging lamp,
 ## rock streaming past) and the depth gauge spins to the other end.
 
-const SPAWN_YAW := 0.32           # the lift and shack ahead-left, the dig site ahead-right
 const FLOAT_POOL := 16
 const STREAM_EVERY := 0.25
 
@@ -19,7 +18,8 @@ var surface: Surface
 var player: Player
 var helpers: HelperCrew
 var hud: Hud
-var force_dig := false         # tests and screenshots
+var force_dig := false         # tests and screenshots: holds Dig
+var bot_move := Vector2.ZERO   # the playthrough bot's walk stick (added to the keys and the touch stick)
 
 var _env: Environment
 var _sun: DirectionalLight3D
@@ -28,7 +28,9 @@ var _lift_stop_light: OmniLight3D
 var _ride: Dictionary = {}     # the lift ride in progress
 var _ride_cage: Node3D
 var _ride_tube: MeshInstance3D
-var _ride_tube_mat: StandardMaterial3D
+var _ride_props: Node3D
+var _ride_flash: OmniLight3D
+var _ride_lamps: Array = []
 var _floats: Array = []
 var _float_i := 0
 var _pending := 0.0
@@ -81,7 +83,7 @@ func _ready() -> void:
 	if GameState.player_pos.is_finite():
 		player.set_view(GameState.player_yaw, GameState.player_pitch)
 	else:
-		player.set_view(SPAWN_YAW, -0.18)
+		player.look_at_point(Surface.SPAWN_LOOK)   # the composed spawn view
 	player.unstick()
 	GameState.player = player
 	player.struck.connect(_on_struck)
@@ -106,6 +108,15 @@ func _ready() -> void:
 	if DisplayServer.is_touchscreen_available():
 		hud.set_touch_mode(true)
 	_update_env(1.0)
+
+
+func is_riding() -> bool:
+	return not _ride.is_empty()
+
+
+func near() -> String:
+	## What the context button would do here: "lift_top", "lift_stop", "shop" or "".
+	return _near
 
 
 func _exit_tree() -> void:
@@ -147,7 +158,8 @@ func skip_to_zone(z: int) -> void:
 	var fl := field.floor_below(Vector3(0.0, y + 1.0, 0.0), 6.0)
 	var at := Vector3(0.0, fl + 0.05, 0.0)
 	GameState.note_depth(-at.y)
-	GameState.lift_stop = at + Vector3(0.9, 0.0, 0.0)
+	GameState.lift_spot = at
+	GameState.lift_stop = lift_stop_spot(at, 0.0)
 	_place_lift_stop()
 	move_player(at, 0.0, -0.3)
 
@@ -156,54 +168,76 @@ func skip_to_zone(z: int) -> void:
 # Environment: sunny on top, dark underground
 # =====================================================================================
 func _build_environment() -> void:
+	## Late afternoon on top: a low warm sun with long shadows, a cool sky fill
+	## and a warm haze that fades the hills. Underground the same environment
+	## turns into a zone-tinted dark (see _update_env).
 	_env = Environment.new()
 	_env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color(0.3, 0.55, 0.92)
-	sm.sky_horizon_color = Color(0.72, 0.84, 0.95)
-	sm.ground_bottom_color = Color(0.25, 0.3, 0.2)
-	sm.ground_horizon_color = Color(0.62, 0.72, 0.6)
-	sm.sun_angle_max = 20.0
+	sm.sky_top_color = SKY_TOP
+	sm.sky_horizon_color = SKY_HORIZON
+	sm.sky_curve = 0.12
+	sm.ground_bottom_color = Color(0.22, 0.2, 0.15)
+	sm.ground_horizon_color = Color(0.7, 0.6, 0.45)
+	sm.sun_angle_max = 24.0
+	sm.sun_curve = 0.08
 	sky.sky_material = sm
 	_env.sky = sky
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	_env.ambient_light_color = Color(0.62, 0.66, 0.72)
-	_env.ambient_light_energy = 0.6
+	_env.ambient_light_color = SURFACE_AMBIENT
+	_env.ambient_light_energy = 0.55
 	_env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
 	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	_env.tonemap_white = 6.0
 	_env.fog_enabled = true
-	_env.fog_light_color = Color(0.7, 0.8, 0.9)
-	_env.fog_density = 0.002
+	_env.fog_light_color = SURFACE_HAZE
+	_env.fog_density = SURFACE_FOG
 	_env.fog_sky_affect = 0.0
 	var we := WorldEnvironment.new()
 	we.environment = _env
 	add_child(we)
 	_sun = DirectionalLight3D.new()
-	_sun.rotation = Vector3(deg_to_rad(-52.0), deg_to_rad(-35.0), 0.0)
-	_sun.light_color = Color(1.0, 0.95, 0.85)
-	_sun.light_energy = 1.05
+	# Low in the west-south-west, behind the spawn view's left shoulder.
+	_sun.rotation = Vector3(deg_to_rad(-19.0), deg_to_rad(-118.0), 0.0)
+	_sun.light_color = SUN_COLOR
+	_sun.light_energy = SUN_ENERGY
 	_sun.shadow_enabled = true
-	_sun.directional_shadow_max_distance = 60.0
+	_sun.shadow_bias = 0.04
+	_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	_sun.directional_shadow_max_distance = 70.0
 	add_child(_sun)
+
+
+const SKY_TOP := Color(0.42, 0.52, 0.64)
+const SKY_HORIZON := Color(0.95, 0.8, 0.6)
+const SURFACE_AMBIENT := Color(0.56, 0.65, 0.78)   # cool sky fill (#8EA6C8)
+const SURFACE_HAZE := Color(0.86, 0.74, 0.58)
+const SURFACE_FOG := 0.0065
+const SUN_COLOR := Color(1.0, 0.83, 0.6)           # warm key (#FFD39A)
+const SUN_ENERGY := 1.25
+const LAMP_FALLOFF := 8.0                          # metres to near-black with the stock headlamp
 
 
 func _update_env(blend: float) -> void:
 	## Fades from the sunny field to the dark of the shaft as you go down.
+	## Down there the headlamp's amber pool falls off to the zone's own dark
+	## tint by about 8 m (further with the Headlamp Range upgrade).
 	var d := maxf(0.0, -player.position.y)
 	var under := smoothstep(0.5, 9.0, d)
 	var zi := field.zone_of_y(player.position.y)
 	var zone: Dictionary = Balance.ZONES[zi]
-	var fogc: Color = zone.fog
-	var amb := Color(0.62, 0.66, 0.72).lerp(fogc.lightened(0.3), under)
+	var tint: Color = zone.fog
+	var amb := SURFACE_AMBIENT.lerp(tint.lightened(0.18), under)
 	_env.ambient_light_color = _env.ambient_light_color.lerp(amb, blend)
-	_env.ambient_light_energy = lerpf(0.6, 0.07, under)
-	_env.fog_light_color = _env.fog_light_color.lerp(Color(0.7, 0.8, 0.9).lerp(fogc.darkened(0.35), under), blend)
-	_env.fog_density = lerpf(0.002, 0.07, under)
-	_sun.light_energy = lerpf(1.05, 0.0, smoothstep(0.0, 7.0, d))
+	_env.ambient_light_energy = lerpf(0.55, 0.32, under)
+	_env.fog_light_color = _env.fog_light_color.lerp(SURFACE_HAZE.lerp(tint, under), blend)
+	var reach := LAMP_FALLOFF * sqrt(GameState.upgrade_mult("lamp"))
+	_env.fog_density = lerpf(SURFACE_FOG, 2.4 / reach, under)
+	_sun.light_energy = lerpf(SUN_ENERGY, 0.0, smoothstep(0.0, 7.0, d))
 	_sun.visible = _sun.light_energy > 0.01
 	_sun.shadow_enabled = d < 4.0
+	player.sync_viewmodel(_env)
 
 
 # =====================================================================================
@@ -231,7 +265,7 @@ func _process(delta: float) -> void:
 	if player.target.hit:
 		field.material.set_shader_parameter("hit_pos", player.target.pos)
 	field.material.set_shader_parameter("hit_amount", _hit_glow)
-	field.material.set_shader_parameter("hit_radius", GameState.tool_radius() * 0.55)
+	field.material.set_shader_parameter("hit_radius", GameState.tool_radius() * 0.4)
 	_slow_t += delta
 	if _slow_t > 0.5:
 		_slow_t = 0.0
@@ -265,6 +299,7 @@ func _controls() -> void:
 		mv.x += 1.0
 	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
 		mv.x -= 1.0
+	mv += bot_move
 	var touch := hud.touch
 	var blocked := hud.is_blocking() or not _ride.is_empty()
 	if touch.visible:
@@ -380,12 +415,13 @@ func ride_lift(down: bool) -> void:
 	var to: Vector3
 	var yaw: float
 	if down:
-		to = GameState.lift_stop + Vector3(0, 0.05, 0)
-		yaw = atan2(to.x, to.z)   # facing away from the edge, towards the middle
-		var away := Vector3(-to.x, 0, -to.z)
-		yaw = atan2(-away.x, -away.z) if away.length() > 0.5 else player.yaw
+		to = lift_arrival() + Vector3(0, 0.05, 0)
+		# Facing away from the lamp post, into the shaft.
+		var away := to - GameState.lift_stop
+		away.y = 0.0
+		yaw = atan2(-away.x, -away.z) if away.length() > 0.2 else player.yaw
 	else:
-		to = Surface.LIFT_POS + Vector3(0.0, 0.05, -1.7)   # stepping out of the cage, towards the shack
+		to = Surface.LIFT_EXIT + Vector3(0.0, 0.05, 0.0)   # stepping out of the cage, towards the site and the shack
 		yaw = atan2(-(Surface.SHACK_DOOR.x - to.x), -(Surface.SHACK_DOOR.z - to.z))
 	var dist := absf(to.y - from.y)
 	var dur := clampf(Balance.LIFT_RIDE_MIN + dist * Balance.LIFT_RIDE_PER_M, Balance.LIFT_RIDE_MIN, Balance.LIFT_RIDE_MAX)
@@ -414,6 +450,8 @@ func _update_ride(delta: float) -> void:
 		field.flush()
 		_ride_cage.visible = true
 		_ride_tube.visible = true
+		_ride_props.visible = true
+		_dress_ride(r.from, r.to)
 		hud.fade_to(0.0, 0.2)
 		Sound.loop("lift", "lift_loop", true, -5.0)
 	if int(r.stage) == 1:
@@ -424,9 +462,15 @@ func _update_ride(delta: float) -> void:
 		var p := from.lerp(to, e)
 		player.position = p
 		_ride_cage.global_position = p
-		_ride_tube.global_position = p
-		var zi := field.zone_of_y(p.y)
-		_ride_tube_mat.albedo_color = (Balance.ZONES[zi].band as Color).darkened(0.25) if p.y < -1.0 else Color(0.4, 0.3, 0.2)
+		_ride_tube.global_position = p + Vector3(0, 1.0, 0)
+		# The nearest set lamp flashes by.
+		var best := 99.0
+		for lp in _ride_lamps:
+			var dd: float = absf((lp as Vector3).y - (p.y + 1.6))
+			if dd < best:
+				best = dd
+				_ride_flash.global_position = lp
+		_ride_flash.light_energy = clampf(1.0 - best / 2.0, 0.0, 1.0) * 1.6
 		player.shake(0.06)
 		var swing: Node3D = _ride_cage.get_node("Lamp")
 		swing.rotation.z = sin(t * 5.0) * 0.25
@@ -440,6 +484,11 @@ func _update_ride(delta: float) -> void:
 		if float(r.t2) >= 0.16:
 			_ride_cage.visible = false
 			_ride_tube.visible = false
+			_ride_props.visible = false
+			_ride_flash.light_energy = 0.0
+			for c in _ride_props.get_children():
+				if c != _ride_flash:
+					c.queue_free()
 			player.set_physics_process(true)
 			player.teleport(r.to, r.yaw, -0.25)
 			Sound.loop("lift", "lift_loop", false)
@@ -457,9 +506,10 @@ func _update_ride(delta: float) -> void:
 
 
 func _build_ride_cage() -> void:
-	## What you see while riding: a cage round you, a swinging lamp, and a
-	## tube of rock that streams past (it moves with you, and its texture is
-	## in world space, so the rock slides by).
+	## What you see while riding: the cage round you with its swinging lamp
+	## and the cable overhead, and a shaft that streams past: rock walls in
+	## each layer's colour (world-space, so they slide by), timber sets every
+	## few metres, a lamp now and then, and an enamel sign at each new layer.
 	_ride_cage = Node3D.new()
 	_ride_cage.visible = false
 	add_child(_ride_cage)
@@ -482,46 +532,140 @@ func _build_ride_cage() -> void:
 	bulb.position = Vector3(0, -0.35, 0)
 	lamp.add_child(bulb)
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.8, 0.5)
-	light.light_energy = 1.6
-	light.omni_range = 6.0
+	light.light_color = Color(1.0, 0.76, 0.45)
+	light.light_energy = 1.4
+	light.omni_range = 5.0
 	light.position = Vector3(0, -0.4, 0)
+	light.layers = 1 | Player.VIEWMODEL_LAYER
 	lamp.add_child(light)
+	# The cable, rising out of sight.
+	var cable := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.025
+	cm.bottom_radius = 0.025
+	cm.height = 30.0
+	cm.radial_segments = 6
+	cable.mesh = cm
+	cable.material_override = Models.flat(Color(0.2, 0.18, 0.16), 0.5, 0.5)
+	cable.position = Vector3(0, 3.0 + 15.0, 0)
+	_ride_cage.add_child(cable)
 	_ride_tube = MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 2.0
-	cyl.bottom_radius = 2.0
-	cyl.height = 14.0
-	cyl.radial_segments = 16
-	cyl.rings = 4
+	cyl.top_radius = 2.25
+	cyl.bottom_radius = 2.25
+	cyl.height = 22.0
+	cyl.radial_segments = 14
+	cyl.rings = 6
 	cyl.cap_top = false
 	cyl.cap_bottom = false
 	cyl.flip_faces = true
 	_ride_tube.mesh = cyl
-	_ride_tube_mat = StandardMaterial3D.new()
-	_ride_tube_mat.albedo_texture = DigField.detail_texture(Balance.WORLD_SEED)
-	_ride_tube_mat.uv1_triplanar = true
-	_ride_tube_mat.uv1_world_triplanar = true
-	_ride_tube_mat.uv1_scale = Vector3(0.35, 0.35, 0.35)
-	_ride_tube_mat.roughness = 0.95
-	_ride_tube.material_override = _ride_tube_mat
+	var tm := ShaderMaterial.new()
+	tm.shader = load("res://shaders/ride_shaft.gdshader")
+	tm.set_shader_parameter("paint_tex", load("res://textures/rock_paint.png"))
+	tm.set_shader_parameter("strata_tex", DigField.strata_texture())
+	var zimg := Image.create(Balance.zone_count(), 1, false, Image.FORMAT_RGB8)
+	for z in Balance.zone_count():
+		zimg.set_pixel(z, 0, Balance.MATERIALS[int(Balance.ZONES[z].mats[0])].color)
+	tm.set_shader_parameter("zone_tex", ImageTexture.create_from_image(zimg))
+	tm.set_shader_parameter("zones", float(Balance.zone_count()))
+	tm.set_shader_parameter("zone_depth", Balance.ZONE_DEPTH)
+	_ride_tube.material_override = tm
 	_ride_tube.visible = false
 	_ride_tube.position = Vector3(0, 1.0, 0)
 	add_child(_ride_tube)
+	_ride_props = Node3D.new()
+	add_child(_ride_props)
+	_ride_flash = OmniLight3D.new()
+	_ride_flash.light_color = Color(1.0, 0.74, 0.42)
+	_ride_flash.light_energy = 0.0
+	_ride_flash.omni_range = 4.0
+	_ride_flash.layers = 1 | Player.VIEWMODEL_LAYER
+	_ride_props.add_child(_ride_flash)
+
+
+func _dress_ride(from: Vector3, to: Vector3) -> void:
+	## Timber sets, lamps and layer signs along the stretch of shaft the ride
+	## covers (freed when it's over).
+	for c in _ride_props.get_children():
+		if c != _ride_flash:
+			c.queue_free()
+	_ride_lamps = []
+	var top := maxf(from.y, to.y) + 4.0
+	var bottom := minf(from.y, to.y) - 4.0
+	var span := top - bottom
+	var mesh := DigField.decor_mesh("timber_set")
+	var xfs: Array = []
+	var y := top
+	var i := 0
+	while y > bottom:
+		var t := clampf((from.y - y) / maxf(from.y - to.y, 0.001), 0.0, 1.0) if from.y != to.y else 0.0
+		var p := from.lerp(to, t)
+		p.y = y
+		xfs.append(Transform3D(Basis(Vector3.UP, float(i % 4) * PI * 0.5), p + Vector3(0, 0.5, 0)))
+		if i % 4 == 2:
+			_ride_lamps.append(p + Vector3(1.25, 1.4, 0.0))
+		y -= 3.0
+		i += 1
+	if mesh != null and not xfs.is_empty():
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = xfs.size()
+		for k in xfs.size():
+			mm.set_instance_transform(k, xfs[k])
+		var mi := MultiMeshInstance3D.new()
+		mi.multimesh = mm
+		_ride_props.add_child(mi)
+	# Lamps on the sets: little glowing boxes (one moving light does the flashes).
+	var lm := Models.flat(Color(1.0, 0.82, 0.5), 0.3, 0.0, 3.0)
+	for lp in _ride_lamps:
+		var b := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.12, 0.18, 0.12)
+		b.mesh = bm
+		b.material_override = lm
+		b.position = lp
+		_ride_props.add_child(b)
+	# A sign at the top of each layer you pass.
+	for z in range(1, Balance.zone_count()):
+		var zy := -z * Balance.ZONE_DEPTH
+		if zy > top or zy < bottom:
+			continue
+		var t := clampf((from.y - zy) / maxf(from.y - to.y, 0.001), 0.0, 1.0)
+		var p := from.lerp(to, t)
+		var plate := MeshInstance3D.new()
+		var pm := BoxMesh.new()
+		pm.size = Vector3(0.05, 0.42, 1.3)
+		plate.mesh = pm
+		plate.material_override = Models.flat(UiTheme.CREAM, 0.5)
+		plate.position = Vector3(p.x - 1.42, zy + 1.6, p.z)
+		_ride_props.add_child(plate)
+		var l := Label3D.new()
+		l.text = "%s  ·  %d m" % [Balance.ZONES[z].name, int(-zy)]
+		l.font = UiTheme.display_font()
+		l.font_size = 48
+		l.outline_size = 0
+		l.modulate = UiTheme.ENAMEL_RED
+		l.pixel_size = 0.0045
+		l.position = Vector3(p.x - 1.39, zy + 1.6, p.z)
+		l.rotation = Vector3(0, PI * 0.5, 0)
+		_ride_props.add_child(l)
 
 
 func _build_lift_stop() -> void:
-	## The bottom end of the lift: a timber post with a lantern, a bell and a
-	## sign (Blender: art/blender/world_models.py).
+	## The bottom end of the lift: a timber post with a lantern, a bell and an
+	## enamel plate (Blender: art/blender/world_models.py).
 	_lift_stop = Node3D.new()
 	_lift_stop.visible = false
 	add_child(_lift_stop)
 	_lift_stop.add_child(Models.instance("liftstop"))
 	_lift_stop_light = OmniLight3D.new()
-	_lift_stop_light.light_color = Color(1.0, 0.75, 0.4)
-	_lift_stop_light.light_energy = 1.6
+	_lift_stop_light.light_color = Color(1.0, 0.72, 0.4)
+	_lift_stop_light.light_energy = 1.5
 	_lift_stop_light.omni_range = 7.0
 	_lift_stop_light.position = Vector3(0.6, 1.8, 0)
+	_lift_stop_light.layers = 1 | Player.VIEWMODEL_LAYER
 	_lift_stop.add_child(_lift_stop_light)
 	var sign := Label3D.new()
 	sign.text = "Lift\nup"
@@ -530,7 +674,7 @@ func _build_lift_stop() -> void:
 	sign.outline_size = 0
 	sign.modulate = Color(0.71, 0.2, 0.165)
 	sign.pixel_size = 0.004
-	sign.position = Vector3(0.03, 1.45, 0.1)
+	sign.position = Vector3(0.12, 1.42, 0.0)
 	sign.rotation = Vector3(0, PI / 2, 0)
 	_lift_stop.add_child(sign)
 	var tag := Label3D.new()
@@ -545,6 +689,35 @@ func _build_lift_stop() -> void:
 	tag.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	_lift_stop.add_child(tag)
 	_place_lift_stop()
+
+
+func lift_stop_spot(p: Vector3, facing: float) -> Vector3:
+	## Where the lamp post goes when the lift stop follows you down: a step
+	## behind you (or to a side), in open space, on the floor. Never right
+	## where you stand, so it can't end up in front of your eyes.
+	var back := Vector3(sin(facing), 0.0, cos(facing))
+	var dirs := [back, back.rotated(Vector3.UP, PI * 0.5), back.rotated(Vector3.UP, -PI * 0.5),
+		back.rotated(Vector3.UP, PI * 0.25), back.rotated(Vector3.UP, -PI * 0.25), -back]
+	for dist in [1.1, 0.85, 0.65]:
+		for dv in dirs:
+			var c: Vector3 = p + (dv as Vector3) * float(dist)
+			c.x = clampf(c.x, -DigField.HALF + 0.35, DigField.HALF - 0.35)
+			c.z = clampf(c.z, -DigField.HALF + 0.35, DigField.HALF - 0.35)
+			if field.solid_at(c + Vector3(0, 0.6, 0)) or field.solid_at(c + Vector3(0, 1.5, 0)) or field.solid_at(c + Vector3(0, 2.2, 0)):
+				continue
+			var fl := field.floor_below(c + Vector3(0, 1.0, 0), 3.0)
+			if absf(fl - p.y) > 1.0:
+				continue
+			return Vector3(c.x, fl, c.z)
+	return p + back * 0.6
+
+
+func lift_arrival() -> Vector3:
+	## Where the lift sets you down: the spot you stood on, on today's floor.
+	var s := GameState.lift_spot if GameState.lift_spot.is_finite() else GameState.lift_stop
+	if field.is_loaded(field.zone_of_y(s.y - 0.5)):
+		return Vector3(s.x, field.floor_below(s + Vector3(0, 1.2, 0), 30.0), s.z)
+	return s
 
 
 func _place_lift_stop() -> void:
@@ -568,7 +741,8 @@ func _update_depth() -> void:
 		var inside := absf(player.position.x) < DigField.HALF and absf(player.position.z) < DigField.HALF
 		if inside and (not stop.is_finite() or d > -stop.y + Balance.LIFT_STOP_STEP):
 			var first := not stop.is_finite() or -stop.y < Balance.LIFT_MIN_DEPTH
-			GameState.lift_stop = player.position
+			GameState.lift_spot = player.position
+			GameState.lift_stop = lift_stop_spot(player.position, player.yaw)
 			_place_lift_stop()
 			if d >= Balance.LIFT_MIN_DEPTH and (first or int(d) % 10 < 3):
 				hud.toast("The lift now reaches %d m" % int(d))
@@ -583,6 +757,7 @@ func _update_depth() -> void:
 
 
 func _update_slow() -> void:
+	field.settle_landmarks()
 	# The lift stop sits on the floor: if it's been dug out from under, it drops.
 	if GameState.lift_stop.is_finite():
 		var s := GameState.lift_stop
@@ -614,7 +789,7 @@ func _on_dug(r: Dictionary) -> void:
 
 
 func _on_struck(_r: Dictionary, _at: Vector3, _normal: Vector3) -> void:
-	_hit_glow = 0.55 if GameState.tool_def().kind in ["drill", "laser", "borer"] else 0.25
+	_hit_glow = 0.32 if GameState.tool_def().kind in ["drill", "laser", "borer"] else 0.16
 
 
 func _build_float_pool() -> void:
@@ -675,12 +850,9 @@ func _on_find_exposed(f: int) -> void:
 	var node := Node3D.new()
 	add_child(node)
 	node.global_position = p
-	var l := Sprite3D.new()
-	l.texture = UiTheme.icon(str(d.icon))
-	l.pixel_size = 0.006
-	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	l.no_depth_test = true
-	l.shaded = false
+	# The find itself (art/blender/finds.py), popping out and turning.
+	var l := Models.instance("find_" + str(d.icon)) if ResourceLoader.exists("res://models/find_%s.glb" % d.icon) else Node3D.new()
+	l.scale = Vector3.ONE * 0.3
 	node.add_child(l)
 	var light := OmniLight3D.new()
 	light.light_color = rc.lightened(0.3)
@@ -724,16 +896,23 @@ func _update_pops(delta: float) -> void:
 		var t: float = pp.t
 		var node: Node3D = pp.node
 		var from: Vector3 = pp.from
+		var model: Node3D = pp.label
 		if t < 1.6:
+			# Pop up out of the rock with a little overshoot, turning slowly.
 			var k := minf(t / 0.5, 1.0)
 			node.global_position = from + Vector3(0, 0.7 * (1.0 - pow(1.0 - k, 3.0)), 0)
-			(pp.label as Sprite3D).pixel_size = 0.006 * (0.4 + 0.6 * k + 0.08 * sin(t * 10.0))
+			var pop := 1.0 + 0.25 * sin(minf(t / 0.35, 1.0) * PI)
+			model.scale = Vector3.ONE * (0.3 + 0.7 * k) * pop
+			model.rotation.y = t * 2.2
 		else:
-			# Fly into your pocket.
+			# Fly towards your pocket, shrinking away before it reaches the lens.
 			var k := minf((t - 1.6) / 0.45, 1.0)
-			var to := player.eye_pos() + Vector3(0, -0.4, 0)
-			node.global_position = (from + Vector3(0, 0.7, 0)).lerp(to, k * k)
-			(pp.label as Sprite3D).pixel_size = 0.006 * (1.0 - 0.8 * k)
+			var eye := player.eye_pos()
+			var start := from + Vector3(0, 0.7, 0)
+			var to := eye + (start - eye).normalized() * 0.9 + Vector3(0, -0.45, 0)
+			node.global_position = start.lerp(to, k * k)
+			model.scale = Vector3.ONE * maxf(0.001, 1.0 - k)
+			model.rotation.y += delta * 9.0
 			(pp.light as OmniLight3D).light_energy = 3.0 * (1.0 - k)
 			if k >= 1.0:
 				node.queue_free()
@@ -831,6 +1010,8 @@ func _fit_render_scale() -> void:
 	var vp := get_viewport()
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	vp.scaling_3d_scale = s
+	if player != null:
+		player.sync_viewmodel(_env, s)
 
 
 func _watch_frame_rate(delta: float) -> void:

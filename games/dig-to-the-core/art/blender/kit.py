@@ -18,32 +18,58 @@ from mathutils import Matrix, Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODELS = os.path.normpath(os.path.join(HERE, "..", "..", "models"))
 
-# The palette (see the art bible in NOTES.md) plus a few working colours.
-PAL = {
-    "amber": (0.95, 0.71, 0.27),
-    "brass": (0.75, 0.54, 0.24),
-    "cream": (0.94, 0.89, 0.78),
-    "red": (0.71, 0.2, 0.16),
-    "soot": (0.14, 0.11, 0.09),
-    "verdigris": (0.31, 0.64, 0.57),
-    "umber": (0.42, 0.29, 0.18),
-    # working colours
-    "steel": (0.55, 0.56, 0.58),
-    "dark_steel": (0.24, 0.24, 0.26),
-    "wood": (0.5, 0.33, 0.19),
-    "wood_dark": (0.33, 0.21, 0.12),
-    "rubber": (0.09, 0.08, 0.08),
-    "yellow": (0.93, 0.68, 0.12),
-    "orange": (0.88, 0.42, 0.1),
-    "tin": (0.52, 0.55, 0.56),
-    "stone": (0.46, 0.44, 0.42),
-    "fur": (0.27, 0.22, 0.2),
-    "pink": (0.93, 0.56, 0.6),
-    "leaf": (0.26, 0.45, 0.22),
-    "pine": (0.17, 0.34, 0.2),
-    "glass": (1.0, 0.82, 0.46),
-    "laser": (1.0, 0.25, 0.35),
+# The art bible's seven swatches (sRGB). Every other colour below is a tint
+# or a mix of these, so the models stay on palette.
+SWATCH = {
+    "amber": (0.949, 0.71, 0.267),      # Lamp Amber
+    "brass": (0.753, 0.541, 0.243),     # Hoist Brass
+    "cream": (0.937, 0.89, 0.784),      # Enamel Cream
+    "red": (0.71, 0.2, 0.165),          # Signal Red
+    "soot": (0.141, 0.11, 0.09),        # Soot Iron
+    "verdigris": (0.31, 0.639, 0.569),  # Verdigris
+    "umber": (0.42, 0.29, 0.18),        # Topsoil Umber
 }
+
+
+def mix(a, b, t):
+    a = SWATCH.get(a, a) if isinstance(a, str) else a
+    b = SWATCH.get(b, b) if isinstance(b, str) else b
+    return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
+
+
+PAL = dict(SWATCH)
+PAL.update({
+    # metals: soot iron worn toward cream
+    "iron": mix("soot", "cream", 0.16),
+    "steel": mix("soot", "cream", 0.42),
+    "bright_steel": mix("soot", "cream", 0.64),
+    "dark_steel": mix("soot", "cream", 0.08),
+    # timber: umber toward amber (fresh) or soot (old)
+    "wood": mix(mix("umber", "amber", 0.28), "cream", 0.08),
+    "wood_dark": mix("umber", "soot", 0.42),
+    "wood_grey": mix(mix("umber", "cream", 0.32), "soot", 0.12),
+    "leather": mix("umber", "amber", 0.42),
+    "leather_dark": mix("umber", "soot", 0.25),
+    "canvas": mix("umber", "soot", 0.55),
+    "rubber": mix("soot", "umber", 0.15),
+    "rope": mix("brass", "cream", 0.35),
+    # living things
+    "fur": mix("soot", "umber", 0.55),
+    "fur_light": mix("umber", "cream", 0.25),
+    "pink": mix("red", "cream", 0.55),
+    "leaf": mix(mix("verdigris", "umber", 0.45), "amber", 0.18),
+    "leaf_dark": mix(mix(mix("verdigris", "umber", 0.45), "amber", 0.12), "soot", 0.35),
+    "pine": mix("verdigris", "soot", 0.58),
+    "bark": mix("umber", "soot", 0.35),
+    # stone and bone
+    "stone": mix(mix("soot", "cream", 0.5), "umber", 0.15),
+    "bone": mix("cream", "umber", 0.16),
+    "tin": mix("soot", "cream", 0.55),
+    # light
+    "glass": mix("amber", "cream", 0.35),
+    "glow_red": mix("red", "amber", 0.35),
+    "laser": mix("red", "amber", 0.15),
+})
 
 _mats = {}
 
@@ -279,6 +305,193 @@ def join(objs, name):
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
     return o
+
+
+def lathe(profile, segs=16, name="lathe", m=None, loc=(0, 0, 0)):
+    """Spins a profile of (radius, z) points round the Z axis (closed at the
+    ends when the radius there is 0)."""
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    rings = []
+    for (r, z) in profile:
+        if r <= 1e-5:
+            rings.append([bm.verts.new((0, 0, z))])
+        else:
+            rings.append([bm.verts.new((math.cos(a) * r, math.sin(a) * r, z))
+                          for a in [i / segs * math.tau for i in range(segs)]])
+    for i in range(len(rings) - 1):
+        a, b = rings[i], rings[i + 1]
+        if len(a) == 1 and len(b) == 1:
+            continue
+        if len(a) == 1:
+            for j in range(segs):
+                bm.faces.new((a[0], b[j], b[(j + 1) % segs]))
+        elif len(b) == 1:
+            for j in range(segs):
+                bm.faces.new((a[j], b[0], a[(j + 1) % segs]))
+        else:
+            for j in range(segs):
+                bm.faces.new((a[j], a[(j + 1) % segs], b[(j + 1) % segs], b[j]))
+    if len(rings[0]) > 1:
+        bm.faces.new(list(reversed(rings[0])))
+    if len(rings[-1]) > 1:
+        bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    o.location = loc
+    bpy.context.view_layer.objects.active = o
+    if m:
+        _set_mat(o, m)
+    return o
+
+
+def place(o, loc=(0, 0, 0), rot=(0, 0, 0), scale=(1, 1, 1)):
+    """Moves, turns and scales an object, then bakes that into its mesh."""
+    o.location = loc
+    o.rotation_euler = rot
+    o.scale = scale
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.select_all(action="DESELECT")
+    o.select_set(True)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    return o
+
+
+def smooth(o, angle=40):
+    """Smooth shading below `angle` degrees, flat above (crisp bevels)."""
+    me = o.data
+    for p in me.polygons:
+        p.use_smooth = True
+    try:
+        bpy.context.view_layer.objects.active = o
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(angle))
+    except Exception:
+        pass
+
+
+def strut(a, b, r, m=None, sides=4, name="strut"):
+    """A square (or n-sided) timber or rod from point a to point b."""
+    a = Vector(a)
+    b = Vector(b)
+    o = bar(sides, r, 1.0, 1, (0, 0, 0), m, name=name)
+    d = b - a
+    o.scale = (1.0, d.length, 1.0)
+    o.rotation_mode = "QUATERNION"
+    o.rotation_quaternion = Vector((0, 1, 0)).rotation_difference(d.normalized())
+    o.location = a
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.select_all(action="DESELECT")
+    o.select_set(True)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    return o
+
+
+def glove(m_leather=None, m_cuff=None, m_sleeve=None, r=0.022, name="Glove", sleeve_len=0.32):
+    """A leather work glove gripping a handle of radius r that runs along X
+    through the origin. The back of the hand faces -Y/+Z (towards the
+    viewer), the forearm runs back along -Y and down. Returns one object."""
+    m_leather = m_leather or mat("leather", rough=0.85)
+    m_cuff = m_cuff or mat("leather_dark", rough=0.9)
+    m_sleeve = m_sleeve or mat("canvas", rough=0.95)
+    parts = []
+    # Palm and back of the hand, wrapped round behind the handle.
+    palm = sphere(0.05, (0, -0.042, 0.012), m_leather, scale=(1.05, 0.62, 0.78), segs=12, rings=8, name="palm")
+    parts.append(palm)
+    # Four fingers curled round the handle, a little fanned and uneven.
+    for k, x in enumerate((-0.033, -0.011, 0.011, 0.032)):
+        fr = 0.0105 - 0.001 * abs(k - 1.5)
+        rr = r + fr * 0.95
+        prev = None
+        for (a0, a1) in ((110, 40), (40, -30), (-30, -85)):
+            a0r = math.radians(a0 + k * 4)
+            a1r = math.radians(a1 + k * 4)
+            p0 = Vector((x, math.cos(a0r) * rr, math.sin(a0r) * rr))
+            p1 = Vector((x, math.cos(a1r) * rr, math.sin(a1r) * rr))
+            seg = strut(p0, p1, fr, m_leather, sides=6, name="finger")
+            parts.append(seg)
+            parts.append(sphere(fr * 1.02, tuple(p1), m_leather, segs=8, rings=5, name="knuckle"))
+        parts.append(sphere(fr * 1.05, (x, math.cos(math.radians(110 + k * 4)) * rr, math.sin(math.radians(110 + k * 4)) * rr),
+                            m_leather, segs=8, rings=5, name="knuckle"))
+    # Thumb across the front of the fingers.
+    t0 = Vector((-0.04, -0.03, -0.02))
+    t1 = Vector((-0.045, 0.012, -0.03))
+    t2 = Vector((-0.02, 0.028, -0.012))
+    parts.append(strut(t0, t1, 0.013, m_leather, sides=6, name="thumb"))
+    parts.append(strut(t1, t2, 0.0115, m_leather, sides=6, name="thumb"))
+    parts.append(sphere(0.012, tuple(t1), m_leather, segs=8, rings=5))
+    parts.append(sphere(0.0115, tuple(t2), m_leather, segs=8, rings=5))
+    # Stitched seam over the knuckles.
+    parts.append(box((0.085, 0.006, 0.006), (0, -0.012, 0.042), m_cuff, rot=(0.5, 0, 0)))
+    # Gauntlet cuff and the work-shirt sleeve going back out of frame.
+    wrist = Vector((0, -0.1, -0.02))
+    cuff = cyl(0.046, 0.075, (0, 0, 0), m_cuff, verts=12, r2=0.036, name="cuff")
+    place(cuff, tuple(wrist + Vector((0, -0.02, -0.006))), (math.radians(90) + 0.25, 0, 0))
+    parts.append(cuff)
+    parts.append(torus(0.046, 0.006, tuple(wrist + Vector((0, -0.057, -0.016))), m_cuff, (math.radians(90) + 0.25, 0, 0), 14, 4))
+    sleeve = cyl(0.043, sleeve_len, (0, 0, 0), m_sleeve, verts=12, r2=0.047, name="sleeve")
+    place(sleeve, tuple(wrist + Vector((0, -0.06 - sleeve_len / 2, -0.016 - sleeve_len * 0.25))), (math.radians(90) + 0.25, 0, 0))
+    parts.append(sleeve)
+    o = join(parts, name)
+    wobble(o, 0.0012, 77)
+    ao(o, 0.06)
+    return o
+
+
+def ao(o, dist=0.2, rays=14, strength=0.75, seed=5, edge=0.6, top=0.1):
+    """Bakes ambient occlusion (rays cast from each vertex over its normal's
+    hemisphere) and edge wear (convex edges lighter, creases darker) into the
+    "Col" vertex colour. Cheap and good enough for small props."""
+    from mathutils.bvhtree import BVHTree
+    me = o.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    bm.normal_update()
+    tree = BVHTree.FromBMesh(bm)
+    rnd = random.Random(seed)
+    dirs = []
+    while len(dirs) < rays:
+        v = Vector((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-1, 1)))
+        if 0.05 < v.length <= 1.0:
+            dirs.append(v.normalized())
+    shade = {}
+    for v in bm.verts:
+        n = v.normal
+        if n.length < 0.5:
+            shade[v.index] = 1.0
+            continue
+        hit = 0
+        tot = 0
+        for d in dirs:
+            if d.dot(n) < 0:
+                d = -d
+            tot += 1
+            loc, _nrm, _i, _dd = tree.ray_cast(v.co + n * 0.0015, d, dist)
+            if loc is not None:
+                hit += 1
+        occ = hit / max(tot, 1)
+        conv = 0.0
+        if v.link_edges:
+            for e in v.link_edges:
+                dv = e.other_vert(v).co - v.co
+                if dv.length > 1e-6:
+                    conv += -dv.normalized().dot(n)
+            conv /= len(v.link_edges)
+        s = (1.0 - strength * occ) * (1.0 + edge * 0.5 * conv) + top * n.z
+        s *= 1.0 - 0.06 * rnd.random()
+        shade[v.index] = max(0.28, min(1.0, s))
+    bm.free()
+    if "Col" not in me.color_attributes:
+        me.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+    col = me.color_attributes["Col"]
+    me.color_attributes.active_color = col
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            s = shade[me.loops[li].vertex_index]
+            col.data[li].color = (s, s, s, 1.0)
 
 
 def wear(o, strength=1.0, top=0.12, seed=3):

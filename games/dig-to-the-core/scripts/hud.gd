@@ -161,14 +161,15 @@ func _build_top() -> void:
 	right.offset_right = -12
 	right.offset_top = 12
 	_boost = Button.new()
-	_boost.custom_minimum_size = Vector2(0, 64)
-	UiTheme.style_button(_boost, Color(0.3, 0.55, 0.75), 22)
-	_boost.icon = UiTheme.icon("ad")
+	_boost.custom_minimum_size = Vector2(0, 60)
+	UiTheme.style_ticket(_boost, 21)
 	_boost.pressed.connect(func(): watch_ad("boost"))
 	right.add_child(_boost)
 	touch.buttons.append({"control": _boost, "action": func(): watch_ad("boost")})
 	_offer_tag = PanelContainer.new()
-	_offer_tag.add_theme_stylebox_override("panel", UiTheme.plate(UiTheme.AMBER, true, Vector4(16, 8, 16, 10)))
+	var tag := UiTheme.paper(Vector4(34, 8, 16, 10), 3, false, UiTheme.MANILA)
+	tag.hole = true
+	_offer_tag.add_theme_stylebox_override("panel", tag)
 	_offer_tag.visible = false
 	_offer_tag.mouse_filter = Control.MOUSE_FILTER_STOP
 	right.add_child(_offer_tag)
@@ -176,7 +177,7 @@ func _build_top() -> void:
 	ov.add_theme_constant_override("separation", 2)
 	ov.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_offer_tag.add_child(ov)
-	_offer_title = UiTheme.label("", 19, Color(0.2, 0.1, 0.03), 0)
+	_offer_title = UiTheme.label("", 19, UiTheme.INK, 0)
 	_offer_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_offer_title.custom_minimum_size = Vector2(280, 0)
 	ov.add_child(_offer_title)
@@ -184,16 +185,16 @@ func _build_top() -> void:
 	srow.add_theme_constant_override("separation", 6)
 	srow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	srow.add_child(_icon_rect("ad", 22))
-	srow.add_child(UiTheme.label("tap to watch a short ad", 15, Color(0.3, 0.18, 0.06), 0, false))
+	srow.add_child(UiTheme.label("tap to watch a short ad", 15, UiTheme.INK.lightened(0.2), 0, false))
 	ov.add_child(srow)
 	_offer_bar = ProgressBar.new()
 	_offer_bar.show_percentage = false
 	_offer_bar.custom_minimum_size = Vector2(0, 6)
 	_offer_bar.max_value = 1.0
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.3, 0.18, 0.06, 0.4)
+	bg.bg_color = Color(UiTheme.INK, 0.15)
 	var fg := StyleBoxFlat.new()
-	fg.bg_color = Color(0.45, 0.2, 0.05)
+	fg.bg_color = UiTheme.ENAMEL_RED
 	_offer_bar.add_theme_stylebox_override("background", bg)
 	_offer_bar.add_theme_stylebox_override("fill", fg)
 	ov.add_child(_offer_bar)
@@ -230,10 +231,7 @@ func _build_center() -> void:
 	_target.offset_top = 30
 	_target.offset_bottom = 60
 	_coach = PanelContainer.new()
-	var enamel := UiTheme.plate(UiTheme.CREAM, true, Vector4(26, 12, 26, 14))
-	enamel.rim = UiTheme.SOOT
-	enamel.seed = 7
-	_coach.add_theme_stylebox_override("panel", enamel)
+	_coach.add_theme_stylebox_override("panel", UiTheme.enamel(UiTheme.CREAM, Vector4(28, 12, 28, 14), 7))
 	_coach.rotation = -0.012
 	_coach.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_coach.visible = false
@@ -260,7 +258,7 @@ func _build_bottom() -> void:
 	box.offset_top = -190
 	box.offset_bottom = -12
 	_prompt = PanelContainer.new()
-	_prompt.add_theme_stylebox_override("panel", UiTheme.plate(UiTheme.LAMP_GREEN.darkened(0.2), true, Vector4(20, 6, 20, 8)))
+	_prompt.add_theme_stylebox_override("panel", UiTheme.enamel(UiTheme.LAMP_GREEN.darkened(0.25), Vector4(22, 6, 22, 8), 11))
 	_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_prompt.visible = false
 	box.add_child(_prompt)
@@ -268,7 +266,9 @@ func _build_bottom() -> void:
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_prompt.add_child(_prompt_label)
 	var plate := PanelContainer.new()
-	plate.add_theme_stylebox_override("panel", UiTheme.plate(UiTheme.IRON_LIGHT, true, Vector4(22, 8, 22, 10)))
+	var iron := UiTheme.plate(UiTheme.IRON_LIGHT, false, Vector4(22, 8, 22, 10))
+	iron.seed = 5
+	plate.add_theme_stylebox_override("panel", iron)
 	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(plate)
 	var v := VBoxContainer.new()
@@ -304,14 +304,18 @@ func _build_bottom() -> void:
 
 
 func _build_find_card() -> void:
+	## A specimen card from the assay office, pinned in the right-hand column
+	## under the boost ticket (clear of the gauge, the money and the toasts).
 	_find_card = PanelContainer.new()
-	_find_card.add_theme_stylebox_override("panel", UiTheme.iron_panel(18.0))
+	_find_card.add_theme_stylebox_override("panel", UiTheme.paper(Vector4(16, 12, 16, 12), 21))
 	_find_card.visible = false
 	_find_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_find_card)
-	_find_card.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	_find_card.position = Vector2(DepthGauge.W + 40, 110)
-	_find_card.custom_minimum_size = Vector2(300, 0)
+	_find_card.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_find_card.offset_left = -342
+	_find_card.offset_right = -14
+	_find_card.offset_top = 84
+	_find_card.custom_minimum_size = Vector2(328, 0)
 
 
 func _build_rotate_overlay() -> void:
@@ -466,7 +470,7 @@ func toast(text: String, color: Color = UiTheme.CREAM, seconds: float = 3.2) -> 
 func big_toast(title: String, sub: String, color: Color) -> void:
 	## Breaking into a new zone.
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiTheme.plate(color.darkened(0.25), true, Vector4(30, 10, 30, 14)))
+	p.add_theme_stylebox_override("panel", UiTheme.enamel(color.darkened(0.35), Vector4(34, 10, 34, 14), title.length()))
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", -2)
@@ -535,7 +539,7 @@ func take_offer() -> void:
 
 
 func _update_offer(delta: float) -> void:
-	var playing := not is_blocking() and not riding
+	var playing := not is_blocking() and not riding and not find_card_up()
 	var ev := offers.update(delta, playing)
 	if ev == 1:
 		_offer_title.text = AdOffers.headline(offers.current)
@@ -544,6 +548,9 @@ func _update_offer(delta: float) -> void:
 		Sound.play("offer", -8.0)
 	elif ev == -1:
 		_hide_offer()
+	_offer_tag.visible = offers.current != "" and not find_card_up() and not riding
+	# One 2x offer at a time: the boost ticket steps aside while the tag offers the boost.
+	_boost.visible = not (_offer_tag.visible and offers.current == "boost")
 	if _offer_tag.visible:
 		if offers.current == "cash":
 			_offer_title.text = AdOffers.headline("cash")
@@ -567,38 +574,41 @@ func show_find(f: int, value: float) -> void:
 		_find_card.remove_child(c)
 		c.queue_free()
 	var rc: Color = Balance.rarity(f).color
-	(_find_card.get_theme_stylebox("panel") as RivetBox).color = rc.darkened(0.2)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 2)
+	v.add_theme_constant_override("separation", 4)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_find_card.add_child(v)
-	var head := UiTheme.label("Found, %s" % str(Balance.rarity(f).name).to_lower(), 18, rc.lightened(0.35), 4)
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(head)
-	var ic := _icon_rect(str(d.icon), 96)
-	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	v.add_child(ic)
-	var nm := UiTheme.label(str(d.name), 25, UiTheme.CREAM, 0)
-	UiTheme.sign_text(nm, 25, UiTheme.CREAM, 4)
-	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 12)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(top)
+	var ic := _icon_rect(str(d.icon), 76)
+	top.add_child(ic)
+	var tv := VBoxContainer.new()
+	tv.add_theme_constant_override("separation", 0)
+	tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tv.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(tv)
+	var head := UiTheme.label("Found · %s" % str(Balance.rarity(f).name).to_lower(), 15, rc.darkened(0.35), 0)
+	tv.add_child(head)
+	var nm := UiTheme.label(str(d.name), 23, UiTheme.INK, 0)
+	UiTheme.sign_text(nm, 23, UiTheme.INK, 0)
 	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	nm.custom_minimum_size = Vector2(270, 0)
-	v.add_child(nm)
-	var fl := UiTheme.label(str(d.flavor), 15, Color(0.9, 0.85, 0.75), 3, false)
-	fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nm.custom_minimum_size = Vector2(210, 0)
+	tv.add_child(nm)
+	var fl := UiTheme.label(str(d.flavor), 15, UiTheme.INK.lightened(0.25), 0, false)
 	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	fl.custom_minimum_size = Vector2(270, 0)
-	v.add_child(fl)
-	var val := UiTheme.label("+" + Fmt.num(value) + " cash", 26, UiTheme.AMBER, 5)
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fl.custom_minimum_size = Vector2(210, 0)
+	tv.add_child(fl)
+	var val := UiTheme.label("+" + Fmt.num(value) + " cash", 22, UiTheme.ENAMEL_RED.darkened(0.1), 0)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	v.add_child(val)
 	_find_double = null
 	if Monetization.is_rewarded_ready(Monetization.PLACEMENT_DOUBLE_FIND):
 		_find_double = Button.new()
 		_find_double.text = "Double it  +%s" % Fmt.num(value)
-		_find_double.icon = UiTheme.icon("ad")
-		_find_double.custom_minimum_size = Vector2(0, 58)
-		UiTheme.style_button(_find_double, Color(0.3, 0.55, 0.75), 21)
+		_find_double.custom_minimum_size = Vector2(0, 52)
+		UiTheme.style_ticket(_find_double, 20)
 		var fi := f
 		_find_double.pressed.connect(func(): _double_find(fi))
 		v.add_child(_find_double)
@@ -606,22 +616,31 @@ func show_find(f: int, value: float) -> void:
 		touch.buttons.append({"control": _find_double, "action": func(): _double_find(fi)})
 		_find_bar = ProgressBar.new()
 		_find_bar.show_percentage = false
-		_find_bar.custom_minimum_size = Vector2(0, 6)
+		_find_bar.custom_minimum_size = Vector2(0, 5)
 		_find_bar.max_value = 1.0
 		var bg := StyleBoxFlat.new()
-		bg.bg_color = UiTheme.SOOT
+		bg.bg_color = Color(UiTheme.INK, 0.15)
 		var fg := StyleBoxFlat.new()
-		fg.bg_color = Color(0.4, 0.65, 0.85)
+		fg.bg_color = UiTheme.ENAMEL_RED
 		_find_bar.add_theme_stylebox_override("background", bg)
 		_find_bar.add_theme_stylebox_override("fill", fg)
 		v.add_child(_find_bar)
-	_find_card.visible = true
+	_find_card.visible = not riding
 	_find_card.reset_size()
-	_find_card.pivot_offset = Vector2(0, 115)
+	_find_card.pivot_offset = Vector2(_find_card.size.x, 0)
+	_find_card.rotation = 0.015
 	_find_card.scale = Vector2(0.5, 0.5)
 	_find_card.create_tween().tween_property(_find_card, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_find_double_t = Balance.FIND_DOUBLE_SECONDS
 	_find_t = Balance.FIND_DOUBLE_SECONDS + 0.5
+	_hide_offer_for_card()
+
+
+func _hide_offer_for_card() -> void:
+	## One thing at a time in the right-hand column: an offer waits while a
+	## find card is up.
+	if _offer_tag.visible:
+		_offer_tag.visible = false
 
 
 func _double_find(f: int) -> void:
@@ -638,10 +657,16 @@ func _double_find(f: int) -> void:
 				_find_double.text = "Doubled")
 
 
+func find_card_up() -> bool:
+	return _find_index >= 0
+
+
 func _update_find_card(delta: float) -> void:
-	if not _find_card.visible:
+	if _find_index < 0:
 		return
-	if Monetization.is_watching():
+	# Never during the lift ride: the card waits (hidden) until you step out.
+	_find_card.visible = not riding
+	if riding or Monetization.is_watching():
 		return
 	_find_t -= delta
 	_find_double_t -= delta
