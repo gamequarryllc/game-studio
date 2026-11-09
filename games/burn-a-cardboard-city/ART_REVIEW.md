@@ -40,3 +40,28 @@ Reviewed all 18 screenshots and the model sheet against the studio's "Look and f
 ## Direction for the next pass
 
 A kid's craft project built from recycling, lit by late-afternoon skylight in a dim warehouse. Each district has its own materials: suburbs from painted cereal boxes and tissue trees, downtown from printed shipping boxes, skyscrapers from white printer-paper boxes, the castle from egg cartons and toilet rolls on a pallet. Lower ambient, one warm key with long shadows, cool blue in the shade; fire is the brightest, warmest thing on screen and lights what's near it. Fire is cut paper with grey tissue smoke; burning creeps across the board as a glowing edge and leaves crumpled shells and grey ash, never black voids. Every tool in a drawn giant hand. Giant warehouse props between districts for scale. UI: stencil headers, one popup at a time, touch-only wording, the shop and offers as physical objects (a box with depth, a matchbox, luggage tags on string).
+
+---
+
+# Art review 2: second fresh-eyes critic, 2026-11-09 (after review-1 fixes + QA)
+
+**Verdict: Almost.** The UI and the downtown boxes come from a specific vision; the fire, the burnt aftermath, the castle, the trees and the held tools still read as a prototype with an asset pack. **Phone readability:** HUD text is legible, but the floor is too bright for good contrast, hint text and floating numbers are too small at 844x390, and the bottom-right corner (hand, JUMP, HOLD) plus a permanent offer tag are cluttered. This review is the polish list toward "ready to play".
+
+## Problems, worst first
+
+1. **The burnt aftermath looks generated**: the floor scorch is a noise texture with white blotches (reads as camouflage or a broken texture); rubble is a near-black slab that reads as a hole. Fix: 6-8 hand-painted scorch decals with a soot fade outward from each footprint (char brown to ash grey); light ash on rubble tops, curled card edges catching the key light, embers that cool; one wall left standing so the building stays recognisable.
+2. **The fire is still weak**: burnt blocks covered in small identical flame spikes like a pin cushion; flames floating off facade sides; no smoke column; sparks as white blurry blobs; no light cast on neighbours. Fix: one big flame cluster per building rooted at edges and openings; fewer, larger flames on rubble; torn-tissue smoke leaning with the fans; orange-speck sparks; a warm light pool on the floor and nearby boxes.
+3. **Lighting and floor look like a greybox**: almost-white flat empty concrete, blown-out skylights, no late-afternoon warmth, no value contrast between kraft and floor. Fix: floor ~30% darker with joints, tape lines and stains; a warmer key; a darker foreground; edge dressing with craft props (glue gun, scissors, paint pots, offcuts, a pallet, a stepladder) for scale and story.
+4. **The castle is primitives**: smooth plastic red and blue cones on plain cylinders, battlements like Duplo studs. Fix: toilet-roll towers with the spiral seam visible, cones rolled from printed card with a taped overlap seam, battlements cut from grey egg-carton cups, the pallet base visible.
+5. **Trees and lawns look like a stock asset pack**: low-poly lollipops and stacked-cone pines; flat saturated green lawn planes. Fix: crumpled-tissue trees on six-sided pencils stuck in clay; construction-paper lawns with fibre texture, cut edges and lifted corners, green pulled toward the palette.
+6. **Held tools and hand are primitives**: candle, blowtorch and bottle are plain cylinders; the blowtorch has no flame jet; in the rocket shot the hand points at the bottle instead of holding it; the JUMP cap sits on top of the hand. Fix: a grip pose per tool with the thumb wrapped round; a blowtorch with valve knob, label and a roaring blue flame cone; the hand framed above the button cluster.
+7. **The shop is a template list**: identical rows (icon, title, text, price on the right); tab icons (thermometer, duck, TV) are clip-art stand-ins for emoji; the "box" is flaps on a flat panel; low-contrast cream-on-brown captions. Fix: tools laid in cut-out inserts of different sizes with the next tool shown big; tab icons as objects from the game's world; higher caption contrast.
+8. **HUD loose ends**: the fan tag is mostly blank and the wind ribbon barely visible; an unlabelled tick on the district bar; the hint note overlaps the fan tag; an ad tag stays up permanently; "light something" reads like placeholder text; the CHAIN stamp lingers and jumps x5 → x8 → x5; floating "+2.7" numbers too small. Fix: label the tick, one note at a time, the offer tag only now and then, animate the stamp out, readable numbers.
+9. **Repetition**: every downtown box the same kraft with the same blue and yellow window scribbles; identical skyscraper window grids; suburb houses read as plain coloured cubes at play distance. Fix: vary box stock (white, dark brown, printed, faded) and window sets per building; bigger roof prints.
+10. **The ending isn't its own moment**: hand and bottle still in frame, a castle turret still standing, the noise scorch visible. Fix: hide the hand; a composed slow camera move over the ashes.
+
+## Keep
+
+- The downtown shipping-box models: sagging flaps, tape, made-up brands (Kestrel, Mossy, No. 9, Paperlark), felt-tip windows.
+- The UI style and copy: taped cut-card tags, bottle-cap buttons, stencil headers, the matchbox starter offer, the delivery-note ending, lines like "Office box: too thick, needs the candle."
+- The castle sightline at the end of the main street with light shafts through the trusses, and the paper cut-out people.
