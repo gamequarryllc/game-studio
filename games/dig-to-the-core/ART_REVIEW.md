@@ -40,3 +40,27 @@ Reviewed every screenshot, the model contact sheet and the icon sheet against th
 ## Direction for the next pass
 
 Fix lighting first. Underground is a warm amber pool that fades to near-black within 8 m; each zone gets its own dark tint and one landmark (fossil ribs, crystals, lava as a second red light), with strata bands on every wall. The surface moves to late afternoon with a composed spawn view. Rebuild the weak models up to the standard of the shack (the best model): oversized working ends, AO and edge wear, only the seven palette colours. Drop the blue and the rivet-on-every-corner plate; each UI element's material follows its job. Fix the dust and the near-plane clip before the next screenshots.
+
+---
+
+# Art review 2: second fresh-eyes critic, 2026-11-09 (after fixes + QA)
+
+**Verdict: No.** The UI and the surface pass as indie work; the underground, where players spend ~90% of their time, still reads as a game-jam prototype. The next pass is about the underground.
+
+## Problems, worst first
+
+1. **Underground is muddy and samey**: each layer is one colour wash inside a hard-edged headlamp circle; the same dried-mud crack texture on every layer; flat white flecks scattered like confetti; the lava is a banned noise-blotch texture under a full-screen red wash. Fix: each layer its own material with strata bands and two rock values; a soft lamp falloff with a cool bounce light; flecks become real pebbles or go; lava as a dark crust with glowing cracks that lights the walls.
+2. **Floating text looks broken**: "Coal +96", "Lift", "Fossil Bone +8K" pop up huge in grey Rye, overlapping and drawn through rock; the "Lift up" sign's letters spill off the board; debug-style labels under the crosshair ("Dirt", "Sandstone · 13 hits"); red "too hard" text on a red scene. Fix: small Zilla Slab popups that don't draw through rock and merge per tick; sign lettering painted into the texture; a cracked-rock icon instead of "too hard".
+3. **Arms and held tools look amateur**: arms are stacks of orange rings or a plain brown drainpipe; the pickaxe is one smooth gold material; the shovel blade is a flat grey card; the laser drill reads as a flashlight. Fix: a real sleeve with cuff and folds, gloves with knuckles; worn steel edges, wood grain, grip tape; a distinct silhouette per tool.
+4. **The shop is a template**: dark modal, five equal tabs, identical rows, a red Remove Ads banner on every tab plus a second buy button for it, "(test)" on prices, the finds grid as identical "?" cards with unreadable grey-on-tan labels. Fix: build it as the shack counter: tools on a pegboard with paper tags, upgrades in a ledger, finds in a drawer cabinet, Remove Ads as one enamel sign.
+5. **Underground props are primitives**: the mantle is plain hex prisms in flat colours; the timber set is two bare sticks; the mine cart looks like a nightstand (no wheels, no rails); ribs identical and evenly spaced like a comb, kinking at joints; crystals matte and unlit; the inner core washed-out beige. Fix: varied, broken, half-buried ribs; timbers with a cap beam and wedges; a cart on rails; glowing crystals; the core as molten amber, the brightest moment in the game.
+6. **Surface reads as an asset pack**: acacia savanna trees in a temperate field; a blurry ground texture; the first dig is a dark smudge with no grass lip or dirt pile. Fix: maples, oaks and birch; a worn path to the headframe; clods and a spoil heap around the hole.
+7. **HUD crowded on a phone**: plates in all four corners stacking down the middle; at 844x390 some text is ~6 px; two depth bars side by side; the ad ticket never leaves. Fix: merge the bars into one brass tube; the layer banner has its moment then fades; the ad ticket only when relevant.
+8. **Repetitive copy**: every layer banner says "Harder rock, worth N.Nx more" with jumpy numbers. Fix: one in-world line per layer.
+9. **Smaller things**: desktop prompts in most shots ("Click... left mouse button", "E: ride the lift"); the red-on-black "Open shaft" sign is unreadable; the crew shot shows no crew; the full HUD stays up during the lift ride, where the cage is a few dark sticks.
+
+## Keep
+
+- The UI's look: brass and iron plates, Rye with Zilla Slab, the crooked enamel offer tag, ticket-stub ad buttons, ledger-paper rows.
+- The finds: their writing and the odd, specific find models (cassette, subway car, satellite, mosquito in amber, mole, robo-mole).
+- The surface layout: shack left, headframe right, rope fences leading the eye, a low warm sun with long shadows; the shack and headframe models.
