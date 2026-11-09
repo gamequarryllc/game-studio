@@ -46,6 +46,28 @@ so anything that must survive goes here.
 - The same goes for commit messages and commit authors (always `Claude <noreply@anthropic.com>`).
 - Before every push: run `python3 tools/privacy_check.py --commits` and fix every hit. Where the owner's private term list is available (kept outside this repo, never committed), add `--terms <that file>`. CI runs the generic check too and refuses to publish on a hit.
 
+## Look and feel: hand-made, never "AI-generated" (the owner's standard)
+
+The owner wants every game and UI to look like a small, skilled studio made it, with real leg work. Treat this as seriously as the money rules.
+
+**Tells to hunt down and remove:**
+- Emoji used as icons or in UI text (🔥 📓 📺 💰). Every icon is drawn for the game (SVG authored in the repo, one consistent stroke and fill style per game). Emoji only as a deliberate exception.
+- Template UI: the same rounded dark pill panel everywhere, soft outer glows, centered symmetric layouts, one corner radius on everything, a default geometric sans (Outfit, Inter, Poppins and the like) as the only font.
+- Generic copy: upbeat filler, Title Case Everywhere, exclamation marks on everything, emoji. Write short, specific, in-world lines in sentence case.
+- Primitive-soup models (a sphere on a cylinder), random scatter with no composition, everything at one scale, flat untextured colours, oversaturated palettes with no value structure, dithering or z-fighting artifacts.
+- Linear, floaty motion. Use easing, anticipation, squash and stretch, staggered reveals, weight.
+
+**What to do instead:**
+- **Art bible per game** at the top of its NOTES.md: a palette of 5 to 7 named swatches with roles (and checked value contrast), a characterful display font plus a readable body font (open-licensed, licence file included), a UI motif taken from the fiction (burnt-wood signs, cardboard tags and tape, brass mining gauges), a shape language, and 3 real-world inspirations that aren't other games (linocut prints, papercraft, old mining-company signage...).
+- **Models built in Blender**, not in code from primitives: `pip install --break-system-packages bpy` (Blender 5.2 as a Python module, runs headless here). Write each model as a Python script in `games/<slug>/art/blender/` (the source stays in the repo so it's reproducible), with real silhouettes, bevels, deliberate proportions, the game's shape language, and vertex-colour or small-texture detail (baked AO, gradients, edge wear). Export `.glb` to `games/<slug>/models/` (`bpy.ops.export_scene.gltf(export_format="GLB", export_apply=True)`). Render a contact sheet of every model with Cycles on the CPU to review them before they go in the game. Keep poly counts phone-friendly and use LODs or MultiMesh for repeats.
+- **Composed levels:** hand-placed landmarks, paths and sightlines, variety in scale and silhouette, lighting with intent (a time of day, rim light, warm/cool contrast).
+- **UI with texture and imperfection:** grain, paper, wear, slightly irregular hand-drawn edges, intentional asymmetry, a real type scale, motion with easing.
+
+**Process, every time a game is shown to the owner:**
+1. Screenshots plus the model contact sheet.
+2. A fresh-eyes critic agent that has NOT seen the build process reviews them with one question: "what here looks AI-generated, generic or template-made, and what would a skilled indie artist change?" It must return concrete findings.
+3. The builder fixes every finding, then re-shoots. A game isn't "first playable" or "ready to play" while the critic still flags it.
+
 ## Making money (the point of the studio)
 
 The goal is revenue. Every game is designed around its monetization from the first build, not bolted on at the end. Reference implementation: Melt a Glacier's `scripts/monetization/` (provider interface + stub), `scripts/ad_offers.gd` and `Balance.AD_REWARDS` (copy the architecture, not the look).
@@ -81,7 +103,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 3. First-run hints.
 4. Sound effects and music made for the game (generated, no stock audio), with volume and mute.
 5. Save/load, autosave, and save on backgrounding.
-6. Its own art direction, HUD and UI theme.
+6. Its own art direction, HUD and UI theme, following "Look and feel": an art bible, Blender-made models, custom icons, no emoji UI, and a clean report from the fresh-eyes critic.
 7. Shop with tools, upgrades and helpers and a clear progression; finds/collectibles.
 8. Smooth on a phone (render scale), no errors in the console.
 9. The full "Making money" set above is in and tuned: every rewarded ad, timed offer tags, light interstitials, all IAPs, restore. Pacing bot runs both with and without ads.
@@ -99,6 +121,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 - 2026-11-08: Build all 10, Claude picks the order. Use the plan as much as needed. Wants pings with status, to come back and playtest, and fresh idea lists when the queue runs dry.
 - 2026-11-08: "The goal is to make money": every game needs incentives to spend, through IAPs or rewarded ads ("watch an ad for 2x mining"). → Added the "Making money" section; monetization is part of first playable.
 - 2026-11-09: Keep personal information (names and anything like it) out of the public repo, and keep checking. → Added the Privacy section and `tools/privacy_check.py`.
+- 2026-11-09: Screenshots "look pretty sweet so far". Strain to make the UI and game NOT look AI-generated; put in the leg work. Models must look very good too: use Blender or custom-build them as needed. → Added "Look and feel" (art bible, Blender pipeline, custom icons, fresh-eyes critic). Next free slot: a full art pass on Burn Down a Forest before starting a new game.
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
