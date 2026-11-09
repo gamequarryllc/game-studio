@@ -1,0 +1,161 @@
+name: iOS build
+
+# Builds games for iPhone and iPad on a Mac runner (Godot iOS builds need macOS).
+#
+#   check       Unsigned build. Needs no Apple account. Proves a game compiles and
+#               packages for iOS. Runs for every game when the pipeline itself changes,
+#               and on request for one game.
+#   testflight  Signs with the owner's App Store Connect API key and uploads the build
+#               to TestFlight. Only ever started by hand (Actions > iOS build > Run workflow).
+#
+# Nothing here submits an app for review; that stays a manual step in App Store Connect.
+# Secrets (the owner adds them; see STUDIO.md, "App Store pipeline"):
+#   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, APPLE_TEAM_ID
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: "Game folder name in games/, e.g. burn-down-a-forest"
+        required: true
+        type: string
+      mode:
+        description: "check = unsigned test build; testflight = sign and upload"
+        required: true
+        type: choice
+        options: [check, testflight]
+        default: check
+      version:
+        description: "Version shown on the App Store"
+        required: true
+        type: string
+        default: "1.0.0"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios.yml"
+      - "tools/ios_build.sh"
+      - "tools/ios_preset.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.event_name }}-${{ inputs.game || 'all' }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.4.1"
+
+jobs:
+  pick:
+    runs-on: ubuntu-24.04
+    outputs:
+      games: ${{ steps.pick.outputs.games }}
+      mode: ${{ steps.pick.outputs.mode }}
+      version: ${{ steps.pick.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Privacy check (no personal information in a public repo)
+        run: python3 tools/privacy_check.py
+
+      - name: Pick the games and the mode
+        id: pick
+        env:
+          IN_GAME: ${{ inputs.game }}
+          IN_MODE: ${{ inputs.mode }}
+          IN_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$IN_GAME" in *[!a-z0-9-]*|"") echo "::error::Bad game name"; exit 1;; esac
+            [ -f "games/$IN_GAME/project.godot" ] || { echo "::error::No game at games/$IN_GAME"; exit 1; }
+            case "$IN_MODE" in check|testflight) ;; *) echo "::error::Bad mode"; exit 1;; esac
+            echo "$IN_VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "::error::Version must look like 1.0.0"; exit 1; }
+            games="[\"$IN_GAME\"]"; mode="$IN_MODE"; version="$IN_VERSION"
+          else
+            # The pipeline changed: check-build every game.
+            games="$(ls games/*/project.godot | sed -E 's#games/([^/]+)/project.godot#"\1"#' | paste -sd, -)"
+            games="[$games]"; mode="check"; version="1.0.0"
+          fi
+          echo "games=$games" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building $games in $mode mode"
+
+  build:
+    needs: pick
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        game: ${{ fromJSON(needs.pick.outputs.games) }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Restore Godot from cache
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/Library/Application Support/Godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-ios-v1
+
+      - name: Download Godot and the iOS export template
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          templates="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p ~/godot "$templates"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/godot.zip" "$base/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d ~/godot
+          # The full template pack is 1.2 GB; keep only the iOS template.
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/templates.tpz" "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q -j "$RUNNER_TEMP/templates.tpz" 'templates/ios.zip' 'templates/version.txt' -d "$templates"
+          rm -f "$RUNNER_TEMP/godot.zip" "$RUNNER_TEMP/templates.tpz"
+
+      - name: Use the newest released Xcode on the runner
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          newest="$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|candidate|_rc' | sort -V | tail -1)"
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest"; fi
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
+
+      - name: Build ${{ matrix.game }} (${{ needs.pick.outputs.mode }})
+        env:
+          GAME: ${{ matrix.game }}
+          MODE: ${{ needs.pick.outputs.mode }}
+          VERSION: ${{ needs.pick.outputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          WORK: ${{ runner.temp }}/ios
+          ASC_KEY_ID: ${{ needs.pick.outputs.mode == 'testflight' && secrets.ASC_KEY_ID || '' }}
+          ASC_ISSUER_ID: ${{ needs.pick.outputs.mode == 'testflight' && secrets.ASC_ISSUER_ID || '' }}
+          ASC_KEY_P8: ${{ needs.pick.outputs.mode == 'testflight' && secrets.ASC_KEY_P8 || '' }}
+          APPLE_TEAM_ID: ${{ needs.pick.outputs.mode == 'testflight' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          set -euo pipefail
+          export GODOT="$HOME/godot/Godot.app/Contents/MacOS/Godot"
+          "$GODOT" --version
+          bash tools/ios_build.sh "$GAME" "$MODE" 2>&1 | tee "$RUNNER_TEMP/ios_build.txt"
+          {
+            echo "### $GAME ($MODE)"
+            echo '```'
+            grep -E '^(name on|bundle id|orientations|architectures|size|== OK)' "$RUNNER_TEMP/ios_build.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the build logs when something fails
+        if: failure() && needs.pick.outputs.mode == 'check'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-logs-${{ matrix.game }}
+          path: ${{ runner.temp }}/ios/logs
+          retention-days: 7
