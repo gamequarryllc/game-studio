@@ -29,6 +29,9 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      - name: Privacy check (no personal information in a public repo)
+        run: python3 tools/privacy_check.py
+
       - name: Restore Godot from cache
         id: godot-cache
         uses: actions/cache@v4
