@@ -138,6 +138,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: Burn Down a Forest art pass done: all 12 review items (41 SVG icons, charred-plank HUD, paper notebook, IM Fell/Alegreya/Caveat Brush, 48 Blender models, inked cartoon flames, composed village spawn, measured palette, meadow drifts, phone-first hints, sentence-case copy). Next: second critic review, then fixes + full QA playthrough.
 - 2026-11-09: In progress in the conversation loop (don't start these elsewhere): Burn a Cardboard City first build; Burn Down a Forest art pass (from ART_REVIEW.md); Dig to the Core critic fixes + full QA playthrough.
 - 2026-11-09: Dig to the Core builder handed back (10 streamed zones, 7 tools, lift, 16 finds, full stubbed money set, 18 Blender models, 51 SVG icons, brass-and-enamel UI; 52 smoke checks). Held at `building` until the fresh-eyes critic and a QA playthrough are done.
 - 2026-11-09: Burn Down a Forest reached first playable (fire spread with wind, 6 tools, notebook shop, stubbed ads/IAPs, save, sound, ending; 45 smoke checks). Next: pacing bot, music, fix the odd pink blocks near spawn, finds, real-phone test.

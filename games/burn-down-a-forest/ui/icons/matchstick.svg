@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
+  <!-- matchstick: drawn by art/icons/make_icons.py -->
+  <path d="M 13.61 54.35 L 44.07 18.13 L 48.64 21.82 L 18.76 57.80 Z" fill="#E2C48C" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 53.54 23.15 C 52.63 24.46 51.08 25.48 49.64 25.91 C 48.21 26.35 46.30 26.48 44.95 25.76 C 43.60 25.03 42.14 23.13 41.52 21.56 C 40.90 19.99 41.08 18.08 41.23 16.32 C 41.37 14.57 41.48 12.32 42.40 11.02 C 43.32 9.73 45.44 8.89 46.76 8.54 C 48.08 8.19 49.18 8.25 50.32 8.93 C 51.46 9.61 52.81 11.09 53.60 12.61 C 54.40 14.12 55.11 16.26 55.10 18.02 C 55.09 19.78 54.45 21.83 53.54 23.15 Z" fill="#D9483B" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 44.61 13.02 L 49.04 11.64" fill="none" stroke="#EFE3C8" stroke-width="1.80" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

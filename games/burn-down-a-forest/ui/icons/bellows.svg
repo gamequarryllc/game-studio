@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
+  <!-- bellows: drawn by art/icons/make_icons.py -->
+  <path d="M 8.28 30.17 C 10.85 24.83 24.32 15.21 29.60 13.85 C 34.88 12.50 39.15 17.07 39.97 22.03 C 40.78 27.00 38.78 39.66 34.48 43.63 C 30.18 47.60 18.54 48.11 14.17 45.86 C 9.80 43.62 5.71 35.51 8.28 30.17 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 9.99 35.82 C 12.63 31.80 27.44 21.19 32.10 19.84 C 36.76 18.49 40.61 23.70 37.97 27.72 C 35.34 31.75 20.95 42.64 16.28 43.99 C 11.62 45.34 7.36 39.85 9.99 35.82 Z" fill="#8A5A38" stroke="#2E1E14" stroke-width="1.80" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 35.98 30.13 L 47.95 34.23 L 47.71 38.20 L 35.98 38.19 Z" fill="#6F7C88" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 56.45 46.48 C 58.07 46.69 59.90 45.44 60.68 44.04 C 61.45 42.64 61.46 39.66 61.11 38.10 C 60.76 36.54 58.96 35.86 58.59 34.65 C 58.23 33.45 59.28 31.04 58.92 30.87 C 58.55 30.71 56.90 34.21 56.39 33.68 C 55.88 33.15 56.45 27.53 55.85 27.69 C 55.25 27.86 53.57 33.09 52.79 34.66 C 52.01 36.23 51.47 35.74 51.16 37.09 C 50.85 38.45 50.04 41.23 50.92 42.80 C 51.80 44.36 54.82 46.28 56.45 46.48 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

@@ -340,15 +340,15 @@ func grant_ad_reward(kind: String) -> String:
 			grant_embers(amount)
 			instant_ready_at = now() + Balance.INSTANT_COOLDOWN
 			save_game()
-			return "🔥 +%s embers!" % Fmt.num(amount)
+			return "%s %s embers, on the house" % ["[img=22x22]res://ui/icons/coal.svg[/img]", Fmt.num(amount)]
 		"boost":
 			start_boost()
 			save_game()
-			return "⚡ 2x fire for %s!" % Fmt.duration(boost_seconds_left())
+			return "2x fire for the next %s" % Fmt.duration(boost_seconds_left())
 		"helper_rush":
 			helper_rush_until = maxf(now(), helper_rush_until) + Balance.HELPER_RUSH_DURATION
 			changed.emit()
-			return "✨ Your helpers are working 3x as hard!"
+			return "Your helpers are working three times as hard"
 	return ""
 
 

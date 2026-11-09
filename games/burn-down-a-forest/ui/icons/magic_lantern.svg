@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
+  <!-- magic_lantern: drawn by art/icons/make_icons.py -->
+  <path d="M 40.48 29.93 L 59.65 20.36 L 60.24 48.42 L 39.62 39.97 Z" fill="#FFC15E" stroke="#2E1E14" stroke-width="1.80" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 31.13 21.77 C 34.74 21.95 32.34 22.37 32.80 22.86 C 33.27 23.35 33.63 21.65 33.91 24.71 C 34.18 27.78 34.55 38.09 34.44 41.22 C 34.33 44.36 33.80 43.10 33.27 43.53 C 32.74 43.96 34.94 43.79 31.26 43.82 C 27.58 43.84 14.88 43.88 11.19 43.69 C 7.50 43.49 9.61 43.08 9.12 42.65 C 8.62 42.21 8.48 44.09 8.22 41.09 C 7.95 38.08 7.43 27.60 7.53 24.63 C 7.62 21.66 8.18 23.74 8.78 23.26 C 9.38 22.79 7.41 22.05 11.13 21.80 C 14.86 21.55 27.52 21.60 31.13 21.77 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 31.89 27.83 L 40.75 28.14 L 41.25 39.97 L 31.73 40.04 Z" fill="#6F7C88" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 16.00 22.20 L 17.83 11.82 L 24.00 11.93 L 25.82 22.18 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 11.69 43.96 L 9.98 54.33" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 30.22 43.79 L 31.78 54.33" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 25.10 32.48 C 25.09 33.42 23.93 35.32 23.28 36.02 C 22.62 36.72 22.05 36.78 21.14 36.71 C 20.23 36.63 18.60 36.09 17.83 35.57 C 17.05 35.05 16.49 34.39 16.47 33.58 C 16.46 32.78 17.07 31.46 17.73 30.76 C 18.39 30.06 19.51 29.45 20.45 29.39 C 21.38 29.32 22.56 29.86 23.34 30.38 C 24.11 30.90 25.11 31.54 25.10 32.48 Z" fill="#FFC15E" stroke="#2E1E14" stroke-width="1.80" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

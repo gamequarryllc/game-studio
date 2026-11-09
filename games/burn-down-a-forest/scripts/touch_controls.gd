@@ -3,7 +3,8 @@ extends Control
 ## Multi-touch phone controls drawn over the game:
 ##  left side = a floating thumb stick to walk,
 ##  right side = drag to orbit the camera,
-##  the big 🔥 button = hold to use the tool (dragging from it also turns the camera),
+##  the burn button (a log slice with a flame branded in) = hold to use the tool
+##  (dragging from it also turns the camera),
 ##  the JUMP button = tap to jump.
 ## Godot's Buttons only see the first finger, so this reads raw touches, and
 ## on-screen buttons registered in `buttons` are tapped from here with any finger.
@@ -256,50 +257,101 @@ func _flash(c: Control) -> void:
 	c.create_tween().tween_property(c, "modulate", Color.WHITE, 0.25)
 
 
-# --- Drawing: coals in a dark ring ---------------------------------------------------
-func _coal(center: Vector2, radius: float, rim: Color, lit: float) -> void:
-	## A dark disc with a glowing rim; `lit` 0..1 warms it from inside.
-	for k in 4:
-		var r := radius + 4.0 + k * 5.0
-		draw_arc(center, r, 0, TAU, 48, Color(rim.r, rim.g * 0.8, rim.b, (0.12 - k * 0.025) * (0.6 + lit)), 6.0, true)
-	draw_circle(center, radius, Color(UiTheme.CHARCOAL, 0.8))
-	draw_circle(center, radius * 0.86, Color(rim.r * 0.5, rim.g * 0.3, rim.b * 0.2, 0.35 + 0.4 * lit))
-	draw_circle(center, radius * 0.6, Color(rim.r * 0.8, rim.g * 0.5, rim.b * 0.3, 0.2 + 0.5 * lit))
-	draw_arc(center, radius, 0, TAU, 64, rim, 4.0, true)
+# --- Drawing: slices of a log, with marks branded into them ----------------------------
+func _ring_pts(center: Vector2, radius: float, seed: int, amp: float, n: int = 28) -> PackedVector2Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var pts := PackedVector2Array()
+	for k in n:
+		var a := TAU * k / n
+		pts.append(center + Vector2(cos(a), sin(a)) * (radius + rng.randf_range(-amp, amp)))
+	return pts
+
+
+func _log_slice(center: Vector2, radius: float, seed: int, alpha: float, pressed: bool) -> void:
+	## A sawn slice of log: bark round the edge, growth rings, a crack, and a
+	## hard ink shadow under it (it sinks into the shadow when pressed).
+	var c := center + (Vector2(3, 4) if pressed else Vector2.ZERO)
+	if not pressed:
+		draw_colored_polygon(_ring_pts(center + Vector2(4, 6), radius + 3.0, seed, 2.0), Color(UiTheme.INK, 0.9 * alpha))
+	var bark := _ring_pts(c, radius + 3.0, seed, 2.5)
+	draw_colored_polygon(bark, Color("#3D2B22", alpha))
+	var wood := _ring_pts(c, radius - 4.0, seed + 1, 1.2)
+	draw_colored_polygon(wood, Color("#B58A57", alpha))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed + 2
+	# growth rings, all in one batched multiline
+	var rings := int(radius / 11.0)
+	var segs := PackedVector2Array()
+	for k in rings:
+		var r := (radius - 8.0) * float(k + 1) / (rings + 1)
+		var off := Vector2(rng.randf_range(-2, 2), rng.randf_range(-2, 2)) * (float(k) / rings)
+		var ring := _ring_pts(c + off, r, seed + 10 + k, 0.8, 24)
+		for j in ring.size():
+			segs.append(ring[j])
+			segs.append(ring[(j + 1) % ring.size()])
+	var a := rng.randf_range(0, TAU)
+	segs.append(c + Vector2(cos(a), sin(a)) * radius * 0.35)
+	segs.append(c + Vector2(cos(a), sin(a)) * (radius - 4.0))
+	draw_multiline(segs, Color("#7E5A3A", 0.7 * alpha), 1.3)
+	draw_polyline(wood + PackedVector2Array([wood[0]]), Color(UiTheme.INK, alpha), 2.0, true)
+	draw_polyline(bark + PackedVector2Array([bark[0]]), Color(UiTheme.INK, alpha), 2.4, true)
+
+
+func _brand_flame(c: Vector2, s: float, col: Color) -> void:
+	## The flame mark branded into the burn button.
+	var pts := PackedVector2Array()
+	var shape := [Vector2(0, 1), Vector2(0.55, 0.78), Vector2(0.62, 0.25), Vector2(0.32, -0.15), Vector2(0.36, -0.62),
+		Vector2(0.06, -0.38), Vector2(-0.04, -1.0), Vector2(-0.34, -0.45), Vector2(-0.6, -0.2), Vector2(-0.6, 0.6)]
+	for p in shape:
+		pts.append(c + p * s)
+	draw_colored_polygon(pts, col)
+	draw_polyline(pts + PackedVector2Array([pts[0]]), UiTheme.INK, 2.2, true)
 
 
 func _draw() -> void:
-	var font := UiTheme.bold()
-	# The stick.
+	# The stick: a carved wooden ring with a peg for a knob.
 	var base := _stick_origin if _stick_finger != NONE else stick_home()
 	var knob := _stick_pos if _stick_finger != NONE else base
-	var a := 0.95 if _stick_finger != NONE else 0.55
-	draw_circle(base, STICK_RADIUS, Color(UiTheme.CHARCOAL, 0.35 * a))
-	draw_arc(base, STICK_RADIUS, 0, TAU, 64, Color(UiTheme.EMBER, 0.55 * a), 3.0, true)
-	for k in 8:
-		var ang := TAU * k / 8.0
-		draw_line(base + Vector2(cos(ang), sin(ang)) * (STICK_RADIUS - 12.0), base + Vector2(cos(ang), sin(ang)) * (STICK_RADIUS - 4.0),
-			Color(UiTheme.EMBER_HOT, 0.4 * a), 3.0, true)
-	_coal(knob, 34.0, Color(UiTheme.EMBER, a), 0.6 if _stick_finger != NONE else 0.2)
-	if _stick_finger == NONE:
-		_text(font, "MOVE", base + Vector2(0, STICK_RADIUS + 26), 22, Color(UiTheme.CREAM, 0.75))
-	# The fire button: it breathes, and roars while held.
+	var a := 0.95 if _stick_finger != NONE else 0.6
+	draw_arc(base + Vector2(3, 4), STICK_RADIUS, 0, TAU, 48, Color(UiTheme.INK, 0.5 * a), 9.0, true)
+	draw_arc(base, STICK_RADIUS, 0, TAU, 48, Color("#7A5636", a), 7.0, true)
+	draw_arc(base, STICK_RADIUS + 3.5, 0, TAU, 48, Color(UiTheme.INK, a), 1.6, true)
+	draw_arc(base, STICK_RADIUS - 3.5, 0, TAU, 48, Color(UiTheme.INK, a), 1.6, true)
+	for k in 4:
+		var ang := TAU * k / 4.0 + PI * 0.25
+		draw_line(base + Vector2(cos(ang), sin(ang)) * (STICK_RADIUS - 3.5), base + Vector2(cos(ang), sin(ang)) * (STICK_RADIUS + 3.5),
+			Color(UiTheme.INK, a), 2.0, true)
+	_log_slice(knob, 32.0, 17, a, false)
+	draw_circle(knob, 7.0, Color(UiTheme.INK, 0.5 * a))
+	# The burn button: a log slice with a flame branded into it. The brand
+	# glows ember only while you burn (the one warm thing in the corner).
 	var fc := fire_center()
-	var press := Vector2(0, 4) if firing else Vector2.ZERO
-	var pulse := 0.5 + 0.5 * sin(_t * 3.0)
-	var rim := UiTheme.EMBER if heat_ok else Color(0.6, 0.55, 0.6)
-	_coal(fc + press, FIRE_RADIUS, Color(rim, 1.0), (1.0 if firing else 0.35 + 0.15 * pulse))
-	_text(font, "🔥", fc + press + Vector2(0, -14), 58, Color.WHITE)
-	_text(font, "HOLD TO BURN", fc + press + Vector2(0, 46), 19, UiTheme.CREAM)
-	# Jump.
+	_log_slice(fc, FIRE_RADIUS, 29, 1.0, firing)
+	var press := Vector2(3, 4) if firing else Vector2.ZERO
+	var pulse := 0.5 + 0.5 * sin(_t * 9.0)
+	var brand := Color("#2A1A12")
+	if firing:
+		brand = UiTheme.EMBER.lerp(UiTheme.CORE, 0.35 * pulse)
+	elif not heat_ok:
+		brand = Color("#5E5048")
+	_brand_flame(fc + press + Vector2(0, -4), 40.0, brand)
+	if firing:
+		_brand_flame(fc + press + Vector2(0, 8), 18.0, UiTheme.CORE)
+	_text(UiTheme.hand(), "hold to burn", fc + Vector2(0, FIRE_RADIUS + 22.0), 25, UiTheme.CREAM)
+	# Jump: a smaller slice with a chevron branded in.
 	var jc := jump_center()
-	var jp := Vector2(0, 3) if _jump_finger != NONE else Vector2.ZERO
-	_coal(jc + jp, JUMP_RADIUS, Color(UiTheme.EMBER_HOT, 0.85), 0.6 if _jump_finger != NONE else 0.15)
-	_text(font, "JUMP", jc + jp, 22, UiTheme.CREAM)
+	var jdown := _jump_finger != NONE
+	_log_slice(jc, JUMP_RADIUS, 41, 1.0, jdown)
+	var jp := Vector2(3, 4) if jdown else Vector2.ZERO
+	var chev := PackedVector2Array([jc + jp + Vector2(-18, 10), jc + jp + Vector2(0, -12), jc + jp + Vector2(18, 10)])
+	draw_polyline(chev, UiTheme.INK, 9.0, true)
+	draw_polyline(chev, Color("#2A1A12"), 5.0, true)
+	_text(UiTheme.hand(), "jump", jc + Vector2(-JUMP_RADIUS - 36.0, 6.0), 24, UiTheme.CREAM)
 
 
 func _text(font: Font, s: String, center: Vector2, font_size: int, color: Color) -> void:
 	var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 	var at := Vector2(center.x - w * 0.5, center.y + font_size * 0.35)
-	draw_string_outline(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, maxi(4, font_size / 4), Color(UiTheme.SOOT, color.a))
+	draw_string_outline(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, maxi(4, font_size / 4), Color(UiTheme.INK, color.a))
 	draw_string(font, at, s, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)

@@ -1,9 +1,11 @@
 shader_type spatial;
 render_mode diffuse_lambert, specular_schlick_ggx;
-// The river and the pond: deep teal with drifting ripples.
+// The river and the pond: dark slate water with slow ripples, catching the
+// moonlight in short ink-and-cream glints.
 
-uniform vec3 deep : source_color = vec3(0.06, 0.2, 0.3);
-uniform vec3 shallow : source_color = vec3(0.18, 0.5, 0.58);
+uniform vec3 deep : source_color = vec3(0.1, 0.16, 0.2);
+uniform vec3 shallow : source_color = vec3(0.18, 0.33, 0.37);
+uniform vec3 glint : source_color = vec3(0.79, 0.84, 0.95);
 
 varying vec3 v_world;
 
@@ -13,9 +15,9 @@ void vertex() {
 
 void fragment() {
 	vec2 p = v_world.xz;
-	float r = sin(p.x * 1.7 + TIME * 1.3) * sin(p.y * 1.3 - TIME * 1.1) + sin((p.x + p.y) * 2.9 + TIME * 2.0) * 0.4;
-	ALBEDO = mix(deep, shallow, 0.5 + 0.25 * r);
-	ROUGHNESS = 0.12;
-	SPECULAR = 0.7;
-	EMISSION = vec3(0.4, 0.9, 1.0) * smoothstep(1.1, 1.35, r) * 0.25;
+	float r = sin(p.x * 1.7 + TIME * 1.1) * sin(p.y * 1.3 - TIME * 0.9) + sin((p.x + p.y) * 2.9 + TIME * 1.6) * 0.4;
+	ALBEDO = mix(deep, shallow, 0.5 + 0.22 * r);
+	ROUGHNESS = 0.2;
+	SPECULAR = 0.5;
+	EMISSION = glint * smoothstep(1.15, 1.32, r) * 0.18;
 }

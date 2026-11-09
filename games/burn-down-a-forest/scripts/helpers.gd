@@ -1,8 +1,8 @@
 class_name HelperSwarm
 extends Node3D
 ## Helpers that wander the forest and light things on their own.
-##  Fire Sprites: giggling floating sparks, hot enough for grass and bushes.
-##  Ember Salamanders: little glowing lizards that scurry to pines and oaks.
+##  Fire sprites: round flame spirits with faces, hot enough for grass and bushes.
+##  Ember salamanders: ember lizards that scurry to pines and oaks.
 ## Each picks something it can light near the keeper, goes there, and holds
 ## its heat on it until it catches. Past MAX_VISIBLE_HELPERS of a kind, the
 ## ones you see just burn hotter.
@@ -12,26 +12,20 @@ var keeper: Node3D
 var _walkers: Array = []          # {node, type, pos, target, t, id, phase, legs}
 var _rng := RandomNumberGenerator.new()
 var _next_id := 0
-var _sprite_mat: StandardMaterial3D
-var _eye_mat: StandardMaterial3D
-var _lizard_mat: StandardMaterial3D
+var _sprite_mat: ShaderMaterial
+var _lizard_mat: ShaderMaterial
 
 
 func _ready() -> void:
 	_rng.seed = Balance.WORLD_SEED + 31
-	_sprite_mat = StandardMaterial3D.new()
-	_sprite_mat.albedo_color = Color(1.0, 0.7, 0.3)
-	_sprite_mat.emission_enabled = true
-	_sprite_mat.emission = Color(1.0, 0.55, 0.15)
-	_sprite_mat.emission_energy_multiplier = 1.6
-	_eye_mat = StandardMaterial3D.new()
-	_eye_mat.albedo_color = Color(0.1, 0.05, 0.08)
-	_eye_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_lizard_mat = StandardMaterial3D.new()
-	_lizard_mat.albedo_color = Color(0.95, 0.35, 0.12)
-	_lizard_mat.emission_enabled = true
-	_lizard_mat.emission = Color(0.9, 0.25, 0.05)
-	_lizard_mat.emission_energy_multiplier = 0.7
+	_sprite_mat = ShaderMaterial.new()
+	_sprite_mat.shader = load("res://shaders/prop.gdshader")
+	_sprite_mat.set_shader_parameter("glow_strength", 0.9)
+	_sprite_mat.set_shader_parameter("ink_edge", 0.6)
+	_lizard_mat = ShaderMaterial.new()
+	_lizard_mat.shader = _sprite_mat.shader
+	_lizard_mat.set_shader_parameter("emit_all", 0.25)
+	_lizard_mat.set_shader_parameter("ink_edge", 0.5)
 
 
 func _process(delta: float) -> void:
@@ -55,89 +49,39 @@ func _sync() -> void:
 			have += 1
 
 
+func _mesh(m: Mesh, mat: Material, parent: Node3D, pos: Vector3 = Vector3.ZERO) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = m
+	mi.material_override = mat
+	mi.position = pos
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	return mi
+
+
 func _spawn(type: int) -> void:
+	## Fire sprites are round flame spirits with faces; salamanders are ember
+	## lizards with a ridge of flames down the back (models/creatures.glb).
 	var node := Node3D.new()
 	add_child(node)
 	var legs: Array = []
 	if type == 0:
-		var orb := MeshInstance3D.new()
-		var s := SphereMesh.new()
-		s.radius = 0.2
-		s.height = 0.4
-		s.radial_segments = 10
-		s.rings = 6
-		orb.mesh = s
-		orb.material_override = _sprite_mat
-		node.add_child(orb)
-		for side in [-1.0, 1.0]:
-			var eye := MeshInstance3D.new()
-			var e := SphereMesh.new()
-			e.radius = 0.035
-			e.height = 0.07
-			e.radial_segments = 6
-			e.rings = 3
-			eye.mesh = e
-			eye.material_override = _eye_mat
-			eye.position = Vector3(0.07 * side, 0.04, 0.17)
-			node.add_child(eye)
-		var flame := _flame(0.28, 14)
-		flame.position = Vector3(0, 0.12, 0)
+		var body := _mesh(Models.creature("sprite"), _sprite_mat, node)
+		body.scale = Vector3.ONE * 1.25
+		var flame := _flame(0.3, 12)
+		flame.position = Vector3(0, 0.4, 0)
 		node.add_child(flame)
 	else:
-		var body := MeshInstance3D.new()
-		var c := CapsuleMesh.new()
-		c.radius = 0.13
-		c.height = 0.6
-		c.radial_segments = 8
-		c.rings = 2
-		body.mesh = c
-		body.rotation.x = PI / 2.0
-		body.position = Vector3(0, 0.16, 0)
-		body.material_override = _lizard_mat
-		node.add_child(body)
-		var head := MeshInstance3D.new()
-		var hs := SphereMesh.new()
-		hs.radius = 0.12
-		hs.height = 0.2
-		hs.radial_segments = 8
-		hs.rings = 4
-		head.mesh = hs
-		head.position = Vector3(0, 0.2, 0.34)
-		head.material_override = _lizard_mat
-		node.add_child(head)
-		var tail := MeshInstance3D.new()
-		var tc := CylinderMesh.new()
-		tc.top_radius = 0.01
-		tc.bottom_radius = 0.07
-		tc.height = 0.45
-		tc.radial_segments = 6
-		tail.mesh = tc
-		tail.rotation.x = -PI / 2.0 + 0.2
-		tail.position = Vector3(0, 0.12, -0.5)
-		tail.material_override = _lizard_mat
-		node.add_child(tail)
+		var body := _mesh(Models.creature("salamander"), _lizard_mat, node)
+		body.scale = Vector3.ONE * 1.3
 		for side in [-1.0, 1.0]:
-			var eye := MeshInstance3D.new()
-			var e := SphereMesh.new()
-			e.radius = 0.03
-			e.height = 0.06
-			eye.mesh = e
-			eye.material_override = _eye_mat
-			eye.position = Vector3(0.07 * side, 0.27, 0.42)
-			node.add_child(eye)
 			for fb in [-1.0, 1.0]:
-				var leg := MeshInstance3D.new()
-				var lc := BoxMesh.new()
-				lc.size = Vector3(0.05, 0.05, 0.16)
-				leg.mesh = lc
-				leg.material_override = _lizard_mat
-				leg.position = Vector3(0.16 * side, 0.06, 0.16 * fb)
-				leg.rotation.y = 1.1 * side
-				node.add_child(leg)
-				legs.append(leg)
-		var flame := _flame(0.3, 10)
-		flame.position = Vector3(0, 0.3, -0.05)
-		node.add_child(flame)
+				var hip := Node3D.new()
+				hip.position = Vector3(0.1 * side, 0.2, 0.2 * fb) * 1.3
+				hip.scale = Vector3(side, 1.0, 1.0) * 1.3
+				node.add_child(hip)
+				_mesh(Models.creature("salamander_leg"), _lizard_mat, hip)
+				legs.append(hip)
 	var start := keeper.position if keeper != null else Vector3.ZERO
 	start += Vector3(_rng.randf_range(-2, 2), 0, _rng.randf_range(-2, 2))
 	_next_id += 1
@@ -163,13 +107,12 @@ func _flame(size: float, amount: int) -> CPUParticles3D:
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	mat.billboard_keep_scale = true
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.vertex_color_use_as_albedo = true
 	mat.albedo_texture = UiTheme.soft_dot()
 	quad.material = mat
 	p.mesh = quad
 	var g := Gradient.new()
-	g.colors = PackedColorArray([Color(1, 0.9, 0.5, 1), Color(1, 0.4, 0.1, 0.7), Color(0.6, 0.1, 0.05, 0.0)])
+	g.colors = PackedColorArray([Color("#FFC15E"), Color(Color("#E8642C"), 0.8), Color(Color("#4A3B4A"), 0.0)])
 	g.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
 	p.color_ramp = g
 	var c := Curve.new()
@@ -223,12 +166,13 @@ func _step(w: Dictionary, d: float) -> void:
 	var ph: float = w.phase
 	var t := Time.get_ticks_msec() * 0.001
 	if type == 0:
-		pos.y = maxf(g, ForestGrid.WATER_LEVEL) + 1.25 + sin(t * 3.0 + ph) * 0.18
+		pos.y = maxf(g, ForestGrid.WATER_LEVEL) + 1.45 + sin(t * 3.0 + ph) * 0.18
+		(w.node as Node3D).scale = Vector3(1.0 + sin(t * 6.0 + ph) * 0.06, 1.0 - sin(t * 6.0 + ph) * 0.06, 1.0)
 	else:
 		pos.y = maxf(g, ForestGrid.WATER_LEVEL)
 		var wig := sin(t * 18.0 + ph) * (0.5 if not arrived else 0.1)
 		for k in (w.legs as Array).size():
-			(w.legs[k] as Node3D).rotation.x = wig * (1.0 if k % 2 == 0 else -1.0)
+			(w.legs[k] as Node3D).rotation.y = wig * (1.0 if k % 2 == 0 else -1.0)
 	w.pos = pos
 	(w.node as Node3D).position = pos
 

@@ -6,8 +6,8 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabl
 
 uniform vec2 wind = vec2(0.6, -0.4);
 uniform sampler2D puff : filter_linear_mipmap;
-uniform vec3 wisp : source_color = vec3(0.55, 0.42, 0.72);
-uniform vec3 soot : source_color = vec3(0.16, 0.12, 0.16);
+uniform vec3 wisp : source_color = vec3(0.42, 0.36, 0.5);
+uniform vec3 soot : source_color = vec3(0.17, 0.13, 0.19);
 
 varying float v_t;
 varying float v_dark;
@@ -33,5 +33,5 @@ void fragment() {
 	float a = texture(puff, UV).a;
 	vec3 col = mix(wisp, soot, v_dark);
 	ALBEDO = col;
-	ALPHA = a * smoothstep(0.0, 0.12, v_t) * (1.0 - v_t) * 0.55 * v_near;
+	ALPHA = a * smoothstep(0.0, 0.12, v_t) * (1.0 - v_t) * 0.6 * v_near;
 }

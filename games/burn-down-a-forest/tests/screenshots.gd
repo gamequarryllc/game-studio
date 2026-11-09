@@ -71,6 +71,16 @@ func _run() -> void:
 	hud.show_desktop_hint = false
 	await _frames(12)
 	await _shot("01_spawn")
+	# The same moment on a phone: the first hint sits by the burn button, with a finger.
+	hud.set_touch_mode(true)
+	await _frames(8)
+	await _shot("01b_spawn_phone")
+	hud.set_touch_mode(false)
+	# On a computer before the first click: a taped note says how to play.
+	hud.show_desktop_hint = true
+	await _frames(4)
+	await _shot("01c_click_to_play")
+	hud.show_desktop_hint = false
 
 	# Light the grass in front of the village and watch it spread.
 	world.force_fire = true
@@ -130,6 +140,9 @@ func _run() -> void:
 	hud.notebook.select("shop")
 	await _frames(4)
 	await _shot("07d_notebook_shop")
+	hud.notebook.select("settings")
+	await _frames(4)
+	await _shot("07e_notebook_settings")
 	hud.close_notebook()
 
 	# The timed offer tag.
@@ -180,8 +193,37 @@ func _run() -> void:
 
 	# The starter pack popup.
 	hud.show_starter_offer()
-	await _frames(6)
+	await _frames(20)
 	await _shot("12_starter_popup")
+	_close_popups()
+
+	# A golden critter's tag.
+	hud.show_golden(1240.0)
+	await _frames(4)
+	await _shot("14_golden_tag")
+	hud.find_tag.visible = false
+
+	# The village and the path into the forest, under the root arch.
+	_place(Vector3(5.0, 0, 49.5), 0.12, -0.3)
+	await _frames(8)
+	await _shot("15_village_path")
+
+	# The Elder Tree, watching from the heart of the grove.
+	_light(Vector3(0.0, 0, 12.0), 6.0)
+	_ff(40.0)
+	_place(Vector3(0.5, 0, 12.5), 0.0, -0.08)
+	await _frames(8)
+	await _shot("16_elder_tree")
+
+	# Down low in the meadow.
+	_place(Vector3(-8.0, 0, 30.0), 0.6, -0.42)
+	await _frames(8)
+	await _shot("17_meadow_close")
+
+	# The ending.
+	hud.show_ending()
+	await _frames(6)
+	await _shot("18_ending")
 	_close_popups()
 	gs.wipe_save(false)
 	world.queue_free()

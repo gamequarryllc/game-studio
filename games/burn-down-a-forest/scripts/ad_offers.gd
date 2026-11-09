@@ -104,16 +104,17 @@ static func unlocks_tool() -> String:
 
 
 static func headline(kind: String) -> String:
-	## The tag's big line: "FREE: +🔥 2.4K embers, enough for the Tiki Torch!"
+	## The tag's big line: "Free: 2.4K embers, enough for the tiki torch"
+	## (BBCode: the coal icon sits inline with the number).
 	match kind:
 		"instant":
-			var line := "FREE: +🔥 %s embers" % Fmt.num(GameState.instant_amount())
+			var line := "Free: %s %s embers" % ["[img=22x22]res://ui/icons/coal.svg[/img]", Fmt.num(GameState.instant_amount())]
 			var tool := unlocks_tool()
 			if tool != "":
-				line += ", enough for the %s!" % tool
+				line += ", enough for the %s" % tool.to_lower()
 			return line
 		"boost":
-			return "FREE: 2x fire for 5 minutes!"
+			return "Free: 2x fire for 5 minutes"
 		"helper_rush":
-			return "FREE: helpers work 3x for 3 min!"
+			return "Free: your helpers work 3x for 3 minutes"
 	return ""

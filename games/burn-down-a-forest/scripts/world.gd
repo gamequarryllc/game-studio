@@ -5,9 +5,11 @@ extends Node3D
 ## fire ticks, embers come in, floating numbers rise off the big fires, the
 ## wind shifts now and then, first-run hints, the starter pack offer, the ending.
 
-const SPAWN := Vector3(0.0, 0.0, 53.0)
+const SPAWN := Vector3(-0.6, 0.0, 52.4)
 const SPAWN_YAW := 0.0
-const SPAWN_PITCH := -0.6
+const SPAWN_PITCH := -0.58           # low enough to see the path lead into the woods and the moon over them
+const AMBIENT_COLD := Color("#776DA2")    # cursed night
+const AMBIENT_WARM := Color("#A3967E")    # the valley healing as the meadow spreads
 const FLOAT_POOL := 20
 
 var forest: ForestGrid
@@ -17,6 +19,7 @@ var helpers: HelperSwarm
 var critters: Critters
 var hud: Hud
 var env: Environment
+var moon: DirectionalLight3D
 var force_fire := false              # tests and screenshots hold the button down
 
 var _mouse_fire := false
@@ -81,7 +84,7 @@ func _ready() -> void:
 	hud.notebook_closed.connect(func(): Monetization.maybe_show_interstitial(Monetization.PLACEMENT_INTERSTITIAL))
 	GameState.tool_bought.connect(func(i: int):
 		Sound.play("reward", -4.0)
-		hud.toast("🔥 The %s! It lights %s." % [Balance.TOOLS[i].name, Balance.TOOLS[i].lights]))
+		hud.toast("The %s. It lights %s." % [str(Balance.TOOLS[i].name).to_lower(), Balance.TOOLS[i].lights]))
 	GameState.won.connect(_on_won)
 	_build_float_pool()
 	get_window().size_changed.connect(_fit_render_scale)
@@ -100,41 +103,43 @@ func _exit_tree() -> void:
 # Sky and light
 # =====================================================================================
 func _build_environment() -> void:
+	## Night in the cursed valley: cool moonlight from the upper left (as seen
+	## from the village), a plum sky with a pale moon, plum fog for depth. The
+	## fire is the only warm light. Linear tonemapping and no bloom, so every
+	## colour lands where the art bible puts it and a fire never goes white.
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.12, 0.08, 0.26)
-	sky_mat.sky_horizon_color = Color(0.78, 0.42, 0.45)
-	sky_mat.sky_curve = 0.12
-	sky_mat.ground_bottom_color = Color(0.08, 0.05, 0.1)
-	sky_mat.ground_horizon_color = Color(0.5, 0.28, 0.36)
-	sky_mat.sun_angle_max = 12.0
-	sky_mat.sun_curve = 0.08
+	sky_mat.sky_top_color = Color("#1B1430")
+	sky_mat.sky_horizon_color = Color("#5E4C74")
+	sky_mat.sky_curve = 0.18
+	sky_mat.ground_bottom_color = Color("#120D18")
+	sky_mat.ground_horizon_color = Color("#3A2E4A")
+	sky_mat.sun_angle_max = 2.2
+	sky_mat.sun_curve = 0.02
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.42, 0.62)
-	env.ambient_light_energy = 0.75
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.05
+	env.ambient_light_color = AMBIENT_COLD
+	env.ambient_light_energy = 1.0
+	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	env.tonemap_exposure = 1.15
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.36, 0.24, 0.38)
-	env.fog_density = 0.0065
-	env.fog_sky_affect = 0.25
-	env.glow_enabled = true
-	env.glow_intensity = 0.7
-	env.glow_bloom = 0.05
-	env.glow_hdr_threshold = 0.9
+	env.fog_light_color = Color("#514468")
+	env.fog_density = 0.0058
+	env.fog_sky_affect = 0.15
+	env.glow_enabled = false
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
-	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.78, 0.72)
-	sun.light_energy = 0.95
-	sun.rotation = Vector3(deg_to_rad(-32.0), deg_to_rad(-55.0), 0.0)
-	sun.shadow_enabled = false
-	add_child(sun)
+	moon = DirectionalLight3D.new()
+	moon.light_color = Color("#C4D2F2")
+	moon.light_energy = 2.05
+	moon.shadow_enabled = false
+	add_child(moon)
+	# from the west-north-west and high: the upper left of the view from the village
+	moon.look_at_from_position(Vector3(-60.0, 70.0, -25.0), Vector3.ZERO, Vector3.UP)
 
 
 func _fit_render_scale() -> void:
@@ -181,7 +186,7 @@ func _process(delta: float) -> void:
 		_last_tick = forest.ticks
 		_after_tick()
 	view.advance(d)
-	view.set_camera(keeper.camera.global_position, keeper.position + Vector3(0, 1.0, 0))
+	view.set_camera(keeper.camera.global_position, keeper.position + Vector3(0, 1.5, 0))
 	var earned := GameState.earn(forest.take_pay())
 	if earned > 0.0:
 		var r := GameState.income_per_second_now()
@@ -292,7 +297,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				hud.take_find()
 			KEY_M:
 				Sound.set_muted(not Sound.muted)
-				hud.toast("🔇 Sound off (M turns it back on)" if Sound.muted else "🔊 Sound on")
+				hud.toast("Sound off. M turns it back on" if Sound.muted else "Sound on")
 			KEY_ESCAPE:
 				if hud.notebook != null:
 					hud.close_notebook()
@@ -317,15 +322,15 @@ func _update_wind(d: float) -> void:
 func _build_float_pool() -> void:
 	for _i in FLOAT_POOL:
 		var l := Label3D.new()
-		l.font = UiTheme.bold()
+		l.font = UiTheme.display()
 		l.font_size = 72
-		l.outline_size = 18
+		l.outline_size = 16
 		l.pixel_size = 0.0085
 		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		l.no_depth_test = true
 		l.fixed_size = false
-		l.modulate = UiTheme.EMBER_HOT
-		l.outline_modulate = Color(0.2, 0.05, 0.02)
+		l.modulate = UiTheme.CORE
+		l.outline_modulate = UiTheme.INK
 		l.visible = false
 		add_child(l)
 		_floats.append({"node": l, "t": 9.0})
@@ -342,7 +347,7 @@ func _show_pay_spots() -> void:
 	for s in spots:
 		var v := float(s[1]) * mult
 		var at: Vector3 = s[0]
-		if v < 1.0 or at.distance_to(cam) > 45.0:
+		if v < 1.0 or at.distance_to(cam) > 45.0 or at.distance_to(cam) < 9.0:
 			continue
 		var top := at + Vector3(0, 3.0 + minf(4.0, log(v + 1.0)), 0)
 		if keeper.camera.is_position_behind(top) or keeper.camera.unproject_position(top).y < 130.0:
@@ -381,7 +386,7 @@ func _update_floats(d: float) -> void:
 func _on_golden(amount: float, at: Vector3) -> void:
 	GameState.grant_embers(amount, true)
 	Sound.play("golden", -3.0)
-	_float_text(at + Vector3(0, 2.0, 0), "✨ +" + Fmt.num(amount), amount)
+	_float_text(at + Vector3(0, 2.0, 0), "+" + Fmt.num(amount), amount)
 	hud.show_golden(amount)
 
 
@@ -390,6 +395,10 @@ func _on_golden(amount: float, at: Vector3) -> void:
 # =====================================================================================
 func _update_slow() -> void:
 	GameState.cells_burned = forest.burned
+	# The valley warms as the meadow spreads.
+	var healed := clampf(forest.progress() * 1.4, 0.0, 1.0)
+	env.ambient_light_color = AMBIENT_COLD.lerp(AMBIENT_WARM, healed)
+	env.fog_light_color = Color("#514468").lerp(Color("#6E6266"), healed)
 	GameState.check_win()
 	if not GameState.starter_offered and not GameState.owns_starter and GameState.play_time >= Balance.STARTER_AFTER \
 			and not hud.is_blocking() and not Monetization.is_showing_ad():
@@ -406,39 +415,49 @@ func _on_won() -> void:
 
 
 func _update_coach() -> void:
-	## First-run hints, one at a time.
+	## First-run hints, one at a time, about six words each, beside the control
+	## they're about (with a drawn finger on phones).
 	var touch := hud.touch_mode
 	var step := GameState.tutorial_step
 	var text := ""
+	var anchor := "center"
 	match step:
 		0:
-			text = ("Hold the 🔥 button to light the cursed grass" if touch else "Hold the left mouse button to light the cursed grass") \
-				+ "\n(aim with the camera: the flame lands where the ring is)"
+			text = "Hold to light the cursed grass" if touch else "Hold the mouse button to light the grass"
+			anchor = "burn"
 			if forest.burning.size() > 0:
 				_next_step()
 		1:
-			text = "It spreads on its own! Everything that burns pays 🔥 embers.\nWhere it burns, flowers grow."
-			if _coach_t > 7.0 or GameState.embers >= 40.0:
+			text = "It spreads. Everything burnt pays embers."
+			anchor = "embers"
+			if _coach_t > 6.0 or GameState.embers >= 40.0:
 				_next_step()
 		2:
-			text = "Drag the right side to turn the camera, left thumb to walk." if touch \
-				else "Move the mouse to turn the camera, WASD to walk."
-			if _coach_t > 7.0:
+			text = "Drag here to look around" if touch else "Move the mouse to look around"
+			anchor = "look"
+			if _coach_t > 5.0:
 				_next_step()
 		3:
+			text = "Thumb here to walk" if touch else "W, A, S and D to walk"
+			anchor = "stick"
+			if _coach_t > 5.0:
+				_next_step()
+		4:
+			anchor = "notebook"
 			if GameState.tool_index >= 1:
 				_next_step()
 			elif GameState.embers >= float(Balance.TOOLS[1].cost):
-				text = "You can afford the Lighter!\nOpen the 📓 Notebook (top right)" + ("" if touch else " or press N")
-		4:
-			text = "Cursed pines need more heat: aim the Lighter at a pine 🌲"
-			if _coach_t > 10.0:
-				_next_step()
+				text = "Enough for the lighter. Open the notebook."
 		5:
-			text = "Fire can't cross the dirt trails, but embers jump them on the wind 🌬.\nDry Winds in the notebook makes them jump further."
+			text = "Pines need the lighter. Aim at one."
 			if _coach_t > 9.0:
 				_next_step()
-	hud.set_coach(text)
+		6:
+			text = "Trails stop fire. Embers jump them."
+			anchor = "wind"
+			if _coach_t > 8.0:
+				_next_step()
+	hud.set_coach(text, anchor)
 
 
 func _next_step() -> void:

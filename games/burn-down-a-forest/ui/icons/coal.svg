@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
+  <!-- coal: drawn by art/icons/make_icons.py -->
+  <path d="M 9.87 39.53 C 8.91 35.32 11.59 29.60 14.01 25.80 C 16.42 21.99 20.44 18.71 24.36 16.71 C 28.28 14.70 33.29 13.11 37.54 13.77 C 41.79 14.44 47.02 17.43 49.88 20.70 C 52.74 23.98 54.79 29.28 54.69 33.41 C 54.58 37.54 52.24 42.29 49.26 45.48 C 46.28 48.67 41.70 51.64 36.79 52.57 C 31.88 53.50 24.27 53.23 19.79 51.05 C 15.30 48.88 10.84 43.74 9.87 39.53 Z" fill="#3A2A24" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 21.67 44.40 C 20.97 42.29 25.61 35.53 27.99 34.48 C 30.38 33.44 33.62 38.76 35.98 38.11 C 38.34 37.46 40.31 30.99 42.15 30.58 C 43.98 30.18 47.08 33.50 46.97 35.69 C 46.86 37.88 43.95 41.82 41.50 43.72 C 39.04 45.63 35.54 47.00 32.24 47.11 C 28.93 47.23 22.38 46.50 21.67 44.40 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="0.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 17.98 28.13 C 19.34 28.97 25.15 31.00 26.14 33.14 C 27.13 35.29 24.29 39.70 23.92 41.01 " fill="none" stroke="#FFC15E" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 26.12 33.38 C 27.82 32.52 33.34 28.53 36.33 28.19 C 39.31 27.86 42.75 30.84 44.03 31.36 " fill="none" stroke="#FFC15E" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 36.01 28.21 L 37.80 19.64" fill="none" stroke="#FFC15E" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 30.14 45.86 C 31.28 44.73 34.41 40.03 37.02 39.09 C 39.63 38.14 44.33 40.01 45.79 40.20 " fill="none" stroke="#FFC15E" stroke-width="2.20" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

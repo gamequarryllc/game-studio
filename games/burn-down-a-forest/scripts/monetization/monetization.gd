@@ -30,12 +30,12 @@ const PRODUCT_EMBERS_M := "embers_medium"          # consumable
 const PRODUCT_EMBERS_L := "embers_large"           # consumable
 
 const PRODUCTS = {
-	PRODUCT_REMOVE_ADS_2X: {"title": "Remove Ads + Permanent 2x", "fallback_price": "$4.99", "consumable": false},
-	PRODUCT_STARTER: {"title": "Fire-Keeper's Starter Pack", "fallback_price": "$1.99", "consumable": false},
-	PRODUCT_PHOENIX: {"title": "Phoenix Flame", "fallback_price": "$2.99", "consumable": false},
-	PRODUCT_EMBERS_S: {"title": "Pouch of Embers", "fallback_price": "$0.99", "consumable": true},
-	PRODUCT_EMBERS_M: {"title": "Jar of Embers", "fallback_price": "$2.99", "consumable": true},
-	PRODUCT_EMBERS_L: {"title": "Cauldron of Embers", "fallback_price": "$9.99", "consumable": true},
+	PRODUCT_REMOVE_ADS_2X: {"title": "No ads, and 2x for good", "fallback_price": "$4.99", "consumable": false},
+	PRODUCT_STARTER: {"title": "A parcel for new keepers", "fallback_price": "$1.99", "consumable": false},
+	PRODUCT_PHOENIX: {"title": "Phoenix flame", "fallback_price": "$2.99", "consumable": false},
+	PRODUCT_EMBERS_S: {"title": "Pouch of embers", "fallback_price": "$0.99", "consumable": true},
+	PRODUCT_EMBERS_M: {"title": "Jar of embers", "fallback_price": "$2.99", "consumable": true},
+	PRODUCT_EMBERS_L: {"title": "Cauldron of embers", "fallback_price": "$9.99", "consumable": true},
 }
 const PACK_PRODUCTS := [PRODUCT_EMBERS_S, PRODUCT_EMBERS_M, PRODUCT_EMBERS_L]
 
@@ -154,7 +154,7 @@ func _grant(product_id: String) -> void:
 	match product_id:
 		PRODUCT_REMOVE_ADS_2X:
 			GameState.owns_remove_ads_2x = true
-			text = "🚫 No more ads, and everything burns 2x. Thank you!"
+			text = "No more ads, and everything burns 2x. Thank you."
 		PRODUCT_STARTER:
 			if GameState.owns_starter:
 				return
@@ -162,16 +162,16 @@ func _grant(product_id: String) -> void:
 			GameState.starter_offered = true
 			GameState.sparkler_on = true
 			GameState.grant_embers(Balance.STARTER_EMBERS)
-			text = "🎁 +%s embers and the Rainbow Sparkler!" % Fmt.num(Balance.STARTER_EMBERS)
+			text = "The parcel: %s embers and the rainbow sparkler" % Fmt.num(Balance.STARTER_EMBERS)
 		PRODUCT_PHOENIX:
 			GameState.owns_phoenix = true
 			GameState.phoenix_on = true
-			text = "🪶 The Phoenix Flame is yours: golden fire, +10% heat!"
+			text = "The phoenix flame is yours: golden fire, 10% hotter"
 		PRODUCT_EMBERS_S, PRODUCT_EMBERS_M, PRODUCT_EMBERS_L:
 			var amount := GameState.ember_pack_amount(PACK_PRODUCTS.find(product_id))
 			GameState.grant_embers(amount)
 			GameState.packs_bought += 1
-			text = "🔥 +%s embers!" % Fmt.num(amount)
+			text = "%s %s embers, in the satchel" % ["[img=22x22]res://ui/icons/coal.svg[/img]", Fmt.num(amount)]
 		_:
 			push_warning("Unknown product: %s" % product_id)
 			return

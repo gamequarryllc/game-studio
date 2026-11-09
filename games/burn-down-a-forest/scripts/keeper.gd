@@ -1,12 +1,16 @@
 class_name Keeper
 extends Node3D
-## The fire-keeper: a small hooded figure with a lantern on their back, walked
+## The fire-keeper: a hooded figure in a madder-red robe with a tall flopping
+## hood and a brass lantern on their back (models/keeper.glb), walked
 ## around the forest floor (the ground's height field, no physics needed) and
 ## followed by an elevated chase camera that orbits around them. The tool heats
 ## the forest where the screen's centre lands (the crosshair), out to the tool's
 ## range; aim further and it lands at the edge of the range in that direction.
 
-const EYE := 2.3                     # the camera looks at a point this high above the keeper's feet
+const EYE := 2.7                    # the camera orbits a point this high above the keeper's feet,
+const SHOULDER := 0.95              # this far to their right (an over-the-shoulder view: the crosshair
+const LOOK_AHEAD := 1.2             # and the ring sit clear of the keeper), looking this far ahead
+const MODEL_SCALE := 1.6            # the keeper reads clearly at phone size from the chase camera
 const MIN_AIM_DIST := 1.2
 
 var grid: ForestGrid
@@ -41,16 +45,19 @@ var _ring: MeshInstance3D
 var _ring_mat: StandardMaterial3D
 var _shadow: MeshInstance3D
 var _light: OmniLight3D
+var _lantern: Node3D
 var fx: ToolFx
 var _cam_pos := Vector3.ZERO
-var _mat: StandardMaterial3D
+var _mat: ShaderMaterial
 var _touch_device := DisplayServer.is_touchscreen_available()
 
 
 func _ready() -> void:
-	_mat = StandardMaterial3D.new()
-	_mat.vertex_color_use_as_albedo = true
-	_mat.roughness = 0.9
+	_mat = ShaderMaterial.new()
+	_mat.shader = load("res://shaders/prop.gdshader")
+	_mat.set_shader_parameter("rim", 0.85)                    # moonlit rim so the hero reads against the woods
+	_mat.set_shader_parameter("rim_color", Color("#A9C0F2"))
+	_mat.set_shader_parameter("ink_edge", 0.35)
 	_build_model()
 	camera = Camera3D.new()
 	camera.fov = 62.0
@@ -74,33 +81,30 @@ func _ready() -> void:
 
 func _build_model() -> void:
 	_model = Node3D.new()
+	_model.scale = Vector3.ONE * MODEL_SCALE
 	add_child(_model)
 	_body = _part("body", _model, Vector3.ZERO)
 	_head = Node3D.new()
-	_head.position = Vector3(0, 1.02, 0)
+	_head.position = Vector3(0, 1.1, 0)
 	_body.add_child(_head)
 	_part("head", _head, Vector3.ZERO)
-	_part("hood", _head, Vector3(0, 0.12, -0.02))
-	_hand_l = _part("hand", _body, Vector3(-0.34, 0.5, 0.06))
-	_hand_r = _part("hand", _body, Vector3(0.34, 0.5, 0.1))
-	_foot_l = _part("foot", _model, Vector3(-0.13, 0.0, 0))
-	_foot_r = _part("foot", _model, Vector3(0.13, 0.0, 0))
-	# The lantern on the back glows like a coal.
-	var lantern := MeshInstance3D.new()
-	lantern.mesh = Models.keeper_part("lantern")
-	var lm := StandardMaterial3D.new()
-	lm.vertex_color_use_as_albedo = true
-	lm.emission_enabled = true
-	lm.emission = Color(1.0, 0.5, 0.15)
-	lm.emission_energy_multiplier = 1.4
-	lantern.material_override = lm
-	lantern.position = Vector3(0.1, 0.72, -0.34)
-	_body.add_child(lantern)
+	_part("hood", _head, Vector3.ZERO)
+	_hand_l = _part("hand", _body, Vector3(-0.36, 0.5, 0.06))
+	_hand_r = _part("hand", _body, Vector3(0.36, 0.5, 0.1))
+	_foot_l = _part("foot", _model, Vector3(-0.14, 0.0, 0))
+	_foot_r = _part("foot", _model, Vector3(0.14, 0.0, 0))
+	# The lantern hangs off a hook on the back, above the shoulder, where the
+	# chase camera always sees it; it sways as the keeper walks.
+	_lantern = Node3D.new()
+	_lantern.position = Vector3(0.16, 0.98, -0.3)
+	_body.add_child(_lantern)
+	var lantern := _part("lantern", _lantern, Vector3(0, -0.2, 0))
+	lantern.scale = Vector3.ONE * 1.25
 	_tool_holder = Node3D.new()
 	_hand_r.add_child(_tool_holder)
 	_shadow = MeshInstance3D.new()
 	var q := QuadMesh.new()
-	q.size = Vector2(1.1, 1.1)
+	q.size = Vector2(1.1 * MODEL_SCALE, 1.1 * MODEL_SCALE)
 	q.orientation = PlaneMesh.FACE_Y
 	_shadow.mesh = q
 	var sm := StandardMaterial3D.new()
@@ -124,15 +128,29 @@ func _part(name: String, parent: Node3D, pos: Vector3) -> MeshInstance3D:
 
 
 func _build_ring() -> void:
-	## The glowing ring on the ground where the flame lands.
-	var n := 128
+	## The ring on the ground where the flame lands: a hand-inked dashed circle
+	## (ink outside, colour inside), painted on, not glowing.
+	var n := 192
 	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 12
+	var wob := []
+	for k in 16:
+		wob.append(rng.randf_range(-0.02, 0.02))
 	for y in n:
 		for x in n:
-			var d := Vector2(x + 0.5 - n * 0.5, y + 0.5 - n * 0.5).length() / (n * 0.5)
-			var ring := exp(-pow((d - 0.82) / 0.07, 2.0))
-			var fill := 0.12 * clampf(1.0 - d, 0.0, 1.0)
-			img.set_pixel(x, y, Color(1, 1, 1, clampf(ring + fill, 0.0, 1.0)))
+			var v := Vector2(x + 0.5 - n * 0.5, y + 0.5 - n * 0.5) / (n * 0.5)
+			var d := v.length()
+			var a := atan2(v.y, v.x)
+			var seg := (a + PI) / TAU * 16.0
+			var k0 := int(floor(seg)) % 16
+			var r0 := 0.8 + lerpf(wob[k0], wob[(k0 + 1) % 16], seg - floor(seg))
+			var dash := 1.0 if fmod(seg * 1.5, 1.0) < 0.7 else 0.0
+			var paint := clampf(1.0 - absf(d - r0) / 0.045, 0.0, 1.0) * dash
+			var ink := clampf(1.0 - absf(d - r0) / 0.085, 0.0, 1.0) * dash
+			var inner := 0.1 * clampf(1.0 - d / r0, 0.0, 1.0)
+			var col := Color(0.18, 0.12, 0.08).lerp(Color.WHITE, paint)
+			img.set_pixel(x, y, Color(col.r, col.g, col.b, clampf(maxf(ink, inner), 0.0, 1.0)))
 	img.generate_mipmaps()
 	_ring = MeshInstance3D.new()
 	var q := QuadMesh.new()
@@ -142,7 +160,6 @@ func _build_ring() -> void:
 	_ring_mat = StandardMaterial3D.new()
 	_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_ring_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_ring_mat.no_depth_test = true
 	_ring_mat.albedo_texture = ImageTexture.create_from_image(img)
 	_ring.material_override = _ring_mat
@@ -170,12 +187,16 @@ func cam_forward() -> Vector3:
 	return Vector3(-sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), -cos(cam_yaw) * cos(cam_pitch))
 
 
+func _pivot() -> Vector3:
+	return position + Vector3(0, EYE, 0) + Vector3(cos(cam_yaw), 0, -sin(cam_yaw)) * SHOULDER
+
+
 func _camera_target() -> Vector3:
-	return position + Vector3(0, EYE, 0)
+	return _pivot() + Vector3(-sin(cam_yaw), 0, -cos(cam_yaw)) * LOOK_AHEAD
 
 
 func _wanted_cam_pos() -> Vector3:
-	var p := _camera_target() - cam_forward() * Balance.CAM_DISTANCE
+	var p := _pivot() - cam_forward() * Balance.CAM_DISTANCE
 	if grid != null:
 		p.y = maxf(p.y, grid.height_at(p.x, p.z) + 0.8)
 	return p
@@ -260,7 +281,9 @@ func update_aim() -> void:
 		return
 	var from := camera.global_position
 	var dir := -camera.global_transform.basis.z
-	var start := maxf(0.0, from.distance_to(_camera_target()) - 0.6)   # trees between the camera and the keeper are see-through: skip them
+	# Trees between the camera and the keeper, and just round them, are cut away
+	# (see shaders/plant.gdshader): start looking a little beyond the keeper.
+	var start := maxf(0.0, from.distance_to(position + Vector3(0, EYE, 0)) + 1.6)
 	var hit := Vector3.INF
 	var t := start
 	var hit_cell := -1
@@ -326,13 +349,13 @@ func _update_tool(d: float) -> void:
 	var pulse := 1.0 + 0.06 * sin(Time.get_ticks_msec() * 0.008)
 	_ring.scale = Vector3(r, 1, r) * pulse
 	var cell: int = aim.cell
-	var col := Color(1.0, 0.55, 0.18, 0.9)
+	var col := Color("#FFC15E")
 	if grid != null and cell >= 0 and grid.is_flammable(cell) and not grid.can_light(cell, GameState.tool_heat()):
-		col = Color(0.6, 0.55, 0.65, 0.55)
+		col = Color(0.75, 0.7, 0.72, 0.7)
 	if not aim.in_range:
-		col.a *= 0.55
+		col.a *= 0.6
 	if active:
-		col = col.lightened(0.2)
+		col = Color("#E8642C")
 	_ring_mat.albedo_color = col
 	_light.global_position = tool_tip() + Vector3(0, 0.3, 0)
 	_light.light_energy = move_toward(_light.light_energy, 1.6 if active else 0.0, d * 6.0)
@@ -359,9 +382,9 @@ func _animate(d: float) -> void:
 	var breathe := sin(Time.get_ticks_msec() * 0.003) * 0.012
 	_body.position.y = 0.04 + bob + breathe
 	_body.rotation.z = s * 0.05 if moving else 0.0
-	_foot_l.position = Vector3(-0.13, maxf(0.0, s) * 0.12 if moving else 0.0, s * 0.18 if moving else 0.0)
-	_foot_r.position = Vector3(0.13, maxf(0.0, -s) * 0.12 if moving else 0.0, -s * 0.18 if moving else 0.0)
-	_hand_l.position = Vector3(-0.34, 0.5 + (0.03 * s if moving else 0.0), 0.06 - (s * 0.12 if moving else 0.0))
+	_foot_l.position = Vector3(-0.14, maxf(0.0, s) * 0.12 if moving else 0.0, s * 0.18 if moving else 0.0)
+	_foot_r.position = Vector3(0.14, maxf(0.0, -s) * 0.12 if moving else 0.0, -s * 0.18 if moving else 0.0)
+	_hand_l.position = Vector3(-0.36, 0.5 + (0.03 * s if moving else 0.0), 0.06 - (s * 0.12 if moving else 0.0))
 	if firing:
 		_hand_r.position = _hand_r.position.lerp(Vector3(0.26, 0.72, 0.42), 1.0 - exp(-d * 18.0))
 		# Point the tool at where the flame lands.
@@ -373,9 +396,11 @@ func _animate(d: float) -> void:
 		_tool_holder.rotation = Vector3(-pitch, yaw, 0)
 	else:
 		var swing := -s * 0.12 if moving else 0.0
-		_hand_r.position = _hand_r.position.lerp(Vector3(0.34, 0.5, 0.12 + swing), 1.0 - exp(-d * 12.0))
+		_hand_r.position = _hand_r.position.lerp(Vector3(0.36, 0.5, 0.12 + swing), 1.0 - exp(-d * 12.0))
 		_tool_holder.rotation = _tool_holder.rotation.lerp(Vector3(-0.9, 0.15, 0), 1.0 - exp(-d * 10.0))
 	_head.rotation.x = -0.15 if firing else 0.0
+	_lantern.rotation.z = lerpf(_lantern.rotation.z, (s * 0.35 if moving else 0.0) + breathe * 3.0, 1.0 - exp(-d * 6.0))
+	_lantern.rotation.x = lerpf(_lantern.rotation.x, (0.25 if moving else 0.0), 1.0 - exp(-d * 4.0))
 	var g := grid.height_at(position.x, position.z) if grid != null else 0.0
 	_shadow.global_position = Vector3(position.x, maxf(g, ForestGrid.WATER_LEVEL) + 0.04, position.z)
 	var lift := clampf((position.y - g) / 3.0, 0.0, 0.7)

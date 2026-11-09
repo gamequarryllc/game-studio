@@ -136,7 +136,7 @@ func _run() -> void:
 	_touch(0, touch.fire_center(), true)
 	await _frames(1)
 	world._controls()
-	check(touch.firing and keeper.firing, "holding the 🔥 button burns")
+	check(touch.firing and keeper.firing, "holding the burn button burns")
 	_touch(1, Vector2(200, touch.size.y - 160), true)
 	_drag(1, Vector2(200, touch.size.y - 250), Vector2(0, -90))
 	await _frames(1)
@@ -218,7 +218,7 @@ func _run() -> void:
 	gs._income = [150.0, 150.0, 150.0, 150.0]
 	var offers_script = load("res://scripts/ad_offers.gd")
 	var line: String = offers_script.headline("instant")
-	check(line.begins_with("FREE: +") and line.contains("Tiki Torch"), "offer tag: \"%s\"" % line)
+	check(line.begins_with("Free: ") and line.contains("tiki torch") and not line.contains("!"), "offer tag: \"%s\"" % line)
 	check(offers_script.new().pick() == "instant", "the offer worth taking comes first")
 
 	# --- Save / load round trip.

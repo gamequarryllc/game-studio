@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
+  <!-- meteor: drawn by art/icons/make_icons.py -->
+  <path d="M 7.64 56.33 C 6.73 55.29 25.55 33.21 30.22 29.85 C 34.89 26.48 39.43 31.73 35.67 36.15 C 31.91 40.56 8.55 57.38 7.64 56.33 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 13.92 41.78 L 25.95 32.01" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 21.61 53.99 L 31.77 41.79" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 41.86 6.13 L 46.26 16.42 L 57.46 16.88 L 48.50 24.49 L 51.27 34.96 L 41.96 28.86 L 32.95 34.89 L 35.53 23.97 L 26.57 16.57 L 38.01 16.44 Z" fill="#FFC15E" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

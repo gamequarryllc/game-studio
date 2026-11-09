@@ -25,11 +25,11 @@ func is_rewarded_ready(_placement: String) -> bool:
 
 
 func show_rewarded(placement: String) -> void:
-	_show_fake_ad("REWARDED AD", placement, true)
+	_show_fake_ad("A pretend rewarded ad", placement, true)
 
 
 func show_interstitial(placement: String) -> void:
-	_show_fake_ad("INTERSTITIAL AD", placement, false)
+	_show_fake_ad("A pretend ad between breaks", placement, false)
 
 
 func purchase(product_id: String) -> void:
@@ -65,7 +65,7 @@ func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:
 	bg.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var label := Label.new()
-	label.text = "%s\n(placeholder: %s)\n\nImagine a mobile game ad here." % [title, placement]
+	label.text = "%s\nplacement: %s\n\nA real ad plays here once the ad network is connected." % [title, placement]
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 34)
 	box.add_child(label)
@@ -78,14 +78,14 @@ func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:
 	if rewarded:
 		var skip := Button.new()
 		skip.focus_mode = Control.FOCUS_NONE
-		skip.text = "Close early (no reward)"
+		skip.text = "Close early, no reward"
 		skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		box.add_child(skip)
 		skip.pressed.connect(func():
 			_close()
 			rewarded_failed.emit(placement, "closed early"))
 	for i in range(FAKE_AD_SECONDS, 0, -1):
-		btn.text = "Close in %d..." % i
+		btn.text = "Close in %d" % i
 		await get_tree().create_timer(1.0).timeout
 		if _layer == null:
 			return  # closed early

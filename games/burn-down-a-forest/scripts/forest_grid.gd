@@ -27,6 +27,7 @@ const CHUNK := 8                   # cells per side of a payout region (floating
 const DX := [1, -1, 0, 0, 1, 1, -1, -1]
 const DY := [0, 0, 1, -1, 1, -1, 1, -1]
 const WATER_LEVEL := -0.35
+const PATH_END := 57                # the path runs from the village up to this row
 
 var n: int = Balance.GRID
 var origin := Vector2.ZERO          # world x/z of the corner of cell (0, 0)
@@ -41,6 +42,7 @@ var pay_rate := PackedFloat32Array()
 var ash_t := PackedFloat32Array()
 var damp := PackedByteArray()
 var vary := PackedFloat32Array()    # 0..1 per cell, for looks (size, colour)
+var size_mult := PackedFloat32Array()  # 1 for most plants; more for the hand-placed landmark trees
 var heights := PackedFloat32Array() # the ground at cell corners, MARGIN cells past the edge
 var hn: int = 0                     # corners per side of `heights`
 
@@ -95,6 +97,8 @@ func generate(seed: int) -> void:
 	pay_rate.resize(size)
 	ash_t.resize(size)
 	vary.resize(size)
+	size_mult.resize(size)
+	size_mult.fill(1.0)
 	kind.fill(0)
 	state.fill(INTACT)
 	heat.fill(0.0)
@@ -138,16 +142,26 @@ func generate(seed: int) -> void:
 		for x in n:
 			if Vector2(x, y).distance_to(Vector2(62, 56)) < 3.4:
 				kind[x + y * n] = Balance.WATER
-	# The swallowed village at the south edge, and a patch of grass in front of
-	# it to light first.
+	# The swallowed village at the south edge: a square, yards either side for
+	# the cottages, and a patch of grass in front of it to light first.
 	for y in range(n - 16, n):
 		for x in n:
 			var i := x + y * n
 			var dx := absf(x - c)
 			if y >= n - 6 and dx < 11.0:
 				kind[i] = Balance.BARE
+			elif y >= n - 10 and dx >= 5.5 and dx < 13.0:
+				kind[i] = Balance.BARE
 			elif y >= n - 15 and dx < 13.0 and kind[i] != Balance.WATER:
 				kind[i] = Balance.GRASS if rng.randf() < 0.72 else Balance.BUSH
+	# A path winds from the square into the forest, toward the Elder Tree.
+	for y in range(PATH_END, n - 5):
+		var px := path_x(y)
+		for x in range(int(floor(px)), int(floor(px)) + 2):
+			var i := x + y * n
+			if x >= 0 and x < n and kind[i] != Balance.WATER:
+				kind[i] = Balance.BARE
+	_place_landmarks()
 	# Damp cells by the water are harder to light.
 	for y in n:
 		for x in n:
@@ -184,6 +198,36 @@ func generate(seed: int) -> void:
 	burning.clear()
 	ashing.clear()
 	_build_heights(seed)
+
+
+func path_x(y: float) -> float:
+	## The path's centre column at grid row y (the village is at the bottom rows).
+	var t := float(n - 7) - y
+	return 45.0 - t * 0.12 + 2.2 * sin(t * 0.25)
+
+
+func _place_landmarks() -> void:
+	## Hand-placed trees that give the forest its sightlines: two big crooked
+	## pines either side of where the path leaves the thicket, an old watcher oak
+	## where it ends, a lone giant pine on the hill west of the village, a great
+	## oak by the pond. They burn like the rest, just bigger.
+	var gate_y := 67
+	var gx := int(floor(path_x(gate_y)))
+	for l in [[gx - 3, gate_y, Balance.PINE, 1.5], [gx + 4, gate_y + 1, Balance.PINE, 1.4],
+			[int(floor(path_x(PATH_END))) + 1, PATH_END - 2, Balance.OAK, 1.55], [27, 63, Balance.PINE, 1.75],
+			[57, 52, Balance.OAK, 1.5], [52, 64, Balance.PINE, 1.45]]:
+		var x: int = l[0]
+		var y: int = l[1]
+		# room around it, so its big crown doesn't sit in its neighbours'
+		for oy in range(-1, 2):
+			for ox in range(-1, 2):
+				var j := (x + ox) + (y + oy) * n
+				if kind[j] != Balance.WATER and kind[j] != Balance.BARE and (ox != 0 or oy != 0):
+					kind[j] = Balance.GRASS
+		var i := x + y * n
+		kind[i] = l[2]
+		vary[i] = 0.95
+		size_mult[i] = l[3]
 
 
 func _cut_trails(seed: int) -> void:
@@ -327,7 +371,7 @@ func plant_height(i: int) -> float:
 	## How tall what's growing here is, for aiming at it.
 	if i < 0 or state[i] != INTACT or kind[i] > Balance.ELDER:
 		return 0.0
-	return float(Balance.PLANTS[kind[i]].height) * (0.85 + 0.3 * vary[i])
+	return float(Balance.PLANTS[kind[i]].height) * Models.variant_height(kind[i], vary[i]) * size_mult[i] * (0.92 + 0.16 * fmod(vary[i] * 3.7, 1.0))
 
 
 func zone_at(wx: float, wz: float) -> int:

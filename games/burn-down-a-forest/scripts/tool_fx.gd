@@ -47,7 +47,6 @@ func _particles(amount: int, size: float) -> CPUParticles3D:
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	mat.billboard_keep_scale = true
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.vertex_color_use_as_albedo = true
 	mat.albedo_texture = UiTheme.soft_dot()
 	quad.material = mat
@@ -85,13 +84,18 @@ func setup(i: int) -> void:
 	_gold = GameState.phoenix_on
 	_arc = false
 	_from_sky = false
-	var fire := [Color(1, 0.9, 0.6, 0.9), Color(1, 0.55, 0.12, 0.7), Color(0.9, 0.22, 0.06, 0.4), Color(0.3, 0.1, 0.1, 0.0)]
+	# Warm, never white: hot core -> flame body -> deep red -> soot (art bible palette).
+	var core := Color("#FFC15E")
+	var body := Color("#E8642C")
+	var deep := Color("#B8361E")
+	var soot := Color("#3B2D3A")
+	var fire := [core, Color(body, 0.95), Color(deep, 0.7), Color(soot, 0.0)]
 	if _gold:
-		fire = [Color(1, 1, 0.9, 1), Color(1, 0.85, 0.3, 0.95), Color(1, 0.55, 0.2, 0.6), Color(0.5, 0.25, 0.1, 0.0)]
+		fire = [Color("#FFE08A"), Color(Color("#F2C14E"), 0.95), Color(Color("#D9862E"), 0.7), Color(soot, 0.0)]
 	_ramp(_tip_flame, fire)
 	_ramp(_stream, fire)
-	_ramp(_trail, [Color(1, 0.85, 0.4, 1), Color(1, 0.4, 0.1, 0.8), Color(0.6, 0.15, 0.05, 0.0)])
-	_ramp(_impact, [Color(1, 0.9, 0.5, 1), Color(1, 0.45, 0.1, 0.8), Color(0.4, 0.1, 0.05, 0.0)])
+	_ramp(_trail, [core, Color(body, 0.85), Color(soot, 0.0)])
+	_ramp(_impact, [core, Color(body, 0.85), Color(soot, 0.0)])
 	_tip_flame.direction = Vector3.UP
 	_tip_flame.spread = 12.0
 	_tip_flame.gravity = Vector3(0, 1.5, 0)
@@ -143,7 +147,7 @@ func setup(i: int) -> void:
 			_life = 0.55
 			_trail.amount = 40
 			if not _gold:
-				_ramp(_stream, [Color(1, 0.9, 1, 1), Color(1, 0.4, 0.85, 0.95), Color(0.55, 0.15, 0.9, 0.6), Color(0.2, 0.05, 0.3, 0.0)])
+				_ramp(_stream, [Color("#F0A0E8"), Color(Color("#9B4FD1"), 0.95), Color(Color("#5C2B8C"), 0.7), Color(soot, 0.0)])
 		_:
 			_size(_tip_flame, 0.2)
 			_stream.amount = 12
@@ -152,7 +156,7 @@ func setup(i: int) -> void:
 			_from_sky = true
 			_trail.amount = 60
 			if not _gold:
-				_ramp(_stream, [Color(0.85, 0.95, 1, 1), Color(1, 0.8, 0.4, 1), Color(1, 0.35, 0.1, 0.8), Color(0.3, 0.1, 0.1, 0.0)])
+				_ramp(_stream, [Color("#FFE08A"), Color(core, 1.0), Color(body, 0.8), Color(soot, 0.0)])
 	_stream.lifetime = _life
 	_trail.lifetime = _life * 1.3
 

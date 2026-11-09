@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
+  <!-- horn: drawn by art/icons/make_icons.py -->
+  <path d="M 7.89 25.63 C 10.33 23.70 16.33 28.81 22.34 26.28 C 28.35 23.74 39.38 12.84 43.93 10.43 C 48.48 8.02 48.64 4.90 49.62 11.81 C 50.60 18.72 50.67 44.80 49.79 51.90 C 48.92 58.99 49.07 56.73 44.37 54.39 C 39.66 52.05 27.68 40.61 21.57 37.86 C 15.45 35.10 9.97 39.91 7.69 37.87 C 5.41 35.83 5.45 27.56 7.89 25.63 Z" fill="#C9973F" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 51.74 22.29 L 58.20 18.32" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 53.84 31.75 L 60.99 31.85" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 52.00 42.09 L 58.04 46.10" fill="none" stroke="#2E1E14" stroke-width="2.40" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 7.72 25.82 L 16.29 25.86 L 15.81 38.21 L 7.86 38.17 Z" fill="#EFE3C8" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
