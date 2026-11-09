@@ -1,0 +1,8 @@
+.godot/
+/build/
+**/android/
+*.apk
+*.aab
+export_credentials.cfg
+__pycache__/
+/tmp/

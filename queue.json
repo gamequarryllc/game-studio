@@ -1,0 +1,95 @@
+{
+  "_about": "The studio queue. Order = build priority. status: queued | building | first-playable | polishing | ready-to-play | shipped | parked. The site page and the loop both read this file.",
+  "games": [
+    {
+      "slug": "burn-down-a-forest",
+      "title": "Burn Down a Forest",
+      "emoji": "🔥",
+      "color": "#e8642c",
+      "tagline": "A cursed forest swallowed the valley overnight. Burn it back with a match, then a torch, then a dragon.",
+      "status": "building",
+      "note": ""
+    },
+    {
+      "slug": "dig-to-the-core",
+      "title": "Dig to the Core",
+      "emoji": "⛏️",
+      "color": "#b07a3c",
+      "tagline": "Shovel, drill, laser. Dig straight down through fossils and a T. rex to the middle of the Earth.",
+      "status": "building",
+      "note": ""
+    },
+    {
+      "slug": "burn-a-cardboard-city",
+      "title": "Burn a Cardboard City",
+      "emoji": "📦",
+      "color": "#c9a46a",
+      "tagline": "Someone built a whole city out of cardboard. It would be a shame if it caught fire.",
+      "status": "queued",
+      "note": "Reuses the fire system from Burn Down a Forest"
+    },
+    {
+      "slug": "drain-an-ocean",
+      "title": "Drain an Ocean",
+      "emoji": "🌊",
+      "color": "#2a7fc1",
+      "tagline": "Pump the sea dry and watch shipwrecks, sunken treasure and finally Atlantis come up for air.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "eat-a-giant-cake",
+      "title": "Eat a Giant Cake",
+      "emoji": "🎂",
+      "color": "#e98bb5",
+      "tagline": "You are tiny and the cake is enormous. Spoon, fork, stand mixer, through frosting, sponge and jam.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "unbury-a-pyramid",
+      "title": "Unbury a Pyramid",
+      "emoji": "🏜️",
+      "color": "#d9a441",
+      "tagline": "Blow away a desert of sand to uncover a buried pyramid, with mummies who help if you ask nicely.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "thaw-a-frozen-planet",
+      "title": "Thaw a Frozen Planet",
+      "emoji": "🪐",
+      "color": "#7fb6e8",
+      "tagline": "A whole tiny planet frozen solid. Walk all the way around it and bring summer back.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "dust-a-haunted-house",
+      "title": "Dust a Haunted House",
+      "emoji": "👻",
+      "color": "#8a7fc9",
+      "tagline": "A century of dust and cobwebs, and something is hiding under every layer.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "erase-a-mountain",
+      "title": "Erase a Mountain",
+      "emoji": "🏔️",
+      "color": "#8c96a3",
+      "tagline": "Chisel, dynamite, laser. Take a whole mountain apart and find the temple sealed inside.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "defrost-a-freezer",
+      "title": "Defrost a Freezer",
+      "emoji": "🧊",
+      "color": "#9fd3e6",
+      "tagline": "You are tiny, the freezer is ancient, and somewhere under the ice is a pizza from 1987.",
+      "status": "queued",
+      "note": "Closest to Melt a Glacier; may ship as a Melt a Glacier map instead of its own app"
+    }
+  ]
+}
