@@ -74,6 +74,9 @@ The owner wants every game and UI to look like a small, skilled studio made it, 
 - Template shop layouts (equal tabs, identical rows or card grids, a second buy button), stock centred modals, too many popups at once. Build shops and offers as physical objects from the game's world, one popup at a time.
 - Default free fonts that read as AI picks (Outfit, Permanent Marker as the only font). Pick fonts with character that match the fiction.
 - An ending card shown over live gameplay with the HUD still up. Hide the HUD and give the ending its own moment.
+- Terrain that looks generated: perfectly round or concentric shapes, stair-stepped heightmap edges, blurry noise blotches for grass and sand. Sculpt asymmetric landforms with landmarks, smooth modelled edges, painted detail that has direction (tide lines, ripples, paths).
+- Anything that looks like debug output: numbered IDs on objects, labels on grey translucent boxes, raw units ("398 cells"), "(test)" in prices, a visible dev tab. Use in-world lettering and real copy; hide dev tools.
+- The same frame treatment on every panel. Give each UI role its own material.
 
 **Process, every time a game is shown to the owner:**
 1. Screenshots plus the model contact sheet.
