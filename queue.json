@@ -26,7 +26,7 @@
       "color": "#c9a46a",
       "tagline": "Someone built a whole city out of cardboard. It would be a shame if it caught fire.",
       "status": "first-playable",
-      "note": "Critic: almost. Polish pass next (aftermath, fire, floor and lighting, castle, trees, hands, shop, HUD)"
+      "note": "Critic: almost. Polish pass in progress (aftermath, fire, floor and lighting, castle, trees, hands, shop, HUD)"
     },
     {
       "slug": "drain-an-ocean",
@@ -35,7 +35,7 @@
       "color": "#2a7fc1",
       "tagline": "Pump the sea dry and watch shipwrecks, sunken treasure and finally Atlantis come up for air.",
       "status": "building",
-      "note": ""
+      "note": "First build in; fresh-eyes critic, then fixes + full QA playthrough"
     },
     {
       "slug": "eat-a-giant-cake",

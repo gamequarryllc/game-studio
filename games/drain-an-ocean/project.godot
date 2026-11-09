@@ -1,0 +1,44 @@
+; Engine configuration file.
+; Open this folder in Godot 4.4+ (Project Manager > Import > select this file).
+
+config_version=5
+
+[application]
+
+config/name="Drain an Ocean"
+config/description="Pump a whole bay dry, rescue what's stranded, and find the lost town at the bottom."
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.4", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+GameState="*res://scripts/game_state.gd"
+Monetization="*res://scripts/monetization/monetization.gd"
+Sound="*res://scripts/audio/sound.gd"
+
+[audio]
+
+driver/output_latency.web=200
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+
+[input_devices]
+
+pointing/emulate_mouse_from_touch=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.06, 0.2, 0.24, 1)
+lights_and_shadows/directional_shadow/size=2048
+lights_and_shadows/directional_shadow/soft_shadow_filter_quality=1
+anti_aliasing/quality/msaa_3d=1

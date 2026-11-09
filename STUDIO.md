@@ -150,6 +150,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: Drain an Ocean first build handed back (one falling water level, 11 cut-off pools drained by barges, rescues into an idle-earning aquarium, salvage, 5 pump tiers, pelicans and crabs, sea seepage at depth for pacing, nautical-chart UI with signal-flag buttons; 71 smoke checks; browser check passes). Held at `building` until the critic and a QA playthrough. Started the Cardboard City polish pass.
 - 2026-11-09: Burn a Cardboard City second critic: **Almost** → first playable. Review 2 is its polish list; the polish pass starts in the next free slot.
 - 2026-11-09: Burn a Cardboard City review-1 fixes + QA done: cut-paper fire with tissue smoke, 16 Blender burnt states, district materials, hands holding tools, warm key light, FOV 60 with giant props, physical-object shop and matchbox offer, stencil type, bottle-cap controls, paper rockets. Playthrough passes keen (21:48), casual (50:04), boosted; chaos, visual and browser runs pass; 13 bugs fixed (95 smoke checks). Next: second critic. Started the forest polish pass (review 3).
 - 2026-11-09: Burn Down a Forest third critic: **Almost** → first playable (the studio's first). Review 3 is its polish list (fire at scale, sculpted keeper, meadow edges, ending, darker-than-readable interior, number figures and text size, village models, notebook pages, offers, hearts and Elder silhouette).

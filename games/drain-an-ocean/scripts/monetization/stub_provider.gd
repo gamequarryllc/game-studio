@@ -1,0 +1,115 @@
+class_name StubMonetizationProvider
+extends MonetizationProvider
+## Fake ads and purchases so the whole flow can be played and tested without
+## any SDK (playtest builds). An "ad" is a dark screen with a countdown;
+## purchases succeed after a short pause. What you bought is kept in the save.
+
+const FAKE_AD_SECONDS := 3
+
+var instant := false     # tests: ads finish at once, no screen
+var _layer: CanvasLayer
+
+
+func provider_name() -> String:
+	return "stub"
+
+
+func initialize() -> void:
+	print("[Monetization] Stub provider: ads and purchases are simulated.")
+
+
+func is_rewarded_ready(_placement: String) -> bool:
+	return true
+
+
+func show_rewarded(placement: String) -> void:
+	if instant:
+		rewarded_completed.emit.call_deferred(placement)
+		return
+	_show_fake_ad("A short ad would play here", placement, true)
+
+
+func show_interstitial(placement: String) -> void:
+	if instant:
+		interstitial_closed.emit.call_deferred(placement)
+		return
+	_show_fake_ad("Ad break", placement, false)
+
+
+func purchase(product_id: String) -> void:
+	if instant:
+		purchase_succeeded.emit.call_deferred(product_id)
+		return
+	await get_tree().create_timer(0.4).timeout
+	purchase_succeeded.emit(product_id)
+
+
+func restore_purchases() -> void:
+	# A real store returns what the account owns. The stub's purchases are
+	# already remembered in the save file.
+	pass
+
+
+func price_string(_product_id: String, fallback: String) -> String:
+	return fallback + " (test)"
+
+
+func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:
+	if _layer != null:
+		return
+	_layer = CanvasLayer.new()
+	_layer.layer = 100
+	add_child(_layer)
+	var bg := ColorRect.new()
+	bg.color = Color(0.06, 0.1, 0.12, 0.96)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	_layer.add_child(bg)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 24)
+	bg.add_child(box)
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var label := Label.new()
+	label.text = "%s\n(test placement: %s)" % [title, placement]
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 30)
+	box.add_child(label)
+	var btn := Button.new()
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(360, 90)
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn.disabled = true
+	box.add_child(btn)
+	if rewarded:
+		var skip := Button.new()
+		skip.focus_mode = Control.FOCUS_NONE
+		skip.text = "Close early (no reward)"
+		skip.custom_minimum_size = Vector2(300, 64)
+		skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		box.add_child(skip)
+		skip.pressed.connect(func():
+			_close()
+			rewarded_failed.emit(placement, "closed early"))
+	var mine := _layer
+	for i in range(FAKE_AD_SECONDS, 0, -1):
+		btn.text = "Close in %d" % i
+		await get_tree().create_timer(1.0, true, false, true).timeout
+		if _layer != mine or not is_instance_valid(btn):
+			return
+	btn.text = "Close ad"
+	btn.disabled = false
+	await btn.pressed
+	if _layer != mine:
+		return
+	_close()
+	if rewarded:
+		rewarded_completed.emit(placement)
+	else:
+		interstitial_closed.emit(placement)
+
+
+func _close() -> void:
+	if _layer != null:
+		_layer.queue_free()
+		_layer = null
