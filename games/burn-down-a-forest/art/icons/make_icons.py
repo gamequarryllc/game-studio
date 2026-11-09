@@ -209,15 +209,18 @@ def flamethrower(i):
 
 @icon
 def dragon(i):
-    i.shape([(12, 48), (14, 30), (24, 18), (40, 16), (52, 24), (56, 36), (50, 48), (36, 54), (22, 54)], VIOLET)
-    i.shape([(22, 22), (16, 8), (28, 18)], CREAM, smooth=False)
-    i.shape([(36, 17), (40, 4), (44, 19)], CREAM, smooth=False)
-    i.blob(25, 32, 4, 4, CREAM, n=8)
-    i.blob(40, 30, 4, 4, CREAM, n=8)
-    i.blob(25.5, 32.5, 1.5, 1.5, INK, n=6, width=0)
-    i.blob(40.5, 30.5, 1.5, 1.5, INK, n=6, width=0)
-    i.line([(30, 44), (36, 46), (44, 42)], width=2.2)
-
+    """The dragon puppet, side on: a felt head with a long snout, a flared
+    nostril, swept-back horns, a slit-pupil eye and the cuff it's worn by."""
+    i.shape([(10, 58), (12, 44), (18, 34), (24, 26), (34, 22), (46, 22), (56, 26), (60, 32), (56, 36), (44, 38), (34, 42), (28, 50), (26, 58)], VIOLET)
+    i.shape([(24, 26), (18, 12), (22, 10), (30, 22)], CREAM, smooth=False)
+    i.shape([(31, 23), (30, 8), (34, 7), (37, 22)], CREAM, smooth=False)
+    i.blob(38, 29, 4.2, 3.4, GOLD, n=9)
+    i.line([(38, 26.5), (38, 31.5)], width=1.8)
+    i.blob(54, 29, 1.6, 1.3, INK, n=6, width=0)
+    i.line([(42, 36), (54, 34)], width=1.8)
+    i.line([(20, 40), (24, 36)], width=1.6)
+    i.line([(16, 46), (21, 42)], width=1.6)
+    i.rect(8, 54, 22, 7, "#4A3070", r=2.0)
 
 @icon
 def meteor(i):
@@ -280,12 +283,14 @@ def boots(i):
 # --- helpers ------------------------------------------------------------------------------
 @icon
 def sprite(i):
-    i.shape([(32, 58), (46, 50), (50, 36), (44, 22), (40, 10), (34, 18), (28, 6), (20, 22), (14, 36), (18, 50)], EMBER)
-    i.blob(32, 44, 11, 9, CORE, n=9, width=0)
-    i.blob(27, 38, 2, 3, INK, n=6, width=0)
-    i.blob(37, 38, 2, 3, INK, n=6, width=0)
-    i.line([(28, 46), (32, 48), (36, 46)], width=2.0)
-
+    """A fire sprite: a plump flame spirit with a curled tip, two little side
+    tongues for arms and two ink eyes (no grin: it's a spirit, not a sticker)."""
+    i.shape([(32, 58), (45, 52), (50, 40), (46, 28), (42, 18), (44, 9), (36, 13), (30, 8), (22, 22), (16, 34), (16, 48)], EMBER)
+    i.shape([(17, 40), (8, 34), (10, 30), (18, 33)], EMBER, wob=0.3)
+    i.shape([(48, 38), (57, 31), (56, 27), (47, 31)], EMBER, wob=0.3)
+    i.blob(32, 45, 10, 8, CORE, n=9, width=0)
+    i.blob(27, 38, 1.8, 3.0, INK, n=6, width=0)
+    i.blob(37, 38, 1.8, 3.0, INK, n=6, width=0)
 
 @icon
 def salamander(i):
@@ -461,15 +466,17 @@ def tick(i):
 
 @icon
 def heart(i):
+    """A cursed heart set free: mint, like the knots in the trees, with two carved lines."""
     pts = []
     for k in range(24):
         t = 2 * math.pi * k / 24
         x = 16 * math.sin(t) ** 3
         y = -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t))
         pts.append((32 + x * 1.5, 30 + y * 1.5))
-    i.shape(pts, POPPY, wob=0.4)
-    i.line([(20, 20), (17, 27)], color=CREAM, width=2.4)
-
+    i.shape(pts, MINT, wob=0.4)
+    i.line([(19, 21), (16, 28)], color=CREAM, width=2.4)
+    i.line([(26, 40), (32, 46)], color="#5FB89A", width=2.0)
+    i.line([(38, 38), (42, 33)], color="#5FB89A", width=2.0)
 
 @icon
 def finger(i):
@@ -497,12 +504,14 @@ def flame(i):
 
 @icon
 def hare(i):
-    i.shape([(10, 50), (14, 38), (26, 32), (40, 34), (48, 26), (50, 14), (54, 12), (54, 26), (58, 32), (54, 40), (48, 44), (44, 52),
-             (30, 54), (16, 56)], GOLD)
-    i.shape([(46, 26), (40, 8), (44, 6), (50, 20)], GOLD)
-    i.blob(52, 32, 1.6, 1.6, INK, n=6, width=0)
-    i.blob(12, 44, 5, 5, CREAM, n=8)
-
+    """A golden hare at full stretch: ears laid back, long hind leg kicking out."""
+    i.shape([(8, 40), (16, 32), (28, 28), (40, 30), (48, 24), (54, 24), (60, 30), (56, 36), (50, 38), (46, 44), (36, 46), (24, 46), (14, 48)], GOLD)
+    i.shape([(48, 25), (36, 14), (34, 16), (44, 27)], GOLD, wob=0.3)
+    i.shape([(51, 24), (42, 10), (40, 12), (47, 26)], GOLD, wob=0.3)
+    i.shape([(16, 46), (6, 54), (8, 56), (20, 50)], GOLD, wob=0.3)
+    i.shape([(42, 44), (50, 54), (52, 52), (46, 42)], GOLD, wob=0.3)
+    i.blob(54, 29, 1.5, 1.5, INK, n=6, width=0)
+    i.blob(9, 38, 3.6, 3.6, CREAM, n=8)
 
 @icon
 def lantern(i):
@@ -512,6 +521,24 @@ def lantern(i):
     i.line([(32, 20), (32, 46)], width=1.8)
     i.rect(18, 46, 28, 6, BRASS, wob=0.3)
     i.line([(26, 6), (32, 0.5), (38, 6)], width=2.0)
+
+
+def cursor_match(i, lit=False):
+    """The pointer: a spent match, head at the top left (the hot spot)."""
+    i.shape([(6, 6), (12, 4), (16, 9), (13, 15), (7, 13)], CHAR if not lit else POPPY)
+    i.poly([(13, 12), (16, 10), (44, 38), (40, 42)], PALE_WOOD)
+    if lit:
+        i.flame(7, 10, 12, 14)
+
+
+@icon
+def cursor(i):
+    cursor_match(i)
+
+
+@icon
+def cursor_lit(i):
+    cursor_match(i, True)
 
 
 def main():

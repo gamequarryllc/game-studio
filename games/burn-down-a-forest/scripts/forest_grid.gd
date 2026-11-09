@@ -68,6 +68,8 @@ var zone_total: Array = []
 var zone_burned: Array = []
 var elder_cell := -1
 var ticks := 0
+var withered := {}                   # cells the lifted curse took (they fade, they don't burn)
+var lifted := false                  # the Elder Tree is gone and the curse with it
 
 var _acc := 0.0
 var _w := PackedFloat32Array()
@@ -248,8 +250,8 @@ func _cut_trails(seed: int) -> void:
 	for y in n:
 		for x in n:
 			var i := x + y * n
-			if zone[i] >= 3:
-				continue
+			if Vector2(x, y).distance_to(Vector2(n / 2, n / 2)) < 2.5:
+				continue          # (trails split every ring, the grove too; only the Elder's own clearing is whole)
 			var p := Vector2(x + 0.5, y + 0.5)
 			var lx := int(p.x / Balance.PATCH)
 			var ly := int(p.y / Balance.PATCH)
@@ -448,13 +450,14 @@ func add_heat_area(at: Vector2, radius: float, amount: float) -> void:
 
 func step(delta: float) -> void:
 	## Run as many fixed ticks as `delta` covers (a few at most).
-	_acc += minf(delta, 0.5)
+	var scale := maxf(1.0, Engine.time_scale)
+	_acc += minf(delta, 0.5 * scale)
 	var guard := 0
-	while _acc >= Balance.TICK and guard < 4:
+	while _acc >= Balance.TICK and guard < int(4 * scale):
 		_acc -= Balance.TICK
 		guard += 1
 		tick(Balance.TICK)
-	if guard >= 4:
+	if guard >= int(4 * scale):
 		_acc = 0.0
 
 
@@ -480,7 +483,12 @@ func tick(dt: float) -> void:
 			var nc := nx + ny * n
 			if state[nc] != INTACT or kind[nc] > Balance.ELDER:
 				continue
-			heat[nc] += out * _w[d] * rng.randf_range(0.55, 1.45)
+			var kn := kind[nc]
+			var tier := 1.0
+			if kn > k and kn >= Balance.PINE:
+				# a fire only barely warms a tougher kind of tree: that's the next tool's job
+				tier = Balance.TIER_UP if kn == k + 1 else Balance.TIER_UP2
+			heat[nc] += out * _w[d] * tier * rng.randf_range(0.55, 1.45)
 			hot[nc] = true
 		var spot: float = Balance.PLANTS[k].spot
 		if spot > 0.0 and rng.randf() < spot * spread_mult * spread_mult * (0.6 + wind_strength):
@@ -638,6 +646,7 @@ func to_save_string() -> String:
 func load_save_string(s: String) -> void:
 	if s.length() != state.size():
 		return
+	lifted = s[elder_cell] == "2" or s[elder_cell] == "3"
 	var b := s.to_ascii_buffer()
 	for i in b.size():
 		var v := b[i] - 48
@@ -659,6 +668,48 @@ func load_save_string(s: String) -> void:
 				zone_burned[zone[i]] += 1
 	changed.clear()
 	ignited.clear()
+
+
+func any_lightable(tool_heat: float, at_least: int = 1) -> bool:
+	## Are there at least `at_least` cells left that heat of `tool_heat` can light?
+	var need := tool_heat / Balance.COOL * 0.97
+	var n := 0
+	for i in state.size():
+		if state[i] == INTACT and kind[i] <= Balance.ELDER and thresh[i] <= need:
+			n += 1
+			if n >= at_least:
+				return true
+	return false
+
+
+func lift_curse() -> void:
+	## The Elder Tree is gone: what's left of the cursed forest withers away in a
+	## wave out from the heart, and the meadow follows it.
+	lifted = true
+	var c := Vector2(n / 2, n / 2)
+	for i in state.size():
+		if state[i] == INTACT and Balance.flammable(kind[i]):
+			state[i] = ASH
+			ash_t[i] = 0.8 + Vector2(i % n, i / n).distance_to(c) * 0.085
+			ashing[i] = true
+			withered[i] = true
+			changed.append(i)
+	hot.clear()
+
+
+func dev_clear_outside(z: int) -> void:
+	## Developer tool: every ring outside ring z is meadow at once.
+	for i in state.size():
+		if zone[i] >= z or not Balance.flammable(kind[i]) or kind[i] == Balance.ELDER or state[i] == MEADOW:
+			continue
+		if state[i] == INTACT or state[i] == BURNING:
+			burned += 1
+			zone_burned[zone[i]] += 1
+		burning.erase(i)
+		ashing.erase(i)
+		hot.erase(i)
+		state[i] = MEADOW
+		changed.append(i)
 
 
 func burn_everything_in_zone(z: int) -> void:

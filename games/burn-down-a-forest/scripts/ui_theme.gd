@@ -38,6 +38,7 @@ const POPPY := Color("#D9483B")
 const MINT := Color("#9FF0D0")
 const SCORCH := Color("#5A3420")
 const STAMP_OFF := Color("#9A8E80")
+const PENCIL := Color("#6E6A70")        # graphite: things sketched but not yet in reach
 # kept for older call sites
 const CHARCOAL := CHAR
 const EMBER_HOT := CORE
@@ -74,6 +75,23 @@ static func clear() -> void:
 	_soft_dot = null
 	_grain = null
 	_icons.clear()
+
+
+static func install_cursors() -> void:
+	## The pointer is a spent match; over anything you can press, it's lit.
+	if DisplayServer.get_name() == "headless":
+		return
+	for pair in [["cursor", Input.CURSOR_ARROW], ["cursor_lit", Input.CURSOR_POINTING_HAND]]:
+		var tex := icon(pair[0])
+		if tex == null:
+			continue
+		var img := tex.get_image()
+		if img == null:
+			continue
+		if img.is_compressed():
+			img.decompress()
+		img.resize(40, 40, Image.INTERPOLATE_LANCZOS)
+		Input.set_custom_mouse_cursor(ImageTexture.create_from_image(img), pair[1], Vector2(6, 5))
 
 
 static func install_fonts() -> void:

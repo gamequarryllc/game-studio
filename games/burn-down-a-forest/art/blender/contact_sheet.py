@@ -5,7 +5,7 @@ triangle count. Lighting follows the art bible: cool moonlight from the upper
 left, a warm rim from behind, plum shadows. Vertex colours drive the material;
 the glow parts (vertex alpha 0.5) are emissive.
 
-Run:  python3 art/blender/contact_sheet.py OUT.png [glb names...] [--samples N] [--res WxH] [--cols N]
+Run:  python3 art/blender/contact_sheet.py OUT.png [glb names...] [--samples N] [--res WxH] [--cols N] [--only a,b]
 """
 import math
 import os
@@ -80,6 +80,7 @@ def main():
     res = (1800, 1100)
     cols = 0
     names = []
+    only = None
     i = 1
     while i < len(args):
         a = args[i]
@@ -90,6 +91,10 @@ def main():
         if a == "--res":
             w, h = args[i + 1].split("x")
             res = (int(w), int(h))
+            i += 2
+            continue
+        if a == "--only":
+            only = set(args[i + 1].split(","))
             i += 2
             continue
         if a == "--cols":
@@ -110,6 +115,9 @@ def main():
         bpy.ops.import_scene.gltf(filepath=fname if os.path.isabs(fname) else os.path.join(MODELS, fname))
         new = [o for o in bpy.data.objects if o not in before and o.type == 'MESH']
         for o in sorted(new, key=lambda o: o.name):
+            if only is not None and o.name not in only:
+                bpy.data.objects.remove(o, do_unlink=True)
+                continue
             o.data.materials.clear()
             layer = o.data.color_attributes[0].name if len(o.data.color_attributes) else "Color"
             if layer not in mats:

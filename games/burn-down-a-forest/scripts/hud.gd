@@ -46,6 +46,9 @@ var popups: Control
 var rotate_overlay: Control
 var find_tag: PanelContainer
 var string_line: Line2D
+var ending_active := false
+var ending_layer: Control
+var _letter: Control
 
 var _offer_title: RichTextLabel
 var _offer_bar: UiParts.Fuse
@@ -124,6 +127,7 @@ func _ready() -> void:
 		if notebook != null:
 			notebook.rebuild())
 	_shown_embers = GameState.embers
+	UiTheme.install_cursors()
 
 
 # =====================================================================================
@@ -421,7 +425,7 @@ func set_touch_mode(on: bool) -> void:
 
 
 func is_blocking() -> bool:
-	return notebook != null or popups.get_child_count() > 0
+	return notebook != null or popups.get_child_count() > 0 or ending_active
 
 
 # =====================================================================================
@@ -784,7 +788,7 @@ func take_offer() -> void:
 
 
 func watch_ad(kind: String) -> void:
-	if Monetization.is_watching():
+	if Monetization.is_showing_ad():
 		return
 	if not Monetization.is_rewarded_ready(str(Balance.AD_REWARDS[kind].placement)):
 		toast("No ad ready right now. Try again in a bit")
@@ -830,7 +834,7 @@ func _update_find(delta: float) -> void:
 
 
 func take_find() -> void:
-	if not find_tag.visible or Monetization.is_watching() or is_blocking():
+	if not find_tag.visible or Monetization.is_showing_ad() or is_blocking():
 		return
 	find_tag.visible = false
 	var amount := _find_amount
@@ -944,21 +948,44 @@ func show_starter_offer() -> void:
 	tw.tween_property(parcel, "position:y", parcel.position.y + 40, 0.5).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 
+func begin_ending() -> void:
+	## The curse is lifted: the HUD goes away for the dawn sweep over the valley.
+	ending_active = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	keeper.input_enabled = false
+	keeper.firing = false
+	touch.release_all()
+	root.visible = false
+	ending_layer = Control.new()
+	ending_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ending_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	ending_layer.theme = root.theme
+	add_child(ending_layer)
+
+
+func ending_letter_shown() -> bool:
+	return _letter != null
+
+
 func show_ending() -> void:
-	var dim := _block()
-	var p := {"root": dim}
+	## A ruled letter with the stats, set down over the dawn (the HUD stays hidden).
+	if ending_layer == null:
+		begin_ending()
+	if _letter != null:
+		return
 	var page := PanelContainer.new()
 	var paper := UiTheme.PaperBox.new(101, 34.0)
 	paper.ruled = 30.0
 	paper.margin_line = 56.0
 	page.add_theme_stylebox_override("panel", paper)
-	page.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	page.offset_left = -380
-	page.offset_right = 300
-	page.offset_top = -250
-	page.offset_bottom = 190
+	page.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
+	page.offset_left = 40
+	page.offset_right = 560
+	page.offset_top = -230
+	page.offset_bottom = 200
 	page.rotation = -0.02
-	dim.add_child(page)
+	ending_layer.add_child(page)
+	_letter = page
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	page.add_child(v)
@@ -967,7 +994,7 @@ func show_ending() -> void:
 	v.add_child(t)
 	var b := UiTheme.label(UiTheme.T_BODY + 1, UiTheme.INK, UiTheme.body())
 	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	b.custom_minimum_size = Vector2(560, 0)
+	b.custom_minimum_size = Vector2(440, 0)
 	b.text = "The Elder Tree has burned down and the village is free. Where the cursed forest stood, there's a valley of flowers."
 	v.add_child(b)
 	var stats := UiTheme.label(27, UiTheme.HAND_INK, UiTheme.hand())
@@ -979,5 +1006,25 @@ func show_ending() -> void:
 	walk.text = "Walk the meadow"
 	walk.custom_minimum_size = Vector2(260, 72)
 	walk.size_flags_horizontal = Control.SIZE_SHRINK_END
-	walk.pressed.connect(func(): close_popup(p))
+	walk.pressed.connect(close_ending)
 	v.add_child(walk)
+	page.modulate.a = 0.0
+	page.position.y += 30
+	var tw := page.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(page, "modulate:a", 1.0, 0.6)
+	tw.tween_property(page, "position:y", page.position.y - 30, 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func close_ending() -> void:
+	if ending_layer != null:
+		ending_layer.queue_free()
+	ending_layer = null
+	_letter = null
+	ending_active = false
+	root.visible = true
+	keeper.input_enabled = true
+	touch.visible = touch_mode
+	var w := get_parent()
+	if w != null and w.has_method("end_ending"):
+		w.end_ending()

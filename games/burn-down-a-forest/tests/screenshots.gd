@@ -69,7 +69,11 @@ func _run() -> void:
 	var keeper = world.keeper
 	hud.set_touch_mode(false)
 	hud.show_desktop_hint = false
-	await _frames(12)
+	await _frames(6)
+	await _shot("00_intro")          # a fresh game opens on the Elder Tree's crown over the woods
+	world.intro_t = -1.0
+	keeper.set_view(world.SPAWN_YAW, world.SPAWN_PITCH)
+	await _frames(6)
 	await _shot("01_spawn")
 	# The same moment on a phone: the first hint sits by the burn button, with a finger.
 	hud.set_touch_mode(true)
@@ -220,11 +224,24 @@ func _run() -> void:
 	await _frames(8)
 	await _shot("17_meadow_close")
 
-	# The ending.
-	hud.show_ending()
+	# The keeper up close, side on, by the village.
+	_place(Vector3(-2.0, 0, 50.0), PI * 0.85, -0.35)
 	await _frames(6)
-	await _shot("18_ending")
-	_close_popups()
+	await _shot("19_keeper_close")
+
+	# The ending: the curse lifts, the HUD goes, dawn, the camera sweeps up.
+	_place(Vector3(0.5, 0, 16.0), 0.0, -0.4)
+	world._on_won()
+	for _i in 30:
+		world._update_ending(0.2)
+		_ff(0.2)
+		await process_frame
+	await _shot("18_ending_sweep")
+	world._update_ending(4.0)
+	_ff(1.0)
+	await _frames(8)
+	await _shot("18b_ending_letter")
+	hud.close_ending()
 	gs.wipe_save(false)
 	world.queue_free()
 	await _frames(2)

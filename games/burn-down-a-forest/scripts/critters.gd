@@ -13,6 +13,7 @@ const MAX_ACTIVE := 10
 const RUN_TIME := 3.2
 
 var grid: ForestGrid
+var goldens := 0                   # golden critters found (the playthrough bot checks finds are reachable)
 var _active: Array = []            # {node, dir, t, golden, kind}
 var _pops: Array = []              # {node, t}
 var _rng := RandomNumberGenerator.new()
@@ -58,7 +59,7 @@ func spawn(at: Vector3, golden: bool) -> void:
 
 
 func _process(delta: float) -> void:
-	var d := minf(delta, 0.05)
+	var d := minf(delta, 0.05 * maxf(1.0, Engine.time_scale))
 	for k in range(_active.size() - 1, -1, -1):
 		var c: Dictionary = _active[k]
 		var node: Node3D = c.node
@@ -79,7 +80,8 @@ func _process(delta: float) -> void:
 		if float(c.t) >= RUN_TIME:
 			_pop(node.position, bool(c.golden))
 			if bool(c.golden):
-				var amount := maxf(80.0, GameState.income_per_minute() * Balance.GOLDEN_MINUTES)
+				goldens += 1
+				var amount := GameState.golden_amount()
 				golden_found.emit(amount, node.position)
 			GameState.critters_saved += 1
 			saved.emit(str(c.kind))

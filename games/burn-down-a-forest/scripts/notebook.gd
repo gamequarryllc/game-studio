@@ -38,6 +38,7 @@ var _progress: Label
 var _sketch: TextureRect
 var _sketch_note: Label
 var _refreshers: Array = []
+var _cards: Array = []
 var _t := 0.0
 var _scroll: ScrollContainer
 var _book: Control
@@ -321,6 +322,7 @@ func rebuild() -> void:
 	for c in _list.get_children():
 		c.queue_free()
 	_refreshers.clear()
+	_cards.clear()
 	_seed = 0
 	match tab:
 		"tools":
@@ -355,29 +357,65 @@ func refresh() -> void:
 		_map.progress = f.progress()
 		_map.zone = z
 		_map.queue_redraw()
-	var td := GameState.tool_def()
-	_sketch.texture = UiTheme.icon(str(td.icon))
-	_sketch_note.text = "in hand:\nthe %s" % str(td.name).to_lower()
+	_left_page_sketch()
 	for r in _refreshers:
 		r.call()
+
+
+func _left_page_sketch() -> void:
+	## Each chapter gets its own doodle on the left page, with a note about it.
+	var td := GameState.tool_def()
+	var icon_name := str(td.icon)
+	var note := "in hand:\nthe %s" % str(td.name).to_lower()
+	match tab:
+		"upgrades":
+			icon_name = "bellows"
+			var bits: Array = []
+			for u in Balance.UPGRADES:
+				var lv := int(GameState.upgrade_levels[u.key])
+				if lv > 0:
+					bits.append("%s %d" % [str(u.name).to_lower().split(" ")[0], lv])
+			note = "so far:\n" + (", ".join(bits) if not bits.is_empty() else "nothing yet")
+		"helpers":
+			icon_name = "salamander" if int(GameState.helper_counts[1]) > 0 else "sprite"
+			var n0 := int(GameState.helper_counts[0])
+			var n1 := int(GameState.helper_counts[1])
+			note = "%d sprite%s,\n%d salamander%s" % [n0, "" if n0 == 1 else "s", n1, "" if n1 == 1 else "s"] if n0 + n1 > 0 else "no helpers yet.\nlonely work"
+		"magic":
+			icon_name = "magic_lantern"
+			note = "2x fire, %s left" % Fmt.duration(GameState.boost_seconds_left()) if GameState.is_boost_active() else "nothing\nrunning now"
+		"shop":
+			icon_name = "parcel"
+			note = "nothing here you\ncan't burn for"
+		"settings":
+			icon_name = "dial"
+			note = "sound at %d%%" % int(round(Sound.volume * 100.0)) if not Sound.muted else "all quiet"
+	var big := tab != "tools"
+	_map.visible = not big
+	_sketch.custom_minimum_size = Vector2(150, 150) if big else Vector2(96, 96)
+	_sketch.pivot_offset = _sketch.custom_minimum_size * 0.5
+	_sketch.rotation = -0.12 if not big else 0.07
+	_sketch.texture = UiTheme.icon(icon_name)
+	_sketch_note.text = note
 
 
 # =====================================================================================
 # Entries
 # =====================================================================================
-func _card(icon_name: String, title: String, desc: String) -> Dictionary:
+func _card(icon_name: String, title: String, desc: String, kind: String = "tag") -> Dictionary:
+	## One entry: a sketch (with room for a note in the margin), the name and a
+	## line about it, and the price tag you tap to buy it (settings use stamps).
 	_seed += 1
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 16)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.custom_minimum_size = Vector2(0, 112)
-	var ic := TextureRect.new()
+	row.custom_minimum_size = Vector2(0, 108)
+	var ic := UiParts.Sketch.new()
 	ic.texture = UiTheme.icon(icon_name)
-	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	ic.custom_minimum_size = Vector2(76, 76)
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	ic.pivot_offset = Vector2(38, 38)
-	ic.rotation = [-0.08, 0.05, -0.03, 0.09, -0.06][_seed % 5]
+	ic.tilt = [-0.08, 0.05, -0.03, 0.09, -0.06][_seed % 5]
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(ic)
 	var v := VBoxContainer.new()
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -386,15 +424,17 @@ func _card(icon_name: String, title: String, desc: String) -> Dictionary:
 	row.add_child(v)
 	var tl := UiTheme.label(UiTheme.T_TITLE - 2, UiTheme.INK, UiTheme.display())
 	tl.text = title
+	tl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # long names wrap: the page never widens
+	tl.custom_minimum_size = Vector2(160, 0)
 	v.add_child(tl)
 	var dl := UiTheme.rich(UiTheme.T_BODY - 1, Color(UiTheme.INK, 0.86), UiTheme.body())
 	dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dl.custom_minimum_size = Vector2(240, 0)
+	dl.custom_minimum_size = Vector2(180, 0)
 	dl.text = desc
 	v.add_child(dl)
 	var xl := UiTheme.rich(23, UiTheme.HAND_INK, UiTheme.hand())
 	xl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	xl.custom_minimum_size = Vector2(240, 0)
+	xl.custom_minimum_size = Vector2(180, 0)
 	xl.visible = false
 	v.add_child(xl)
 	var side := VBoxContainer.new()
@@ -403,23 +443,15 @@ func _card(icon_name: String, title: String, desc: String) -> Dictionary:
 	side.add_theme_constant_override("separation", 4)
 	side.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(side)
-	var tag := PanelContainer.new()
-	tag.add_theme_stylebox_override("panel", UiTheme.TagBox.new(500 + _seed))
-	tag.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	tag.rotation = [0.04, -0.05, 0.02, -0.03][_seed % 4]
-	side.add_child(tag)
-	var th := HBoxContainer.new()
-	th.add_theme_constant_override("separation", 4)
-	tag.add_child(th)
-	var tic := TextureRect.new()
-	tic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tic.custom_minimum_size = Vector2(24, 24)
-	tic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	th.add_child(tic)
-	var price := UiTheme.label(UiTheme.T_LABEL, UiTheme.INK, UiTheme.display())
-	th.add_child(price)
-	var b := UiParts.Stamp.new(700 + _seed * 7)
-	b.custom_minimum_size = Vector2(134, 56)
+	var b: Button
+	if kind == "stamp":
+		var st := UiParts.Stamp.new(700 + _seed * 7)
+		st.custom_minimum_size = Vector2(134, 56)
+		b = st
+	else:
+		var pt := UiParts.PriceTag.new(500 + _seed * 7)
+		pt.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		b = pt
 	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	side.add_child(b)
 	_list.add_child(row)
@@ -427,26 +459,60 @@ func _card(icon_name: String, title: String, desc: String) -> Dictionary:
 	rule.seed = _seed
 	rule.custom_minimum_size = Vector2(0, 8)
 	_list.add_child(rule)
-	return {"panel": row, "title": tl, "desc": dl, "extra": xl, "button": b, "icon": ic, "tag": tag, "price": price, "price_icon": tic}
+	var card := {"panel": row, "title": tl, "desc": dl, "extra": xl, "button": b, "icon": ic}
+	_cards.append(card)
+	return card
 
 
 func _set_btn(card: Dictionary, stamp: String, enabled: bool, price: String = "", price_icon: String = "coal", done: bool = false) -> void:
-	var b: UiParts.Stamp = card.button
-	if b.text != stamp:
-		b.text = stamp
-	b.disabled = not enabled or done
-	b.done = done
-	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if enabled and not done else Control.CURSOR_ARROW
-	b.queue_redraw()
-	var tag: PanelContainer = card.tag
-	tag.visible = price != ""
-	var pl: Label = card.price
-	if pl.text != price:
-		pl.text = price
-	var tic: TextureRect = card.price_icon
-	tic.visible = price_icon != ""
-	if price_icon != "":
-		tic.texture = UiTheme.icon(price_icon)
+	## Set an entry's button: on a price tag, `stamp` is the small word on the tag
+	## (buy, hire, watch) or, once `done`, what gets stamped across it.
+	var b: Button = card.button
+	if b is UiParts.PriceTag:
+		var t := b as UiParts.PriceTag
+		t.locked = false
+		t.action = "" if done else stamp.to_lower()
+		t.stamp = stamp.to_lower() if done else ""
+		t.price = "" if done else price
+		t.price_icon = UiTheme.icon(price_icon) if price_icon != "" and not done else null
+		t.affordable = enabled or done
+		t.disabled = not enabled or done
+		t.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if enabled and not done else Control.CURSOR_ARROW
+		t.queue_redraw()
+	else:
+		var st := b as UiParts.Stamp
+		if st.text != stamp:
+			st.text = stamp
+		st.disabled = not enabled or done
+		st.done = done
+		st.queue_redraw()
+	var sk: UiParts.Sketch = card.icon
+	sk.set_pencil(false)
+	(card.title as Label).add_theme_color_override("font_color", UiTheme.INK)
+
+
+func _set_locked(card: Dictionary, price: String, why: String) -> void:
+	## Not in reach yet: sketched in pencil, the tag only an outline.
+	var t := card.button as UiParts.PriceTag
+	t.locked = true
+	t.stamp = ""
+	t.action = "later"
+	t.price = price
+	t.price_icon = UiTheme.icon("coal")
+	t.affordable = false
+	t.disabled = true
+	t.mouse_default_cursor_shape = Control.CURSOR_ARROW
+	t.queue_redraw()
+	(card.icon as UiParts.Sketch).set_pencil(true)
+	(card.title as Label).add_theme_color_override("font_color", UiTheme.PENCIL)
+	_extra(card, why)
+
+
+func _margin(card: Dictionary, note: String) -> void:
+	var sk: UiParts.Sketch = card.icon
+	if sk.note != note:
+		sk.note = note
+		sk.queue_redraw()
 
 
 func _extra(card: Dictionary, text: String) -> void:
@@ -484,14 +550,17 @@ func _build_tools() -> void:
 			_extra(card, "heat %s, lights %s" % [Fmt.num(heat), t.lights])
 			if idx == GameState.tool_index:
 				_set_btn(card, "In hand", false, "", "", true)
+				_margin(card, "")
 			elif idx < GameState.tool_index:
 				_set_btn(card, "Kept", false, "", "", true)
+				_margin(card, "")
 			elif idx == GameState.next_tool_index():
-				var cost := float(t.cost)
+				var cost := GameState.tool_cost(idx)
 				_set_btn(card, "Buy", GameState.embers >= cost, Fmt.num(cost))
+				_margin(card, "a fair price" if GameState.stuck else ("next!" if GameState.embers >= cost else "save up"))
 			else:
-				_set_btn(card, "Buy", false, Fmt.num(float(t.cost)), "padlock")
-				_extra(card, "buy the %s first" % str(Balance.TOOLS[idx - 1].name).to_lower()))
+				_set_locked(card, Fmt.num(float(t.cost)), "buy the %s first" % str(Balance.TOOLS[idx - 1].name).to_lower())
+				_margin(card, ""))
 	# Ember packs, when you're short for the next tool.
 	if GameState.short_for_next_tool():
 		_section("Short on embers?")
@@ -505,7 +574,7 @@ func _build_tools() -> void:
 				var amount := GameState.ember_pack_amount(pack)
 				card.desc.text = "%s %s embers right now." % [UiTheme.icon_bb("coal", 20), Fmt.num(amount)]
 				var nt := GameState.next_tool_index()
-				if nt >= 0 and GameState.embers + amount >= float(Balance.TOOLS[nt].cost):
+				if nt >= 0 and GameState.embers + amount >= GameState.tool_cost(nt):
 					_extra(card, "enough for the %s" % str(Balance.TOOLS[nt].name).to_lower())
 				else:
 					_extra(card, "")
@@ -525,7 +594,8 @@ func _build_upgrades() -> void:
 				_set_btn(card, "Full", false, "", "", true)
 			else:
 				var cost := GameState.upgrade_cost(key)
-				_set_btn(card, "Buy", GameState.embers >= cost, Fmt.num(cost)))
+				_set_btn(card, "Buy", GameState.embers >= cost, Fmt.num(cost))
+			_margin(card, "a good one" if key == "value" and lv == 0 else ""))
 
 
 func _build_helpers() -> void:
@@ -549,6 +619,7 @@ func _build_magic() -> void:
 	_refreshers.append(func():
 		var left := GameState.boost_seconds_left()
 		_extra(boost, "running, %s left" % Fmt.duration(left) if left > 0.0 else "")
+		_margin(boost, "on now" if left > 0.0 else "")
 		if GameState.boost_full():
 			_set_btn(boost, "Full", false, "", "", true)
 		else:
@@ -632,7 +703,7 @@ func _build_shop() -> void:
 
 
 func _build_settings() -> void:
-	var vol := _card("horn", "Sound effects", "Crackling, whooshing, footsteps.")
+	var vol := _card("horn", "Sound effects", "Crackling, whooshing, footsteps.", "stamp")
 	var side: VBoxContainer = vol.button.get_parent()
 	var minus := UiParts.Stamp.new(901)
 	minus.text = "Softer"
@@ -652,37 +723,91 @@ func _build_settings() -> void:
 		_set_btn(vol, "Louder", Sound.volume < 1.0)
 		minus.disabled = Sound.volume <= 0.0
 		minus.queue_redraw())
-	var mute := _card("horn_mute", "Mute everything", "On a computer, M does this too.")
+	var mute := _card("horn_mute", "Mute everything", "On a computer, M does this too.", "stamp")
 	mute.button.ink = UiTheme.INK
 	mute.button.pressed.connect(func():
 		Sound.set_muted(not Sound.muted)
 		refresh())
 	_refreshers.append(func(): _set_btn(mute, "Unmute" if Sound.muted else "Mute", true))
 	if OS.is_debug_build() or OS.has_feature("playtest"):
-		_section("Developer tools, playtest builds only")
-		var cash := _card("coals", "Free embers", "Adds 10x your embers, at least 1K.")
-		cash.button.pressed.connect(func():
-			GameState.grant_embers(maxf(1000.0, GameState.embers * 10.0))
-			refresh())
-		_set_btn(cash, "Add", true)
-		var speed := _card("hourglass", "Fire speed", "Multiplies all tool and helper heat, for testing.")
-		speed.button.pressed.connect(func():
-			GameState.debug_speed = 1.0 if GameState.debug_speed >= 100.0 else GameState.debug_speed * 10.0
-			refresh())
-		_refreshers.append(func(): _set_btn(speed, "x%d" % int(GameState.debug_speed), true))
-		var burn := _card("flame", "Burn this ring", "Everything in the ring you're standing in catches at once.")
-		burn.button.pressed.connect(func():
-			var f := GameState.forest
-			f.burn_everything_in_zone(f.zone_at(GameState.keeper.position.x, GameState.keeper.position.z))
-			closed.emit())
-		_set_btn(burn, "Burn", true)
-		var ads := _card("chart", "Fake ads and purchases", "")
-		_refreshers.append(func():
-			var c: Dictionary = Monetization.provider.get("counts") if Monetization.provider.get("counts") != null else {}
-			ads.desc.text = "rewarded %d, interstitial %d, purchases %d" % [int(c.get("rewarded", 0)), int(c.get("interstitial", 0)), int(c.get("purchases", 0))]
-			_set_btn(ads, "Count", false, "", "", true))
-		var wipe := _card("sprout", "Start over", "A fresh cursed forest. Keeps purchases.")
-		wipe.button.pressed.connect(func():
-			GameState.wipe_save()
-			get_tree().reload_current_scene())
-		_set_btn(wipe, "Wipe", true)
+		_build_dev_tools()
+
+
+func _build_dev_tools() -> void:
+	## Playtest builds only (the `playtest` feature tag): speed the game up to
+	## play it end to end, and jump about in it.
+	_section("Developer tools, playtest builds only")
+	var speed := _card("hourglass", "Time", "Runs the whole game faster: fire, walking, boosts, offers.", "stamp")
+	speed.button.pressed.connect(func():
+		var steps := [1.0, 5.0, 10.0, 50.0]
+		var k := (steps.find(Engine.time_scale) + 1) % steps.size()
+		Engine.time_scale = steps[k]
+		refresh())
+	_refreshers.append(func(): _set_btn(speed, "x%d" % int(Engine.time_scale), true))
+	var income := _card("ember_value", "Income", "Multiplies every ember the fire pays.", "stamp")
+	income.button.pressed.connect(func():
+		GameState.dev_income = 1.0 if GameState.dev_income >= 100.0 else GameState.dev_income * 10.0
+		refresh())
+	_refreshers.append(func(): _set_btn(income, "x%d" % int(GameState.dev_income), true))
+	var cash := _card("coals", "Free embers", "Adds 10x your embers, at least 1K.", "stamp")
+	cash.button.pressed.connect(func():
+		GameState.grant_embers(maxf(1000.0, GameState.embers * 10.0))
+		refresh())
+	_set_btn(cash, "Add", true)
+	var unlock := _card("padlock", "Unlock everything", "Every tool, the upgrades at their top, three of each helper.", "stamp")
+	unlock.button.pressed.connect(func():
+		GameState.dev_unlock_all()
+		rebuild())
+	_set_btn(unlock, "Unlock", true)
+	var skip := _card("chart", "Skip to a ring", "", "stamp")
+	skip.button.pressed.connect(func():
+		GameState.dev_skip_to_ring(_next_ring())
+		closed.emit())
+	_refreshers.append(func():
+		var z := _next_ring()
+		skip.desc.text = "Burns the rings outside it, gives its tool and walks you to its edge: %s." % (
+			"the Elder Tree" if z >= Balance.ZONES.size() else str(Balance.ZONES[z].name).to_lower())
+		_set_btn(skip, "Skip", true))
+	var fire := _card("flame", "Fire speed", "Multiplies all tool and helper heat.", "stamp")
+	fire.button.pressed.connect(func():
+		GameState.debug_speed = 1.0 if GameState.debug_speed >= 100.0 else GameState.debug_speed * 10.0
+		refresh())
+	_refreshers.append(func(): _set_btn(fire, "x%d" % int(GameState.debug_speed), true))
+	var ads := _card("chart", "Fake ads and purchases", "", "stamp")
+	_refreshers.append(func():
+		var c: Dictionary = Monetization.provider.get("counts") if Monetization.provider.get("counts") != null else {}
+		ads.desc.text = "rewarded %d, interstitial %d, purchases %d" % [int(c.get("rewarded", 0)), int(c.get("interstitial", 0)), int(c.get("purchases", 0))]
+		_set_btn(ads, "Count", false, "", "", true))
+	var wipe := _card("sprout", "Start over", "A fresh cursed forest. Keeps purchases.", "stamp")
+	wipe.button.pressed.connect(func():
+		Engine.time_scale = 1.0
+		GameState.wipe_save()
+		get_tree().reload_current_scene())
+	_set_btn(wipe, "Wipe", true)
+	var wipe_all := _card("restore", "Reset the save", "Everything, purchases too, as if newly installed.", "stamp")
+	wipe_all.button.pressed.connect(func():
+		Engine.time_scale = 1.0
+		GameState.wipe_save(false)
+		get_tree().reload_current_scene())
+	_set_btn(wipe_all, "Reset", true)
+
+
+func _next_ring() -> int:
+	var f := GameState.forest
+	if f == null or GameState.keeper == null:
+		return 1
+	return mini(f.zone_at(GameState.keeper.position.x, GameState.keeper.position.z) + 1, Balance.ZONES.size())
+
+
+func press(title: String) -> bool:
+	## Press an entry's tag (or stamp) the way a finger would: the playthrough
+	## bot shops through this. False if there's no such entry or it can't be pressed.
+	for c in _cards:
+		var tl: Label = c.title
+		if tl.text == title:
+			var b: Button = c.button
+			if b.disabled:
+				return false
+			b.pressed.emit()
+			return true
+	return false

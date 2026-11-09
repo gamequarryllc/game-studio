@@ -186,6 +186,83 @@ class Model:
         tmp.free()
         return list(vmap.values())
 
+    def cushion(self, center, R, H, lobes, seed, base, top, under, flag=LEAF, droop=0.4, belly=0.32,
+                carve=(0.56,), segs=3, lump=0.07, tilt=(0.0, 0.0), squash=(1.0, 1.0), hang_var=0.5, inner=(0.33,)):
+        """A carved storybook canopy: a domed cushion whose rim is cut into round
+        scallops, each scallop drooping into a hanging point, with carved lines
+        (thin lighter grooves that follow the scallops) across the dome, the way a
+        linocut tree is cut. Colours: `top` on the dome, `base` at the rim, `under`
+        below. Returns the vertices."""
+        rng = random.Random(seed)
+        c = Vector(center)
+        nseg = lobes * segs
+        phase = rng.uniform(0, 2 * math.pi)
+        lscale = [rng.uniform(0.86, 1.14) for _ in range(lobes)]
+        ldrop = [rng.uniform(1.0 - hang_var, 1.0 + hang_var) for _ in range(lobes)]
+        off = Vector((seed * 1.37, seed * 0.71, seed * 2.11))
+        rot = Matrix.Rotation(tilt[0], 3, 'X') @ Matrix.Rotation(tilt[1], 3, 'Y')
+
+        def lobe(k):
+            u = (k + 0.5) / segs          # half a step in: every scallop gets a vertex at its middle
+            i = int(math.floor(u)) % lobes
+            f = u - math.floor(u)
+            return i, f
+
+        # rows: (radius fraction, height fraction, colour mix 0 = base .. 1 = top, carved?)
+        def dome(rf):
+            # a round shoulder, not a flat parasol: nearly spherical toward the rim
+            return max(0.0, 1.0 - rf * rf) ** 0.62 * 0.94 + 0.06
+        rows = []
+        for rf in inner:
+            rows.append((rf, dome(rf), 1.0, False))
+        for cv in carve:
+            rows.append((cv - 0.05, dome(cv - 0.05), 0.85, False))
+            rows.append((cv, dome(cv) - 0.04, 0.85, True))
+            rows.append((cv + 0.05, dome(cv + 0.05), 0.8, False))
+        if max(carve) < 0.8:
+            rows.append((0.88, dome(0.88), 0.45, False))
+        rows.append((1.0, 0.04, 0.0, False))           # the scalloped rim
+        rows.append((0.96, -1.0, -0.3, False))          # the hanging points (z set per vertex)
+        rows.append((0.62, -belly, -1.0, False))        # the underside
+        rows = sorted(rows[:-2], key=lambda r: r[0]) + rows[-2:]
+        grid = []
+        for ri, (rf, zf, ct, carved) in enumerate(rows):
+            ring = []
+            for k in range(nseg):
+                i, f = lobe(k)
+                a = phase + 2 * math.pi * k / nseg
+                bulge = math.sin(math.pi * f) ** 0.6
+                r = R * rf * (0.8 + 0.2 * bulge) * (lscale[i] if rf > 0.4 else 1.0)
+                if zf == -1.0:
+                    point = max(0.0, 1.0 - abs(f - 0.5) * 2.0) ** 2.2
+                    z = -(0.06 + droop * point * ldrop[i]) * H
+                else:
+                    z = zf * H
+                p = Vector((math.cos(a) * r * squash[0], math.sin(a) * r * squash[1], z))
+                if 0.0 < zf <= 1.0:
+                    # cloud bumps across the dome (bigger toward the top), smaller ones round the rim
+                    q = Vector((p.x, p.y, 0.0)) * (1.7 / max(R, 0.1)) + off
+                    p += Vector((p.x * 0.4 / max(R, 0.1), p.y * 0.4 / max(R, 0.1), 1.0)) * lump * H * noise.noise(q) * (0.5 + zf)
+                if carved:
+                    p.z -= 0.025 * H
+                if ct >= 0:
+                    col = mix(base, top, ct)
+                else:
+                    col = mix(base, under, -ct)
+                hi = 1.0 if carved else (0.35 if rf == 1.0 else 0.0)
+                ring.append(self.vert(c + rot @ p, col, flag, hi))
+            grid.append(ring)
+        apex = self.vert(c + rot @ Vector((0, 0, H * (1.0 + lump * 0.5))), top, flag, 0.2)
+        bottom = self.vert(c + rot @ Vector((0, 0, -belly * H * 1.08)), under, flag, 0.0)
+        for k in range(nseg):
+            k2 = (k + 1) % nseg
+            self.face([apex, grid[0][k], grid[0][k2]])
+            for ri in range(len(grid) - 1):
+                a, b = grid[ri], grid[ri + 1]
+                self.face([a[k], b[k], b[k2], a[k2]])
+            self.face([grid[-1][k2], grid[-1][k], bottom])
+        return [apex, bottom] + [v for ring in grid for v in ring]
+
     def box(self, center, size, color, flag, bevel=0.0, smooth=False, rot=None):
         """An axis-aligned box (optionally rotated by a Matrix), with a rounded bevel."""
         tmp = bmesh.new()
@@ -262,13 +339,38 @@ class Model:
             v.co = m @ v.co
 
     # --- finishing ---------------------------------------------------------------
-    def bake(self, ao_dist=1.2, ao_rays=24, ao_strength=0.75, ground=True, grad=None, hi_color=None,
-             hi_strength=0.35, height=None, ground_dark=0.0, ao_floor=0.25):
-        """Bake AO, the vertical gradient and the highlights into the vertex colours.
-        grad = (bottom_mult, top_mult); colours are multiplied from bottom to top.
-        hi_color: rims and tips are pulled toward this colour by their highlight weight."""
+    def curvature(self):
+        """Per vertex: how convex (< 0, an edge that sticks out) or concave (> 0, a
+        crease) the surface is there, from the neighbours' height over its tangent plane."""
         bm = self.bm
         bm.normal_update()
+        out = {}
+        for v in bm.verts:
+            n = v.normal
+            if n.length < 0.1 or not v.link_edges:
+                out[v] = 0.0
+                continue
+            k = 0.0
+            for e in v.link_edges:
+                o = e.other_vert(v)
+                d = o.co - v.co
+                ln = d.length
+                if ln > 1e-6:
+                    k += d.dot(n) / ln
+            out[v] = k / len(v.link_edges)
+        return out
+
+    def bake(self, ao_dist=1.2, ao_rays=24, ao_strength=0.75, ground=True, grad=None, hi_color=None,
+             hi_strength=0.35, height=None, ground_dark=0.0, ao_floor=0.25, wear=0.0, wear_color=None,
+             grime=0.0, paint=0.0, paint_scale=3.0):
+        """Bake AO, the vertical gradient and the highlights into the vertex colours.
+        grad = (bottom_mult, top_mult); colours are multiplied from bottom to top.
+        hi_color: rims and tips are pulled toward this colour by their highlight weight.
+        wear: edges that stick out are rubbed lighter (toward wear_color, or just lighter);
+        grime: creases go darker; paint: a soft hand-painted mottle across the surface."""
+        bm = self.bm
+        bm.normal_update()
+        curv = self.curvature() if (wear or grime) else None
         tree_bm = bm.copy()
         if ground:
             # a big ground quad so roots and trunks get contact shadow
@@ -310,6 +412,17 @@ class Model:
                 rgb = scale(rgb, g)
             if ground_dark and v.co.z < 0.4:
                 rgb = scale(rgb, 1.0 - ground_dark * (1.0 - v.co.z / 0.4))
+            if paint:
+                q = v.co * paint_scale
+                pn = noise.noise(q) * 0.65 + noise.noise(q * 2.7 + Vector((5.1, 2.3, 7.7))) * 0.35
+                rgb = scale(rgb, 1.0 + paint * pn)
+            if curv is not None:
+                k = curv[v]
+                if wear and k < -0.04:
+                    w = min(1.0, (-k - 0.04) * 3.0) * wear
+                    rgb = mix(rgb, wear_color, w) if wear_color else scale(rgb, 1.0 + w * 0.9)
+                if grime and k > 0.04:
+                    rgb = scale(rgb, 1.0 - min(1.0, (k - 0.04) * 3.0) * grime)
             if hi_color and v[self.hi] > 0:
                 rgb = mix(rgb, hi_color, min(1.0, v[self.hi] * hi_strength))
             v[self.col] = (rgb[0], rgb[1], rgb[2], c[3])

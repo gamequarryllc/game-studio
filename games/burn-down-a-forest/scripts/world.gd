@@ -8,7 +8,11 @@ extends Node3D
 const SPAWN := Vector3(-0.6, 0.0, 52.4)
 const SPAWN_YAW := 0.0
 const SPAWN_PITCH := -0.58           # low enough to see the path lead into the woods and the moon over them
-const AMBIENT_COLD := Color("#776DA2")    # cursed night
+const INTRO_PITCH := 0.02            # the establishing shot: level, the Elder Tree's crown over the woods
+const AMBIENT_COLD := Color("#6A6294")    # cursed night (the moon is the key light; the shadows stay plum)
+const FOG_DENSITY := 0.0058
+const MOON_ENERGY := 3.0
+const STRAYS := 150                  # fewer cells than this (~3% of the forest) left to light counts as nothing left (the safety net)
 const AMBIENT_WARM := Color("#A3967E")    # the valley healing as the meadow spreads
 const FLOAT_POOL := 20
 
@@ -21,6 +25,7 @@ var hud: Hud
 var env: Environment
 var moon: DirectionalLight3D
 var force_fire := false              # tests and screenshots hold the button down
+var force_move := Vector2.ZERO       # ...and push the stick (the playthrough bot walks with this)
 
 var _mouse_fire := false
 var _quality := 1.0
@@ -35,6 +40,14 @@ var _wind_target := 0.0
 var _wind_angle := 0.0
 var _coach_t := 0.0
 var _rng := RandomNumberGenerator.new()
+var intro_t := -1.0                  # the establishing shot on a fresh game (< 0: not running)
+var ending_t := -1.0                 # the ending: dawn and a camera sweep over the valley (< 0: not running)
+var sky_mat: ProceduralSkyMaterial
+var _end_from := Vector3.ZERO
+var _end_angle := 0.0
+var _dawn := 0.0
+var _stuck_t := 0.0
+var _intro_pitch := 0.0
 
 
 func _ready() -> void:
@@ -65,7 +78,17 @@ func _ready() -> void:
 		keeper.set_view(GameState.keeper_yaw, GameState.cam_pitch)
 	else:
 		keeper.set_view(SPAWN_YAW, SPAWN_PITCH)
+		if GameState.tutorial_step == 0 and GameState.play_time < 1.0:
+			# A fresh forest: open on the Elder Tree's crown over the woods, then
+			# ease down to the village and the grass to light.
+			intro_t = 0.0
+			_intro_pitch = INTRO_PITCH
+			keeper.set_view(SPAWN_YAW, INTRO_PITCH)
 	GameState.keeper = keeper
+	if GameState.has_won:
+		_set_dawn(1.0)              # a finished forest stays at dawn
+	view.add_lit(keeper.material())
+	keeper.material().set_shader_parameter("lantern_gain", 0.4)
 
 	helpers = HelperSwarm.new()
 	helpers.grid = forest
@@ -75,6 +98,8 @@ func _ready() -> void:
 	critters.grid = forest
 	add_child(critters)
 	critters.golden_found.connect(_on_golden)
+	for m in [critters._mat, critters._gold_mat, helpers._sprite_mat, helpers._lizard_mat]:
+		view.add_lit(m)
 	critters.saved.connect(func(_icon): Sound.play("critter_pop", -12.0, 1.0, 0.15, 0.3))
 
 	hud = Hud.new()
@@ -107,7 +132,7 @@ func _build_environment() -> void:
 	## from the village), a plum sky with a pale moon, plum fog for depth. The
 	## fire is the only warm light. Linear tonemapping and no bloom, so every
 	## colour lands where the art bible puts it and a fire never goes white.
-	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat = ProceduralSkyMaterial.new()
 	sky_mat.sky_top_color = Color("#1B1430")
 	sky_mat.sky_horizon_color = Color("#5E4C74")
 	sky_mat.sky_curve = 0.18
@@ -127,19 +152,43 @@ func _build_environment() -> void:
 	env.tonemap_exposure = 1.15
 	env.fog_enabled = true
 	env.fog_light_color = Color("#514468")
-	env.fog_density = 0.0058
+	env.fog_density = FOG_DENSITY
 	env.fog_sky_affect = 0.15
 	env.glow_enabled = false
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	# The key light: cool moonlight from the upper left with real cast shadows
+	# (trees, cottages and the keeper cast them; grass, bushes and flowers don't).
 	moon = DirectionalLight3D.new()
 	moon.light_color = Color("#C4D2F2")
-	moon.light_energy = 2.05
-	moon.shadow_enabled = false
+	moon.light_energy = MOON_ENERGY
+	moon.shadow_enabled = true
+	moon.shadow_opacity = 0.62
+	moon.shadow_blur = 1.5
+	moon.shadow_bias = 0.06
+	moon.shadow_normal_bias = 1.2
+	moon.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	moon.directional_shadow_max_distance = 32.0 if DisplayServer.is_touchscreen_available() else 48.0
+	moon.directional_shadow_fade_start = 0.75
 	add_child(moon)
 	# from the west-north-west and high: the upper left of the view from the village
 	moon.look_at_from_position(Vector3(-60.0, 70.0, -25.0), Vector3.ZERO, Vector3.UP)
+
+
+func _update_intro(d: float) -> void:
+	if intro_t < 0.0:
+		return
+	if absf(keeper.cam_pitch - _intro_pitch) > 0.001:
+		intro_t = -1.0          # the player (or a test) took the camera: stop
+		return
+	intro_t += d
+	var t := clampf((intro_t - 1.6) / 2.4, 0.0, 1.0)
+	var e := t * t * (3.0 - 2.0 * t)
+	_intro_pitch = lerpf(INTRO_PITCH, SPAWN_PITCH, e)
+	keeper.cam_pitch = _intro_pitch
+	if t >= 1.0:
+		intro_t = -1.0
 
 
 func _fit_render_scale() -> void:
@@ -176,7 +225,7 @@ func _watch_frame_rate(delta: float) -> void:
 # Per frame
 # =====================================================================================
 func _process(delta: float) -> void:
-	var d := minf(delta, 0.1)
+	var d := minf(delta, 0.1 * maxf(1.0, Engine.time_scale))
 	_watch_frame_rate(delta)
 	_controls()
 	forest.spread_mult = GameState.spread_mult()
@@ -186,7 +235,10 @@ func _process(delta: float) -> void:
 		_last_tick = forest.ticks
 		_after_tick()
 	view.advance(d)
-	view.set_camera(keeper.camera.global_position, keeper.position + Vector3(0, 1.5, 0))
+	view.set_camera(keeper.camera.global_position, keeper.position + Vector3(0, 1.9, 0))
+	view.set_lantern(keeper.lantern_pos(), keeper.lantern_flicker)
+	_update_intro(d)
+	_update_ending(d)
 	var earned := GameState.earn(forest.take_pay())
 	if earned > 0.0:
 		var r := GameState.income_per_second_now()
@@ -254,6 +306,7 @@ func _controls() -> void:
 		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
 			mv.x -= 1.0
 	var touch := hud.touch
+	mv += force_move
 	if touch.visible:
 		mv += touch.move_vector
 		keeper.add_look(touch.take_look_delta() * Balance.LOOK_SENSITIVITY_TOUCH)
@@ -395,11 +448,25 @@ func _on_golden(amount: float, at: Vector3) -> void:
 # =====================================================================================
 func _update_slow() -> void:
 	GameState.cells_burned = forest.burned
-	# The valley warms as the meadow spreads.
-	var healed := clampf(forest.progress() * 1.4, 0.0, 1.0)
-	env.ambient_light_color = AMBIENT_COLD.lerp(AMBIENT_WARM, healed)
-	env.fog_light_color = Color("#514468").lerp(Color("#6E6266"), healed)
+	# The valley warms as the meadow spreads (and after the ending it's dawn).
+	if _dawn <= 0.0:
+		var healed := clampf(forest.progress() * 1.4, 0.0, 1.0)
+		env.ambient_light_color = AMBIENT_COLD.lerp(AMBIENT_WARM, healed)
+		env.fog_light_color = Color("#514468").lerp(Color("#6E6266"), healed)
 	GameState.check_win()
+	# The safety net: nothing left the tool can light and the next tool's out of reach.
+	_stuck_t += 0.5
+	if _stuck_t >= 2.0:
+		_stuck_t = 0.0
+		var was := GameState.stuck
+		GameState.stuck = false
+		var short := GameState.short_for_next_tool()
+		# (a few stray cells by the water or in corners don't count as something left to burn)
+		GameState.stuck = short and forest.burning.is_empty() and helpers_idle() and not forest.any_lightable(GameState.tool_heat(), STRAYS)
+		if GameState.stuck and not was:
+			var nt := GameState.next_tool_index()
+			hud.toast("Nothing left the %s can light. The %s is yours for what you have, in the notebook" % [
+				str(GameState.tool_def().name).to_lower(), str(Balance.TOOLS[nt].name).to_lower()])
 	if not GameState.starter_offered and not GameState.owns_starter and GameState.play_time >= Balance.STARTER_AFTER \
 			and not hud.is_blocking() and not Monetization.is_showing_ad():
 		GameState.starter_offered = true
@@ -407,11 +474,75 @@ func _update_slow() -> void:
 		hud.show_starter_offer()
 
 
+func helpers_idle() -> bool:
+	## Helpers can't light anything either (they use the same heat tiers as tools, or less).
+	for i in Balance.HELPERS.size():
+		if int(GameState.helper_counts[i]) > 0 and forest.any_lightable(float(Balance.HELPERS[i].heat) * GameState.upgrade_mult("heat"), STRAYS):
+			return false
+	return true
+
+
 func _on_won() -> void:
+	## The curse lifts: the rest of the forest withers in a wave out from the
+	## heart and blooms, the HUD goes, night turns to dawn and the camera sweeps
+	## up over the restored valley. Then the letter.
 	Sound.play("reward", 0.0)
 	if hud.notebook != null:
 		hud.close_notebook()
-	hud.show_ending()
+	forest.lift_curse()
+	view.green_trails()
+	hud.begin_ending()
+	keeper.cinematic = true
+	keeper.firing = false
+	ending_t = 0.0
+	_end_from = keeper.camera.global_position
+	_end_angle = atan2(_end_from.x, _end_from.z)
+
+
+func _update_ending(d: float) -> void:
+	if ending_t < 0.0:
+		return
+	ending_t += d
+	_set_dawn(clampf(ending_t / 7.0, 0.0, 1.0))
+	# the sweep: up from where the keeper stood, round and over the valley
+	var t := clampf(ending_t / 11.0, 0.0, 1.0)
+	var e := t * t * (3.0 - 2.0 * t)
+	var a := _end_angle + e * 1.9 + maxf(0.0, ending_t - 11.0) * 0.03
+	var r := lerpf(Vector2(_end_from.x, _end_from.z).length(), 38.0, e)
+	var h := lerpf(_end_from.y, 17.0, e)
+	var pos := Vector3(sin(a) * r, h, cos(a) * r)
+	if ending_t < 2.0:
+		pos = _end_from.lerp(pos, ending_t / 2.0)
+	var cam := keeper.camera
+	cam.global_position = pos
+	var look := Vector3(0, 4.0, 0).lerp(Vector3(0, 2.0, 0), e)
+	if pos.distance_to(look) > 0.5:
+		cam.look_at(look, Vector3.UP)
+	if ending_t >= 9.0 and not hud.ending_letter_shown():
+		hud.show_ending()
+
+
+func end_ending() -> void:
+	## "Walk the meadow": the keeper's back, at dawn.
+	ending_t = -1.0
+	keeper.cinematic = false
+	keeper.set_view(keeper.cam_yaw, keeper.cam_pitch)
+
+
+func _set_dawn(k: float) -> void:
+	## Night (0) to dawn over the restored valley (1).
+	_dawn = k
+	var e := k * k * (3.0 - 2.0 * k)
+	sky_mat.sky_top_color = Color("#1B1430").lerp(Color("#3A4C86"), e)
+	sky_mat.sky_horizon_color = Color("#5E4C74").lerp(Color("#F2A87A"), e)
+	sky_mat.ground_horizon_color = Color("#3A2E4A").lerp(Color("#B98A86"), e)
+	env.ambient_light_color = env.ambient_light_color.lerp(Color("#9AA0B8"), e)
+	env.fog_light_color = Color("#514468").lerp(Color("#B4979C"), e)
+	env.fog_density = FOG_DENSITY * lerpf(1.0, 0.55, e)     # the dawn air clears
+	moon.light_color = Color("#C4D2F2").lerp(Color("#FFDDB8"), e)
+	moon.light_energy = lerpf(MOON_ENERGY, 2.2, e)
+	var from := Vector3(-60.0, 70.0, -25.0).lerp(Vector3(70.0, 26.0, -20.0), e)
+	moon.look_at_from_position(from, Vector3.ZERO, Vector3.UP)
 
 
 func _update_coach() -> void:
@@ -446,7 +577,7 @@ func _update_coach() -> void:
 			anchor = "notebook"
 			if GameState.tool_index >= 1:
 				_next_step()
-			elif GameState.embers >= float(Balance.TOOLS[1].cost):
+			elif GameState.embers >= GameState.tool_cost(1):
 				text = "Enough for the lighter. Open the notebook."
 		5:
 			text = "Pines need the lighter. Aim at one."

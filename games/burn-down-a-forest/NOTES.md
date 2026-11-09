@@ -61,16 +61,42 @@ drooping star-shaped tiers, scalloped canopies with hanging points, clawed
 branches, knothole eyes). The hero, the village and the meadow are round (bell
 robe, loaf thatch, round doors and windows, cupped petals).
 
-**Lighting:** cool moonlight `#C4D2F2` from the upper left as seen from the
-village (west-north-west, high); plum ambient that warms as the meadow grows;
-real omni light on the fire on desktop (phones skip it: the flames and the
-burning trees light themselves); a cool rim light on the keeper in its shader.
-Linear tonemapping and no bloom, so colours land where the palette puts them.
+**Lighting:** the moon is the key: cool `#C4D2F2` from the upper left as seen
+from the village (west-north-west, high), strong, with cast shadows (trees,
+cottages, the keeper; grass, bushes and flowers don't cast), over a low plum
+ambient so the shadowed sides stay plum and the lit tops read. A cold rim on
+the canopy tops (plant shader). The foreground nearer than the keeper is
+darkened to frame them. Warm light comes only from fire: a blurred per-cell
+fire-light map (`ForestView._fire_img`, mipmapped) lights the ground, trunks,
+props and the keeper near any fire, on phones too; one omni light follows the
+nearest big fire on desktop. The keeper's lantern paints a warm pool on the
+ground and warms nearby trunks. The flat ground's response to the moon is
+damped (`key_response`) so the meadow sits mid-value under the trees' lit
+tops. Linear tonemapping and no bloom. After the ending it's dawn (peach
+horizon, warm low sun from the east).
+
+**Fire:** an inked flipbook (`art/fx/make_fx.py` draws `fx/flames.png`): three
+flame silhouettes and one tall leading flame, four held drawings each, played
+at 8 a second, carved lines through the body, sooty tips; stored as levels, so
+the shader paints cursed-wood, phoenix or dragon fire. Each burning plant gets
+a cluster of flames of different sizes round it with its leading flame on top
+(grass fires get a crest every few cells), all leaning with the wind (the
+taller, the more), mirrored at random; sparks spit out of the same MultiMesh;
+plum smoke in cel-shaded puffs (`fx/puffs.png`). Burning trees char from the
+roots up behind a thin ember line; bark splits into thin glowing cracks that
+cool as the front moves on; leaves just char with a few embers in them.
+
+**Camera:** an over-the-shoulder chase camera that rises over any canopy at its
+spot (never pulls in among leaves), tilts down 0.3 rad more when the woods
+round the keeper are thick (the player can still drag it back up), and cuts away everything up to the keeper's
+depth inside a circle on screen round them, with an inked rim (grass and
+bushes are spared, `ForestView.standing_flag`). The hero is always framed.
 
 **Models:** all built in Blender from scripts in `art/blender/` (see "Models"
 below), detail baked into vertex colours (ray-cast AO, a vertical gradient,
-carved highlights on rims and tips). Contact sheet:
-`python3 art/blender/contact_sheet.py OUT.png`.
+carved highlights on rims and tips, edge wear and crease grime from the
+mesh's curvature, a soft painted mottle). Contact sheet:
+`python3 art/blender/contact_sheet.py OUT.png [files] [--only a,b]`.
 
 ---
 
@@ -85,7 +111,7 @@ and teal cursed trees, warm hand-drawn fire, critters that always scamper out un
 Godot 4.4, Compatibility renderer, landscape 1280x720 (stretch: canvas_items / expand).
 Bundle ID (when it ships): `com.gamequarry.burndownaforest`.
 
-## Status: first playable, art pass 1 done (awaiting the second review)
+## Status: first playable; art pass 2 (the 3D world) done and the full QA playthrough run (see "QA")
 
 Loads, phone and desktop controls work, the fire spreads by itself in chain
 reactions, embers come in, 6 tools (4 reachable in a normal run so far), 5
@@ -129,15 +155,18 @@ cells, heated cells, ash waiting to bloom).
   HUD's wind arrow (relative to the camera). Flames and trees lean with it.
 
 **Camera and controls** (`scripts/keeper.gd`, `scripts/touch_controls.gd`). An
-elevated over-the-shoulder chase camera 11 m behind the fire-keeper (a madder-red
-robe, a tall flopping hood, a brass lantern on the back), orbiting a point a
-little above and to the right of them so the crosshair and its ring never sit on
-the keeper. The tool heats where the screen's centre lands (the crosshair, and
+elevated over-the-shoulder chase camera 11 m behind the fire-keeper (a round
+figure in a soot-stained rust cape, an ember scarf and a round hood, a lantern
+on a crooked pole held up on the side away from the crosshair), orbiting a
+point a little above and to the right of them so the crosshair and its ring
+never sit on the keeper. The tool heats where the screen's centre lands (the crosshair, and
 an inked dashed ring on the ground), out to the tool's range; aim further and it
-lands at the edge of the range. Trees between the camera and the keeper, near
-the camera, or right over the keeper's head are cut away in a round window with
-an inked rim (plant shader; no dither, no transparency), and the aim ray starts
-just beyond the keeper so it never picks a tree that's been cut away.
+lands at the edge of the range. Everything up to the keeper's depth inside a circle on
+screen round them is cut away with an inked rim (plant and prop shaders; grass
+and bushes are spared), the camera rises over any canopy at its spot and tilts
+down a little more in thick woods, and the aim ray starts just beyond the keeper
+so it never picks a tree that's been cut away. The crosshair stops on the first
+standing tree in line, so you step closer or round it to reach one behind.
 
 | Phone | Desktop |
 |---|---|
@@ -151,20 +180,32 @@ just beyond the keeper so it never picks a tree that's been cut away.
 
 **Progression** (all numbers in `scripts/balance.gd`):
 - Tools, bought in order: Matchstick (heat 8), Lighter (40, 250 embers), Tiki
-  torch (150, 4.5K), Flamethrower (520, 30K), Dragon breath (1800, 200K), Meteor
-  shower (6000, 1.5M). Each has its own effect (`scripts/tool_fx.gd`): a flick of
-  sparks, a thin jet, lobbed fireballs, a billowing cone, a purple dragon jet,
-  shooting stars from the sky.
-- Upgrades: Hotter flame (+25% heat), Dry winds (+6% spread, embers jump
-  further), Ember value (+15% embers), Wide flame (+12% flame size), Swift boots.
+  torch (150, 9K), Flamethrower (520, 55K), Dragon breath (1800, 95K), Meteor
+  shower (6000, 110K: the only thing that lights the Elder Tree, ignite 9000).
+  Each has its own effect (`scripts/tool_fx.gd`): a flick of sparks, a thin jet,
+  lobbed fireballs, a billowing cone, a purple dragon jet, shooting stars.
+- **Tiers hold:** heat a burning plant pushes into a tougher kind of tree is
+  damped (`Balance.TIER_UP` 0.35 one tier up, `TIER_UP2` 0.1 further), so a
+  fire front can't light the next ring by itself (it used to cascade into
+  whole-forest jackpots that bought four tools in two minutes). Within a kind,
+  trees push about a quarter to a third of their own ignite level: fires run
+  along fronts and die out in patches; grass and bushes still sweep a patch.
+- **The safety net:** if nothing your tool can light is left (fewer than 150
+  stray cells, about 3% of the forest, and nothing burning) and you can't afford the next tool (you spent on upgrades), the
+  next tool costs what you have, with a toast and "a fair price" in the notebook
+  (`GameState.stuck`, checked by `World`). No forest can leave you stuck.
+- Upgrades: Hotter flame (+10% heat, 5 levels: reach a tier a little early, never
+  skip one), Dry winds (+4% spread, embers jump further), Ember value (+8%
+  embers, 15 levels), Wide flame (+6% flame size), Swift boots.
 - Helpers (`scripts/helpers.gd`): fire sprites (round flame spirits with faces,
   light grass and bushes) and ember salamanders (ember lizards with a flame ridge,
   light pines and oaks). Each picks something it can light near the keeper, goes there and holds
   its heat on it. Past 12 of a kind the visible ones just burn hotter.
 - Critters (`scripts/critters.gd`): a rabbit, a fox and a hedgehog (Blender
   models) bolt out of 7% of trees as they catch, bound away from the fire and
-  pop out of sight with a drawn heart. 4% of them are golden and
-  drop a bonus (1.5 minutes of income) that a rewarded ad can double.
+  pop out of sight with a drawn mint heart. 6% of them are golden and
+  drop a bonus (1.5 minutes of income, capped at a quarter of the next tool, or
+  20K once every tool is bought) that a rewarded ad can double.
 
 **Art direction:** see the art bible at the top. **The world** (`scripts/forest_view.gd`):
 pines and oaks in three sizes each (small/medium/large, picked from each cell's
@@ -210,13 +251,127 @@ bodies; 0 everything else). Triangle counts:
 
 | File | Models |
 |---|---|
-| `forest.glb` (trees.py) | pine_s 265, pine_m 405, pine_l 533 (crooked trunk, drooping star tiers, hooked tip, knothole eye with a mint pupil on the big one); oak_s 384, oak_m 529, oak_l 545 (forked crooked trunk, scalloped canopy with hanging points, knothole eyes); giant_a/b 1335 (buttress roots, clawed branches, a cursed heart with the only sparkles, mint eyes); elder 2156 (huge gnarled trunk, roots, a face of mint knot eyes, the cursed heart); grass 36, bush 140, boulder 120, far_pine 72, far_oak 52 |
+| `forest.glb` (trees.py) | pine_s 313, pine_m 461, pine_l 581 (crooked trunk, drooping star tiers, hooked tip, mint knothole eyes on every size); oak_s ~1.1K, oak_m ~1.46K, oak_l ~1.5K (forked crooked trunk, clawed roots and twigs, carved scalloped cushions with hanging points, mint eyes); giant_a/b ~2.6K (buttress roots, clawed branches, carved cushions, curse moss, a cursed heart with the only sparkles, mint eyes); elder ~5.5K (a crown of five crooked finger limbs with clawed tips, knuckle cushions, weeping curse moss, the face and heart looking south); grass 36, bush 140, boulder 120, far_pine 72, far_oak 314 (two carved cushions on a short crooked trunk) |
 | `meadow.glb` (meadow.py) | poppy 52, oxeye_daisy 80, buttercup 96, harebell 162, sage_tuft 28 |
-| `village.glb` (village.py) | cottage_a/b/c 2.5-2.8K (rounded walls, loaf thatch, round lit windows, roots over the roof), well, lantern_post, signpost, woodpile, fence, ground_roots, root_arch |
-| `keeper.glb`, `tools.glb`, `creatures.glb` (characters.py) | the keeper in six parts (body, head, tall hood, hand, foot, lantern); matchstick, rainbow sparkler, lighter, tiki torch, flamethrower, dragon puppet, meteor staff; fire sprite, salamander (+ leg), rabbit, fox, hedgehog |
+| `village.glb` (village.py) | lodge ~4K (the landmark: round two storeys, carved cone of thatch, tall leaning chimney), cottage_mid, cottage_small (carved layered loaf thatch, damp plaster, leaning), woodshed, well, lantern_post, signpost, woodpile (uneven, chopping block and axe), fence, ground_roots, root_arch, flagstone_0..5 (hand-cut slabs) |
+| `keeper.glb`, `tools.glb`, `creatures.glb` (characters.py) | the keeper in eight parts (body: cape, scarf, clasp, patch; head: the dark face and eyes; hood; hand; foot; lantern; pole; scarf tail); matchstick, rainbow sparkler, lighter, tiki torch, flamethrower, dragon puppet, meteor staff (bevelled, worn); fire sprite, salamander (+ leg), rabbit, fox, hedgehog (heads, snouts, legs) |
+| `fx/flames.png`, `fx/puffs.png` (art/fx/make_fx.py) | the fire flipbook and the smoke puffs |
 
 `art/blender/contact_sheet.py OUT.png [files...]` renders them all in Cycles on
 the CPU (one cell each, labelled with triangle counts) for review.
+
+## QA (2026-11-09, after art pass 2)
+
+Run per STUDIO.md "Playtesting". Commands (headless unless noted; runs side by
+side each need `-- save=<name> log=<path>` plus `--log-file <path>`):
+
+    godot --headless -s res://tests/smoke_test.gd                                   # 77 checks
+    godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- keen|casual|boosted [ads]
+    godot --headless --fixed-fps 20 -s res://tests/chaos.gd -- 6 4242               # minutes, seed
+    xvfb-run ... godot --rendering-driver opengl3 --fixed-fps 20 -s res://tests/playthrough.gd -- boosted shots=DIR size=844x390 every=10
+    python3 tools/browser_check.py games/burn-down-a-forest
+
+**The playthrough bot** plays a fresh save to the ending through the real
+systems: it walks with the stick input, turns the camera until the crosshair
+sits on something its tool can light (stepping closer when a tree is in the
+way), holds the burn button, and shops by opening the notebook and pressing
+the price tags. Like a person it takes a moment to settle on each new target
+(keen 1 s, casual 2.2 s), and a casual player idles about 40% of the time and
+shops every 25 s. It fails on: no ending in time, progress stalled, any tool /
+upgrade / helper / golden critter never reached, the keeper leaving the world
+or sinking under it, a save-and-reload mismatch (at 20/45/70% of the forest
+and right after the flamethrower and the meteor shower, with big fires going),
+a stub ad or purchase flow that doesn't finish, anything logged as an error.
+Once the forest is nearly gone and its tool can light the Elder Tree it heads
+there. Debug arguments: `debug` (a trace every 10 s), `from=<ring>`,
+`embers=<n>`, `at=<x>,<z>`.
+
+**Pacing** (game time; final balance):
+
+| Milestone | keen | casual | boosted (x10 income, ads) |
+|---|---|---|---|
+| lighter | 0:33 | 0:53 | 0:07 |
+| the thicket burned | 10:15 | 15:36 | - |
+| tiki torch | 15:07 | 19:39 | 0:19 |
+| ember salamander hired | 20:09 | 28:50 | 0:55 |
+| flamethrower | 24:29 | 41:21 | 0:35 |
+| oakwood / pinewood burned | 23:20 / 24:38 | 44:09 / 42:21 | - |
+| dragon breath | 28:55 | 47:11 | 0:47 |
+| the cursed grove burned | 29:39 | 49:01 | 1:38 |
+| meteor shower | 29:50 | 49:41 | 0:51 |
+| **the ending** | **30:10** (99% burned) | **50:01** (97%) | **1:47** (36%) |
+| reloads / golden critters | 5 / 4 | 5 / 4 | 3 / 1 |
+| real time (quiet machine) | 150 s | 141 s | 24 s |
+
+Runs vary by a few minutes (keen 24-30, casual 50-61 over the last runs; the
+casual bot finished at 60-61 before it was taught to try the first salamander).
+No jackpots left: the biggest jump is the grove fire after the dragon breath
+(about 100K in a minute, the finale). The keen run spent so much on upgrades
+that the safety net offered it the dragon breath for 69K at 28:28; that is the
+net doing its job, not a stall.
+
+**Bugs found and fixed** (each has a smoke-test check now):
+
+1. Jackpot cascades: a fire front lit the next tier of tree by itself, Dry Winds
+   and spotting carried fire through every trail, and keen bought four tools in
+   two minutes (the whole game took 3:14). Heat into tougher kinds is now damped
+   (`TIER_UP`), spotting cut 5x, trails split the grove too, giants need the
+   flamethrower.
+2. Hotter Flame went to 20 levels (5.5x heat), letting the tiki torch light half
+   the giants: now 5 levels of +10%.
+3. Golden critters paid 1.5 minutes of income uncapped (300K+ during a grove
+   fire, 1M once every tool was bought): capped at a quarter of the next tool,
+   20K after the last.
+4. Soft-lock: a player who spent on upgrades could be left with nothing their
+   tool could light and the next tool out of reach, forever (the bot sat stuck
+   for 8 minutes). The safety net now offers the next tool for what you have.
+5. In thick woods the new camera tilt clamped the pitch so the crosshair never
+   reached more than ~4 m: now an offset the player can drag against.
+6. The Elder Tree's aim volume was one cell wide around a trunk three times
+   wider: the crosshair slid past it and the off-centre heat never reached its
+   ignite level, even with the meteor shower.
+7. Two ads requested at once (a rewarded ad during an interstitial, or two
+   placements): the second was dropped without an answer, freezing the keeper
+   and blocking every later ad (found by the chaos run). Now refused with a
+   failure callback.
+8. `AdOffers.eligible("")` logged a script error every 20 s whenever nothing
+   was worth offering (found by the boosted run's log check).
+9. Boosts, cooldowns and interstitial spacing ran on the wall clock, so the
+   developer time scale (and the bot) broke them: they run on a game clock now,
+   which catches up with real time on load. The fire, keeper, critters and
+   helpers also keep up at 5x-50x time.
+10. Flames standing between the camera and the keeper could hide the hero (seen
+    in the visual run): they shrink away inside the see-through circle.
+11. The keeper faced the camera at spawn; the meadow mask was unset (meadow
+    painted everywhere); the Free magic chapter widened the notebook and
+    clipped its tabs; phone strings said click (all from the art pass review).
+12. The dawn sweep at the ending showed the hill woods as flat pink lollipops in
+    thick fog: the far oaks are carved cushions like the near ones now, and the
+    dawn air clears to about half the night fog.
+
+Test-side fixes along the way (no game change): the bot read the full tool
+price instead of the tag's price, so it never took the safety net's offer;
+it gave up walking to a far target after 9 s; the golden-critter count was
+lost on each reload; the log check counted the audio driver's "no sound card"
+error on this machine.
+
+**Chaos run:** 6 game-minutes of random input, two seeds (every control, every
+notebook chapter and entry, offers, finds, ads watched or closed early,
+purchases, popups, touch/mouse switching, time scale 1-50x, background and
+resume): passes, no errors, no soft-lock, no broken UI state.
+
+**Visual run:** the boosted bot rendered every 10 game-seconds at 844x390,
+932x430 (touch) and 1024x768 (tablet): HUD, notebook, coach notes, toasts,
+boost tags and touch controls fit at every size with no overlap or clipped
+text; the keeper stays framed through the biggest fires.
+
+**Browser run:** `tools/browser_check.py` exports the web build and opens it in
+headless Chromium as a touch phone: it loads and starts at 844x390, 932x430 and
+1024x768, the touch stick, burn and jump buttons and the first coach note show,
+a tap reaches the game, and there are no console or page errors. (The tablet
+screenshot at 2x needs more than the tool's 3-minute screenshot timeout under
+software GL on this machine, so that size was rerun with a longer timeout from
+the same export; frame rate has to be checked on a real phone.)
 
 ## Money
 
@@ -304,19 +459,25 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
   (multiline and triangle-array calls) to keep that low.
   `tests/perf_bench.gd`: at ~580 burning cells the fire costs ~1 ms per tick plus
   ~1 ms to rebuild the flames, 10 times a second, on desktop.
-- Tests: `tests/smoke_test.gd` (passes), `tests/screenshots.gd` (27 shots incl.
-  the phone layout, every notebook chapter, the village path, the Elder Tree,
-  the meadow, the ending), `tests/fire_bench.gd` (spread tuning), `tests/perf_bench.gd`,
-  `tests/draw_calls.gd`.
+- Tests: `tests/smoke_test.gd` (71 checks, passes; includes a regression check
+  for every bug the QA runs found), `tests/playthrough.gd` (the playthrough bot,
+  keen / casual / boosted, plus the visual run), `tests/chaos.gd` (random input),
+  `tests/screenshots.gd` (30 shots incl. the establishing shot, the phone layout,
+  every notebook chapter, the keeper close up and the dawn ending),
+  `tests/look.gd` (a few 3D views fast, for art tuning), `tests/fire_bench.gd`,
+  `tests/perf_bench.gd`, `tests/draw_calls.gd`.
+- Developer tools (Settings, playtest builds only): time 1x/5x/10x/50x, income
+  x1/x10/x100, free embers, unlock everything, skip to a ring, fire speed, fake
+  ad/purchase counts, start over, reset the save.
 
 ## Next steps toward the polish bar (STUDIO.md)
 
-0. **Second fresh-eyes art review** of the new screenshots and the contact sheet
-   (STUDIO.md process step 2), then fix what it finds.
+0. **Third fresh-eyes art review** of the screenshots from
+   `tests/screenshots.gd` and the model contact sheet (STUDIO.md process step 2),
+   then fix what it finds.
 
-1. **Pacing bot** (`tests/pacing.gd`): a bot that walks to patches, lights them,
-   buys in order, with and without ads; tune for a keen run ~30 min and casual ~60.
-   The balance is first-pass (see below).
+1. Real-phone playtest of the new lighting (moon shadows cost a depth pass; the
+   distance is 32 m on touch screens) and of the camera's tilt in the woods.
 2. **Music**: two or three generated tunes for the forest plus one for the meadow
    after the curse lifts, with a music volume slider (effects are done).
 3. **Juice on the fire**: ember sparks flying from spotting (the sim already
@@ -335,13 +496,11 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
 
 ## Known bugs and limitations
 
-- In very dense woods the canopy can still hide the fire you're lighting from
-  some camera angles; tilting the camera down (or the see-through) fixes it.
-  Worth a smarter camera (pull up when occluded) after playtesting.
 - Walking ignores trees (you pass through them). Intended for now, it's much
   nicer on a phone, but trunks might deserve a soft push later.
-- The giant canopies are big; from low camera angles the Oakwood/Grove is a sea
-  of violet blobs. Fine from the default angle.
+- Moon shadows: the plant shader's see-through window also runs in the shadow
+  pass, so trees cut away round the keeper cast no shadow on them (it reads as
+  moonlight on the hero; left as is).
 - The headless editor import prints `Parameter "t" is null` once per .glb (Godot
   4.4.1 does it for a one-cube .glb in an empty project too); harmless, and not
   seen at runtime.
@@ -354,24 +513,25 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
   colours by zero, so every plant MultiMesh sets `use_colors` and white colours.
 - Headless test runs print "ObjectDB instances leaked / resources still in use"
   at exit (dummy audio driver teardown); not seen in normal play.
-- Wind direction changes are shown on the HUD but not announced.
+- Shader colour uniforms are set from code with `Color("#hex")` (sRGB, converted);
+  defaults written in a shader are taken as linear, so don't rely on them.
+- Tests that run side by side must each pass `-- save=<name>` (and
+  `--log-file <path>`), or they overwrite one another's save and log.
 
 ## Balance notes
 
-- What the forest holds (seed 20261109): Thicket 2.7K burnable cells / ~5.8K
-  embers, Pinewood 1.1K / ~19K, Oakwood 600 / ~47K, Cursed Grove 300 / ~206K,
-  Elder Tree 50K. Ember Value and the boosts multiply all of it.
-- Tool costs follow that: the Lighter (250) after the first patch or two, the Tiki
-  Torch (4.5K) partway through the Pinewood, the Flamethrower (30K) in the Oakwood.
-  Dragon Breath (200K) needs most of the Grove or Ember Value upgrades; the Elder
-  Tree is also reachable with the Flamethrower + ~8 levels of Hotter Flame, or by
-  burning the whole ring of giants around it with Dry Winds up.
-- `tests/fire_bench.gd` lights single cells in each ring: with no Dry Winds one
-  ignition burns ~0-330 cells (a patch), at Dry Winds 5 (x1.3) a few hundred to a
-  whole ring, at max (x1.6) usually much of a ring and sometimes a jackpot that
-  cascades inward. That jackpot is fun but can skip a tool; watch it in the pacing bot.
-- Spread knobs: `PLANTS[].heat` (spread within a kind), `ignite` (the tier gap),
-  `spot` (jumping trails), `SPREAD`, `DIAGONAL`, `COOL`, `PATCH` (patch size).
+- What the forest holds raw (seed 20261109): Thicket 5.7K (2.6K cells), Pinewood
+  19K (1.1K), Oakwood 46K (600), Cursed Grove 156K (300, 150K of it in 187
+  giants), Elder Tree 50K. Ember Value and the boosts multiply all of it. The
+  forest is finite, so tool prices are set against what the ring before pays:
+  each needs roughly 70-90% of it (with some upgrades bought on the way).
+- Spread knobs: `PLANTS[].heat` (spread within a kind: grass and bushes sweep a
+  patch, trees about 0.25-0.35 of their own ignite so fronts die out in places),
+  `ignite` (the tier gap), `TIER_UP` / `TIER_UP2` (heat into tougher kinds),
+  `spot` (jumping trails; cut 5x in the QA pass), `SPREAD`, `DIAGONAL`, `COOL`,
+  `PATCH`. Trails now split every ring, the grove too.
+- `tests/fire_bench.gd` lights single cells in each ring for spread tuning;
+  `tests/playthrough.gd` is the real pacing check (see "QA").
 
 ## Files
 
@@ -396,17 +556,22 @@ scripts/game_state.gd       autoload: economy, purchases' effects, save/load
 scripts/ad_offers.gd        when the timed offer tag shows and what it offers
 scripts/monetization/       provider interface, stub, autoload facade (product and placement IDs)
 scripts/audio/sound.gd      autoload: effects, fire loops, ambience, volume
-shaders/                    plant (baked colours, ink edge, burn, round see-through window), flame (cel),
-                            smoke, ground (organic edges, cobbled square), water, prop (village, keeper, creatures)
+shaders/                    plant (baked colours, ink edge, creeping char and cracks, moon rim, fire and lantern
+                            light, see-through window), flame (flipbook), smoke (puffs), ground (meadow mask,
+                            fire light, lantern pool), water, prop (village, keeper, creatures), outline (the
+                            keeper's ink line), pencil (notebook entries out of reach)
 models/                     Blender exports: forest, meadow, village, keeper, tools, creatures (.glb)
 art/blender/                the model scripts (forest_lib.py helpers; trees, meadow, village, characters)
                             and contact_sheet.py; rebuild a file: python3 art/blender/trees.py
-art/icons/make_icons.py     draws ui/icons/*.svg
+art/icons/make_icons.py     draws ui/icons/*.svg (incl. the match cursors)
+art/fx/make_fx.py           draws fx/flames.png and fx/puffs.png
 ui/icons/                   the icon set (SVG)
 audio/                      generated by tools/make_audio.py
 fonts/                      IM Fell English SC, Alegreya Sans, Caveat Brush (all OFL, licences beside them)
 tools/make_audio.py         rebuilds audio/ (numpy, scipy, ffmpeg)
-tests/                      smoke_test, screenshots, fire_bench, perf_bench, draw_calls
+tests/                      smoke_test, playthrough (the bot, and the visual run), chaos, screenshots, look,
+                            fire_bench, perf_bench, draw_calls
+fx/                         the fire flipbook and smoke puffs (drawn by art/fx/make_fx.py)
 ```
 
 Run: `godot --headless --import`, then `godot --headless -s res://tests/smoke_test.gd`;

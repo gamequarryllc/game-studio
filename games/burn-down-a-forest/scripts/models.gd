@@ -104,10 +104,6 @@ static func far_tree(oak: bool) -> Mesh:
 	return mesh("forest", "far_oak" if oak else "far_pine")
 
 
-static func cottage_mesh(seed: int) -> Mesh:
-	return mesh("village", ["cottage_a", "cottage_b", "cottage_c"][seed % 3])
-
-
 static func prop(name: String) -> Mesh:
 	return mesh("village", name)
 

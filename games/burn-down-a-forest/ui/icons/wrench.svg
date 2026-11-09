@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- wrench: drawn by art/icons/make_icons.py -->
-  <path d="M 9.80 51.81 L 35.87 25.85 L 40.10 30.03 L 13.72 55.83 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 34.42 22.45 C 33.71 18.65 36.01 12.24 38.23 9.53 C 40.45 6.82 46.79 5.03 47.73 6.17 C 48.66 7.32 43.39 13.81 43.85 16.39 C 44.30 18.97 48.14 21.35 50.45 21.64 C 52.76 21.93 57.15 17.01 57.73 18.12 C 58.31 19.22 56.45 25.89 53.90 28.26 C 51.36 30.64 45.70 33.34 42.45 32.37 C 39.20 31.40 35.12 26.26 34.42 22.45 Z" fill="#6F7C88" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 10.38 52.37 L 36.04 25.85 L 39.84 29.58 L 13.64 55.62 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 33.93 21.77 C 33.31 18.08 35.97 12.70 38.25 10.02 C 40.52 7.35 46.67 4.71 47.60 5.71 C 48.53 6.71 43.45 13.27 43.84 16.02 C 44.22 18.77 47.60 21.82 49.90 22.18 C 52.20 22.54 56.94 17.25 57.63 18.18 C 58.33 19.11 56.70 25.43 54.09 27.76 C 51.48 30.09 45.34 33.16 41.98 32.16 C 38.62 31.17 34.56 25.46 33.93 21.77 Z" fill="#6F7C88" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

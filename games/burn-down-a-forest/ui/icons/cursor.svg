@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
+  <!-- cursor: drawn by art/icons/make_icons.py -->
+  <path d="M 6.23 5.63 C 7.13 4.17 10.52 3.84 12.19 4.39 C 13.86 4.94 16.19 7.10 16.27 8.91 C 16.35 10.73 14.24 14.58 12.66 15.29 C 11.08 16.00 7.86 14.78 6.79 13.17 C 5.72 11.56 5.33 7.10 6.23 5.63 Z" fill="#3A2A24" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 12.80 12.10 L 15.97 9.84 L 44.00 38.32 L 40.24 42.27 Z" fill="#E2C48C" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

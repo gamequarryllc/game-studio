@@ -19,6 +19,8 @@ const DAMP_MULT := 2.2             # cells next to water are this much harder to
 const SPREAD := 1.0                # base multiplier on heat pushed to neighbours
 const PATCH := 10.0                # trails split the forest into patches about this many cells across
 const DIAGONAL := 0.7              # diagonal neighbours get this share
+const TIER_UP := 0.35              # heat a burning plant pushes into a tougher kind of tree, one tier up
+const TIER_UP2 := 0.1              # ...two or more tiers up (each tool opens a ring; no whole-forest jackpots)
 const ASH_TIME := Vector2(5.0, 11.0)   # seconds of ash before flowers grow
 
 # Kinds of cell. Indices are stored in the grid, so only append.
@@ -37,12 +39,12 @@ const BARE := 8
 # whole burn is roughly heat x 1.6, so each kind spreads to its own kind but
 # can barely light the next kind up: that's the next tool's job.
 const PLANTS = [
-	{"name": "Cursed grass", "ignite": 3.0, "heat": 2.6, "burn": 2.6, "embers": 1.0, "height": 0.5, "spot": 0.0},
-	{"name": "Gloom bush", "ignite": 5.0, "heat": 5.0, "burn": 4.0, "embers": 3.0, "height": 1.0, "spot": 0.0004},
-	{"name": "Cursed pine", "ignite": 45.0, "heat": 22.0, "burn": 6.0, "embers": 20.0, "height": 4.6, "spot": 0.0012},
-	{"name": "Hex oak", "ignite": 160.0, "heat": 75.0, "burn": 9.0, "embers": 120.0, "height": 5.0, "spot": 0.0015},
-	{"name": "Giant cursed tree", "ignite": 560.0, "heat": 200.0, "burn": 14.0, "embers": 800.0, "height": 9.0, "spot": 0.002},
-	{"name": "The Elder Tree", "ignite": 3000.0, "heat": 600.0, "burn": 30.0, "embers": 50000.0, "height": 20.0, "spot": 0.0},
+	{"name": "Cursed grass", "ignite": 3.0, "heat": 2.1, "burn": 2.6, "embers": 1.0, "height": 0.5, "spot": 0.0},
+	{"name": "Gloom bush", "ignite": 5.0, "heat": 3.8, "burn": 4.0, "embers": 3.0, "height": 1.0, "spot": 0.0001},
+	{"name": "Cursed pine", "ignite": 45.0, "heat": 16.0, "burn": 6.0, "embers": 20.0, "height": 4.6, "spot": 0.00025},
+	{"name": "Hex oak", "ignite": 160.0, "heat": 42.0, "burn": 9.0, "embers": 120.0, "height": 5.0, "spot": 0.0003},
+	{"name": "Giant cursed tree", "ignite": 640.0, "heat": 140.0, "burn": 14.0, "embers": 800.0, "height": 9.0, "spot": 0.0004},
+	{"name": "The Elder Tree", "ignite": 9000.0, "heat": 600.0, "burn": 30.0, "embers": 50000.0, "height": 20.0, "spot": 0.0},
 ]
 
 # The forest grows in rings around the Elder Tree (cells from the centre).
@@ -69,27 +71,27 @@ const TOOLS = [
 	{"key": "match", "name": "Matchstick", "icon": "matchstick", "heat": 8.0, "radius": 0.9, "range": 6.0, "cost": 0.0,
 		"desc": "One match. A whole cursed forest. Start small.", "lights": "grass and gloom bushes"},
 	{"key": "lighter", "name": "Lighter", "icon": "lighter", "heat": 40.0, "radius": 1.2, "range": 7.0, "cost": 250.0,
-		"desc": "Click, whoosh. Hot enough for cursed pines.", "lights": "cursed pines"},
-	{"key": "tiki", "name": "Tiki torch", "icon": "tiki_torch", "heat": 150.0, "radius": 1.6, "range": 9.0, "cost": 4500.0,
+		"desc": "Flick, whoosh. Hot enough for cursed pines.", "lights": "cursed pines"},
+	{"key": "tiki", "name": "Tiki torch", "icon": "tiki_torch", "heat": 150.0, "radius": 1.6, "range": 9.0, "cost": 9000.0,
 		"desc": "Lobs balls of fire. Hex oaks don't stand a chance.", "lights": "hex oaks"},
-	{"key": "flamer", "name": "Flamethrower", "icon": "flamethrower", "heat": 520.0, "radius": 2.2, "range": 11.0, "cost": 30000.0,
+	{"key": "flamer", "name": "Flamethrower", "icon": "flamethrower", "heat": 520.0, "radius": 2.2, "range": 11.0, "cost": 55000.0,
 		"desc": "A roaring jet. Even the giant cursed trees catch.", "lights": "giant cursed trees"},
-	{"key": "dragon", "name": "Dragon breath", "icon": "dragon", "heat": 1800.0, "radius": 3.0, "range": 14.0, "cost": 200000.0,
-		"desc": "Borrowed from a very polite dragon.", "lights": "the Elder Tree's bark"},
-	{"key": "meteor", "name": "Meteor shower", "icon": "meteor", "heat": 6000.0, "radius": 4.5, "range": 24.0, "cost": 1500000.0,
-		"desc": "Calls down the stars. Overkill, and wonderful.", "lights": "anything at all"},
+	{"key": "dragon", "name": "Dragon breath", "icon": "dragon", "heat": 1800.0, "radius": 3.0, "range": 14.0, "cost": 95000.0,
+		"desc": "Borrowed from a very polite dragon.", "lights": "anything in the grove"},
+	{"key": "meteor", "name": "Meteor shower", "icon": "meteor", "heat": 6000.0, "radius": 4.5, "range": 24.0, "cost": 110000.0,
+		"desc": "Calls down the stars. Nothing else will touch the Elder Tree.", "lights": "the Elder Tree"},
 ]
 
 # Upgrades. Effect = 1 + per_level * level. Cost = base * growth^level.
 const UPGRADES = [
-	{"key": "heat", "name": "Hotter flame", "icon": "bellows", "base": 50.0, "growth": 2.0, "per_level": 0.25, "max": 20,
-		"desc": "+25% tool heat. Reach tougher trees early."},
-	{"key": "wind", "name": "Dry winds", "icon": "dry_winds", "base": 120.0, "growth": 2.0, "per_level": 0.06, "max": 10,
-		"desc": "+6% fire spread, and embers jump further. Bigger chain reactions."},
-	{"key": "value", "name": "Ember value", "icon": "ember_value", "base": 80.0, "growth": 1.85, "per_level": 0.15, "max": 20,
-		"desc": "+15% embers from everything that burns."},
-	{"key": "wide", "name": "Wide flame", "icon": "wide_flame", "base": 150.0, "growth": 2.3, "per_level": 0.12, "max": 8,
-		"desc": "+12% flame size where it lands."},
+	{"key": "heat", "name": "Hotter flame", "icon": "bellows", "base": 80.0, "growth": 2.3, "per_level": 0.1, "max": 5,
+		"desc": "+10% tool heat. Reach tougher trees a little early."},
+	{"key": "wind", "name": "Dry winds", "icon": "dry_winds", "base": 150.0, "growth": 2.2, "per_level": 0.04, "max": 10,
+		"desc": "+4% fire spread, and embers jump further. Bigger chain reactions."},
+	{"key": "value", "name": "Ember value", "icon": "ember_value", "base": 80.0, "growth": 1.9, "per_level": 0.08, "max": 15,
+		"desc": "+8% embers from everything that burns."},
+	{"key": "wide", "name": "Wide flame", "icon": "wide_flame", "base": 150.0, "growth": 2.3, "per_level": 0.06, "max": 8,
+		"desc": "+6% flame size where it lands."},
 	{"key": "boots", "name": "Swift boots", "icon": "boots", "base": 60.0, "growth": 2.1, "per_level": 0.12, "max": 8,
 		"desc": "+12% walking speed."},
 ]
@@ -106,7 +108,7 @@ const MAX_VISIBLE_HELPERS := 12    # per type; more helpers just burn hotter
 
 # Critters scamper out of burning trees (always unharmed). A rare golden one pays a bonus.
 const CRITTER_CHANCE := 0.07       # per tree that catches
-const GOLDEN_CHANCE := 0.04        # of those, a golden critter
+const GOLDEN_CHANCE := 0.06        # of those, a golden critter
 const GOLDEN_MINUTES := 1.5        # a golden critter pays this many minutes of recent income
 
 # --- Boosts, ads ---------------------------------------------------------------------------

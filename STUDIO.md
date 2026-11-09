@@ -150,6 +150,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-09: Burn Down a Forest review-2 fixes + QA done: inked flipbook fire with smoke and ground light, moon key and rim light, camera that never hides the keeper, rebuilt round keeper, carved oaks and a landmark Elder, hand-laid village and meadow drifts, notebook and ending fixes. Playthrough passes keen (30:10), casual (50-61 min), boosted; chaos and browser runs pass; 77 smoke checks. Next: third critic. Started Dig to the Core art round 3 (the underground).
 - 2026-11-09: Started Drain an Ocean in the conversation loop (tap-to-play isometric bay diorama, global water level plus isolated pools, creature rescues into an idle-earning aquarium).
 - 2026-11-09: Dig to the Core critic fixes + QA done: all 12 review items, playthrough bot passes keen (25:47), casual (~80 min, varies 63-92) and boosted (12:22 game time in ~2.5 min real), chaos/visual/browser runs clean, 12 bugs fixed and added to the smoke test (72 checks). Next: second critic.
 - 2026-11-09: The daily backstop's first run stopped at the plan's usage limit (08:26 UTC) right after marking Drain an Ocean as building; nothing was built, so it's back to `queued` and the conversation loop starts it when a builder slot frees. Builders also paused at the limit 08:30-09:10 UTC and were resumed (Dig's builder couldn't resume: its partial work was checkpoint-committed and a fresh builder is finishing).

@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- dry_winds: drawn by art/icons/make_icons.py -->
-  <path d="M 5.63 21.83 C 9.75 21.83 25.00 22.54 30.35 21.85 C 35.69 21.16 36.79 19.46 37.69 17.69 C 38.58 15.92 37.13 12.16 35.73 11.21 C 34.34 10.26 30.40 11.87 29.33 12.00 " fill="none" stroke="#2E1E14" stroke-width="2.80" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 5.90 32.30 C 12.52 32.29 37.57 31.49 45.65 32.26 C 53.73 33.03 53.52 34.77 54.38 36.93 C 55.25 39.08 52.72 44.12 50.83 45.19 C 48.94 46.27 44.34 43.66 43.04 43.35 " fill="none" stroke="#2E1E14" stroke-width="2.80" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 9.86 42.15 L 26.19 41.75" fill="none" stroke="#2E1E14" stroke-width="2.80" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 35.85 56.02 C 34.64 54.75 40.91 48.50 44.35 46.44 C 47.80 44.39 55.29 42.42 56.50 43.69 C 57.71 44.95 55.05 51.98 51.61 54.03 C 48.17 56.09 37.05 57.28 35.85 56.02 Z" fill="#C9A253" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 38.27 54.97 L 51.85 45.63" fill="none" stroke="#2E1E14" stroke-width="1.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 5.64 21.71 C 9.69 21.74 24.53 22.46 29.94 21.91 C 35.36 21.35 37.16 20.16 38.13 18.36 C 39.09 16.55 37.29 12.15 35.75 11.07 C 34.21 10.00 30.04 11.77 28.89 11.91 " fill="none" stroke="#2E1E14" stroke-width="2.80" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 5.94 31.94 C 12.62 31.99 38.03 31.38 46.04 32.24 C 54.05 33.11 53.21 34.96 54.00 37.14 C 54.78 39.33 52.60 44.36 50.77 45.35 C 48.94 46.34 44.32 43.46 43.03 43.09 " fill="none" stroke="#2E1E14" stroke-width="2.80" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 10.29 42.22 L 26.08 42.26" fill="none" stroke="#2E1E14" stroke-width="2.80" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 35.91 56.48 C 34.52 55.20 40.70 48.56 43.98 46.41 C 47.26 44.26 54.22 42.30 55.61 43.59 C 56.99 44.88 55.58 51.98 52.30 54.13 C 49.02 56.28 37.29 57.77 35.91 56.48 Z" fill="#C9A253" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 38.12 54.83 L 52.05 46.25" fill="none" stroke="#2E1E14" stroke-width="1.60" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

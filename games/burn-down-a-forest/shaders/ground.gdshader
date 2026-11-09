@@ -1,12 +1,17 @@
 shader_type spatial;
 render_mode diffuse_lambert, specular_disabled;
 // The forest floor. `cells` holds one pixel per forest cell: rgb = the ground
-// colour there (cursed moss, dirt trail, fresh ash, meadow...), a = how hot
-// the ash still is (it glows with embers for a while after the fire). The
-// lookup is pushed around by noise so the edges between meadow, ash and moss
-// wander organically instead of following the cell grid.
+// colour there (cursed moss, dirt trail, fresh ash, packed village earth...),
+// a = how hot the ash still is (it glows with embers for a while after the
+// fire). `meadow` is 1 where the meadow has grown: it's painted here in sage,
+// in lighter and darker drifts, with a ragged edge where it meets the ash
+// (and a darker rim of fresh turf against the cinders). Lookups are pushed
+// around by noise so edges wander organically instead of following the cells.
+// Warm light: the fire nearby (`fire_light`) and the keeper's lantern pool.
 
 uniform sampler2D cells : filter_linear, repeat_disable;
+uniform sampler2D meadow : filter_linear, repeat_disable;
+uniform sampler2D fire_light : filter_linear_mipmap, repeat_disable;
 uniform vec2 forest_origin = vec2(-60.0, -60.0);
 uniform float forest_size = 120.0;
 uniform float cell_size = 1.5;
@@ -14,7 +19,16 @@ uniform vec3 hill_color : source_color = vec3(0.16, 0.12, 0.2);
 uniform vec3 hill_top : source_color = vec3(0.23, 0.18, 0.28);
 uniform vec3 ember : source_color = vec3(0.91, 0.39, 0.17);
 uniform vec3 speck : source_color = vec3(0.18, 0.118, 0.078);
-uniform vec4 village_rect = vec4(-17.0, 46.0, 17.0, 60.0);   // x0, z0, x1, z1: the cobbled square
+uniform vec3 sage_dark : source_color = vec3(0.29, 0.39, 0.2);
+uniform vec3 sage : source_color = vec3(0.44, 0.55, 0.3);
+uniform vec3 moss : source_color = vec3(0.24, 0.3, 0.2);
+uniform vec4 village_rect = vec4(-18.0, 44.0, 18.0, 60.0);   // x0, z0, x1, z1: the village square
+uniform vec3 fire_tint : source_color = vec3(1.0, 0.55, 0.25);
+uniform float fire_gain = 2.2;
+uniform vec3 lantern_pos = vec3(0.0, -100.0, 0.0);
+uniform vec3 lantern_tint : source_color = vec3(1.0, 0.66, 0.34);
+uniform float lantern_flicker = 1.0;
+uniform float key_response = 0.62;   // flat ground faces the high moon square on: keep it below the trees' lit tops
 
 varying vec3 v_world;
 
@@ -45,44 +59,41 @@ void fragment() {
 	vec3 col = mix(hills, c.rgb, inside);
 	float n = vnoise(p * 0.55) * 0.5 + vnoise(p * 2.1) * 0.3 + vnoise(p * 6.0) * 0.2;
 	col *= 0.82 + 0.36 * n;
-	// the village square is cobbled: rounded stones with dark gaps, worn at the edges
+	// the village square: packed earth, mossy where few feet go
 	vec2 vr0 = village_rect.xy;
 	vec2 vr1 = village_rect.zw;
 	float in_v = smoothstep(vr0.x, vr0.x + 3.0, p.x) * (1.0 - smoothstep(vr1.x - 3.0, vr1.x, p.x))
-		* smoothstep(vr0.y, vr0.y + 4.0, p.y) * step(c.b * 1.5, c.r) * step(c.g * 1.12, c.r) * inside;
-	if (in_v > 0.01) {
-		vec2 q = p * 1.6;
-		vec2 qi = floor(q);
-		float best = 9.0;
-		float second = 9.0;
-		float shade = 0.0;
-		for (int yy = -1; yy <= 1; yy++) {
-			for (int xx = -1; xx <= 1; xx++) {
-				vec2 cellq = qi + vec2(float(xx), float(yy));
-				vec2 pt = cellq + vec2(hash(cellq), hash(cellq + 7.1)) * 0.8 + 0.1;
-				float dd = distance(q, pt);
-				if (dd < best) {
-					second = best;
-					best = dd;
-					shade = hash(cellq + 3.3);
-				} else if (dd < second) {
-					second = dd;
-				}
-			}
-		}
-		float gap = smoothstep(0.02, 0.12, second - best);
-		float worn = vnoise(p * 0.3);
-		vec3 stone = col * (1.05 + shade * 0.3) + vec3(0.02, 0.015, 0.01);
-		vec3 cob = mix(col * 0.68, stone, gap);
-		col = mix(col, cob, in_v * smoothstep(0.3, 0.6, worn + 0.15) * 0.85);
-	}
+		* smoothstep(vr0.y, vr0.y + 3.0, p.y) * inside;
+	float mossy = smoothstep(0.5, 0.72, vnoise(p * 0.32) * 0.7 + vnoise(p * 1.4) * 0.3);
+	col = mix(col, moss * (0.8 + 0.4 * n), mossy * in_v * 0.45);
+	// the meadow: sage in drifts, a ragged edge into the ash
+	float m = texture(meadow, clamp(uv, vec2(0.001), vec2(0.999))).r * inside;
+	float rag = vnoise(p * 1.7) * 0.6 + vnoise(p * 4.8) * 0.4;
+	float edge = m + (rag - 0.5) * 0.62;
+	float mt = smoothstep(0.46, 0.53, edge);
+	float rim = smoothstep(0.36, 0.46, edge) * (1.0 - mt);
+	float drift = vnoise(p * 0.11) * 0.6 + vnoise(p * 0.45) * 0.4;
+	vec3 mc = mix(sage_dark, sage, smoothstep(0.25, 0.8, drift));
+	mc *= 0.86 + 0.26 * vnoise(p * 2.4);
+	col = mix(col, col * 0.62, rim);
+	col = mix(col, mc, mt);
 	// little dark specks: grit, needles, pebbles
-	float s = step(0.9, vnoise(p * 9.0)) * 0.35;
+	float s = step(0.9, vnoise(p * 9.0)) * 0.35 * (1.0 - mt * 0.6);
 	col = mix(col, speck, s);
-	ALBEDO = col;
+	ALBEDO = col * key_response;
 	ROUGHNESS = 1.0;
 	float g = c.a * inside;
 	float hot = smoothstep(0.55, 0.8, vnoise(p * 3.0 + vec2(TIME * 0.2, 0.0)));
 	float flick = 0.65 + 0.35 * sin(TIME * 6.0 + n * 20.0);
-	EMISSION = ember * g * (0.15 + hot * 0.9) * flick;
+	vec3 em = ember * g * (0.15 + hot * 0.9) * flick;
+	// warm light thrown on the ground by the fire nearby
+	vec2 fuv = (p - forest_origin) / forest_size;
+	float fl = textureLod(fire_light, fuv, 1.0).r * 0.6 + textureLod(fire_light, fuv, 2.5).r * 1.7;
+	fl = 1.0 - exp(-fl * 1.6);
+	em += col * fire_tint * fl * fire_gain;
+	// and the lantern's pool round the keeper's feet, with a soft painted edge
+	float ld = length(v_world.xz - lantern_pos.xz);
+	float pool = pow(clamp(1.0 - ld / 4.5, 0.0, 1.0), 1.8) * (0.85 + 0.15 * vnoise(p * 3.0 + TIME * 0.5));
+	em += col * lantern_tint * pool * 0.55 * lantern_flicker;
+	EMISSION = em;
 }

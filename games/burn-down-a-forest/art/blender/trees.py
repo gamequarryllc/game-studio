@@ -139,7 +139,7 @@ def pine_tier(m, center, axis, R, th, n, rot, droop=0.38, jag=0.12, light=1.0):
         m.face([c, rim[(k + 1) % (2 * n)], rim[k]])
 
 
-def pine(name, H, tiers, seed, points=7, eye=None):
+def pine(name, H, tiers, seed, points=7, eye=1):
     m = L.Model(name, seed)
     rng = m.rng
     s = H / 4.6
@@ -172,12 +172,15 @@ def pine(name, H, tiers, seed, points=7, eye=None):
     m.tube(hook, radii, 5, TEAL, L.LEAF, cap_top=False,
            color_fn=lambda t, k: L.mix(L.scale(TEAL, 1.05), TEAL_HI, t * 0.6),
            hi_fn=lambda t, k: t)
-    if eye is not None:
-        a = rng.uniform(0, 6.28)
-        p = L.point_on(spine, 0.1)
-        d = Vector((math.cos(a), math.sin(a), 0.1))
-        knot_eye(m, p + d.normalized() * 0.17 * s, d, 0.075 * s, glow=eye)
-    m.bake(ao_dist=1.2 * s, ao_strength=0.8, grad=(0.62, 1.12), hi_color=TEAL_HI, hi_strength=0.55)
+    # every cursed pine watches you: mint knothole eyes low on the trunk, under the skirts
+    a = rng.uniform(0, 6.28)
+    p = L.point_on(spine, 0.12)
+    for k in range(eye):
+        off = (k - (eye - 1) * 0.5) * 0.62
+        d = Vector((math.cos(a + off), math.sin(a + off), 0.1))
+        knot_eye(m, p + d.normalized() * 0.19 * s + Z * (0.05 * s * k), d, 0.07 * s, glow=True)
+    m.bake(ao_dist=1.0 * s, ao_strength=0.5, grad=(0.72, 1.22), hi_color=TEAL_HI, hi_strength=0.6,
+           wear=0.2, wear_color=BARK_HI, grime=0.08, paint=0.1, paint_scale=1.0 / s, ao_floor=0.45)
     print(name, m.tri_count(), "tris")
     return m.finish()
 
@@ -185,6 +188,14 @@ def pine(name, H, tiers, seed, points=7, eye=None):
 # ------------------------------------------------------------------------------------
 # Hex oaks
 # ------------------------------------------------------------------------------------
+# Canopy colours are set a little darker and warmer than the swatch on purpose:
+# the cool moonlight lifts the lit tops to the art bible's hex violet (#5A3F7A).
+OAK_BASE = L.srgb("#3E2A5A")
+OAK_TOP = L.srgb("#5A3F7A")
+OAK_UNDER = L.srgb("#1E1428")
+OAK_CARVE = L.srgb("#9C86C4")
+
+
 def canopy_color(base, hi):
     def fn(d, p):
         up = max(0.0, d.z)
@@ -194,41 +205,77 @@ def canopy_color(base, hi):
     return fn
 
 
-def oak(name, H, seed, limbs=3, eyes=1, glow_eye=False):
+def claw_twig(m, start, d, length, s, rng, r0=0.06):
+    """A bare twig poking out of the canopy, ending in a curled claw."""
+    d = Vector(d).normalized()
+    side = d.cross(Z)
+    if side.length < 0.1:
+        side = Vector((1, 0, 0))
+    side.normalize()
+    p1 = start + d * length * 0.5 + Z * 0.15 * s + side * rng.uniform(-0.12, 0.12) * s
+    p2 = start + d * length + Z * 0.25 * s
+    hook = p2 + d * 0.18 * s - Z * 0.22 * s + side * 0.08 * s
+    m.tube([start, p1, p2, hook], [r0 * s, r0 * 0.6 * s, r0 * 0.3 * s, 0.0], 4, BARK, L.BARK, cap_top=False,
+           color_fn=lambda t, k: L.mix(BARK, BARK_HI, 0.25 * t))
+    for side_k in (-1, 1):
+        q0 = p1.lerp(p2, 0.6)
+        tip = q0 + (d * 0.25 + side * side_k * 0.22 + Z * 0.12) * s
+        m.tube([q0, tip, tip - Z * 0.1 * s + d * 0.05 * s], [r0 * 0.35 * s, r0 * 0.15 * s, 0.0], 3, BARK, L.BARK, cap_top=False)
+
+
+def oak(name, H, seed, cushions=2, eyes=2, twigs=2):
+    """A hex oak: a crooked forked trunk with clawed roots, crooked limbs holding
+    carved scalloped cushions of violet leaves that hang into points, bare
+    clawed twigs poking out, and a pair of mint knothole eyes."""
     m = L.Model(name, seed)
     rng = m.rng
     s = H / 5.0
-    fork = 0.36 * H
-    spine = L.crooked_spine(fork, bends=1.1, sway=0.26 * s, rng=rng, segments=4)
-    trunk(m, spine, 0.34 * s, 0.22 * s, 6, flare=1.9)
+    fork = 0.4 * H
+    spine = L.crooked_spine(fork, bends=1.3, sway=0.3 * s, rng=rng, segments=5)
+    spine = L.smooth_spine(spine)
+    trunk(m, spine, 0.36 * s, 0.24 * s, 7, flare=2.1)
+    # clawed roots gripping the ground
+    for k in range(4):
+        a = 2 * math.pi * k / 4 + rng.uniform(-0.4, 0.4)
+        d = Vector((math.cos(a), math.sin(a), 0))
+        m.tube([d * 0.2 * s + Z * 0.45 * s, d * 0.55 * s + Z * 0.12 * s, d * 0.85 * s - Z * 0.05 * s],
+               [0.15 * s, 0.09 * s, 0.03 * s], 4, BARK, L.BARK, cap_top=False)
     top = spine[-1]
-    ends = []
     a0 = rng.uniform(0, 6.28)
-    for k in range(limbs):
-        a = a0 + 2 * math.pi * k / limbs + rng.uniform(-0.3, 0.3)
-        out = rng.uniform(1.0, 1.3) * s
-        up = rng.uniform(0.9, 1.2) * s
-        mid = top + Vector((math.cos(a) * out * 0.45, math.sin(a) * out * 0.45, up * 0.55))
-        end = top + Vector((math.cos(a) * out, math.sin(a) * out, up))
-        bend = Vector((math.cos(a + 1.2) * 0.15 * s, math.sin(a + 1.2) * 0.15 * s, 0))
-        m.tube([top - Vector((0, 0, 0.3 * s)), mid + bend, end], [0.17 * s, 0.11 * s, 0.05 * s], 5, BARK, L.BARK,
-               color_fn=lambda t, kk: L.mix(BARK, BARK_HI, 0.15 * (kk % 2)))
-        ends.append(end)
-    fn = canopy_color(VIOLET, VIOLET_HI)
-    m.blob(top + Vector((0, 0, 1.75 * s)), 1.15 * s, VIOLET, L.LEAF, subdiv=2, rough=0.3, seed=seed,
-           squash=(1.0, 1.0, 0.72), droop=0.6, color_fn=fn, hi_top=0.7, scallop=0.45, lobes=7)
-    for k, e in enumerate(ends):
-        m.blob(e + Vector((0, 0, 0.3 * s)), rng.uniform(0.85, 1.0) * s, VIOLET, L.LEAF, subdiv=2, rough=0.32,
-               seed=seed * 10 + k, squash=(1.0, 1.0, 0.7), droop=1.0, color_fn=fn, hi_top=0.6, scallop=0.5, lobes=5)
-    # knothole eyes on the side the canopy leans away from
+    centres = []
+    # the main cushion sits high over the fork; the others hang off crooked limbs
+    main_c = top + Vector((rng.uniform(-0.15, 0.15) * s, rng.uniform(-0.15, 0.15) * s, 1.25 * s))
+    centres.append((main_c, 1.25 * s, 1.05 * s, 7))
+    for k in range(cushions - 1):
+        # tucked in under the shoulders of the main crown, so it all reads as one lumpy silhouette
+        a = a0 + 2 * math.pi * k / max(1, cushions - 1) + rng.uniform(-0.4, 0.4)
+        out = rng.uniform(0.8, 1.0) * s
+        up = rng.uniform(0.45, 0.7) * s
+        c = top + Vector((math.cos(a) * out, math.sin(a) * out, up))
+        centres.append((c, rng.uniform(0.8, 0.92) * s, rng.uniform(0.62, 0.72) * s, 6))
+    for (c, R, h, lobes) in centres:
+        d = c - top
+        mid = top + d * 0.5 + Vector((rng.uniform(-0.2, 0.2) * s, rng.uniform(-0.2, 0.2) * s, 0.1 * s))
+        m.tube([top - Z * 0.25 * s, mid, c - Z * 0.15 * s], [0.18 * s, 0.12 * s, 0.07 * s], 5, BARK, L.BARK,
+               color_fn=lambda t, kk: L.mix(BARK, BARK_HI, 0.18 * (kk % 2)))
+    for i, (c, R, h, lobes) in enumerate(centres):
+        m.cushion(c, R, h, lobes, seed * 13 + i, OAK_BASE, OAK_TOP, OAK_UNDER, droop=0.55, belly=0.38,
+                  carve=(0.6,) if i == 0 else (0.64,), tilt=(rng.uniform(-0.12, 0.12), rng.uniform(-0.12, 0.12)),
+                  lump=0.2 if i == 0 else 0.14)
+    # bare clawed twigs poking out under the canopy
+    for k in range(twigs):
+        a = a0 + math.pi * 0.5 + k * 2.4 + rng.uniform(-0.3, 0.3)
+        st = L.point_on(spine, 0.82 + 0.08 * k)
+        claw_twig(m, st, (math.cos(a), math.sin(a), 0.35), rng.uniform(1.05, 1.35) * s, s, rng)
+    # a pair of mint knothole eyes on the trunk, looking out
     a = rng.uniform(0, 6.28)
+    p = L.point_on(spine, 0.55)
     for k in range(eyes):
-        off = (k - (eyes - 1) * 0.5) * 0.42
+        off = (k - (eyes - 1) * 0.5) * 0.5
         d = Vector((math.cos(a + off), math.sin(a + off), 0.05))
-        p = L.point_on(spine, 0.5)
-        p.z = 0.55 * fork + (0.04 * s if k == 1 else 0.0)
-        knot_eye(m, p + d.normalized() * 0.25 * s, d, 0.07 * s, glow=glow_eye)
-    m.bake(ao_dist=1.6 * s, ao_strength=0.85, grad=(0.6, 1.1), hi_color=VIOLET_HI, hi_strength=0.5)
+        knot_eye(m, p + d.normalized() * 0.27 * s + Z * (0.04 * s if k == 1 else 0.0), d, 0.075 * s, glow=True)
+    m.bake(ao_dist=1.4 * s, ao_strength=0.6, grad=(0.62, 1.1), hi_color=OAK_CARVE, hi_strength=0.6,
+           wear=0.25, wear_color=BARK_HI, grime=0.15, paint=0.12, paint_scale=1.2 / s, ao_floor=0.4)
     print(name, m.tri_count(), "tris")
     return m.finish()
 
@@ -236,6 +283,10 @@ def oak(name, H, seed, limbs=3, eyes=1, glow_eye=False):
 # ------------------------------------------------------------------------------------
 # The giants and the Elder Tree
 # ------------------------------------------------------------------------------------
+GIANT_BASE = L.srgb("#36254F")
+GIANT_TOP = L.srgb("#4E366D")
+
+
 def claw_branch(m, start, a, length, rise, s, rng, r0):
     """A crooked branch ending in a few clawed twigs."""
     d = Vector((math.cos(a), math.sin(a), 0))
@@ -243,7 +294,8 @@ def claw_branch(m, start, a, length, rise, s, rng, r0):
     p1 = start + d * length * 0.35 + Vector((0, 0, rise * 0.5)) + side * rng.uniform(-0.3, 0.3) * s
     p2 = start + d * length * 0.75 + Vector((0, 0, rise * 0.85)) - side * rng.uniform(-0.3, 0.3) * s
     p3 = start + d * length + Vector((0, 0, rise))
-    m.tube([start, p1, p2, p3], [r0, r0 * 0.6, r0 * 0.35, 0.02 * s], 5, BARK, L.BARK)
+    m.tube([start, p1, p2, p3], [r0, r0 * 0.6, r0 * 0.35, 0.02 * s], 5, BARK, L.BARK,
+           color_fn=lambda t, k: L.mix(BARK, BARK_HI, 0.2 * (k % 2)))
     for k in range(3):
         aa = a + (k - 1) * 0.7
         tip = p3 + Vector((math.cos(aa) * 0.6 * s, math.sin(aa) * 0.6 * s, rng.uniform(0.1, 0.5) * s))
@@ -257,7 +309,6 @@ def heart(m, center, normal, size, sparkles, rng):
     and the only sparkles in the forest drifting round it."""
     x, y, n = frame(normal)
     c = Vector(center)
-    # the hollow: a dark ring sunk into the trunk
     seg = 10
     rim = [m.vert(c + (x * math.cos(2 * math.pi * k / seg) + y * math.sin(2 * math.pi * k / seg) * 1.45) * size * 1.25 + n * 0.05,
                   BARK_HI, L.BARK) for k in range(seg)]
@@ -269,7 +320,6 @@ def heart(m, center, normal, size, sparkles, rng):
     back = m.vert(c - n * size * 0.6, KNOT, L.BARK)
     for k in range(seg):
         m.face([pit[k], pit[(k + 1) % seg], back])
-    # the heart itself: two lobes and a point
     hc = c - n * size * 0.1
     for side in (-1, 1):
         m.blob(hc + x * side * size * 0.3 + y * size * 0.2, size * 0.42, MINT, L.GLOW, subdiv=1, rough=0.05, seed=side + 5)
@@ -287,77 +337,123 @@ def giant(name, seed, H=9.5, variant=0):
     s = H / 9.5
     spine = L.crooked_spine(5.2 * s, bends=1.1, sway=0.5 * s, rng=rng, segments=5)
     spine = L.smooth_spine(spine)
-    trunk(m, spine, 0.78 * s, 0.38 * s, 7, flare=1.4)
-    # buttress roots clawing into the ground
+    trunk(m, spine, 0.78 * s, 0.38 * s, 8, flare=1.4)
     for k in range(5):
         a = 2 * math.pi * k / 5 + rng.uniform(-0.3, 0.3)
         d = Vector((math.cos(a), math.sin(a), 0))
         p0 = d * 0.45 * s + Vector((0, 0, 0.9 * s))
         p1 = d * 1.1 * s + Vector((0, 0, 0.35 * s))
         p2 = d * 1.75 * s + Vector((0, 0, -0.05))
-        m.tube([p0, p1, p2], [0.3 * s, 0.18 * s, 0.05 * s], 5, BARK, L.BARK, cap_top=False)
+        p3 = p2 + Vector((-d.y, d.x, 0)) * 0.25 * s + d * 0.2 * s - Z * 0.1
+        m.tube([p0, p1, p2, p3], [0.3 * s, 0.18 * s, 0.07 * s, 0.0], 5, BARK, L.BARK, cap_top=False)
     top = spine[-1]
     ends = []
     a0 = rng.uniform(0, 6.28)
     for k in range(4):
         a = a0 + 2 * math.pi * k / 4 + rng.uniform(-0.35, 0.35)
-        start = L.point_on(spine, 0.75 + 0.06 * k)
+        start = L.point_on(spine, 0.72 + 0.06 * k)
         ends.append(claw_branch(m, start, a, rng.uniform(2.3, 2.9) * s, rng.uniform(1.2, 1.9) * s, s, rng, 0.28 * s))
-    leaf = GIANT_LEAF if variant == 0 else L.mix(GIANT_LEAF, TEAL, 0.35)
-    fn = canopy_color(leaf, L.mix(VIOLET_HI, TEAL_HI, 0.3 * variant))
-    m.blob(top + Vector((0, 0, 1.9 * s)), 1.9 * s, leaf, L.LEAF, subdiv=2, rough=0.28, seed=seed, squash=(1, 1, 0.7),
-           droop=0.9, color_fn=fn, hi_top=0.5, spikes=0.08, scallop=0.55, lobes=8)
-    for k, e in enumerate(ends):
-        m.blob(e.lerp(top, 0.3) + Vector((0, 0, 0.55 * s)), rng.uniform(1.0, 1.2) * s, leaf, L.LEAF, subdiv=2, rough=0.3,
-               seed=seed * 7 + k, squash=(1, 1, 0.72), droop=1.1, color_fn=fn, hi_top=0.5, spikes=0.08, scallop=0.6, lobes=6)
+    base = GIANT_BASE if variant == 0 else L.mix(GIANT_BASE, TEAL, 0.3)
+    topc = GIANT_TOP if variant == 0 else L.mix(GIANT_TOP, TEAL, 0.3)
+    m.cushion(top + Vector((0, 0, 2.0 * s)), 2.1 * s, 1.5 * s, 8, seed, base, topc, OAK_UNDER, droop=0.6, belly=0.35,
+              carve=(0.48, 0.76), inner=(0.28,), lump=0.18)
+    for k, e in enumerate(ends[:3]):
+        c = e.lerp(top, 0.25) + Vector((0, 0, 0.6 * s))
+        m.cushion(c, rng.uniform(1.2, 1.4) * s, 0.8 * s, 6, seed * 7 + k, base, topc, OAK_UNDER, droop=0.7, belly=0.4,
+                  carve=(0.58,), tilt=(rng.uniform(-0.15, 0.15), rng.uniform(-0.15, 0.15)), lump=0.15)
+        for j in range(2):
+            aa = rng.uniform(0, 6.28)
+            st = c + Vector((math.cos(aa), math.sin(aa), 0)) * rng.uniform(0.4, 0.9) * s - Z * 0.35 * s
+            moss_strand(m, st, rng.uniform(1.4, 2.2) * s, 0.8 * s, rng, L.mix(GIANT_BASE, TEAL, 0.25))
     a = rng.uniform(0, 6.28)
     d = Vector((math.cos(a), math.sin(a), 0.0))
     hp = L.point_on(spine, 0.33)
     heart(m, hp + d * 0.62 * s, d, 0.28 * s, sparkles=5, rng=rng)
-    # two knothole eyes above the heart: the giant is watching
     for side in (-1, 1):
         dd = Vector((math.cos(a + side * 0.32), math.sin(a + side * 0.32), 0.0))
         ep = L.point_on(spine, 0.55)
         knot_eye(m, ep + dd * 0.5 * s, dd, 0.12 * s, glow=True)
-    m.bake(ao_dist=2.5 * s, ao_strength=0.85, grad=(0.55, 1.1), hi_color=VIOLET_HI, hi_strength=0.45)
+    m.bake(ao_dist=2.2 * s, ao_strength=0.65, grad=(0.62, 1.1), hi_color=OAK_CARVE, hi_strength=0.55,
+           wear=0.3, wear_color=BARK_HI, grime=0.15, paint=0.12, paint_scale=0.5, ao_floor=0.4)
     print(name, m.tri_count(), "tris")
     return m.finish()
 
 
+def moss_strand(m, start, length, s, rng, color):
+    """A strand of curse moss hanging from a limb, swaying with the leaves."""
+    pts = [start]
+    p = Vector(start)
+    for k in range(4):
+        p = p + Vector((rng.uniform(-0.15, 0.15), rng.uniform(-0.15, 0.15), -length / 4.0))
+        pts.append(p)
+    m.tube(pts, [0.16 * s, 0.12 * s, 0.09 * s, 0.05 * s, 0.0], 4, color, L.LEAF, cap_top=False,
+           color_fn=lambda t, k: L.mix(color, PLUM, t * 0.5))
+
+
 def elder(name="elder", seed=77):
+    """The Elder Tree: nothing else in the forest has its outline. A vast twisted
+    trunk splits into five crooked limbs that reach up and out like the fingers
+    of a hand, each ending in a claw, with carved cushions of leaves and long
+    strands of curse moss weeping from them. Its face (two mint knot eyes and
+    the glowing cursed heart) looks south at the village."""
     m = L.Model(name, seed)
     rng = m.rng
-    H = 20.0
-    spine = [Vector((0, 0, 0)), Vector((0.5, -0.3, 3.5)), Vector((-0.4, 0.4, 7.0)), Vector((0.6, 0.1, 10.5)), Vector((0.1, -0.4, 13.5))]
+    spine = [Vector((0, 0, 0)), Vector((0.6, -0.2, 3.2)), Vector((-0.5, 0.4, 6.5)), Vector((0.5, 0.1, 9.6)), Vector((0.0, -0.2, 12.0))]
     spine = L.smooth_spine(spine)
-    trunk(m, spine, 2.6, 1.3, 12, flare=1.45)
-    for k in range(7):
-        a = 2 * math.pi * k / 7 + rng.uniform(-0.25, 0.25)
+    trunk(m, spine, 2.7, 1.6, 12, flare=1.5)
+    # roots spreading far over the ground
+    for k in range(8):
+        a = 2 * math.pi * k / 8 + rng.uniform(-0.25, 0.25)
         d = Vector((math.cos(a), math.sin(a), 0))
-        side = Vector((-d.y, d.x, 0)) * rng.uniform(-0.6, 0.6)
-        pts = [d * 1.7 + Vector((0, 0, 3.4)), d * 3.2 + side + Vector((0, 0, 1.5)), d * 4.8 + side * 1.5 + Vector((0, 0, 0.4)),
-               d * 6.2 + side * 1.2 + Vector((0, 0, -0.2))]
-        m.tube(pts, [1.0, 0.65, 0.35, 0.06], 6, BARK, L.BARK, cap_top=False)
-    ends = []
-    for k in range(6):
-        a = 2 * math.pi * k / 6 + 0.4 + rng.uniform(-0.25, 0.25)
-        start = L.point_on(spine, 0.68 + 0.05 * (k % 3))
-        ends.append(claw_branch(m, start, a, rng.uniform(5.0, 6.4), rng.uniform(2.6, 3.6), 2.0, rng, 0.7))
-    fn = canopy_color(GIANT_LEAF, VIOLET_HI)
-    m.blob(Vector((0.2, 0, 17.6)), 4.6, GIANT_LEAF, L.LEAF, subdiv=2, rough=0.25, seed=seed, squash=(1, 1, 0.68),
-           droop=0.8, color_fn=fn, hi_top=0.5, spikes=0.05, scallop=0.45, lobes=9)
-    for k, e in enumerate(ends):
-        m.blob(e + Vector((0, 0, 0.8)), rng.uniform(2.5, 3.0), GIANT_LEAF, L.LEAF, subdiv=2, rough=0.3, seed=seed + k,
-               squash=(1, 1, 0.72), droop=1.1, color_fn=fn, hi_top=0.5, spikes=0.07, scallop=0.55, lobes=6)
-    m.blob(Vector((0.0, 0.3, 21.0)), 2.6, GIANT_LEAF, L.LEAF, subdiv=2, rough=0.25, seed=seed + 20, squash=(1, 1, 0.8),
-           droop=0.5, color_fn=fn, hi_top=0.7, spikes=0.06, scallop=0.4, lobes=7)
-    # The face looks south, toward the village (Blender -Y is the game's +Z).
+        side = Vector((-d.y, d.x, 0)) * rng.uniform(-0.7, 0.7)
+        pts = [d * 1.8 + Vector((0, 0, 3.0)), d * 3.4 + side + Vector((0, 0, 1.3)), d * 5.0 + side * 1.5 + Vector((0, 0, 0.35)),
+               d * 6.8 + side * 1.1 + Vector((0, 0, -0.15)), d * 7.6 + side * 1.6 + Vector((0, 0, -0.1))]
+        m.tube(pts, [1.0, 0.68, 0.38, 0.12, 0.0], 6, BARK, L.BARK, cap_top=False,
+               color_fn=lambda t, kk: L.mix(BARK, BARK_HI, 0.25 * (kk % 2)))
+    # five finger limbs reaching up and out, bare and clawed at the tips
+    top = spine[-1]
+    knuckles = []
+    for k in range(5):
+        a = 2 * math.pi * k / 5 + 0.55 + rng.uniform(-0.2, 0.2)
+        d = Vector((math.cos(a), math.sin(a), 0))
+        side = Vector((-d.y, d.x, 0))
+        out = rng.uniform(10.0, 12.0)
+        rise = rng.uniform(11.0, 14.0)
+        start = L.point_on(spine, 0.78 + 0.05 * (k % 2))
+        p1 = start + d * out * 0.3 + Z * rise * 0.3 + side * rng.uniform(-0.8, 0.8)
+        p2 = start + d * out * 0.62 + Z * rise * 0.62 - side * rng.uniform(-1.0, 1.0)
+        p3 = start + d * out * 0.88 + Z * rise * 0.92
+        claw = p3 - d * 1.9 + Z * 1.0 + side * 0.4      # the fingertip curls back in, a claw
+        pts = L.smooth_spine([start, p1, p2, p3, claw])
+        n = len(pts)
+        m.tube(pts, [1.15 * (1.0 - i / (n - 1)) ** 0.85 + 0.04 for i in range(n)], 7, BARK, L.BARK, cap_top=False,
+               color_fn=lambda t, kk: L.mix(BARK, BARK_HI, 0.22 * (kk % 2) + 0.12 * t))
+        knuckles.append((p1.lerp(p2, 0.55), d))
+        for j in range(2):
+            q = L.point_on(pts, 0.5 + 0.22 * j)
+            aa = a + (1 if j else -1) * 0.95
+            claw_twig(m, q, (math.cos(aa), math.sin(aa), 0.5), rng.uniform(2.2, 3.0), 2.2, rng, r0=0.1)
+    leaf_b = L.mix(GIANT_BASE, PLUM, 0.15)
+    leaf_t = GIANT_TOP
+    for i, (c, d) in enumerate(knuckles):
+        c = c + Z * 0.4
+        m.cushion(c, rng.uniform(2.3, 2.7), 1.5, 7, seed + i, leaf_b, leaf_t, OAK_UNDER, droop=0.8, belly=0.4,
+                  carve=(0.5,), tilt=(rng.uniform(-0.2, 0.2), rng.uniform(-0.2, 0.2)), lump=0.16)
+        # curse moss weeping from under each knuckle cushion
+        for j in range(5):
+            aa = rng.uniform(0, 6.28)
+            r = rng.uniform(0.6, 2.0)
+            st = c + Vector((math.cos(aa) * r, math.sin(aa) * r, -0.5))
+            moss_strand(m, st, rng.uniform(2.8, 5.0), 2.0, rng, L.mix(GIANT_BASE, TEAL, 0.25))
+    # a crown cushion low in the palm of the hand, so the face below stays clear
+    m.cushion(top + Z * 2.6, 3.0, 1.7, 8, seed + 30, leaf_b, leaf_t, OAK_UNDER, droop=0.6, belly=0.3, carve=(0.5, 0.75), lump=0.15)
     front = Vector((0, -1, 0))
-    heart(m, Vector((0.35, -2.3, 4.4)), front, 0.8, sparkles=14, rng=rng)
+    heart(m, Vector((0.35, -2.4, 4.4)), front, 0.85, sparkles=16, rng=rng)
     for side in (-1, 1):
         d = Vector((side * 0.35, -1, 0.05)).normalized()
-        knot_eye(m, Vector((side * 0.95 - 0.1, -1.95, 8.2)), d, 0.4, glow=True, tall=0.7)
-    m.bake(ao_dist=5.0, ao_rays=20, ao_strength=0.85, grad=(0.55, 1.1), hi_color=VIOLET_HI, hi_strength=0.45)
+        knot_eye(m, Vector((side * 1.0 - 0.1, -2.0, 8.0)), d, 0.42, glow=True, tall=0.7)
+    m.bake(ao_dist=5.0, ao_rays=20, ao_strength=0.8, grad=(0.6, 1.08), hi_color=OAK_CARVE, hi_strength=0.55,
+           wear=0.35, wear_color=L.srgb("#8A7088"), grime=0.3, paint=0.15, paint_scale=0.25)
     print(name, m.tri_count(), "tris")
     return m.finish()
 
@@ -441,12 +537,17 @@ def far_pine(name="far_pine", seed=91):
 
 
 def far_oak(name="far_oak", seed=92):
+    """A cheap hex oak for the hills beyond reach: a short crooked trunk under a
+    big carved scalloped cushion with a smaller one tucked against its shoulder,
+    both hanging into points, the same shapes as the near oaks."""
     m = L.Model(name, seed)
-    m.tube([Vector((0, 0, 0)), Vector((0.1, 0, 2.2))], [0.28, 0.16], 4, BARK, L.BARK)
-    fn = canopy_color(VIOLET, VIOLET_HI)
-    m.blob(Vector((0, 0, 3.0)), 1.4, VIOLET, L.LEAF, subdiv=1, rough=0.2, seed=3, squash=(1, 1, 0.75), droop=0.5, color_fn=fn)
-    m.blob(Vector((0.9, 0.4, 2.6)), 0.9, VIOLET, L.LEAF, subdiv=0, rough=0.15, seed=4, color_fn=fn)
-    m.bake(ao_dist=1.0, ao_strength=0.6, grad=(0.6, 1.1))
+    m.tube([Vector((0, 0, 0)), Vector((0.14, 0.05, 0.7)), Vector((-0.04, 0.1, 1.5))], [0.36, 0.24, 0.17], 4, BARK, L.BARK)
+    m.tube([Vector((0.0, 0.08, 1.0)), Vector((0.75, 0.3, 1.45))], [0.13, 0.08], 3, BARK, L.BARK, cap_top=False)
+    m.cushion(Vector((-0.1, 0.05, 1.75)), 1.3, 1.75, 5, seed * 13, OAK_BASE, OAK_TOP, OAK_UNDER, droop=0.5, belly=0.3,
+              carve=(0.62,), segs=2, lump=0.18, tilt=(0.08, -0.06))
+    m.cushion(Vector((1.0, 0.4, 1.55)), 0.95, 1.0, 4, seed * 13 + 1, OAK_BASE, OAK_TOP, OAK_UNDER, droop=0.5,
+              belly=0.3, carve=(0.64,), segs=2, lump=0.14, tilt=(0.0, 0.3))
+    m.bake(ao_dist=1.0, ao_strength=0.6, grad=(0.6, 1.1), hi_color=OAK_CARVE, hi_strength=0.5, ao_floor=0.4)
     print(name, m.tri_count(), "tris")
     return m.finish()
 
@@ -454,12 +555,12 @@ def far_oak(name="far_oak", seed=92):
 def main():
     L.reset()
     obs = [
-        pine("pine_s", 3.5, 3, 101, points=6),
-        pine("pine_m", 4.6, 4, 102, points=7, eye=False),
-        pine("pine_l", 6.0, 5, 103, points=8, eye=True),
-        oak("oak_s", 4.0, 201, limbs=2, eyes=1),
-        oak("oak_m", 5.0, 202, limbs=3, eyes=2),
-        oak("oak_l", 6.2, 203, limbs=3, eyes=2, glow_eye=True),
+        pine("pine_s", 3.5, 3, 101, points=6, eye=1),
+        pine("pine_m", 4.6, 4, 102, points=7, eye=2),
+        pine("pine_l", 6.0, 5, 103, points=8, eye=2),
+        oak("oak_s", 4.0, 201, cushions=2, eyes=2, twigs=1),
+        oak("oak_m", 5.0, 202, cushions=3, eyes=2, twigs=2),
+        oak("oak_l", 6.2, 203, cushions=3, eyes=2, twigs=3),
         giant("giant_a", 301, variant=0),
         giant("giant_b", 302, H=10.5, variant=1),
         elder(),

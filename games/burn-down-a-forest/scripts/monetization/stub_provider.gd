@@ -50,6 +50,11 @@ func price_string(_product_id: String, fallback: String) -> String:
 
 func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:
 	if _layer != null:
+		# one ad at a time: say so, never drop a request without an answer
+		if rewarded:
+			rewarded_failed.emit.call_deferred(placement, "another ad is showing")
+		else:
+			interstitial_closed.emit.call_deferred(placement)
 		return
 	_layer = CanvasLayer.new()
 	_layer.layer = 100

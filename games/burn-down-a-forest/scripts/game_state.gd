@@ -42,12 +42,20 @@ var packs_bought := 0
 var forest: ForestGrid                # set by the world
 var keeper: Node3D
 var debug_speed := 1.0                # developer menu: everything burns faster
+var dev_income := 1.0                 # developer menu: income x10 / x100 (playtest builds)
+var stuck := false                    # nothing the tool can light is left, and the next tool is out of reach (World checks)
+var _clock := 0.0                     # the game's clock in unix seconds: runs with the game (and its time scale)
+var save_path := SAVE_PATH            # tests running side by side each get their own (`-- save=name`)
 var _autosave_t := 0.0
 var _income: Array = []
 var _income_t := 0.0
 
 
 func _ready() -> void:
+	_clock = Time.get_unix_time_from_system()
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("save="):
+			save_path = "user://%s.json" % a.substr(5).validate_filename()
 	reset_state()
 	load_game()
 
@@ -86,11 +94,14 @@ func reset_state(keep_purchases: bool = false) -> void:
 
 
 func now() -> float:
-	return Time.get_unix_time_from_system()
+	## Boosts and cooldowns run on the game's clock: it follows the time scale
+	## while playing, and catches up with real time on load (offline time passes).
+	return _clock
 
 
 func _process(delta: float) -> void:
-	var d := minf(delta, 1.0)
+	_clock += delta
+	var d := minf(delta, maxf(1.0, Engine.time_scale))
 	if not has_won:
 		play_time += d
 	_income_t += d
@@ -230,7 +241,7 @@ func instant_amount() -> float:
 	var amount := maxf(Balance.INSTANT_MIN, income_per_minute() * Balance.INSTANT_MINUTES)
 	var nt := next_tool_index()
 	if nt >= 0:
-		amount = minf(amount, maxf(Balance.INSTANT_MIN, float(Balance.TOOLS[nt].cost) * 0.6))
+		amount = minf(amount, maxf(Balance.INSTANT_MIN, tool_cost(nt) * 0.6))
 	return floorf(amount)
 
 
@@ -241,7 +252,7 @@ func earn(raw: float) -> float:
 	## Raw embers from the fire; returns what you actually got.
 	if raw <= 0.0:
 		return 0.0
-	var v := raw * ember_mult()
+	var v := raw * ember_mult() * dev_income
 	embers += v
 	lifetime_embers += v
 	_note_income(v)
@@ -269,10 +280,20 @@ func next_tool_index() -> int:
 	return tool_index + 1 if tool_index + 1 < Balance.TOOLS.size() else -1
 
 
+func tool_cost(i: int) -> float:
+	## What a tool costs. The safety net: if nothing your tool can light is left
+	## and you can't afford the next one (you spent on upgrades), it's yours for
+	## what you have, so a forest can never leave you stuck.
+	var cost := float(Balance.TOOLS[i].cost)
+	if stuck and i == next_tool_index():
+		return minf(cost, floorf(embers))
+	return cost
+
+
 func buy_tool(i: int) -> bool:
 	if i != next_tool_index():
 		return false
-	var cost := float(Balance.TOOLS[i].cost)
+	var cost := tool_cost(i)
 	if embers < cost:
 		return false
 	embers -= cost
@@ -361,7 +382,46 @@ func ember_pack_amount(pack: int) -> float:
 
 func short_for_next_tool() -> bool:
 	var nt := next_tool_index()
-	return nt >= 0 and embers < float(Balance.TOOLS[nt].cost)
+	return nt >= 0 and embers < tool_cost(nt)
+
+
+func golden_amount() -> float:
+	## A golden critter's pouch: a minute and a half of recent income, but never
+	## more than a quarter of the next tool (a jackpot fire mustn't buy the game).
+	var amount := maxf(80.0, income_per_minute() * Balance.GOLDEN_MINUTES)
+	var nt := next_tool_index()
+	if nt >= 0:
+		amount = minf(amount, maxf(80.0, float(Balance.TOOLS[nt].cost) * 0.25))
+	else:
+		amount = minf(amount, 20000.0)
+	return floorf(amount)
+
+
+func dev_unlock_all() -> void:
+	## Developer tool: every tool, every upgrade at its top, three of each helper.
+	tool_index = Balance.TOOLS.size() - 1
+	for u in Balance.UPGRADES:
+		upgrade_levels[u.key] = int(u.max)
+	for i in helper_counts.size():
+		helper_counts[i] = maxi(int(helper_counts[i]), 3)
+	tool_bought.emit(tool_index)
+	changed.emit()
+
+
+func dev_skip_to_ring(z: int) -> void:
+	## Developer tool: the rings outside ring z turn to meadow, you get the tool
+	## that opens ring z, and you're walked to its edge (z past the last: the Elder Tree).
+	if forest == null:
+		return
+	forest.dev_clear_outside(z)
+	tool_index = maxi(tool_index, mini(z, Balance.TOOLS.size() - 1))
+	if keeper != null:
+		var r := (float(Balance.ZONES[z].outer) + 1.5 if z < Balance.ZONES.size() else 4.5) * Balance.CELL
+		var p := Vector3(0.0, 0.0, r)
+		p.y = forest.height_at(p.x, p.z)
+		keeper.position = p
+		keeper.set_view(0.0, -0.55)
+	changed.emit()
 
 
 func on_cells_burned(count: int) -> void:
@@ -439,11 +499,12 @@ func to_dict() -> Dictionary:
 		"cam_pitch": cam_pitch,
 		"forest": forest_save,
 		"packs_bought": packs_bought,
+		"clock": _clock,
 	}
 
 
 func save_game() -> void:
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f == null:
 		push_warning("Could not save: %s" % FileAccess.get_open_error())
 		return
@@ -451,9 +512,9 @@ func save_game() -> void:
 
 
 func load_game() -> void:
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(save_path):
 		return
-	var data = JSON.parse_string(FileAccess.get_file_as_string(SAVE_PATH))
+	var data = JSON.parse_string(FileAccess.get_file_as_string(save_path))
 	if typeof(data) != TYPE_DICTIONARY:
 		push_warning("Save file unreadable, starting fresh.")
 		return
@@ -492,6 +553,7 @@ func from_dict(data: Dictionary) -> void:
 	cam_pitch = float(data.get("cam_pitch", -0.5))
 	forest_save = str(data.get("forest", ""))
 	packs_bought = int(data.get("packs_bought", 0))
+	_clock = maxf(Time.get_unix_time_from_system(), float(data.get("clock", 0.0)))
 
 
 func wipe_save(keep_purchases: bool = true) -> void:
@@ -499,7 +561,7 @@ func wipe_save(keep_purchases: bool = true) -> void:
 	reset_state(keep_purchases)
 	forest = null
 	keeper = null
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify(to_dict()))
 	changed.emit()

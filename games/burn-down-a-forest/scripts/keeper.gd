@@ -1,16 +1,25 @@
 class_name Keeper
 extends Node3D
-## The fire-keeper: a hooded figure in a madder-red robe with a tall flopping
-## hood and a brass lantern on their back (models/keeper.glb), walked
-## around the forest floor (the ground's height field, no physics needed) and
-## followed by an elevated chase camera that orbits around them. The tool heats
-## the forest where the screen's centre lands (the crosshair), out to the tool's
-## range; aim further and it lands at the edge of the range in that direction.
+## The fire-keeper: a round figure in a soot-stained cape, an ember scarf and a
+## round hood, a brass lantern hanging from a crooked pole in one hand and the
+## tool in the other (models/keeper.glb), walked around the forest floor (the
+## ground's height field, no physics needed) and followed by an elevated chase
+## camera that orbits around them. The tool heats the forest where the
+## screen's centre lands (the crosshair), out to the tool's range; aim further
+## and it lands at the edge of the range in that direction.
+##
+## The camera never loses the keeper: it pulls in when its spot would be inside
+## a canopy, tilts down to look over the trees in the dense rings, and
+## everything between it and the keeper is cut away in a clean round window
+## (shaders/plant.gdshader and prop.gdshader, from `focus_pos`).
 
 const EYE := 2.7                    # the camera orbits a point this high above the keeper's feet,
 const SHOULDER := 0.95              # this far to their right (an over-the-shoulder view: the crosshair
 const LOOK_AHEAD := 1.2             # and the ring sit clear of the keeper), looking this far ahead
 const MODEL_SCALE := 1.6            # the keeper reads clearly at phone size from the chase camera
+const DENSE_TILT := 0.3             # in thick woods the camera tilts down this much more (radians)
+const HAND_TOOL := Vector3(-0.42, 0.55, 0.1)     # the tool hand (screen right, beside the crosshair)
+const HAND_POLE := Vector3(0.42, 0.56, 0.04)     # the lantern-pole hand (screen left, clear of the crosshair)
 const MIN_AIM_DIST := 1.2
 
 var grid: ForestGrid
@@ -44,8 +53,15 @@ var _shown_sparkler := false
 var _ring: MeshInstance3D
 var _ring_mat: StandardMaterial3D
 var _shadow: MeshInstance3D
+var lantern_flicker := 1.0
+var cinematic := false                # the ending's camera sweep has the camera
 var _light: OmniLight3D
 var _lantern: Node3D
+var _pole: Node3D
+var _scarf: Node3D
+var _outline: ShaderMaterial
+var _dense := 0.0                     # how thick the woods are round the keeper (0..1), smoothed
+var _pitch_eff := -0.5
 var fx: ToolFx
 var _cam_pos := Vector3.ZERO
 var _mat: ShaderMaterial
@@ -80,39 +96,51 @@ func _ready() -> void:
 
 
 func _build_model() -> void:
+	_outline = ShaderMaterial.new()
+	_outline.shader = load("res://shaders/outline.gdshader")
+	_mat.next_pass = _outline           # an inked outline round the hero, so they read against any woods
 	_model = Node3D.new()
 	_model.scale = Vector3.ONE * MODEL_SCALE
 	add_child(_model)
 	_body = _part("body", _model, Vector3.ZERO)
 	_head = Node3D.new()
-	_head.position = Vector3(0, 1.1, 0)
+	_head.position = Vector3(0, 1.13, 0)
 	_body.add_child(_head)
 	_part("head", _head, Vector3.ZERO)
 	_part("hood", _head, Vector3.ZERO)
-	_hand_l = _part("hand", _body, Vector3(-0.36, 0.5, 0.06))
-	_hand_r = _part("hand", _body, Vector3(0.36, 0.5, 0.1))
-	_foot_l = _part("foot", _model, Vector3(-0.14, 0.0, 0))
-	_foot_r = _part("foot", _model, Vector3(0.14, 0.0, 0))
-	# The lantern hangs off a hook on the back, above the shoulder, where the
-	# chase camera always sees it; it sways as the keeper walks.
+	_hand_l = _part("hand", _body, HAND_POLE)
+	_hand_r = _part("hand", _body, HAND_TOOL)
+	_foot_l = _part("foot", _model, Vector3(-0.15, 0.0, 0.06))
+	_foot_r = _part("foot", _model, Vector3(0.15, 0.0, 0.06))
+	# The scarf's tail flies out behind from the knot at the back of the neck.
+	_scarf = Node3D.new()
+	_scarf.position = Vector3(0.05, 0.88, -0.17)
+	_body.add_child(_scarf)
+	_part("scarf", _scarf, Vector3.ZERO)
+	# The lantern hangs from the hook of a crooked pole, held up beside the
+	# head on the side away from the crosshair; it sways as the keeper walks.
+	_pole = Node3D.new()
+	_pole.rotation = Vector3(-0.22, 0.0, -0.14)
+	_hand_l.add_child(_pole)
+	_part("pole", _pole, Vector3.ZERO)
 	_lantern = Node3D.new()
-	_lantern.position = Vector3(0.16, 0.98, -0.3)
-	_body.add_child(_lantern)
-	var lantern := _part("lantern", _lantern, Vector3(0, -0.2, 0))
-	lantern.scale = Vector3.ONE * 1.25
+	_lantern.position = Vector3(0.0, 1.13, 0.26)
+	_pole.add_child(_lantern)
+	_part("lantern", _lantern, Vector3.ZERO)
 	_tool_holder = Node3D.new()
 	_hand_r.add_child(_tool_holder)
 	_shadow = MeshInstance3D.new()
 	var q := QuadMesh.new()
-	q.size = Vector2(1.1 * MODEL_SCALE, 1.1 * MODEL_SCALE)
+	q.size = Vector2(0.9 * MODEL_SCALE, 0.9 * MODEL_SCALE)
 	q.orientation = PlaneMesh.FACE_Y
 	_shadow.mesh = q
 	var sm := StandardMaterial3D.new()
 	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	sm.albedo_color = Color(0, 0, 0, 0.45)
+	sm.albedo_color = Color(0, 0, 0, 0.4)
 	sm.albedo_texture = UiTheme.soft_dot()
 	_shadow.material_override = sm
+	_shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_shadow)
 	_shadow.top_level = true
 
@@ -122,9 +150,18 @@ func _part(name: String, parent: Node3D, pos: Vector3) -> MeshInstance3D:
 	mi.mesh = Models.keeper_part(name)
 	mi.material_override = _mat
 	mi.position = pos
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	parent.add_child(mi)
 	return mi
+
+
+func lantern_pos() -> Vector3:
+	## Where the lantern's glass is (the light the ground, trees and props take).
+	return _lantern.global_position + Vector3(0, -0.45, 0) if _lantern != null else position + Vector3(0, 2.0, 0)
+
+
+func material() -> ShaderMaterial:
+	return _mat
 
 
 func _build_ring() -> void:
@@ -180,11 +217,18 @@ func add_look(d: Vector2) -> void:
 func set_view(yaw: float, pitch: float) -> void:
 	cam_yaw = yaw
 	cam_pitch = clampf(pitch, Balance.CAM_PITCH.x, Balance.CAM_PITCH.y)
+	_facing = atan2(-sin(yaw), -cos(yaw))    # the keeper looks where the camera looks (into the woods)
 	_snap_camera()
 
 
 func cam_forward() -> Vector3:
-	return Vector3(-sin(cam_yaw) * cos(cam_pitch), sin(cam_pitch), -cos(cam_yaw) * cos(cam_pitch))
+	## Where the camera looks (the player's pitch, tilted down further in thick woods).
+	var p := _pitch_eff
+	return Vector3(-sin(cam_yaw) * cos(p), sin(p), -cos(cam_yaw) * cos(p))
+
+
+func aim_forward() -> Vector3:
+	return cam_forward()
 
 
 func _pivot() -> Vector3:
@@ -195,16 +239,76 @@ func _camera_target() -> Vector3:
 	return _pivot() + Vector3(-sin(cam_yaw), 0, -cos(cam_yaw)) * LOOK_AHEAD
 
 
+func _update_view_shape(d: float) -> void:
+	## Thick woods round the keeper tilt the camera down to look over the canopy.
+	if grid != null:
+		var c := grid.cell_at(position.x, position.z)
+		var tall := 0
+		var seen := 0
+		if c >= 0:
+			var cx := c % grid.n
+			var cy := c / grid.n
+			for oy in range(-4, 5, 2):
+				for ox in range(-4, 5, 2):
+					var x := cx + ox
+					var y := cy + oy
+					if x < 0 or y < 0 or x >= grid.n or y >= grid.n:
+						continue
+					seen += 1
+					var i := x + y * grid.n
+					if grid.state[i] == ForestGrid.INTACT and grid.kind[i] >= Balance.PINE and grid.kind[i] <= Balance.ELDER:
+						tall += 1
+		var want := smoothstep(0.2, 0.6, float(tall) / maxf(1.0, float(seen)))
+		_dense = lerpf(_dense, want, 1.0 - exp(-d * 1.5))
+	# a tilt the player can still drag against (a hard clamp would stop the
+	# crosshair reaching anything more than a few metres off in the woods)
+	_pitch_eff = clampf(cam_pitch - DENSE_TILT * _dense, Balance.CAM_PITCH.x, Balance.CAM_PITCH.y)
+
+
+func canopy_top_at(p: Vector3, radius: float = 2.2) -> float:
+	## The highest canopy top within `radius` of a point (-INF: open sky).
+	if grid == null:
+		return -INF
+	var top := -INF
+	var c := grid.cell_at(p.x, p.z)
+	if c < 0:
+		return top
+	var cx := c % grid.n
+	var cy := c / grid.n
+	var reach := int(ceil(radius / Balance.CELL)) + 1
+	for oy in range(-reach, reach + 1):
+		for ox in range(-reach, reach + 1):
+			var x := cx + ox
+			var y := cy + oy
+			if x < 0 or y < 0 or x >= grid.n or y >= grid.n:
+				continue
+			var i := x + y * grid.n
+			if grid.state[i] != ForestGrid.INTACT or grid.kind[i] < Balance.PINE or grid.kind[i] > Balance.ELDER:
+				continue
+			var cc := grid.cell_center(i)
+			var crown := Balance.CELL * (0.9 if grid.kind[i] == Balance.PINE else 1.6 * grid.size_mult[i])
+			if Vector2(p.x - cc.x, p.z - cc.y).length() < radius + crown:
+				top = maxf(top, grid.height_at(cc.x, cc.y) + grid.plant_height(i) * 1.05)
+	return top
+
+
 func _wanted_cam_pos() -> Vector3:
+	## Behind and above the keeper. If that spot is inside a canopy, the camera
+	## rises over it (never closer: up close in the woods all you'd see is leaves);
+	## the trees in between are cut away by the round window.
 	var p := _pivot() - cam_forward() * Balance.CAM_DISTANCE
 	if grid != null:
 		p.y = maxf(p.y, grid.height_at(p.x, p.z) + 0.8)
+		var top := canopy_top_at(p)
+		if top > p.y - 0.8:
+			p.y = top + 0.8
 	return p
 
 
 func _snap_camera() -> void:
 	if camera == null:
 		return
+	_update_view_shape(10.0)
 	_cam_pos = _wanted_cam_pos()
 	_place_camera()
 
@@ -220,9 +324,15 @@ func _place_camera() -> void:
 # Per frame
 # =====================================================================================
 func _process(delta: float) -> void:
-	var d := minf(delta, 0.05)
-	_move(d)
-	_cam_pos = _cam_pos.lerp(_wanted_cam_pos(), 1.0 - exp(-d * 14.0))
+	var d := minf(delta, 0.05 * maxf(1.0, Engine.time_scale))
+	if cinematic:
+		_animate(d)
+		return
+	var steps_n := int(ceil(d / 0.05))
+	for _k in steps_n:
+		_move(d / steps_n)
+	_update_view_shape(d)
+	_cam_pos = _cam_pos.lerp(_wanted_cam_pos(), 1.0 - exp(-d * 10.0))
 	_place_camera()
 	update_aim()
 	_update_tool(d)
@@ -294,11 +404,18 @@ func update_aim() -> void:
 			hit = p
 			break
 		var i := grid.cell_at(p.x, p.z)
+		var ec := grid.cell_center(grid.elder_cell)
+		var over_tree := i >= 0 and grid.state[i] == ForestGrid.INTACT and grid.kind[i] >= Balance.PINE and grid.kind[i] <= Balance.ELDER
+		if not over_tree and grid.state[grid.elder_cell] == ForestGrid.INTACT and Vector2(p.x - ec.x, p.z - ec.y).length() < 3.4:
+			i = grid.elder_cell        # the Elder's trunk fills its (cleared) neighbours' cells too
 		if i >= 0:
 			var top := g + grid.plant_height(i) * 0.92
 			if p.y <= top and grid.kind[i] >= Balance.PINE:
 				var c := grid.cell_center(i)
-				if Vector2(p.x - c.x, p.z - c.y).length() < Balance.CELL * (0.75 if grid.kind[i] == Balance.PINE else 1.1):
+				var hit_r := Balance.CELL * (0.75 if grid.kind[i] == Balance.PINE else 1.1)
+				if grid.kind[i] == Balance.ELDER:
+					hit_r = 3.4             # its trunk and roots are far wider than one cell
+				if Vector2(p.x - c.x, p.z - c.y).length() < hit_r:
 					hit = Vector3(c.x, g, c.y)
 					hit_cell = i
 					break
@@ -382,11 +499,14 @@ func _animate(d: float) -> void:
 	var breathe := sin(Time.get_ticks_msec() * 0.003) * 0.012
 	_body.position.y = 0.04 + bob + breathe
 	_body.rotation.z = s * 0.05 if moving else 0.0
-	_foot_l.position = Vector3(-0.14, maxf(0.0, s) * 0.12 if moving else 0.0, s * 0.18 if moving else 0.0)
-	_foot_r.position = Vector3(0.14, maxf(0.0, -s) * 0.12 if moving else 0.0, -s * 0.18 if moving else 0.0)
-	_hand_l.position = Vector3(-0.36, 0.5 + (0.03 * s if moving else 0.0), 0.06 - (s * 0.12 if moving else 0.0))
+	# the cape squashes a touch as each step lands (weight, not floaty)
+	var land := (1.0 - absf(sin(_walk_t))) * 0.035 if moving else 0.0
+	_body.scale = Vector3(1.0 + land, 1.0 - land, 1.0 + land)
+	_foot_l.position = Vector3(-0.15, maxf(0.0, s) * 0.12 if moving else 0.0, 0.06 + (s * 0.2 if moving else 0.0))
+	_foot_r.position = Vector3(0.15, maxf(0.0, -s) * 0.12 if moving else 0.0, 0.06 - (s * 0.2 if moving else 0.0))
+	_hand_l.position = HAND_POLE + Vector3(0.0, 0.03 * s if moving else 0.0, -(s * 0.08 if moving else 0.0))
 	if firing:
-		_hand_r.position = _hand_r.position.lerp(Vector3(0.26, 0.72, 0.42), 1.0 - exp(-d * 18.0))
+		_hand_r.position = _hand_r.position.lerp(Vector3(-0.28, 0.74, 0.44), 1.0 - exp(-d * 18.0))
 		# Point the tool at where the flame lands.
 		var local: Vector3 = _model.global_transform.affine_inverse() * (aim.point as Vector3)
 		var from := _hand_r.position + _body.position
@@ -396,12 +516,22 @@ func _animate(d: float) -> void:
 		_tool_holder.rotation = Vector3(-pitch, yaw, 0)
 	else:
 		var swing := -s * 0.12 if moving else 0.0
-		_hand_r.position = _hand_r.position.lerp(Vector3(0.36, 0.5, 0.12 + swing), 1.0 - exp(-d * 12.0))
-		_tool_holder.rotation = _tool_holder.rotation.lerp(Vector3(-0.9, 0.15, 0), 1.0 - exp(-d * 10.0))
+		_hand_r.position = _hand_r.position.lerp(HAND_TOOL + Vector3(0, 0, swing), 1.0 - exp(-d * 12.0))
+		_tool_holder.rotation = _tool_holder.rotation.lerp(Vector3(-0.9, -0.15, 0), 1.0 - exp(-d * 10.0))
 	_head.rotation.x = -0.15 if firing else 0.0
-	_lantern.rotation.z = lerpf(_lantern.rotation.z, (s * 0.35 if moving else 0.0) + breathe * 3.0, 1.0 - exp(-d * 6.0))
-	_lantern.rotation.x = lerpf(_lantern.rotation.x, (0.25 if moving else 0.0), 1.0 - exp(-d * 4.0))
+	# the pole rocks with the stride, the lantern swings under it, lagging behind
+	_pole.rotation.x = lerpf(_pole.rotation.x, -0.22 + (s * 0.08 if moving else 0.0), 1.0 - exp(-d * 8.0))
+	_lantern.rotation.z = lerpf(_lantern.rotation.z, (s * 0.3 if moving else 0.0) + breathe * 3.0, 1.0 - exp(-d * 5.0))
+	_lantern.rotation.x = lerpf(_lantern.rotation.x, (0.3 if moving else 0.0) + 0.22, 1.0 - exp(-d * 4.0))
+	# the scarf's tail streams out behind when walking, hangs when standing
+	var t := Time.get_ticks_msec() * 0.001
+	var flow := 0.9 if moving else 0.15
+	_scarf.rotation.x = lerpf(_scarf.rotation.x, -0.25 + flow * 0.6 + sin(t * 7.0) * 0.12 * flow, 1.0 - exp(-d * 6.0))
+	_scarf.rotation.z = sin(t * 4.3) * 0.15 * flow
 	var g := grid.height_at(position.x, position.z) if grid != null else 0.0
-	_shadow.global_position = Vector3(position.x, maxf(g, ForestGrid.WATER_LEVEL) + 0.04, position.z)
+	var floor_y := maxf(g, ForestGrid.WATER_LEVEL)
+	_shadow.global_position = Vector3(position.x, floor_y + 0.04, position.z)
 	var lift := clampf((position.y - g) / 3.0, 0.0, 0.7)
 	_shadow.scale = Vector3.ONE * (1.0 - lift)
+	lantern_flicker = 1.0 + 0.08 * sin(t * 9.0) + 0.05 * sin(t * 23.0)
+

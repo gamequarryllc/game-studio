@@ -62,8 +62,8 @@ func _pass() -> void:
 
 
 static func eligible(kind: String) -> bool:
-	if GameState.has_won:
-		return false
+	if GameState.has_won or not Balance.AD_REWARDS.has(kind):
+		return false             # ("" = no earlier offer: that used to log an error every 20 s)
 	if not Monetization.is_rewarded_ready(str(Balance.AD_REWARDS[kind].placement)):
 		return false
 	match kind:
@@ -97,7 +97,7 @@ static func unlocks_tool() -> String:
 	var i := GameState.next_tool_index()
 	if i < 0:
 		return ""
-	var cost := float(Balance.TOOLS[i].cost)
+	var cost := GameState.tool_cost(i)
 	if GameState.embers < cost and GameState.embers + GameState.instant_amount() >= cost:
 		return str(Balance.TOOLS[i].name)
 	return ""

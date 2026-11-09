@@ -31,7 +31,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if grid == null:
 		return
-	var d := minf(delta, 0.05)
+	var d := minf(delta, 0.05 * maxf(1.0, Engine.time_scale))
 	_sync()
 	for w in _walkers:
 		_step(w, d)

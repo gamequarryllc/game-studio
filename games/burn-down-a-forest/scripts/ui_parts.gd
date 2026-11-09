@@ -307,3 +307,158 @@ class Finger:
 		scale = Vector2(1.0 - 0.06 * e, 1.0 - 0.1 * e) if press else Vector2.ONE
 		position.y = get_meta("base_y", position.y) + (8.0 * e if press else 0.0)
 		position.x = get_meta("base_x", position.x) + (0.0 if press else sin(t * 2.2) * 26.0)
+
+
+class PriceTag:
+	## The buy button IS the price tag: a manila tag on a string with the price
+	## on it. Tap it and an ink stamp thumps down on the tag ("in hand", "kept",
+	## "yours", "full"...). Too dear: the tag hangs pale and shakes its head.
+	## Locked (not yet in reach): only a pencil outline, the way you'd sketch
+	## something you mean to get one day.
+	extends Button
+	var seed := 1
+	var price := ""
+	var price_icon: Texture2D
+	var action := "buy"           # the word inked small on the tag
+	var stamp := ""               # stamped across the tag once it's done
+	var locked := false
+	var affordable := true
+	var _thump := 0.0
+	var _shake := 0.0
+	var _tilt := 0.0
+
+	func _init(s: int = 1) -> void:
+		seed = s
+		UiTheme.plain_button(self)
+		for c in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_disabled_color"]:
+			add_theme_color_override(c, Color(0, 0, 0, 0))
+		custom_minimum_size = Vector2(150, 74)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = s
+		_tilt = rng.randf_range(-0.06, 0.06)
+		pressed.connect(func():
+			_thump = 1.0
+			queue_redraw())
+
+	func nope() -> void:
+		_shake = 1.0
+
+	func _process(delta: float) -> void:
+		if _thump > 0.0 or _shake > 0.0:
+			_thump = maxf(0.0, _thump - delta * 3.5)
+			_shake = maxf(0.0, _shake - delta * 3.0)
+			queue_redraw()
+
+	func _draw() -> void:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = seed
+		var c := size * 0.5
+		var hover := is_hovered() and not disabled and stamp == "" and not locked
+		var rot := _tilt + sin(_shake * 18.0) * 0.08 * _shake + (0.03 if hover else 0.0)
+		draw_set_transform(c, rot, Vector2.ONE)
+		var hw := size.x * 0.5 - 8.0
+		var hh := minf(size.y * 0.5 - 8.0, 26.0)
+		var cut := 16.0
+		var pts := PackedVector2Array([Vector2(-hw + cut, -hh), Vector2(hw, -hh + 1), Vector2(hw - 1, hh), Vector2(-hw + cut, hh - 1), Vector2(-hw, 0)])
+		for k in pts.size():
+			pts[k] += Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0))
+		var hole := Vector2(-hw + cut * 0.95, 0)
+		# the string it hangs by, looping off the punched hole
+		var lift := -3.0 if hover else 0.0
+		draw_line(hole + Vector2(0, lift), hole + Vector2(-14, -hh - 6), Color(UiTheme.INK, 0.55) if not locked else Color(UiTheme.PENCIL, 0.6), 1.4, true)
+		if locked:
+			# a pencil outline: dashes in graphite, no fill
+			var closed := pts + PackedVector2Array([pts[0]])
+			for k in closed.size() - 1:
+				UiTheme.dashed(get_canvas_item(), closed[k] + c, closed[k + 1] + c, Color(UiTheme.PENCIL, 0.8), 1.4, 6.0, 4.0)
+			draw_set_transform(c, rot, Vector2.ONE)
+			draw_arc(hole, 3.4, 0, TAU, 12, Color(UiTheme.PENCIL, 0.8), 1.2, true)
+		else:
+			var sh := PackedVector2Array()
+			for p in pts:
+				sh.append(p + Vector2(2, 3))
+			draw_colored_polygon(sh, Color(UiTheme.INK, 0.85))
+			var fill := UiTheme.TAG if affordable or stamp != "" else UiTheme.TAG.lerp(UiTheme.PAPER, 0.55)
+			if hover:
+				fill = fill.lightened(0.08)
+			draw_colored_polygon(pts, fill)
+			draw_texture_rect(UiTheme.grain(), Rect2(Vector2(-hw, -hh), Vector2(hw * 2, hh * 2)), true, Color(0.5, 0.4, 0.25, 0.12))
+			draw_polyline(pts + PackedVector2Array([pts[0]]), UiTheme.INK, 1.6, true)
+			draw_circle(hole, 3.6, UiTheme.INK)
+			draw_circle(hole, 2.0, UiTheme.PAPER_SHADE)
+		# the price
+		var f := UiTheme.display()
+		var fs := UiTheme.T_LABEL
+		var ink := UiTheme.INK if not locked else UiTheme.PENCIL
+		if not affordable and stamp == "" and not locked:
+			ink = Color(UiTheme.INK, 0.5)
+		var x0 := -hw + cut + 8.0
+		if price != "":
+			if price_icon != null:
+				draw_texture_rect(price_icon, Rect2(Vector2(x0, -fs * 0.62 - 6), Vector2(fs * 1.05, fs * 1.05)), false,
+					Color(1, 1, 1, 0.45 if locked or not affordable else 1.0))
+				x0 += fs * 1.05 + 4.0
+			var t := price
+			var tw := f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			while tw > hw - x0 - 4.0 and fs > 15:
+				fs -= 1
+				tw = f.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			draw_string(f, Vector2(x0, fs * 0.2 - 6), t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
+		if action != "" and stamp == "" and not locked:
+			var hf := UiTheme.hand()
+			var ac := UiTheme.STAMP if affordable else Color(UiTheme.STAMP_OFF, 0.9)
+			draw_string(hf, Vector2(-hw + cut + 8.0, hh - 6.0 if price != "" else 8.0), action, HORIZONTAL_ALIGNMENT_LEFT, -1,
+				22 if price != "" else 28, ac)
+		if locked and action != "":
+			draw_string(UiTheme.hand(), Vector2(-hw + cut + 8.0, hh - 6.0), action, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(UiTheme.PENCIL, 0.9))
+		# the stamp, inked over the tag once it's done (it thumps down when pressed)
+		if stamp != "":
+			var sc := 1.0 + 0.25 * _thump
+			draw_set_transform(c + Vector2(6, 2), rot - 0.16, Vector2(sc, sc))
+			var sw := minf(hw * 1.5, f.get_string_size(stamp, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.T_LABEL).x + 22.0)
+			var sh2 := 19.0
+			var col := Color(UiTheme.STAMP, 0.85 - 0.3 * _thump)
+			for ring in 2:
+				var ins := 0.0 if ring == 0 else 4.0
+				var r := Rect2(Vector2(-sw * 0.5 + ins, -sh2 + ins), Vector2(sw - ins * 2, (sh2 - ins) * 2))
+				var corners := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y), r.position]
+				for k in 4:
+					if rng.randf() < 0.15:
+						continue
+					draw_line(corners[k], corners[k + 1], col, 2.6 if ring == 0 else 1.3, true)
+			var stw := f.get_string_size(stamp, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.T_LABEL - 2).x
+			draw_string(f, Vector2(-stw * 0.5, 7), stamp, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.T_LABEL - 2, col)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+class Sketch:
+	## An entry's sketch in the notebook, with an optional note in the margin
+	## beside it in the keeper's hand ("next!", "save up", "on now").
+	extends Control
+	var texture: Texture2D
+	var note := ""
+	var pencil := false
+	var tilt := 0.0
+
+	func set_pencil(on: bool) -> void:
+		if on == pencil:
+			return
+		pencil = on
+		if on:
+			var m := ShaderMaterial.new()
+			m.shader = load("res://shaders/pencil.gdshader")
+			material = m
+		else:
+			material = null
+		queue_redraw()
+
+	func _draw() -> void:
+		var c := size * 0.5
+		draw_set_transform(c, tilt, Vector2.ONE)
+		if texture != null:
+			draw_texture_rect(texture, Rect2(-size * 0.5, size), false)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if note != "":
+			draw_set_transform(Vector2(-34, 6), -0.24, Vector2.ONE)
+			draw_string(UiTheme.hand(), Vector2.ZERO, note, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, UiTheme.HAND_INK)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- sparkler: drawn by art/icons/make_icons.py -->
-  <path d="M 13.97 56.21 L 21.08 47.96 L 24.91 51.21 L 17.91 59.22 Z" fill="#D9483B" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 21.22 48.19 L 27.74 39.84 L 31.89 43.14 L 25.26 50.81 Z" fill="#F2C14E" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 28.02 40.15 L 34.70 32.26 L 39.17 35.23 L 31.91 42.72 Z" fill="#D9483B" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 34.91 32.27 L 41.97 24.25 L 45.98 26.98 L 38.96 34.84 Z" fill="#F2C14E" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 45.80 17.85 L 55.32 18.24" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 46.36 18.26 L 50.26 22.09" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 45.70 18.06 L 45.73 27.10" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 45.64 17.92 L 41.50 22.30" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 45.92 17.99 L 37.08 17.92" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 45.72 18.14 L 41.94 13.83" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 46.10 17.78 L 46.01 8.70" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 45.69 17.95 L 50.44 13.45" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 13.79 56.18 L 20.80 48.25 L 24.71 50.73 L 18.24 59.01 Z" fill="#D9483B" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 20.79 47.72 L 27.99 40.22 L 31.79 43.08 L 24.97 50.94 Z" fill="#F2C14E" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 28.20 39.99 L 35.08 32.08 L 39.08 35.22 L 32.17 43.17 Z" fill="#D9483B" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 35.14 31.96 L 41.87 23.74 L 46.07 27.24 L 38.80 34.75 Z" fill="#F2C14E" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 45.88 17.98 L 54.65 17.97" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 45.96 17.69 L 50.34 22.14" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 46.32 18.29 L 45.90 27.11" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 45.81 17.77 L 41.75 22.45" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 46.34 17.97 L 37.00 17.74" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 45.86 18.29 L 41.71 13.84" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 46.23 18.25 L 45.65 9.37" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 46.23 18.10 L 50.59 13.40" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

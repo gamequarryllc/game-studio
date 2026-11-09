@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 64 64">
   <!-- tiki_torch: drawn by art/icons/make_icons.py -->
-  <path d="M 25.91 59.80 L 29.98 28.17 L 34.65 27.97 L 31.91 60.12 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 28.65 36.09 L 33.60 35.83" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 29.39 46.15 L 33.65 45.69" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 29.11 54.19 L 33.66 53.70" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 21.85 29.89 C 18.14 28.49 19.38 23.46 19.75 21.52 C 20.12 19.57 20.69 18.80 24.05 18.24 C 27.40 17.68 36.57 17.57 39.89 18.15 C 43.22 18.73 43.64 19.75 43.98 21.71 C 44.33 23.67 45.64 28.55 41.95 29.91 C 38.26 31.28 25.55 31.29 21.85 29.89 Z" fill="#7A5636" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 23.24 23.64 L 41.17 23.70" fill="none" stroke="#2E1E14" stroke-width="1.60" stroke-linejoin="round" stroke-linecap="round"/>
-  <path d="M 31.52 18.38 C 34.65 18.49 39.23 16.88 40.91 15.75 C 42.60 14.62 42.16 12.93 41.64 11.59 C 41.12 10.26 38.37 8.92 37.78 7.75 C 37.20 6.57 38.90 4.69 38.15 4.54 C 37.41 4.38 34.34 7.28 33.32 6.80 C 32.30 6.33 33.19 1.52 32.01 1.68 C 30.83 1.84 27.70 6.33 26.25 7.76 C 24.81 9.18 24.01 9.00 23.33 10.23 C 22.64 11.45 20.79 13.74 22.16 15.10 C 23.52 16.46 28.40 18.27 31.52 18.38 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 25.80 59.81 L 29.87 27.85 L 35.10 28.03 L 31.72 59.83 Z" fill="#B58A57" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 29.33 36.36 L 33.69 35.62" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 28.78 46.14 L 33.38 46.31" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 29.36 53.71 L 33.28 54.09" fill="none" stroke="#2E1E14" stroke-width="2.00" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 21.90 30.26 C 18.34 29.00 20.10 24.41 20.45 22.37 C 20.79 20.32 20.64 18.67 23.97 17.99 C 27.29 17.30 37.04 17.58 40.39 18.26 C 43.74 18.94 43.83 20.10 44.07 22.05 C 44.31 24.01 45.53 28.61 41.84 29.98 C 38.14 31.34 25.47 31.53 21.90 30.26 Z" fill="#7A5636" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 23.06 24.28 L 40.71 23.70" fill="none" stroke="#2E1E14" stroke-width="1.60" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M 32.26 17.51 C 35.35 17.80 39.45 17.60 41.11 16.53 C 42.77 15.46 42.90 12.42 42.21 11.09 C 41.53 9.75 37.64 9.60 36.98 8.54 C 36.33 7.47 39.01 5.05 38.29 4.70 C 37.57 4.35 33.84 6.94 32.67 6.44 C 31.50 5.94 32.24 1.43 31.27 1.71 C 30.29 1.98 28.12 6.67 26.82 8.08 C 25.53 9.50 24.20 9.10 23.49 10.21 C 22.78 11.32 21.09 13.55 22.55 14.76 C 24.01 15.98 29.16 17.21 32.26 17.51 Z" fill="#E8642C" stroke="#2E1E14" stroke-width="2.60" stroke-linejoin="round" stroke-linecap="round"/>
 </svg>

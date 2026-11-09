@@ -55,7 +55,7 @@ func _ready() -> void:
 	provider.purchase_failed.connect(func(id, reason): purchase_error.emit(id, reason))
 	provider.interstitial_closed.connect(func(_p): _interstitial_open = false)
 	provider.initialize()
-	_last_interstitial = Time.get_unix_time_from_system()
+	_last_interstitial = GameState.now()
 
 
 func _create_provider() -> MonetizationProvider:
@@ -69,8 +69,11 @@ func is_rewarded_ready(placement: String) -> bool:
 
 
 func show_rewarded(placement: String, on_done: Callable) -> void:
-	## on_done(ok: bool) is called exactly once.
-	if _reward_callbacks.has(placement):
+	## on_done(ok: bool) is called exactly once, even when the ad can't be shown
+	## (another ad is already up): a dropped request used to leave its callback
+	## waiting forever, freezing the keeper and blocking every later ad.
+	if _reward_callbacks.has(placement) or is_showing_ad():
+		on_done.call_deferred(false)
 		return
 	_reward_callbacks[placement] = on_done
 	provider.show_rewarded(placement)
@@ -94,7 +97,7 @@ func is_showing_ad() -> bool:
 
 func _on_rewarded_completed(placement: String) -> void:
 	# Someone who just chose to watch an ad shouldn't get an unasked one next.
-	_last_interstitial = Time.get_unix_time_from_system()
+	_last_interstitial = GameState.now()
 	var cb: Callable = _reward_callbacks.get(placement, Callable())
 	_reward_callbacks.erase(placement)
 	if cb.is_valid():
@@ -114,7 +117,7 @@ func maybe_show_interstitial(placement: String) -> bool:
 	## Only at natural breaks; never with Remove Ads, never early, at most every 4 min.
 	if GameState.owns_remove_ads_2x or GameState.play_time < Balance.INTERSTITIAL_FIRST_AFTER:
 		return false
-	var t := Time.get_unix_time_from_system()
+	var t := GameState.now()
 	if t - _last_interstitial < Balance.INTERSTITIAL_COOLDOWN or is_showing_ad():
 		return false
 	_last_interstitial = t
