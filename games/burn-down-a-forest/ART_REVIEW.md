@@ -45,3 +45,30 @@ Reviewed all 19 screenshots from `tests/screenshots.gd` against the studio's "Lo
 - **Inspirations:** linocut picture books, Scandinavian folk painting, old forestry signs.
 
 Next: a second fresh-eyes review of the new screenshots and the contact sheet (the art pass is written up in NOTES.md, "Art bible").
+
+---
+
+# Art review 2: second fresh-eyes critic, 2026-11-09 (after the art pass)
+
+**Verdict: not yet.** The 2D layer (planks, notebook, icons, copy) passes as hand-made. The 3D world fills most of every frame, and its sticker fire, gnome-like hero and blob trees still read as hobby or AI work. The next pass is about the 3D.
+
+## Problems, worst first
+
+1. **Fire looks like emoji stickers**: every flame is the same orange-yellow teardrop card, upright and evenly spaced like birthday candles, jagged edges, no smoke, lights nothing; burning canopies get a generic noise "lava camo" texture. Fix: inked flipbook flames that vary in size and lean with the wind, one tall leading flame per cluster, plum smoke, sparks, a warm glow cast on the ground; charring as glowing cracks creeping along the model.
+2. **Keeper and critters are primitive builds**: sphere head with diamond eyes, blush dots and a ball nose on a cone body with a belt and a white fur hem reads as Santa or a garden gnome; the spiky hat breaks the "hero is round" rule. Rabbit is a snowman, hedgehog a ball, sprite a flat kite, tools are boxes and cylinders. Fix: redesign the keeper around fire (soot-stained cape, ember scarf, round hood, lantern on a pole, boots), sculpted with bevels and painted vertex colour; critters with real heads and legs; tools with bevels and wear.
+3. **Muddy values, lighting without intent**: one mid-dark plum/teal soup, no moonlight direction, no rim; the keeper disappears; the mint accent is almost absent. Fix: a key light with cast shadows, a cool rim on canopy tops, a darker foreground, mint knothole eyes on every cursed tree, a warm lantern pool under the keeper.
+4. **Camera buried in foliage**: frames fill with purple blobs and the hero is hidden. Fix: camera collision, a clean radial fade of anything blocking the view, a steeper angle in the dense rings.
+5. **Hex oaks are stock icosphere-cluster trees**, brighter than the #5A3F7A swatch; the Elder is just a bigger oak and shows in-game as a black trunk. Fix: scalloped canopies with hanging points, clawed branches, carved-line highlights, less saturation; the Elder gets its own landmark silhouette visible from the village.
+6. **Meadow looks like a paint-bucket fill**: lime not sage, hard edge against the stones, evenly scattered flowers. Fix: value variation, a ragged edge into the ash, drifts by species, a blooming animation.
+7. **Voronoi flagstone ground** reads as a procedural shader. Fix: hand-laid stones of varied sizes, a worn path into the woods, moss.
+8. **Village is symmetric and blank**: two near-identical huts flank a centred keeper; untextured wall slabs, smooth thatch, a perfect pyramid of identical logs. Fix: asymmetric layout, huts at different sizes, a landmark with chimney smoke, carved thatch and wear.
+9. **Emoji-like glyphs**: red floating hearts (the bible says mint), smiling flame and dragon icons, the stock pointing-hand cursor, an odd hand-rabbit icon on the critter toast. Fix: redraw in the game's ink icon style.
+10. **The notebook is a shop-list template with a paper skin**: every row icon/title/blurb/price plus a second stamp button; the left page is the same on every tab; the Free magic page widens and clips the tabs; locked items use grey stamps like disabled web buttons. Fix: stamp the price tag itself, a different left-page sketch per tab, margin notes, locked items as pencil outlines, fix the width jump.
+11. **The ending is a card over gameplay** with the HUD still showing "Pinewood 17% burned". Fix: hide the HUD and sweep the camera over the restored valley at dawn. Phone screens say "click" instead of "tap".
+
+## Keep
+
+- The wood-and-paper UI: charred planks with saw-cut ends and hard shadows, taped handwritten notes, the offer tag on a string with a rope timer, the log-slice touch buttons.
+- The notebook's craft and the consistent hand-drawn ink icons.
+- The dry, in-world, sentence-case copy.
+- Best models: the hooked cursed pines, the daisies, the root arch.
