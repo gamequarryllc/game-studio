@@ -1,0 +1,72 @@
+{
+  "_status": "draft 2026-11-09. Check the name is free when creating the listing. Screenshots and icon come after the polish pass.",
+  "bundle_id": "com.gamequarry.digtothecore",
+  "name": "Dig to the Core",
+  "subtitle": "Incremental digging game",
+  "keywords": "idle,clicker,mining,miner,drill,shovel,excavate,hole,earth,fossil,dinosaur,lava,satisfying,ore",
+  "promotional_text": "Shovel, drill, laser. Dig straight down through clay, fossils, a dinosaur graveyard and lava lakes, all 240 metres to the middle of the Earth.",
+  "description": "You start in a sunny field beside a supply shack. Straight down is the whole planet. Start digging.\n\nEvery bit of rock you dig out pays. Deeper rock is harder and pays more, ore veins glint in your headlamp, and buried finds pop out for a lump sum. Spend it at the shack on better tools and a crew, then go deeper: ten layers, 240 metres, all the way to the core.\n\n- Dig anywhere: the ground really comes away where you aim\n- Seven tools: shovel, pickaxe, jackhammer, drill, dynamite, laser drill and the Earth-Borer\n- Ten layers, each with its own rock: topsoil, clay, bedrock, a fossil bed, a dinosaur graveyard, crystal caves, lava lakes, the mantle and the core\n- Sixteen buried finds to dig up\n- A crew of moles and robo-moles that keep digging while you shop\n- A mine lift that rides down to your deepest point\n- A real ending when you dig out the core, in about 30 to 60 minutes; your progress saves as you go\n\nFree to play with ads. Watching an ad for a boost (2x digging, a crew rush, extra cash) is always your choice, and a short ad can appear at natural breaks. You never need to watch one or buy anything to finish. A one-time purchase removes the ads and doubles your digging for good.",
+  "primary_category": "Games",
+  "game_subcategories": [
+    "Simulation",
+    "Casual"
+  ],
+  "age_rating": {
+    "note": "Draft answers for the age-rating questions; the owner confirms them in App Store Connect.",
+    "cartoon_or_fantasy_violence": "none",
+    "everything_else": "none",
+    "advertising": true,
+    "in_app_purchases": true,
+    "kids_category": false
+  },
+  "products": [
+    {
+      "key": "remove_ads_2x",
+      "type": "non-consumable",
+      "price_usd": 4.99,
+      "display_name": "No ads, and 2x digging for good"
+    },
+    {
+      "key": "starter_pack",
+      "type": "non-consumable",
+      "price_usd": 1.99,
+      "display_name": "Starter pack"
+    },
+    {
+      "key": "golden_tools",
+      "type": "non-consumable",
+      "price_usd": 2.99,
+      "display_name": "Golden tools"
+    },
+    {
+      "key": "cash_small",
+      "type": "consumable",
+      "price_usd": 0.99,
+      "display_name": "A sack of cash"
+    },
+    {
+      "key": "cash_medium",
+      "type": "consumable",
+      "price_usd": 2.99,
+      "display_name": "A crate of cash"
+    },
+    {
+      "key": "cash_large",
+      "type": "consumable",
+      "price_usd": 7.99,
+      "display_name": "A mine cart of cash"
+    }
+  ],
+  "product_id_note": "Store product id = bundle id + '.' + key. The game code already uses the full ids.",
+  "ad_placements": {
+    "rewarded": [
+      "boost_2x_dig",
+      "instant_cash",
+      "helper_rush",
+      "double_find"
+    ],
+    "interstitial": [
+      "shop_close"
+    ]
+  }
+}

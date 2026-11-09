@@ -7,22 +7,26 @@ about the Apple account is ever committed.
 
 Usage:
   python3 tools/ios_preset.py games/<slug> --team <TEAM_ID> [--version 1.0.0] [--build 1]
-                              [--out <dir>] [--print-only]
+                              [--flavor release|playtest] [--out <dir>] [--print-only]
 
 It prints the path to pass to Godot, e.g.:
   godot --headless --path games/<slug> --export-release "iOS" <printed path>
 
 What it sets (see STUDIO.md, "App Store pipeline"):
-  - bundle id com.gamequarry.<slug without dashes>, or "bundle_id" from games/<slug>/store/ios.json
+  - bundle id com.gamequarry.<slug without dashes>, or "bundle_id" from store/<slug>/ios.json
   - export_project_only: Godot writes the Xcode project, the workflow builds and signs it
-  - no "playtest" feature tag: release builds have no developer tools
+  - flavor "release": no "playtest" feature tag, so no developer tools.
+    flavor "playtest": the tag is set (developer tools, pretend ads and purchases),
+    for trying a game on a real phone through TestFlight before its store setup exists
   - purpose strings for the camera, microphone and photo APIs the engine links (never shown: the games don't ask)
   - the privacy manifest reasons for the system APIs the engine itself touches
-  - games/<slug>/store/icon_1024.png as the app icon when it exists (otherwise the project icon)
-  - iOS plugins listed in store/ios.json ("plugins": ["name", ...]) switched on, plus any extra Info.plist lines
+  - store/<slug>/icon_1024.png as the app icon when it exists (otherwise the project icon)
+  - iOS plugins listed in ios.json ("plugins": ["name", ...]) switched on, plus any extra Info.plist lines
 
-Optional games/<slug>/store/ios.json keys: bundle_id, min_ios, plugins, plist_extra,
-iphone_only (true to drop iPad), tracking_enabled, tracking_domains.
+Per-game App Store settings live outside the game folders, in store/<slug>/ at
+the top of the repo. Optional store/<slug>/ios.json keys: bundle_id, min_ios,
+plugins, plist_extra, iphone_only (true to drop iPad), tracking_enabled,
+tracking_domains, real_monetization (see tools/ios_build.sh).
 
 The file it edits is not meant to be committed with the iOS preset in it:
 run it in CI, or on a scratch copy of the game folder.
@@ -76,6 +80,7 @@ def main():
     ap.add_argument("--team", default=PLACEHOLDER_TEAM, help="Apple team id (a placeholder is fine for unsigned check builds)")
     ap.add_argument("--version", default="1.0.0", help="version shown on the App Store")
     ap.add_argument("--build", default="1", help="build number; must go up with every upload")
+    ap.add_argument("--flavor", choices=["release", "playtest"], default="release")
     ap.add_argument("--out", default=None, help="folder for the Xcode project (default: <game>/build/ios)")
     ap.add_argument("--print-only", action="store_true", help="print the preset instead of writing it")
     args = ap.parse_args()
@@ -85,8 +90,10 @@ def main():
     title = read_project_name(game_dir)
     name = xcode_name(title)
 
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    store_dir = os.path.join(repo_root, "store", slug)
     store = {}
-    store_path = os.path.join(game_dir, "store", "ios.json")
+    store_path = os.path.join(store_dir, "ios.json")
     if os.path.exists(store_path):
         with open(store_path, encoding="utf-8") as f:
             store = json.load(f)
@@ -146,9 +153,9 @@ def main():
     options.append(("privacy/tracking_domains",
                     "PackedStringArray(" + ", ".join(cfg_str(d) for d in domains) + ")"))
 
-    icon = os.path.join(game_dir, "store", "icon_1024.png")
+    icon = os.path.join(store_dir, "icon_1024.png")
     if os.path.exists(icon):
-        options.append(("icons/icon_1024x1024", cfg_str("res://store/icon_1024.png")))
+        options.append(("icons/icon_1024x1024", cfg_str(icon)))
 
     for plugin in store.get("plugins", []):
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", plugin):
@@ -177,10 +184,10 @@ def main():
         "runnable=true\n"
         "advanced_options=true\n"
         "dedicated_server=false\n"
-        'custom_features=""\n'
+        f'custom_features="{"playtest" if args.flavor == "playtest" else ""}"\n'
         'export_filter="all_resources"\n'
         'include_filter=""\n'
-        'exclude_filter="tests/*, store/*.json"\n'
+        'exclude_filter="tests/*"\n'
         f"export_path={cfg_str(export_path)}\n"
         'encryption_include_filters=""\n'
         'encryption_exclude_filters=""\n'
@@ -208,6 +215,8 @@ def main():
     print(f"bundle_id={bundle_id}")
     print(f"export_path={export_path}")
     print(f"out_dir={out_dir}")
+    print(f"flavor={args.flavor}")
+    print(f"real_monetization={'true' if store.get('real_monetization') else 'false'}")
 
 
 if __name__ == "__main__":

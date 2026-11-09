@@ -1,0 +1,72 @@
+{
+  "_status": "draft 2026-11-09. Check the name is free when creating the listing. Screenshots and icon come after the polish pass.",
+  "bundle_id": "com.gamequarry.burnacardboardcity",
+  "name": "Burn a Cardboard City",
+  "subtitle": "Incremental destruction game",
+  "keywords": "idle,clicker,destroy,demolish,fire,flames,giant,paper,craft,box,collapse,satisfying,upgrade,smash",
+  "promotional_text": "Someone built a whole city out of cardboard boxes. You are the giant standing next to it with a magnifying glass. Burn it down, block by block.",
+  "description": "Someone filled an empty warehouse with a whole city made of cardboard boxes: suburbs of little box houses, a downtown of office boxes, a row of skyscrapers and a castle in the middle. You are the giant standing next to it. It would be a shame if it caught fire.\n\nHold a magnifying glass on a rooftop until it smokes. Buildings burn, weaken and fall, and a falling building sets off its neighbours. Coins from every collapse buy the next tool: a candle, a blowtorch, a bottle of firework rockets.\n\n- See it through the giant's own eyes: houses up to your knees, offices up to your chest\n- Buildings that really burn through and topple into each other in chains\n- Four tools, each held in your hand\n- Helpers: wind-up cars with a sparkler taped on, and paper planes with a lit fuse\n- Little finds in the rubble: a rubber duck, a lost sock, marbles, a very small teddy, and sometimes a golden ticket\n- Upgrades for heat, spread, coins and speed\n- A real ending in about 30 to 60 minutes; your progress saves as you go\n\nIt is a craft project. Nobody lives there but flat paper cut-out people, who hop out and skip off to safety.\n\nFree to play with ads. Watching an ad for a boost (2x fire, a helper rush, extra coins) is always your choice, and a short ad can appear at natural breaks. You never need to watch one or buy anything to finish. A one-time purchase removes the ads and doubles your fire for good.",
+  "primary_category": "Games",
+  "game_subcategories": [
+    "Simulation",
+    "Casual"
+  ],
+  "age_rating": {
+    "note": "Draft answers for the age-rating questions; the owner confirms them in App Store Connect.",
+    "cartoon_or_fantasy_violence": "infrequent or mild",
+    "everything_else": "none",
+    "advertising": true,
+    "in_app_purchases": true,
+    "kids_category": false
+  },
+  "products": [
+    {
+      "key": "remove_ads_2x",
+      "type": "non-consumable",
+      "price_usd": 4.99,
+      "display_name": "Remove ads and burn 2x for good"
+    },
+    {
+      "key": "starter_pack",
+      "type": "non-consumable",
+      "price_usd": 1.99,
+      "display_name": "Starter pack"
+    },
+    {
+      "key": "golden_lens",
+      "type": "non-consumable",
+      "price_usd": 2.99,
+      "display_name": "The golden lens"
+    },
+    {
+      "key": "coins_small",
+      "type": "consumable",
+      "price_usd": 0.99,
+      "display_name": "A sock of coins"
+    },
+    {
+      "key": "coins_medium",
+      "type": "consumable",
+      "price_usd": 2.99,
+      "display_name": "A jar of coins"
+    },
+    {
+      "key": "coins_large",
+      "type": "consumable",
+      "price_usd": 9.99,
+      "display_name": "A shoebox of coins"
+    }
+  ],
+  "product_id_note": "Store product id = bundle id + '.' + key. The game code still uses the bare keys; it must switch to the full ids before products are created (product ids can't repeat across apps on one account).",
+  "ad_placements": {
+    "rewarded": [
+      "boost_2x_fire",
+      "instant_coins",
+      "helper_rush",
+      "double_find"
+    ],
+    "interstitial": [
+      "shop_close"
+    ]
+  }
+}

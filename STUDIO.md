@@ -151,9 +151,25 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## App Store pipeline
 
-- Status: not set up. Godot iOS builds need macOS. Plan: a GitHub Actions macOS job that exports the Xcode project, builds, signs with an App Store Connect API key and uploads to TestFlight.
-- Needs from the owner (only when the first game is ready): repo secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID` (the owner adds them; Claude never handles keys), and an App Store Connect listing per game (Apple only lets a person create it).
+- **Status (2026-11-09): the build half works; signing waits for the owner's keys; real ads and purchases are not in yet.** Nothing is on the App Store.
+- **What exists.** `.github/workflows/ios.yml` ("iOS build") runs on a Mac runner. `tools/ios_preset.py` writes each game's iOS export preset at build time (nothing about iOS is kept in the game folders); `tools/ios_build.sh` imports, runs the smoke test, has Godot write the Xcode project and builds it.
+  - `check` mode: an unsigned build that needs no Apple account. It runs for every game whenever the pipeline files change, and on request for one game. All four games pass (arm64, landscape, iPhone and iPad, iOS 14+, built with Xcode 26.6, under two minutes a game; Burn Down a Forest is about 83 MB unsigned).
+  - `testflight` mode: signs with the App Store Connect API key and uploads to TestFlight. Started by hand only. **Not yet run for real** (no secrets yet), so expect the first run to need a fix or two: it archives unsigned and lets Xcode sign with a cloud-managed certificate on upload, and falls back to automatic signing if that fails.
+  - Flavors: `playtest` (developer tools, pretend ads and purchases; for trying a game on a real phone) and `release` (what ships). Uploading a `release` build is refused until `store/<slug>/ios.json` says `"real_monetization": true`.
+  - Nothing in the pipeline submits an app for review. That stays a manual step.
+- **Store listings** live in `store/` (one folder per game, outside the game folders): draft name, subtitle, keywords, description, products and age-rating answers in `listing.json`, checked by `python3 tools/store_check.py`. `store/README.md` has the owner's step-by-step for the first TestFlight build and the list of what a game still needs before review.
+- **Needs from the owner:** repo secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID` (the owner adds them; Claude never handles keys), a registered bundle id and an App Store Connect app record per game (Apple only lets a person create them). Steps in `store/README.md`.
 - The business's Apple Developer account exists (Plainworth is on it).
+
+**Next on the shipping list (in order):**
+1. **Real ads and purchases** behind `MonetizationProvider`, off until the owner's ids exist. Findings so far (2026-11-09, from the plugins' own pages; check again before building):
+   - Ads: the maintained Godot AdMob plugin (`poingstudios/godot-admob-plugin`, MIT) says its iOS side needs **Godot 4.5 or newer**, iOS 15+, and bundles Google Mobile Ads 13.x. Its older iOS repo was archived in March 2026; that repo's last release has a build named for Godot 4.4.0 (none named 4.4.1 was visible). So either move the games to Godot 4.5+ (a studio-wide change: CI, both engines' instructions and every game's tests) or try the archived 4.4.0 build against 4.4.1. Decide with one game on a branch of the check build first.
+   - Purchases: `godot-iap` (MIT) supports Godot 4.3+, StoreKit 2, iOS 15+, Xcode 16+, installs as `addons/godot-iap/`. The official `godot-ios-plugins` in-app plugin is StoreKit 1 and has no maintainer. This research did not come across a RevenueCat SDK for Godot (not checked thoroughly); StoreKit through `godot-iap` needs no extra account.
+   - Both need iOS 15 as the minimum (set `min_ios` in `store/<slug>/ios.json`), plugin files inside the game project, and extra Info.plist entries (the AdMob app id, the ad networks' attribution ids, a tracking-permission sentence). The check build proves they compile and link; only a phone proves they show ads.
+   - Burn Down a Forest and Burn a Cardboard City still use bare product keys (`remove_ads_2x`). Store product ids must be unique across the account's apps, so the real provider must use `<bundle id>.<key>` (Dig to the Core and Drain an Ocean already do).
+2. **Store assets:** a 1024 px icon per game (`store/<slug>/icon_1024.png`), screenshots at App Store sizes shot from the game's own screenshot script once it is ready to play, and a short preview clip.
+3. **A privacy policy and a support page** on the play-links site (Apple requires both links), plus `app-ads.txt` for the ad network.
+4. **Discovery:** a featuring nomination per launch (two weeks' notice at least), vertical clips cut from the playthrough bot for short-video posts, a "more from Game Quarry" shelf on ending screens once two games are live.
 
 ## Owner feedback log
 

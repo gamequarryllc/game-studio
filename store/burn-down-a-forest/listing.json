@@ -1,0 +1,72 @@
+{
+  "_status": "draft 2026-11-09. Check the name is free when creating the listing. Screenshots and icon come after the polish pass.",
+  "bundle_id": "com.gamequarry.burndownaforest",
+  "name": "Burn Down a Forest",
+  "subtitle": "Idle incremental fire game",
+  "keywords": "clicker,upgrade,simulator,satisfying,flame,torch,dragon,cursed,trees,woods,relaxing,offline,meadow",
+  "promotional_text": "A cursed forest swallowed the valley overnight. Burn it back with a match, then a torch, then dragon breath, and watch a meadow grow where the ash falls.",
+  "description": "A cursed forest grew over the valley overnight and swallowed the village. You are the village fire-keeper. Burn it back.\n\nStart with a single matchstick. Fire spreads on its own, tree to tree, in chain reactions you set off and steer. Every tree that burns leaves embers to spend on hotter tools: a lighter, a tiki torch, a flamethrower, dragon breath and, for the Elder Tree at the heart of the woods, a meteor shower.\n\n- Fire that really spreads: light one edge and watch the front run\n- Tools from a matchstick to a meteor shower, each with its own flame\n- Upgrades for heat, spread and ember value\n- Helpers that burn alongside you: fire sprites and ember salamanders\n- Rabbits, foxes and hedgehogs that always scamper out unharmed, and now and then a golden one that drops a bonus\n- A meadow of flowers grows wherever the cursed trees burn away\n- A real ending in about 30 to 60 minutes; your progress saves as you go\n\nIt is a cartoon and a fairy tale: the forest is cursed, nobody is hurt, and the village gets its valley back.\n\nFree to play with ads. Watching an ad for a boost (2x fire, a helper rush, extra embers) is always your choice, and a short ad can appear at natural breaks. You never need to watch one or buy anything to finish. A one-time purchase removes the ads and doubles your fire for good.",
+  "primary_category": "Games",
+  "game_subcategories": [
+    "Simulation",
+    "Casual"
+  ],
+  "age_rating": {
+    "note": "Draft answers for the age-rating questions; the owner confirms them in App Store Connect.",
+    "cartoon_or_fantasy_violence": "infrequent or mild",
+    "everything_else": "none",
+    "advertising": true,
+    "in_app_purchases": true,
+    "kids_category": false
+  },
+  "products": [
+    {
+      "key": "remove_ads_2x",
+      "type": "non-consumable",
+      "price_usd": 4.99,
+      "display_name": "No ads, and 2x for good"
+    },
+    {
+      "key": "starter_pack",
+      "type": "non-consumable",
+      "price_usd": 1.99,
+      "display_name": "A parcel for new keepers"
+    },
+    {
+      "key": "phoenix_flame",
+      "type": "non-consumable",
+      "price_usd": 2.99,
+      "display_name": "Phoenix flame"
+    },
+    {
+      "key": "embers_small",
+      "type": "consumable",
+      "price_usd": 0.99,
+      "display_name": "Pouch of embers"
+    },
+    {
+      "key": "embers_medium",
+      "type": "consumable",
+      "price_usd": 2.99,
+      "display_name": "Jar of embers"
+    },
+    {
+      "key": "embers_large",
+      "type": "consumable",
+      "price_usd": 9.99,
+      "display_name": "Cauldron of embers"
+    }
+  ],
+  "product_id_note": "Store product id = bundle id + '.' + key. The game code still uses the bare keys; it must switch to the full ids before products are created (product ids can't repeat across apps on one account).",
+  "ad_placements": {
+    "rewarded": [
+      "boost_2x_fire",
+      "instant_embers",
+      "helper_rush",
+      "double_find"
+    ],
+    "interstitial": [
+      "notebook_close"
+    ]
+  }
+}

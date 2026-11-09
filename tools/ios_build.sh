@@ -6,6 +6,11 @@
 #
 # Environment:
 #   GODOT          path to the Godot 4.4.1 binary (required)
+#   FLAVOR         release (default for check) or playtest (default for testflight).
+#                  playtest = developer tools and pretend ads and purchases, for trying a
+#                  game on a real phone. release = what goes to the App Store; an upload
+#                  is refused until store/<slug>/ios.json says "real_monetization": true,
+#                  so a build with pretend ads can never be the one sent to review.
 #   VERSION        version shown on the App Store (default 1.0.0)
 #   BUILD_NUMBER   must go up with every upload (default 1)
 #   WORK           scratch folder (default: a new temp folder)
@@ -25,6 +30,8 @@ case "$mode" in check|testflight) ;; *) echo "Mode must be check or testflight" 
 [ -f "$game/project.godot" ] || { echo "No game at games/$slug" >&2; exit 2; }
 : "${GODOT:?set GODOT to the Godot 4.4.1 binary}"
 
+if [ "$mode" = "testflight" ]; then FLAVOR="${FLAVOR:-playtest}"; else FLAVOR="${FLAVOR:-release}"; fi
+case "$FLAVOR" in release|playtest) ;; *) echo "FLAVOR must be release or playtest" >&2; exit 2;; esac
 VERSION="${VERSION:-1.0.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 WORK="${WORK:-$(mktemp -d)}"
@@ -75,14 +82,20 @@ if [ -f "$game/tests/smoke_test.gd" ]; then
 fi
 
 say "Xcode project"
-python3 "$root/tools/ios_preset.py" "$game" --team "$team" --version "$VERSION" --build "$BUILD_NUMBER" --out "$WORK/xcode" > "$WORK/vars.txt"
+python3 "$root/tools/ios_preset.py" "$game" --team "$team" --version "$VERSION" --build "$BUILD_NUMBER" --flavor "$FLAVOR" --out "$WORK/xcode" > "$WORK/vars.txt"
+if [ "$mode" = "testflight" ] && [ "$FLAVOR" = "release" ] && ! grep -q '^real_monetization=true$' "$WORK/vars.txt"; then
+  echo "Refusing to upload a release build of $slug: its ads and purchases are still pretend." >&2
+  echo "Upload the playtest flavor to try it on a phone. Once the real ad and purchase code is in," >&2
+  echo "set \"real_monetization\": true in store/$slug/ios.json (see STUDIO.md, App Store pipeline)." >&2
+  exit 4
+fi
 name="$(grep '^name=' "$WORK/vars.txt" | cut -d= -f2-)"
 bundle_id="$(grep '^bundle_id=' "$WORK/vars.txt" | cut -d= -f2-)"
 export_path="$(grep '^export_path=' "$WORK/vars.txt" | cut -d= -f2-)"
 "$GODOT" --headless --path "$game" --export-release "iOS" "$export_path" > "$logs/export.log" 2>&1 || { grep -iE 'error' "$logs/export.log" | head -20; tail -20 "$logs/export.log"; exit 1; }
 project="$WORK/xcode/$name.xcodeproj"
 [ -d "$project" ] || { echo "Godot did not write $name.xcodeproj" >&2; tail -30 "$logs/export.log" >&2; exit 1; }
-echo "$name.xcodeproj  ($bundle_id, version $VERSION build $BUILD_NUMBER)"
+echo "$name.xcodeproj  ($bundle_id, version $VERSION build $BUILD_NUMBER, $FLAVOR)"
 
 # Reads one Info.plist value from a built .app.
 plist() { /usr/libexec/PlistBuddy -c "Print :$2" "$1/Info.plist" 2>/dev/null || true; }

@@ -25,6 +25,12 @@ on:
         type: choice
         options: [check, testflight]
         default: check
+      flavor:
+        description: "playtest = developer tools and pretend ads (for trying on a phone); release = App Store build"
+        required: true
+        type: choice
+        options: [playtest, release]
+        default: playtest
       version:
         description: "Version shown on the App Store"
         required: true
@@ -36,6 +42,7 @@ on:
       - ".github/workflows/ios.yml"
       - "tools/ios_build.sh"
       - "tools/ios_preset.py"
+      - "store/*/ios.json"
 
 permissions:
   contents: read
@@ -54,6 +61,7 @@ jobs:
       games: ${{ steps.pick.outputs.games }}
       mode: ${{ steps.pick.outputs.mode }}
       version: ${{ steps.pick.outputs.version }}
+      flavor: ${{ steps.pick.outputs.flavor }}
     steps:
       - name: Check out
         uses: actions/checkout@v4
@@ -67,6 +75,7 @@ jobs:
           IN_GAME: ${{ inputs.game }}
           IN_MODE: ${{ inputs.mode }}
           IN_VERSION: ${{ inputs.version }}
+          IN_FLAVOR: ${{ inputs.flavor }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
@@ -74,16 +83,18 @@ jobs:
             [ -f "games/$IN_GAME/project.godot" ] || { echo "::error::No game at games/$IN_GAME"; exit 1; }
             case "$IN_MODE" in check|testflight) ;; *) echo "::error::Bad mode"; exit 1;; esac
             echo "$IN_VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "::error::Version must look like 1.0.0"; exit 1; }
-            games="[\"$IN_GAME\"]"; mode="$IN_MODE"; version="$IN_VERSION"
+            case "$IN_FLAVOR" in playtest|release) ;; *) echo "::error::Bad flavor"; exit 1;; esac
+            games="[\"$IN_GAME\"]"; mode="$IN_MODE"; version="$IN_VERSION"; flavor="$IN_FLAVOR"
           else
             # The pipeline changed: check-build every game.
             games="$(ls games/*/project.godot | sed -E 's#games/([^/]+)/project.godot#"\1"#' | paste -sd, -)"
-            games="[$games]"; mode="check"; version="1.0.0"
+            games="[$games]"; mode="check"; version="1.0.0"; flavor="release"
           fi
           echo "games=$games" >> "$GITHUB_OUTPUT"
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Building $games in $mode mode"
+          echo "flavor=$flavor" >> "$GITHUB_OUTPUT"
+          echo "Building $games in $mode mode ($flavor)"
 
   build:
     needs: pick
@@ -134,6 +145,7 @@ jobs:
           GAME: ${{ matrix.game }}
           MODE: ${{ needs.pick.outputs.mode }}
           VERSION: ${{ needs.pick.outputs.version }}
+          FLAVOR: ${{ needs.pick.outputs.flavor }}
           BUILD_NUMBER: ${{ github.run_number }}
           WORK: ${{ runner.temp }}/ios
           ASC_KEY_ID: ${{ needs.pick.outputs.mode == 'testflight' && secrets.ASC_KEY_ID || '' }}
