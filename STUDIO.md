@@ -63,6 +63,18 @@ The owner wants every game and UI to look like a small, skilled studio made it, 
 - **Composed levels:** hand-placed landmarks, paths and sightlines, variety in scale and silhouette, lighting with intent (a time of day, rim light, warm/cool contrast).
 - **UI with texture and imperfection:** grain, paper, wear, slightly irregular hand-drawn edges, intentional asymmetry, a real type scale, motion with easing.
 
+**Lessons from the critics so far (avoid these from the first build):**
+- Fire as identical upright teardrop cards spaced like birthday candles, with no smoke and no light cast. Vary shape and size, lean with the wind, one tall leading flame, smoke, sparks, warm light on nearby surfaces.
+- A noise "lava" texture pasted on burning things; burnt things as pure black. Show burning as a creeping glowing edge; char around #2a2420, ash grey, never #000.
+- Trees built from icosphere clusters or stacked cones; one material on every model; windows in perfect grids. Build distinct silhouettes and materials in Blender.
+- Flat, pale lighting with no key direction. One warm key with long shadows, a cool fill, a rim on silhouettes, darker foregrounds, fire as the brightest warm light.
+- The hero hidden by foliage or buildings. Camera collision plus a clean radial fade.
+- Held tools as primitives with no hand. Draw a hand holding each tool, framed above the touch buttons.
+- Desktop wording on phones ("click", "press B", "left mouse button"). Device-aware prompts, touch wording first.
+- Template shop layouts (equal tabs, identical rows or card grids, a second buy button), stock centred modals, too many popups at once. Build shops and offers as physical objects from the game's world, one popup at a time.
+- Default free fonts that read as AI picks (Outfit, Permanent Marker as the only font). Pick fonts with character that match the fiction.
+- An ending card shown over live gameplay with the HUD still up. Hide the HUD and give the ending its own moment.
+
 **Process, every time a game is shown to the owner:**
 1. Screenshots plus the model contact sheet.
 2. A fresh-eyes critic agent that has NOT seen the build process reviews them with one question: "what here looks AI-generated, generic or template-made, and what would a skilled indie artist change?" It must return concrete findings.
