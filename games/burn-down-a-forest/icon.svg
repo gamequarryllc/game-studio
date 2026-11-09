@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="78%" r="80%">
+      <stop offset="0" stop-color="#5a2a3e"/>
+      <stop offset="0.55" stop-color="#2a1630"/>
+      <stop offset="1" stop-color="#150c18"/>
+    </radialGradient>
+    <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ff4a1c"/>
+      <stop offset="0.5" stop-color="#ff8a24"/>
+      <stop offset="1" stop-color="#ffd25a"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#ffb43a"/>
+      <stop offset="1" stop-color="#fff2b0"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <!-- cursed pines -->
+  <path d="M40 200 L66 120 L92 200 Z" fill="#3b2a6e"/>
+  <path d="M46 168 L66 98 L86 168 Z" fill="#4a3488"/>
+  <path d="M164 200 L192 112 L220 200 Z" fill="#1f5560"/>
+  <path d="M170 166 L192 92 L214 166 Z" fill="#2a6e74"/>
+  <!-- meadow -->
+  <path d="M0 206 Q128 186 256 206 L256 256 L0 256 Z" fill="#3f8a3a"/>
+  <circle cx="44" cy="222" r="6" fill="#ff8fc8"/>
+  <circle cx="212" cy="226" r="6" fill="#ffe066"/>
+  <circle cx="186" cy="238" r="5" fill="#ffffff"/>
+  <circle cx="70" cy="240" r="5" fill="#ffe066"/>
+  <!-- the big flame -->
+  <path d="M128 30 C150 70 186 92 182 146 C180 186 156 210 128 210 C100 210 76 186 74 148 C72 112 96 100 104 70 C112 92 118 100 124 104 C128 80 122 56 128 30 Z" fill="url(#flame)" stroke="#2a1018" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M128 110 C142 132 156 146 154 170 C152 192 142 200 128 200 C114 200 102 190 102 172 C102 150 118 140 128 110 Z" fill="url(#core)"/>
+</svg>
