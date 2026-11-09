@@ -24,7 +24,7 @@ func _ready() -> void:
 
 
 func _line_pos(k: int) -> float:
-	return grid.origin.x + (k * (Balance.BLOCK + Balance.STREET) + 1.5) * Balance.CELL
+	return grid.origin.x + (Balance.lane(k) + 0.5) * Balance.CELL
 
 
 func _build_streets() -> void:

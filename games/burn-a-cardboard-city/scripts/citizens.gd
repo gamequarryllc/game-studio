@@ -56,13 +56,31 @@ func spawn(at: Vector3, away: Vector2) -> void:
 	_active.append({"node": sp, "dir": dir, "t": 0.0, "speed": _rng.randf_range(1.0, 1.5)})
 
 
+func _next_from_bag() -> String:
+	var missing: Array = []
+	for f in Balance.FINDS:
+		if int(GameState.finds.get(str(f.key), 0)) == 0:
+			missing.append(str(f.key))
+	if not missing.is_empty():
+		return missing[_rng.randi() % missing.size()]
+	return str(Balance.FINDS[_rng.randi() % Balance.FINDS.size()].key)
+
+
 func maybe_find(s: int, at: Vector3) -> void:
 	var chance := float(Balance.KINDS[grid.s_kind[s]].find)
 	if _rng.randf() >= chance:
 		return
-	var golden := _rng.randf() < Balance.GOLDEN_SHARE or grid.s_kind[s] == Balance.KEEP
-	var key := "ticket" if golden else str(Balance.FINDS[_rng.randi() % Balance.FINDS.size()].key)
-	var amount := GameState.find_amount(golden)
+	# A golden ticket now and then (and one is owed after a long dry spell); other finds
+	# come out of a bag, so you see every kind before any repeats.
+	var dry := int(GameState.finds_since_golden)
+	var golden := _rng.randf() < Balance.GOLDEN_SHARE or dry >= Balance.GOLDEN_PITY or grid.s_kind[s] == Balance.KEEP
+	var key := "ticket"
+	if golden:
+		GameState.finds_since_golden = 0
+	else:
+		GameState.finds_since_golden = dry + 1
+		key = _next_from_bag()
+	var amount := GameState.find_amount(golden, float(Balance.KINDS[grid.s_kind[s]].coins))
 	var sp := Sprite3D.new()
 	sp.texture = Craft.icon3d(key)
 	sp.pixel_size = 0.004 if golden else 0.0034

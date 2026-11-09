@@ -9,12 +9,16 @@ uniform float gold = 0.0;           // the Golden lens purchase gilds the tools
 uniform vec3 glow : source_color = vec3(0.0);
 uniform float always_on_top = 0.0;
 
+#include "res://shaders/firelight.gdshaderinc"
+
 varying vec4 v_col;
 varying vec3 v_obj;
+varying vec3 v_world;
 
 void vertex() {
 	v_col = COLOR;
 	v_obj = VERTEX;
+	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 float hash12(vec2 p) {
@@ -45,5 +49,6 @@ void fragment() {
 	ROUGHNESS = mix(0.86, 0.5, tape) * (1.0 - shiny * 0.65) * (1.0 - gold * 0.4);
 	SPECULAR = 0.25 + shiny * 0.4 + gold * 0.3;
 	METALLIC = shiny * 0.2 + gold * 0.5;
-	EMISSION = glow;
+	vec3 wn = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	EMISSION = glow + col * fire_light(v_world, wn);
 }

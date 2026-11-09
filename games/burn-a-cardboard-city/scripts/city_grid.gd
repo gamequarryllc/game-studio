@@ -34,6 +34,7 @@ const G_PAVE := 2
 const G_PLAZA := 3
 const G_YARD := 4
 const G_PUDDLE := 5
+const G_ROAD := 6       # a street inside a district (grey card with tape lines); G_STREET is bare warehouse floor
 
 const DX := [1, -1, 0, 0, 1, 1, -1, -1]
 const DY := [0, 0, 1, -1, 1, -1, 1, -1]
@@ -80,6 +81,7 @@ var debris := {}
 var wet := {}
 var trucks: Array = []
 var truck_t := {}
+var truck_water := {}                 # truck id -> squirts left in its tank
 
 var wind := Vector2(0.6, -0.8).normalized()
 var wind_strength := 0.5
@@ -136,11 +138,23 @@ func generate(seed: int) -> void:
 	for y in n:
 		for x in n:
 			zone[x + y * n] = Balance.zone_for_cell(x, y)
-	var period := Balance.BLOCK + Balance.STREET
+	# Streets inside a district are grey card; the gaps between districts are bare floor.
+	var axis_street := PackedInt32Array()
+	axis_street.resize(n)
+	for c in n:
+		axis_street[c] = Balance.street_of(c)
+	for y in n:
+		for x in n:
+			var sx := axis_street[x]
+			var sy := axis_street[y]
+			if sx < 0 and sy < 0:
+				continue
+			var gap: bool = Balance.GAP_STREETS.has(sx) or Balance.GAP_STREETS.has(sy)
+			ground[x + y * n] = G_STREET if gap else G_ROAD
 	for by in Balance.BLOCKS:
 		for bx in Balance.BLOCKS:
-			var x0 := Balance.STREET + bx * period
-			var y0 := Balance.STREET + by * period
+			var x0 := Balance.block_start(bx)
+			var y0 := Balance.block_start(by)
 			var ring := maxi(absi(bx - 4), absi(by - 4))
 			var z: int = [3, 3, 2, 1, 0][ring]
 			var g: int = [G_LAWN, G_PAVE, G_PLAZA, G_YARD][z]
@@ -153,7 +167,10 @@ func generate(seed: int) -> void:
 				1:
 					_downtown_block(x0, y0)
 				2:
-					_sky_block(x0, y0)
+					if bx == 4 and by == 6:
+						_approach_block(x0, y0)   # keep the view from the door to the castle open
+					else:
+						_sky_block(x0, y0)
 	_castle()
 	_cars_and_trucks()
 	_puddles()
@@ -300,10 +317,25 @@ func _sky_block(x0: int, y0: int) -> void:
 			add_structure(Balance.TREE, Rect2i(x0 + q.x + 1, y0 + q.y + 2, 1, 1), m[0], m[1], 0)
 
 
+func _approach_block(x0: int, y0: int) -> void:
+	## The block in front of the castle gate: a little square of paper trees, so the
+	## castle stays in sight from the warehouse door.
+	ground_fill(x0, y0, G_LAWN)
+	for p in [Vector2i(1, 1), Vector2i(6, 1), Vector2i(1, 6), Vector2i(6, 6), Vector2i(3, 2), Vector2i(4, 5)]:
+		var m := _pick_model(Balance.TREE)
+		add_structure(Balance.TREE, Rect2i(x0 + p.x, y0 + p.y, 1, 1), m[0], m[1], rng.randi() % 4)
+
+
+func ground_fill(x0: int, y0: int, g: int) -> void:
+	for y in range(y0, y0 + Balance.BLOCK):
+		for x in range(x0, x0 + Balance.BLOCK):
+			ground[x + y * n] = g
+
+
 func _castle() -> void:
 	## The castle fills the three middle blocks and the streets between them.
-	var c0 := Balance.STREET + 3 * (Balance.BLOCK + Balance.STREET)   # 36
-	var sz := 3 * Balance.BLOCK + 2 * Balance.STREET                   # 30
+	var c0 := Balance.block_start(3)                    # 46
+	var sz := Balance.block_start(5) + Balance.BLOCK - c0   # 30
 	for y in range(c0, c0 + sz):
 		for x in range(c0, c0 + sz):
 			ground[x + y * n] = G_YARD
@@ -342,15 +374,14 @@ func _castle() -> void:
 
 
 func _street_lines() -> Array:
-	## [x0, y0, dx, dy, length]: the middle lane of every street segment between crossings.
+	## [x0, y0, dx, dy, length, street]: the middle lane of every street segment between crossings.
 	var out: Array = []
-	var period := Balance.BLOCK + Balance.STREET
 	for k in Balance.BLOCKS + 1:
-		var lane := k * period + 1
+		var lane := Balance.lane(k)
 		for b in Balance.BLOCKS:
-			var a := Balance.STREET + b * period
-			out.append([a, lane, 1, 0, Balance.BLOCK])
-			out.append([lane, a, 0, 1, Balance.BLOCK])
+			var a := Balance.block_start(b)
+			out.append([a, lane, 1, 0, Balance.BLOCK, k])
+			out.append([lane, a, 0, 1, Balance.BLOCK, k])
 	return out
 
 
@@ -364,8 +395,8 @@ func _cars_and_trucks() -> void:
 		var dy: int = L[3]
 		var length: int = L[4]
 		var mid := Balance.zone_for_cell(x0 + dx * length / 2, y0 + dy * length / 2)
-		if mid >= 3:
-			continue
+		if mid >= 3 or Balance.GAP_STREETS.has(int(L[5])):
+			continue   # no parking on the bare floor between districts
 		var p := 0
 		while p + 2 <= length:
 			var cx := x0 + dx * p
@@ -387,7 +418,7 @@ func _cars_and_trucks() -> void:
 		if mid <= 1:
 			truck_spots.append(L)
 	# Toy fire trucks: a few in the suburbs (not by the giant's starting street) and downtown.
-	var want := {0: 3, 1: 2}
+	var want := {0: 7, 1: 5}
 	var placed := {0: 0, 1: 0}
 	for i in range(truck_spots.size() - 1, 0, -1):   # seeded shuffle (Array.shuffle uses the global RNG)
 		var j := rng.randi_range(0, i)
@@ -416,6 +447,7 @@ func _cars_and_trucks() -> void:
 		var id := add_structure(Balance.TRUCK, rect, m[0], m[1], rot)
 		trucks.append(id)
 		truck_t[id] = rng.randf() * Balance.SPRAY_EVERY
+		truck_water[id] = Balance.TRUCK_TANK
 		placed[z] = int(placed[z]) + 1
 
 
@@ -471,7 +503,8 @@ func _finish() -> void:
 			if damp[c] == 1:
 				wet = true
 		if wet:
-			t *= Balance.DAMP_MULT
+			var cap := float(Balance.TOOLS[Balance.TIER[s_kind[s]]].power) * 0.95
+			t = minf(t * Balance.DAMP_MULT, maxf(t, cap))
 		s_thresh[s] = t
 		zone_total[s_zone[s]] += 1
 	_build_neighbours()
@@ -551,7 +584,16 @@ func top_at(wx: float, wz: float) -> float:
 
 
 func can_light(s: int, power: float) -> bool:
-	return s >= 0 and s_state[s] == STANDING and power * 0.97 >= threshold(s)
+	return s >= 0 and s_state[s] == STANDING and power * 0.97 >= threshold(s) and not keep_shielded(s)
+
+
+func keep_shielded(s: int) -> bool:
+	## The keep won't catch while most of its walls and towers still stand round it.
+	if s != keep_id:
+		return false
+	var others: int = int(zone_total[3]) - 1
+	var down: int = int(zone_fallen[3])
+	return others > 0 and float(down) / float(others) < Balance.KEEP_GATE
 
 
 func threshold(s: int) -> float:
@@ -560,6 +602,24 @@ func threshold(s: int) -> float:
 
 func is_truck(s: int) -> bool:
 	return s >= 0 and s_kind[s] == Balance.TRUCK
+
+
+func truck_dry(s: int) -> bool:
+	return is_truck(s) and int(truck_water.get(s, 0)) <= 0
+
+
+func water_string() -> String:
+	## Squirts left in each truck's tank, for the save.
+	var parts: PackedStringArray = []
+	for t in trucks:
+		parts.append(str(int(truck_water.get(t, 0))))
+	return ",".join(parts)
+
+
+func load_water_string(text: String) -> void:
+	var parts := text.split(",", false)
+	for i in mini(parts.size(), trucks.size()):
+		truck_water[trucks[i]] = clampi(int(parts[i]), 0, Balance.TRUCK_TANK)
 
 
 func progress() -> float:
@@ -719,7 +779,7 @@ func tick(dt: float) -> void:
 		if s_state[s] != STANDING:
 			hot.erase(s)
 			continue
-		if s_heat[s] >= threshold(s):
+		if s_heat[s] >= threshold(s) and not keep_shielded(s):
 			ignite(s)
 		else:
 			s_heat[s] *= keep
@@ -858,7 +918,7 @@ func _spot(s: int) -> void:
 
 
 func _truck(t: int, dt: float) -> void:
-	if s_state[t] != STANDING:
+	if s_state[t] != STANDING or int(truck_water.get(t, 0)) <= 0:
 		return
 	var left := float(truck_t.get(t, 0.0)) - dt
 	if left > 0.0:
@@ -876,6 +936,7 @@ func _truck(t: int, dt: float) -> void:
 		return
 	s_fire[best] -= Balance.SPRAY_DOUSE
 	s_heat[best] = 0.0
+	truck_water[t] = int(truck_water.get(t, 0)) - 1
 	sprays.append([t, best])
 	if s_fire[best] <= 0.05:
 		burning.erase(best)
@@ -937,9 +998,9 @@ func to_save_string() -> String:
 	for s in count:
 		var ch := 48   # '0' standing
 		match s_state[s]:
-			BURNING:
-				ch = 49
-			FALLING, RUBBLE:
+			BURNING, FALLING:
+				ch = 49     # still coming down: it burns on after a reload and falls (and pays) then
+			RUBBLE:
 				ch = 114 if s_fall[s] == CRUMPLE else 52 + int(s_fall[s])   # 'r' or '4'..'7'
 		b[s] = ch
 	return b.get_string_from_ascii()

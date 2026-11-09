@@ -165,6 +165,39 @@ func _run() -> void:
 			lit_by_fall = true
 	check(g3.s_state[tower] == CityGrid.RUBBLE and lit_by_fall, "the toppled tower set what it landed on alight")
 
+	# A building caught mid-fall by a save comes back burning (its collapse still to pay), not as rubble.
+	var g6 := CityGrid.new()
+	g6.generate(Balance.WORLD_SEED)
+	var f6 := -1
+	for s in g6.count:
+		if g6.s_kind[s] == Balance.HOUSE:
+			f6 = s
+			break
+	g6.ignite(f6)
+	g6.s_fire[f6] = 1.0
+	g6.s_integ[f6] = 0.001
+	g6.tick(0.1)
+	check(g6.s_state[f6] == CityGrid.FALLING and g6.to_save_string()[f6] == "1", "a save made while a house is falling keeps it burning")
+	var g7 := CityGrid.new()
+	g7.generate(Balance.WORLD_SEED)
+	# No dead ends: every building (damp or not) can be lit by the tool it's meant for at base
+	# power, without upgrades. (The bot once stood at the castle with rockets that couldn't
+	# light the damp towers by the moat, and nothing left to earn the upgrade with.)
+	var unreachable := 0
+	for s in g7.count:
+		if s != g7.keep_id and not g7.can_light(s, float(Balance.TOOLS[Balance.TIER[g7.s_kind[s]]].power)):
+			unreachable += 1
+	check(unreachable == 0, "every building can be lit by its own tool at base power (%d can't)" % unreachable)
+	g7.load_save_string(g6.to_save_string())
+	check(g7.fallen == 0, "and the reloaded city doesn't count it as down yet")
+	# The keep stays shielded until most of its walls and towers are down.
+	check(g7.keep_shielded(g7.keep_id) and not g7.can_light(g7.keep_id, 99999.0), "the keep won't catch while its walls stand")
+	for s in g7.count:
+		if g7.s_zone[s] == 3 and s != g7.keep_id:
+			g7.s_state[s] = CityGrid.RUBBLE
+			g7.zone_fallen[3] += 1
+	check(not g7.keep_shielded(g7.keep_id) and g7.can_light(g7.keep_id, 99999.0), "with the walls down the keep can burn")
+
 	# Fire trucks squirt water at fires near them.
 	var g4 := CityGrid.new()
 	g4.generate(Balance.WORLD_SEED)
@@ -185,6 +218,19 @@ func _run() -> void:
 			dry_truck = t
 	check(not g4.can_light(dry_truck, Balance.TOOLS[0].power) and g4.can_light(dry_truck, Balance.TOOLS[1].power),
 		"the magnifying glass can't light a fire truck; the candle can")
+	# A truck's tank runs dry (it used to protect its street forever, with the candle
+	# gated behind those same houses: a dead end the playthrough bot found).
+	g4.truck_water[truck] = 1
+	for s in g4.count:
+		if g4.s_kind[s] == Balance.HOUSE and g4.s_center[s].distance_to(g4.s_center[truck]) < Balance.SPRAY_RANGE - 0.3 and g4.s_state[s] == CityGrid.STANDING:
+			g4.ignite(s)
+	for _k in 60:
+		g4.tick(0.1)
+	check(g4.truck_dry(truck), "a fire truck runs out of water")
+	var sprays_before: int = g4.take("sprays").size()
+	for _k in 40:
+		g4.tick(0.1)
+	check(g4.take("sprays").is_empty(), "and then stops squirting")
 
 	# --- The game ----------------------------------------------------------------------
 	var world = load("res://scenes/main.tscn").instantiate()
@@ -210,7 +256,8 @@ func _run() -> void:
 	giant._update_tool(0.016)
 	check(city.sources.has("tool"), "holding the tool focuses heat on it")
 	var lit := false
-	for _k in 40:
+	for _k in 60:
+		giant._update_tool(0.1)
 		city.tick(0.1)
 		if city.s_state[house] != CityGrid.STANDING:
 			lit = true
@@ -275,18 +322,35 @@ func _run() -> void:
 			break
 	check(not giant.is_blocked(city.s_center[other], 0.0), "box houses are low enough to step over")
 
+	# The district tag: the district you're in, and a notch where the next tool goes on sale.
+	world.move_giant_to(Vector3(0.6, 0.0, 33.6), Vector3(0.0, 0.0, 0.0))
+	hud._refresh()
+	check(hud.zone_label.text == str(Balance.ZONES[0].name) and is_equal_approx(hud.zone_bar.gate, float(Balance.TOOL_GATE[1]))
+		and is_equal_approx(hud.zone_bar.value, city.zone_progress(0)), "the district tag shows the suburbs' own progress and the candle's notch")
+
 	# The shop box.
 	hud.open_shop()
 	await _frames(2)
 	check(hud.shop != null and not giant.input_enabled, "the shop box opens and pauses the giant")
 	gs.coins = 1000.0
-	check(gs.buy_tool(1) and gs.tool_index == 1 and is_equal_approx(gs.coins, 850.0), "bought the candle for 150 coins")
+	check(not gs.buy_tool(1) and gs.tool_gate_text(1) != "", "the candle isn't on sale until enough of the suburbs is down")
+	gs.dev_gates_open = true
+	check(gs.buy_tool(1) and gs.tool_index == 1 and is_equal_approx(gs.coins, 1000.0 - float(Balance.TOOLS[1].cost)), "bought the candle")
 	check(city.can_light(office, gs.tool_power()) or city.s_state[office] != CityGrid.STANDING, "the candle lights office boxes")
 	check(not gs.buy_tool(3), "can't skip ahead to the rockets")
+	# No dead ends: with nothing left the candle can light and too few coins for the
+	# blowtorch, the blowtorch goes on clearance for what you've got (the bot overspent once).
+	var keep_coins: float = gs.coins
+	gs.coins = 120.0
+	gs.out_of_fuel = true
+	check(gs.tool_cost(2) == 120.0 and gs.on_clearance(2), "out of things to light and short: the next tool goes on clearance")
+	gs.out_of_fuel = false
+	check(gs.tool_cost(2) == float(Balance.TOOLS[2].cost), "and back to full price while there's still something to burn")
+	gs.coins = keep_coins
 	var lv: int = gs.upgrade_levels["dry"]
 	check(gs.buy("upgrade:dry") and gs.upgrade_levels["dry"] == lv + 1, "bought dry cardboard by id")
 	check(gs.buy("helper:windup") and gs.helper_counts[0] == 1, "got a wind-up car by id")
-	for tab in ["tools", "upgrades", "helpers", "free", "shop", "finds", "settings", "dev"]:
+	for tab in ["tools", "upgrades", "helpers", "extras", "finds", "settings", "dev"]:
 		hud.shop.select(tab)
 		await _frames(1)
 	check(hud.shop.tab == "dev", "every tab of the box opens (dev included in playtest)")
@@ -294,6 +358,99 @@ func _run() -> void:
 	await _frames(2)
 	check(hud.shop == null and giant.input_enabled, "the box closes")
 	check(world.helpers.count() == 1, "the wind-up car came out to help")
+
+	# The box: five divider tabs; dev tools aren't one of them (F1 / hold the box's name).
+	hud.open_shop()
+	await _frames(2)
+	check(hud.shop._tab_buttons.size() == 5 and not hud.shop._tab_buttons.has("dev"), "the box has five tabs and no dev tab")
+	hud.shop.select("dev")
+	await _frames(1)
+	check(hud.shop.tab == "dev", "dev tools still open in playtest builds")
+	hud.shop.select("tools")
+	await _frames(1)
+	var featured: Label = hud.shop._list.get_child(0).get_child(0).get_child(0).get_child(1).get_child(0)
+	check(featured.text.begins_with("Next: the"), "the next tool is the one propped up at the front (\"%s\")" % featured.text)
+	hud.close_shop()
+	await _frames(2)
+
+	# Finds come out of a bag (every kind before repeats) and don't count as income (that compounded).
+	var ipm: float = gs.income_per_minute()
+	world._on_find("duck", false, 5000.0, Vector3.ZERO)
+	check(is_equal_approx(gs.income_per_minute(), ipm), "a find's coins don't count as income")
+	var seen := {"duck": true}
+	for _k in Balance.FINDS.size() - 1:
+		var key: String = world.citizens._next_from_bag()
+		gs.note_find(key)
+		seen[key] = true
+	check(seen.size() == Balance.FINDS.size(), "the find bag hands out every kind before repeating")
+
+	# One note at a time, and no numbers over a chain stamp.
+	hud._notes.clear()
+	if hud._note_panel != null:
+		hud._note_panel.visible = false
+	hud.toast("one")
+	hud.toast("two")
+	hud._update_notes(0.016)
+	check(hud._note_panel.visible and hud._notes.size() == 1, "notes queue up one at a time")
+	# Two things paying at once show one number, not two piled up (the visual run caught a
+	# pair over the keep filling a third of the screen).
+	world.hide_floats()
+	world._next_float_t = 0.0
+	world._float_text(Vector3.ZERO, "+5", 5.0)
+	world._float_text(Vector3(1.0, 0.0, 0.0), "+6", 6.0)
+	var shown := 0
+	for f in world._floats:
+		if (f.node as Node3D).visible:
+			shown += 1
+	check(shown == 1, "two coin numbers at once: only one shows")
+	hud.show_chain(3)
+	var any_float := false
+	for f in world._floats:
+		if (f.node as Node3D).visible:
+			any_float = true
+	check(not any_float, "a chain stamp clears the floating numbers out of its way")
+
+	# Phone wording on phones.
+	hud.set_touch_mode(true)
+	gs.tutorial_step = 0
+	world._update_coach()
+	var c0: String = hud.coach_label.text
+	gs.tutorial_step = 3
+	world._update_coach()
+	var c3: String = hud.coach_label.text
+	var banned := ["click", "mouse", "press ", "key", "wasd"]
+	var desk := false
+	for w in banned:
+		if c0.to_lower().contains(w) or c3.to_lower().contains(w):
+			desk = true
+	check(not desk, "touch hints have no mouse or keyboard words (\"%s\")" % c0)
+	hud.show_find("ticket", true, 10.0)
+	hud._update_find(0.0)
+	check(not hud._find_text.text.to_lower().contains("click") and not hud._find_text.text.contains("press G"), "the golden ticket says tap on a phone")
+	hud.find_tag.visible = false
+	gs.tutorial_step = 9
+
+	# The starter pack: a matchbox with a price tag on a string and a scribbled "not now".
+	hud.show_starter_offer()
+	await _frames(2)
+	var sp: Dictionary = hud._last_popup
+	check(sp.has("tag") and sp.has("nope") and sp.box is Control, "the starter pack is a matchbox with a tag and \"not now\"")
+	sp.nope.pressed.emit()
+	await _frames(2)
+	check(not hud.is_blocking() and giant.input_enabled, "\"not now\" closes it and hands the game back")
+
+	# Boosts run on play time.
+	var clk: float = gs.clock
+	gs.start_boost()
+	gs.clock += Balance.BOOST_DURATION + 1.0
+	check(not gs.is_boost_active(), "the 2x boost lasts its five minutes of play, then stops")
+	gs.clock = clk
+	gs.boost_until = 0.0
+
+	# The held tools are hands now, and the lens camera only runs for the magnifying glass.
+	check(ModelLib.has("hand_magnifier") and ModelLib.has("hand_bottle") and ModelLib.has("rocket"), "the hand-held tools are in tools.glb")
+	var want_lens: int = SubViewport.UPDATE_ALWAYS if gs.tool_index == 0 else SubViewport.UPDATE_DISABLED
+	check(giant._lens_vp.render_target_update_mode == want_lens, "the lens camera only runs while the magnifying glass is in hand")
 
 	# The 2x rewarded boost doubles income.
 	gs.boost_until = 0.0
@@ -329,7 +486,7 @@ func _run() -> void:
 
 	# The timed offer tag names what it buys.
 	gs.tool_index = 1
-	gs.coins = 1500.0
+	gs.coins = float(Balance.TOOLS[2].cost) - 1500.0
 	gs.instant_ready_at = 0.0
 	gs._income = [40.0, 40.0, 40.0, 40.0]
 	var offers_script = load("res://scripts/ad_offers.gd")
@@ -346,7 +503,8 @@ func _run() -> void:
 	Engine.time_scale = 1.0
 
 	# Save / load round trip.
-	for _k in 30:
+	gs.finds = {}
+	for _k in 300:
 		city.tick(0.1)
 	gs.coins = 4321.5
 	gs.tool_index = 2
@@ -371,6 +529,12 @@ func _run() -> void:
 	g5.generate(Balance.WORLD_SEED)
 	g5.load_save_string(gs.city_save)
 	check(g5.fallen == fallen_before and fallen_before > 0, "a reloaded city keeps its rubble (%d)" % g5.fallen)
+	var v5 := CityView.new()
+	root.add_child(v5)
+	v5.build(g5)
+	v5.show_loaded_state()
+	check(v5.rubble_count() == g5.fallen, "and the burnt-out shells are laid back where things fell (%d)" % v5.rubble_count())
+	v5.queue_free()
 
 	# The ending: the keep falls.
 	city.ignite(city.keep_id)
@@ -382,6 +546,14 @@ func _run() -> void:
 	await _frames(2)
 	check(gs.has_won, "bringing down the keep ends the game")
 	check(hud.popups.get_child_count() > 0, "the ending shows its stats")
+	check(not hud.coin_tag.visible and not hud.shop_button.visible, "the HUD steps aside for the ending")
+	await _frames(3)
+	var note_rect: Rect2 = (hud._last_popup.note as Control).get_global_rect()
+	check(Rect2(Vector2.ZERO, hud.root.get_viewport_rect().size).encloses(note_rect),
+		"the delivery note is pinned up on screen (%s)" % str(note_rect))
+	hud._last_popup.button.pressed.emit()
+	await _frames(2)
+	check(hud.coin_tag.visible and not hud.is_blocking(), "\"Walk around the ashes\" brings the HUD back")
 
 	gs.wipe_save(false)
 	world.queue_free()

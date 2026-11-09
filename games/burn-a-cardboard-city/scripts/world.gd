@@ -10,9 +10,9 @@ extends Node3D
 ## calls: ignite_at(point), move_giant_to(point), GameState.buy("tool:candle"),
 ## skip_to_district(z).
 
-const SPAWN := Vector3(0.0, 0.0, 28.0)
+const SPAWN := Vector3(0.6, 0.0, 33.6)   # just inside the warehouse door, looking up the main street at the castle
 const SPAWN_YAW := 0.0
-const SPAWN_PITCH := -0.62
+const SPAWN_PITCH := -0.2
 const FLOAT_POOL := 16
 
 var city: CityGrid
@@ -23,6 +23,7 @@ var helpers: HelperSwarm
 var citizens: Citizens
 var hud: Hud
 var force_fire := false              # tests and screenshots hold the button down
+var bot_move := Vector2.ZERO          # a playthrough bot's thumb on the stick (x right, y forward)
 
 var _mouse_fire := false
 var _quality := 1.0
@@ -39,7 +40,8 @@ var _coach_t := 0.0
 var _step_seen := 0
 var _tick_float := 0.0
 var _tick_float_at := Vector3.ZERO
-var _next_float_ms := 0
+var _float_clock := 0.0               # game seconds, advanced with the floats themselves
+var _next_float_t := 0.0
 var _land_seen := 0
 var _rng := RandomNumberGenerator.new()
 
@@ -56,15 +58,20 @@ func _ready() -> void:
 	_wind_target = _wind_angle
 	if GameState.city_save != "":
 		city.load_save_string(GameState.city_save)
+		city.load_water_string(GameState.water_save)
 	GameState.city = city
 	view = CityView.new()
 	add_child(view)
+	view.shadow_dir = house.shadow_dir()
+	view.shadow_slope = tan(deg_to_rad(Warehouse.KEY_ELEVATION))
 	view.build(city)
+	view.floor_mat.set_shader_parameter("shadow_strength", 0.6 if not house.sun.shadow_enabled else 0.32)
 	view.show_loaded_state()
 	view.set_wind(city.wind * city.wind_strength)
 
 	giant = Giant.new()
 	giant.grid = city
+	giant.obstacles = house.obstacles
 	add_child(giant)
 	var pos := GameState.giant_pos if GameState.giant_pos.is_finite() else SPAWN
 	giant.teleport(pos)
@@ -156,9 +163,11 @@ func skip_to_district(z: int) -> void:
 	GameState.tool_index = maxi(GameState.tool_index, mini(z, Balance.TOOLS.size() - 1))
 	GameState.tool_bought.emit(GameState.tool_index)
 	view.show_loaded_state()
-	var edge := (Balance.GRID * 0.5 - 1.5 - z * (Balance.BLOCK + Balance.STREET)) * Balance.CELL
-	move_giant_to(Vector3(0, 0, edge + 1.0))
-	giant.set_view(0.0, -0.5)
+	# Stand in the street just south of the district's southern blocks.
+	var b := clampi(8 - z, 5, 8) if z > 0 else 8
+	var cell := Balance.block_start(b) + Balance.BLOCK + 2
+	move_giant_to(Vector3(2.5, 0, city.origin.y + cell * Balance.CELL))
+	giant.set_view(0.0, -0.45)
 	GameState.changed.emit()
 
 
@@ -263,8 +272,7 @@ func _after_tick() -> void:
 	_tick_float = 0.0
 	for e in impacts:
 		_on_impact(e[0], e[1], e[2])
-	if _tick_float > 0.0 and Time.get_ticks_msec() >= _next_float_ms:
-		_next_float_ms = Time.get_ticks_msec() + 350
+	if _tick_float > 0.0 and _float_clock >= _next_float_t and not hud.chain_label.visible:
 		_float_text(_tick_float_at, "+" + Fmt.num(_tick_float), _tick_float)
 	for e in city.take("sprays"):
 		var t: int = e[0]
@@ -325,6 +333,7 @@ func _controls() -> void:
 			mv.x += 1.0
 		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
 			mv.x -= 1.0
+	mv += bot_move
 	var touch := hud.touch
 	if touch.visible:
 		mv += touch.move_vector
@@ -370,7 +379,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				hud.take_find()
 			KEY_M:
 				Sound.set_muted(not Sound.muted)
-				hud.toast("Sound off (M turns it back on)" if Sound.muted else "Sound on")
+				hud.toast("Sound off. M brings it back" if Sound.muted else "Sound on")
 			KEY_F1:
 				if GameState.dev_enabled():
 					hud.open_shop("dev")
@@ -449,13 +458,20 @@ func _show_burn_pay() -> void:
 			continue
 		if cam.unproject_position(top).y < 120.0:
 			continue
+		if hud.chain_label.visible:
+			break
 		_float_text(top, "+" + Fmt.num(v), v * 0.5)
 		shown += 1
-		if shown >= 2:
+		if shown >= 1:
 			break
 
 
 func _float_text(at: Vector3, text: String, v: float) -> void:
+	# One number at a time, from either stream (burning pay, things hitting the ground), so
+	# two never pile up on each other; and none bigger than it would be 9 m away.
+	if _float_clock < _next_float_t:
+		return
+	_next_float_t = _float_clock + 1.0
 	var f: Dictionary = _floats[_float_i]
 	_float_i = (_float_i + 1) % _floats.size()
 	var root: Node3D = f.node
@@ -470,11 +486,19 @@ func _float_text(at: Vector3, text: String, v: float) -> void:
 	coin.offset = Vector2(-40, 0)
 	root.position = at
 	root.visible = true
-	root.scale = Vector3.ONE * 0.4
+	f.k = clampf(at.distance_to(giant.camera.global_position) / 9.0, 0.3, 1.0)
+	root.scale = Vector3.ONE * 0.4 * float(f.k)
 	f.t = 0.0
 
 
+func hide_floats() -> void:
+	for f in _floats:
+		f.t = 9.0
+		(f.node as Node3D).visible = false
+
+
 func _update_floats(d: float) -> void:
+	_float_clock += d
 	for f in _floats:
 		if float(f.t) >= 1.7:
 			continue
@@ -485,7 +509,7 @@ func _update_floats(d: float) -> void:
 		# Pops in with a little overshoot, then fades.
 		var pop := minf(1.0, float(f.t) / 0.18)
 		var s := 1.0 + 0.25 * sin(pop * PI) if pop < 1.0 else 1.0
-		root.scale = Vector3.ONE * lerpf(0.4, 1.0, pop) * s
+		root.scale = Vector3.ONE * lerpf(0.4, 1.0, pop) * s * float(f.get("k", 1.0))
 		var a := 1.0 - clampf((t - 0.6) / 0.4, 0.0, 1.0)
 		(f.label as Label3D).modulate.a = a
 		(f.label as Label3D).outline_modulate.a = a
@@ -495,10 +519,10 @@ func _update_floats(d: float) -> void:
 
 
 func _on_find(key: String, golden: bool, amount: float, at: Vector3) -> void:
-	GameState.grant_coins(amount, true)
+	# Not counted as income: finds pay minutes of income, so counting them would compound.
+	GameState.grant_coins(amount, false)
 	GameState.note_find(key)
 	Sound.play("golden" if golden else "find", -4.0 if golden else -7.0)
-	_float_text(at + Vector3(0, 1.2, 0), "+" + Fmt.num(amount), amount)
 	hud.show_find(key, golden, amount)
 
 
@@ -507,11 +531,24 @@ func _on_find(key: String, golden: bool, amount: float, at: Vector3) -> void:
 # =====================================================================================
 func _update_slow() -> void:
 	GameState.check_win()
+	GameState.out_of_fuel = not _anything_to_light()
+	# The warehouse fills with smoke as the city burns.
+	var k := city.progress() * 0.75 + clampf(city.burning.size() / 140.0, 0.0, 1.0) * 0.35
+	house.set_haze(k, view.fire_glow())
 	if not GameState.starter_offered and not GameState.owns_starter and GameState.play_time >= Balance.STARTER_AFTER \
 			and not hud.is_blocking() and not Monetization.is_showing_ad():
 		GameState.starter_offered = true
 		GameState.save_game()
 		hud.show_starter_offer()
+
+
+func _anything_to_light() -> bool:
+	## Is there anything left standing that the tool in hand can light?
+	var p := GameState.tool_power()
+	for s in city.count:
+		if city.s_state[s] <= CityGrid.BURNING and (city.s_state[s] == CityGrid.BURNING or city.can_light(s, p)):
+			return true
+	return false
 
 
 func _on_won() -> void:
@@ -527,7 +564,7 @@ func _update_coach() -> void:
 	var text := ""
 	match GameState.tutorial_step:
 		0:
-			text = ("Hold the fire button" if touch else "Hold the left mouse button") + " with the crosshair on a box house. The glass catches the skylight."
+			text = ("Hold the fire cap" if touch else "Hold the mouse button down") + " with the crosshair on a box house. The glass catches the skylight."
 			if city.burning.size() > 0:
 				_next_step()
 		1:
@@ -548,8 +585,8 @@ func _update_coach() -> void:
 		4:
 			if GameState.tool_index >= 1:
 				_next_step()
-			elif GameState.coins >= float(Balance.TOOLS[1].cost):
-				text = "You can afford the candle. Open the box (top right)" + ("." if touch else ", or press E.")
+			elif GameState.coins >= GameState.tool_cost(1) and GameState.tool_gate_open(1):
+				text = "You can afford the candle. It's in the box (top right)."
 		5:
 			text = "Downtown's office boxes are thicker card. Drip candle wax on them."
 			if _coach_t > 9.0:

@@ -5,6 +5,7 @@ extends RefCounted
 
 static var _dot: Texture2D
 static var _chip: Texture2D
+static var _star: Texture2D
 
 
 static func soft_dot() -> Texture2D:
@@ -36,6 +37,25 @@ static func chip() -> Texture2D:
 		img.generate_mipmaps()
 		_chip = ImageTexture.create_from_image(img)
 	return _chip
+
+
+static func star() -> Texture2D:
+	## A felt-tip star: five points, drawn a little wonky (the rockets' bursts).
+	if _star == null:
+		var n := 48
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		var pts := PackedVector2Array()
+		for k in 10:
+			var a := -PI * 0.5 + TAU * k / 10.0 + (0.08 if k % 3 == 0 else -0.04)
+			var r := (n * 0.47 if k % 2 == 0 else n * 0.2) * (1.0 + 0.06 * sin(k * 2.3))
+			pts.append(Vector2(n * 0.5, n * 0.52) + Vector2(cos(a), sin(a)) * r)
+		for y in n:
+			for x in n:
+				var inside := Geometry2D.is_point_in_polygon(Vector2(x + 0.5, y + 0.5), pts)
+				img.set_pixel(x, y, Color(1, 1, 1, 1.0 if inside else 0.0))
+		img.generate_mipmaps()
+		_star = ImageTexture.create_from_image(img)
+	return _star
 
 
 static func particles(amount: int, size: float, colors: Array, additive: bool = true, tex: Texture2D = null) -> CPUParticles3D:
@@ -83,3 +103,4 @@ static func curve(a: float, b: float) -> Curve:
 static func clear() -> void:
 	_dot = null
 	_chip = null
+	_star = null

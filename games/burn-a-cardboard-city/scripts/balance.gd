@@ -17,15 +17,20 @@ extends RefCounted
 const WORLD_SEED := 20261110
 const CELL := 0.5                  # metres per grid cell
 const BLOCK := 8                   # cells per side of a city block
-const STREET := 3                  # cells across a street
+const STREET := 3                  # cells across an ordinary street
 const BLOCKS := 9                  # blocks per side
-const GRID := BLOCKS * (BLOCK + STREET) + STREET   # 102 cells, 51 m
+# Cells across each of the 10 streets (west to east, north to south). The ones
+# between districts are wide strips of bare warehouse floor (the district gaps,
+# with the builder's giant props standing in them); 3 and 6 hold the castle's moat.
+const STREET_W := [3, 7, 7, 5, 3, 3, 5, 7, 7, 3]
+const GAP_STREETS := [1, 2, 3, 6, 7, 8]
+const GRID := 122                  # sum(STREET_W) + BLOCKS x BLOCK cells (61 m)
 const TICK := 0.1                  # fire simulation step (10 Hz)
 const COOL := 1.2                  # share of a structure's heat lost per second
 const DAMP_MULT := 2.0             # next to a puddle: this much harder to light
 const SPREAD := 1.0
-const WIND_GAIN := 1.3             # downwind neighbours get up to 1 + this x strength
-const GAP_WEIGHT := [1.0, 0.55, 0.16, 0.05]   # heat reaching a neighbour 0, 1, 2, 3 empty cells away
+const WIND_GAIN := 0.8             # downwind neighbours get up to 1 + this x strength
+const GAP_WEIGHT := [0.8, 0.34, 0.07, 0.0]    # heat reaching a neighbour 0, 1, 2, 3 empty cells away
 const BURN_SHARE := 0.55           # share of a structure's coins paid while it burns (the rest when it falls)
 const CHAIN_WINDOW := 3.0          # collapses this close together make a chain
 const CHAIN_STEP := 0.2            # each link adds this to the collapse bonus...
@@ -34,8 +39,9 @@ const TOPPLE_TIME := 1.05          # seconds from the first wobble to hitting th
 const CRUMPLE_TIME := 0.55
 const DEBRIS_HEAT := 9.0           # heat per second a burning scrap of cardboard gives each structure next to it
 const DEBRIS_FUEL := Vector2(2.5, 5.5)
-const SPRAY_EVERY := 2.4           # a toy fire truck squirts water this often...
-const SPRAY_RANGE := 3.6           # ...at the nearest fire within this many metres
+const SPRAY_EVERY := 2.0           # a toy fire truck squirts water this often...
+const SPRAY_RANGE := 4.2           # ...at the nearest fire within this many metres
+const TRUCK_TANK := 12             # squirts in a truck's tank; then it's out of water (no dead ends)
 const SPRAY_DOUSE := 0.5           # each squirt knocks this much off a fire
 const WET_TIME := 8.0              # seconds a doused building stays wet (twice as hard to light)
 
@@ -66,43 +72,65 @@ const TRUCK := 9
 # spot: chance per tick of throwing a burning scrap downwind. find: chance a find
 # pops out when it hits the ground. citizens: paper people who hop out when it catches.
 const KINDS = [
-	{"name": "Box house", "ignite": 12.0, "heat": 22.0, "fill": 1.2, "burn": 4.5, "coins": 5.0,
-		"spill": 20.0, "topple": false, "spot": 0.0, "find": 0.05, "citizens": 1},
-	{"name": "Cardboard car", "ignite": 7.0, "heat": 30.0, "fill": 0.6, "burn": 3.0, "coins": 3.0,
-		"spill": 14.0, "topple": false, "spot": 0.0, "find": 0.02, "citizens": 0},
-	{"name": "Paper tree", "ignite": 7.0, "heat": 15.0, "fill": 0.5, "burn": 2.5, "coins": 1.0,
-		"spill": 10.0, "topple": false, "spot": 0.0, "find": 0.0, "citizens": 0},
-	{"name": "Office box", "ignite": 70.0, "heat": 160.0, "fill": 2.5, "burn": 7.0, "coins": 45.0,
-		"spill": 110.0, "topple": true, "spot": 0.002, "find": 0.15, "citizens": 2},
-	{"name": "Skyscraper", "ignite": 280.0, "heat": 650.0, "fill": 4.0, "burn": 10.0, "coins": 400.0,
-		"spill": 420.0, "topple": true, "spot": 0.003, "find": 0.35, "citizens": 3},
-	{"name": "Castle wall", "ignite": 900.0, "heat": 2000.0, "fill": 5.0, "burn": 11.0, "coins": 2500.0,
-		"spill": 1100.0, "topple": false, "spot": 0.002, "find": 1.0, "citizens": 0},
-	{"name": "Castle tower", "ignite": 1000.0, "heat": 2200.0, "fill": 5.0, "burn": 11.0, "coins": 4000.0,
-		"spill": 1300.0, "topple": true, "spot": 0.003, "find": 1.0, "citizens": 0},
-	{"name": "Gatehouse", "ignite": 950.0, "heat": 2100.0, "fill": 5.0, "burn": 11.0, "coins": 3500.0,
-		"spill": 1200.0, "topple": false, "spot": 0.002, "find": 1.0, "citizens": 0},
-	{"name": "The keep", "ignite": 2000.0, "heat": 3000.0, "fill": 8.0, "burn": 22.0, "coins": 40000.0,
-		"spill": 2500.0, "topple": false, "spot": 0.0, "find": 1.0, "citizens": 0},
-	{"name": "Toy fire truck", "ignite": 60.0, "heat": 50.0, "fill": 1.0, "burn": 4.0, "coins": 25.0,
-		"spill": 30.0, "topple": false, "spot": 0.0, "find": 0.5, "citizens": 0},
+	{"name": "Box house", "ignite": 12.0, "heat": 12.5, "fill": 2.0, "burn": 9.0, "coins": 6.0,
+		"spill": 7.0, "topple": false, "spot": 0.0, "find": 0.05, "citizens": 1},
+	{"name": "Cardboard car", "ignite": 8.0, "heat": 17.0, "fill": 1.0, "burn": 5.0, "coins": 3.0,
+		"spill": 6.0, "topple": false, "spot": 0.0, "find": 0.02, "citizens": 0},
+	{"name": "Paper tree", "ignite": 7.0, "heat": 11.0, "fill": 0.8, "burn": 4.0, "coins": 1.0,
+		"spill": 4.0, "topple": false, "spot": 0.0, "find": 0.0, "citizens": 0},
+	{"name": "Office box", "ignite": 70.0, "heat": 80.0, "fill": 5.0, "burn": 18.0, "coins": 50.0,
+		"spill": 30.0, "topple": true, "spot": 0.001, "find": 0.15, "citizens": 2},
+	{"name": "Skyscraper", "ignite": 340.0, "heat": 160.0, "fill": 10.0, "burn": 34.0, "coins": 450.0,
+		"spill": 80.0, "topple": true, "spot": 0.001, "find": 0.35, "citizens": 3},
+	{"name": "Castle wall", "ignite": 950.0, "heat": 1100.0, "fill": 6.0, "burn": 30.0, "coins": 2500.0,
+		"spill": 550.0, "topple": false, "spot": 0.001, "find": 1.0, "citizens": 0},
+	{"name": "Castle tower", "ignite": 980.0, "heat": 1300.0, "fill": 6.0, "burn": 30.0, "coins": 4000.0,
+		"spill": 650.0, "topple": true, "spot": 0.0015, "find": 1.0, "citizens": 0},
+	{"name": "Gatehouse", "ignite": 960.0, "heat": 1200.0, "fill": 6.0, "burn": 30.0, "coins": 3500.0,
+		"spill": 600.0, "topple": false, "spot": 0.001, "find": 1.0, "citizens": 0},
+	{"name": "The keep", "ignite": 2000.0, "heat": 3000.0, "fill": 12.0, "burn": 75.0, "coins": 40000.0,
+		"spill": 0.0, "topple": false, "spot": 0.0, "find": 1.0, "citizens": 0},
+	{"name": "Toy fire truck", "ignite": 60.0, "heat": 35.0, "fill": 1.5, "burn": 6.0, "coins": 25.0,
+		"spill": 20.0, "topple": false, "spot": 0.0, "find": 0.5, "citizens": 0},
 ]
+# Which tool each kind is meant for (a TOOLS index). Damp never pushes a building past what
+# that tool can light at its base power, so nothing is left that only upgrades could reach.
+const TIER := [0, 0, 0, 1, 2, 3, 3, 3, 3, 1]
+# The keep only catches once this share of the rest of the castle is down (breach the walls first).
+const KEEP_GATE := 0.75
 
 # Model variants per kind (mesh names in models/*.glb) and their heights in metres.
 const MODELS = {
-	HOUSE: [["house_gable", 0.86], ["house_flaps", 0.7], ["house_tall", 1.09], ["house_shoebox", 0.43], ["house_cottage", 0.8]],
+	HOUSE: [["house_cereal", 0.8], ["house_cartons", 0.83], ["house_tissue", 0.58], ["house_insideout", 0.85],
+		["house_shoebox", 0.42], ["house_stack", 1.06]],
 	CAR: [["car_sedan", 0.32], ["car_van", 0.47], ["car_taxi", 0.37]],
-	TREE: [["tree_cone", 0.68], ["tree_ball", 0.61], ["tree_pom", 0.54]],
-	OFFICE: [["office_a", 2.0], ["office_b", 1.88], ["office_stack", 1.94], ["office_tall", 2.6]],
-	SKY: [["sky_setback", 4.0], ["sky_white", 4.1], ["sky_tube", 4.7], ["sky_ziggurat", 4.1]],
-	WALL: [["wall_long", 2.1], ["wall_short", 2.1]],
-	TURRET: [["turret", 4.5]],
-	GATE: [["gatehouse", 3.0]],
-	KEEP: [["keep", 7.0]],
+	TREE: [["tree_tissue", 0.6], ["tree_tuft", 0.54], ["tree_cone", 0.6], ["tree_blossom", 0.54]],
+	OFFICE: [["ship_kestrel", 2.06], ["ship_stack", 2.03], ["ship_open", 2.2], ["ship_tall", 2.75]],
+	SKY: [["sky_stack", 6.4], ["sky_tower", 6.3], ["sky_setback", 5.9], ["sky_tube", 5.65]],
+	WALL: [["wall_long", 2.2], ["wall_short", 2.2]],
+	TURRET: [["turret", 6.0]],
+	GATE: [["gatehouse", 3.3]],
+	KEEP: [["keep", 9.0]],
 	TRUCK: [["fire_truck", 0.6]],
 }
-const OFFICE_WIDE := ["office_wide", 2.0]
-const SKY_WIDE := ["sky_wide", 3.4]
+const OFFICE_WIDE := ["ship_wide", 2.3]
+const SKY_WIDE := ["sky_wide", 5.6]
+
+# What each kind leaves behind when it has burned down (models/rubble.glb). Crumplers get
+# a heap where they stood; topplers a fallen, crumpled tower along the way they fell.
+const RUBBLE = {
+	HOUSE: ["rub_house_0", "rub_house_1", "rub_house_2", "rub_house_3"],
+	CAR: ["rub_small_0"],
+	TREE: ["rub_small_1"],
+	TRUCK: ["rub_small_0"],
+	OFFICE: ["fall_office_0", "fall_office_1", "fall_office_2"],
+	SKY: ["fall_sky_0", "fall_sky_2", "fall_sky_0"],
+	WALL: ["rub_castle_0"],
+	GATE: ["rub_castle_1"],
+	TURRET: ["fall_turret"],
+	KEEP: ["rub_castle_2"],
+}
+const FALL_SIZE = {"fall_office": Vector2(2.2, 1.3), "fall_sky": Vector2(5.6, 1.8), "fall_turret": Vector2(5.0, 1.8)}
 
 # --- The giant ------------------------------------------------------------------------
 const EYE := 3.3                   # eye height (suburb houses come to the knee, offices to the chest)
@@ -121,32 +149,42 @@ const PITCH := Vector2(-1.48, 0.35)
 const TOOLS = [
 	{"key": "magnifier", "name": "Magnifying glass", "power": 20.0, "radius": 0.35, "range": 8.0, "cost": 0.0,
 		"desc": "Catches the light from the skylights and focuses it to a point.", "lights": "box houses, cars and trees"},
-	{"key": "candle", "name": "Candle", "power": 120.0, "radius": 0.55, "range": 7.0, "cost": 150.0,
+	{"key": "candle", "name": "Candle", "power": 120.0, "radius": 0.55, "range": 7.0, "cost": 250.0,
 		"desc": "Drips burning wax. Thick enough for downtown's office boxes.", "lights": "office boxes and fire trucks"},
-	{"key": "blowtorch", "name": "Blowtorch", "power": 480.0, "radius": 0.8, "range": 8.0, "cost": 2000.0,
+	{"key": "blowtorch", "name": "Blowtorch", "power": 480.0, "radius": 0.8, "range": 8.0, "cost": 9000.0,
 		"desc": "A hissing blue jet. Skyscrapers are double-walled; this doesn't care.", "lights": "skyscrapers"},
-	{"key": "rockets", "name": "Firework rockets", "power": 2600.0, "radius": 1.4, "range": 26.0, "cost": 12000.0,
+	{"key": "rockets", "name": "Firework rockets", "power": 2600.0, "radius": 1.4, "range": 26.0, "cost": 24000.0,
 		"desc": "Launch them across the city. They burst where they land.", "lights": "the castle"},
 ]
-const ROCKET_EVERY := 0.6          # seconds between rockets while the button is held
+# District gating: the next tool only goes on sale once this share of the district
+# before it is down (the candle once the suburbs are 45% down, and so on).
+const TOOL_GATE := [0.0, 0.85, 0.86, 0.86]
+# Seconds a tool has to stay on one thing before it gives its full heat (the glass has to
+# gather the light; wax has to pool). The crosshair's ring fills meanwhile.
+const FOCUS := [3.4, 3.0, 2.0, 0.0]
+const ROCKET_EVERY := 0.9          # seconds between rockets while the button is held
+# Each burst dumps this x the rockets' power as heat. Bursts every ROCKET_EVERY pile up to
+# burst / (1 - e^(-COOL x ROCKET_EVERY)) = 1.51 x burst, so 0.66 makes `power` mean what it
+# means for the other tools (a dry wall takes one rocket, a damp one by the moat two or three).
+const ROCKET_BURST := 0.66
 const ROCKET_SPEED := 17.0
 
 # Upgrades. Effect = 1 + per_level x level (glue: burn time x (1 - per_level x level)). Cost = base x growth^level.
 const UPGRADES = [
-	{"key": "heat", "name": "Hotter flame", "base": 30.0, "growth": 2.0, "per_level": 0.25, "max": 20,
-		"desc": "+25% tool power. Reach tougher buildings early."},
-	{"key": "dry", "name": "Dry cardboard", "base": 80.0, "growth": 2.0, "per_level": 0.08, "max": 10,
-		"desc": "+8% spread. Fire jumps gaps it couldn't before."},
-	{"key": "coins", "name": "Loose change", "base": 50.0, "growth": 1.85, "per_level": 0.15, "max": 20,
-		"desc": "+15% coins from everything that burns."},
-	{"key": "glue", "name": "Cheap glue", "base": 120.0, "growth": 2.1, "per_level": 0.06, "max": 8,
-		"desc": "Buildings fall 6% sooner. Faster collapses, longer chains."},
-	{"key": "boots", "name": "Big boots", "base": 40.0, "growth": 2.0, "per_level": 0.12, "max": 8,
-		"desc": "+12% walking speed."},
+	{"key": "heat", "name": "Hotter flame", "base": 40.0, "growth": 2.25, "per_level": 0.12, "max": 15,
+		"desc": "+12% tool power. Reach tougher buildings early."},
+	{"key": "dry", "name": "Dry cardboard", "base": 90.0, "growth": 2.3, "per_level": 0.04, "max": 10,
+		"desc": "+4% spread. Fire jumps gaps it couldn't before."},
+	{"key": "coins", "name": "Loose change", "base": 60.0, "growth": 2.25, "per_level": 0.12, "max": 15,
+		"desc": "+12% coins from everything that burns."},
+	{"key": "glue", "name": "Cheap glue", "base": 120.0, "growth": 2.1, "per_level": 0.05, "max": 8,
+		"desc": "Buildings fall 5% sooner. Faster collapses, longer chains."},
+	{"key": "boots", "name": "Big boots", "base": 40.0, "growth": 2.2, "per_level": 0.08, "max": 6,
+		"desc": "+8% walking speed."},
 ]
 
 # Helpers wander off and light things on their own. power works like a tool's.
-const HELPER_GROWTH := 1.3
+const HELPER_GROWTH := 1.75
 const HELPERS = [
 	{"key": "windup", "name": "Wind-up car", "power": 22.0, "base": 100.0, "speed": 2.6,
 		"desc": "A tin car with a sparkler taped on. Drives the streets and lights houses."},
@@ -158,6 +196,7 @@ const MAX_VISIBLE_HELPERS := 8     # per type; more just burn hotter
 # Citizens and finds.
 const MAX_CITIZENS := 14
 const GOLDEN_SHARE := 0.07         # of finds, a golden ticket
+const GOLDEN_PITY := 18            # ...and one for sure after this many finds without one
 const FIND_MINUTES := 0.4          # a find pays this many minutes of recent income...
 const FIND_MIN := 15.0             # ...at least this
 const GOLDEN_MINUTES := 2.0
@@ -211,15 +250,57 @@ static func kind_def(k: int) -> Dictionary:
 	return KINDS[k]
 
 
+static var _axis_ring := PackedByteArray()
+
+
+static func block_start(b: int) -> int:
+	## First cell of block b (0..8) along an axis.
+	var c := 0
+	for k in b + 1:
+		c += int(STREET_W[k])
+	return c + b * BLOCK
+
+
+static func street_start(k: int) -> int:
+	## First cell of street k (0..9) along an axis.
+	return 0 if k == 0 else block_start(k - 1) + BLOCK
+
+
+static func lane(k: int) -> int:
+	## The middle cell of street k.
+	return street_start(k) + int(STREET_W[k]) / 2
+
+
+static func street_of(c: int) -> int:
+	## Which street a cell along an axis is on (-1: inside a block).
+	for k in STREET_W.size():
+		if c >= street_start(k) and c < street_start(k) + int(STREET_W[k]):
+			return k
+	return -1
+
+
+static func _rings() -> PackedByteArray:
+	## How far out (0 = the middle block, 4 = the outside ring) each cell along an
+	## axis is. A street between two rings is split down its middle.
+	if _axis_ring.size() == GRID:
+		return _axis_ring
+	_axis_ring.resize(GRID)
+	for b in BLOCKS:
+		for c in range(block_start(b), block_start(b) + BLOCK):
+			_axis_ring[c] = absi(b - 4)
+	for k in STREET_W.size():
+		var s := street_start(k)
+		var w := int(STREET_W[k])
+		for i in w:
+			var side := k - 1 if i < w / 2 else k    # the block on that side of the street
+			side = clampi(side, 0, BLOCKS - 1)
+			_axis_ring[s + i] = absi(side - 4)
+	return _axis_ring
+
+
 static func zone_for_cell(x: int, y: int) -> int:
-	## Districts are square rings around the middle of the grid.
-	var c := GRID * 0.5
-	var d := maxf(absf(x + 0.5 - c), absf(y + 0.5 - c))
-	var period := float(BLOCK + STREET)
-	if d < period * 1.5:
-		return 3
-	if d < period * 2.5:
-		return 2
-	if d < period * 3.5:
-		return 1
-	return 0
+	## Districts are square rings around the middle of the grid: the suburbs on the
+	## outside, then downtown, skyscraper row, and the castle in the three middle blocks.
+	var r := _rings()
+	var ring := maxi(r[clampi(x, 0, GRID - 1)], r[clampi(y, 0, GRID - 1)])
+	return [3, 3, 2, 1, 0][ring]

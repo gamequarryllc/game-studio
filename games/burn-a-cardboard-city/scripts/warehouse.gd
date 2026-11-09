@@ -6,7 +6,7 @@ extends Node3D
 ## whoever built the city left lying about (tape, a marker, scissors, pallets of
 ## flattened boxes).
 
-const HALF := 38.0                 # half the inside width of the building
+const HALF := 41.0                 # half the inside width of the building
 const WALL_H := 11.0
 const SKYLIGHT_Z := [-22.0, -7.0, 8.0, 23.0]
 
@@ -29,45 +29,74 @@ func build() -> void:
 	_props()
 
 
+const KEY_ELEVATION := 28.0         # degrees: low late-afternoon light, long shadows
+const KEY_YAW := -141.5             # from the west-north-west: shadows fall to the east-south-east
+const AMBIENT := 0.4
+const FOG := Color(0.42, 0.47, 0.55)
+const FOG_SMOKE := Color(0.24, 0.21, 0.19)
+
+var fill: DirectionalLight3D
+var obstacles: Array = []          # [Vector2 centre, radius]: props too tall to step over
+
+
 func _environment() -> void:
 	env = Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.13, 0.15, 0.18)
+	env.background_color = Color(0.08, 0.09, 0.11)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.56, 0.63, 0.74)
-	env.ambient_light_energy = 0.62
+	env.ambient_light_color = Color("#7f93b0")
+	env.ambient_light_energy = AMBIENT
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 1.08
+	env.tonemap_exposure = 1.12
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.46, 0.52, 0.6)
-	env.fog_density = 0.011
+	env.fog_light_color = FOG
+	env.fog_density = 0.012
 	env.fog_sky_affect = 0.0
 	env.glow_enabled = true
-	env.glow_intensity = 0.55
-	env.glow_bloom = 0.04
+	env.glow_intensity = 0.6
+	env.glow_bloom = 0.05
 	env.glow_hdr_threshold = 1.0
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
+	# The key: warm late-afternoon light through the high west windows.
 	sun = DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.92, 0.8)
-	sun.light_energy = 1.05
-	sun.rotation = Vector3(deg_to_rad(-58.0), deg_to_rad(-32.0), 0.0)
-	# Real shadows on computers; phones get the baked contact shadows only.
+	sun.light_color = Color("#ffe2b0")
+	sun.light_energy = 1.55
+	sun.rotation = Vector3(deg_to_rad(-KEY_ELEVATION), deg_to_rad(KEY_YAW), 0.0)
+	# Real shadows on computers; phones get the long shadows baked into the floor.
 	sun.shadow_enabled = not DisplayServer.is_touchscreen_available()
-	sun.shadow_bias = 0.04
-	sun.shadow_normal_bias = 1.2
+	sun.shadow_bias = 0.05
+	sun.shadow_normal_bias = 1.4
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 32.0
-	sun.shadow_opacity = 0.75
+	sun.directional_shadow_max_distance = 36.0
+	sun.shadow_opacity = 0.82
 	add_child(sun)
-	# A cool fill from the other side (light bouncing off the far wall).
-	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.62, 0.72, 0.9)
-	fill.light_energy = 0.22
-	fill.rotation = Vector3(deg_to_rad(-25.0), deg_to_rad(150.0), 0.0)
+	# A cool fill from the other side (sky bouncing off the far wall).
+	fill = DirectionalLight3D.new()
+	fill.light_color = Color("#7f93b0")
+	fill.light_energy = 0.38
+	fill.rotation = Vector3(deg_to_rad(-22.0), deg_to_rad(KEY_YAW + 180.0), 0.0)
 	fill.shadow_enabled = false
 	add_child(fill)
+
+
+func shadow_dir() -> Vector2:
+	## Which way shadows fall across the floor (world x, z), and how steep the light is.
+	var d := -sun.global_transform.basis.z if sun.is_inside_tree() else Vector3(0.62, -0.47, 0.78)
+	return Vector2(d.x, d.z).normalized()
+
+
+func set_haze(k: float, glow: float) -> void:
+	## As the city burns the warehouse fills with smoke: the haze browns and thickens,
+	## the daylight dims, and the fires take over.
+	k = clampf(k, 0.0, 1.0)
+	env.fog_light_color = FOG.lerp(FOG_SMOKE, k)
+	env.fog_density = 0.012 + 0.016 * k
+	env.ambient_light_energy = AMBIENT * (1.0 - 0.4 * k)
+	sun.light_energy = 1.55 * (1.0 - 0.3 * k)
+	fill.light_energy = 0.38 * (1.0 - 0.35 * k)
+	env.tonemap_exposure = 1.12 + 0.08 * k - minf(glow, 4.0) * 0.015
 
 
 func _box(size: Vector3, pos: Vector3, mat: Material) -> MeshInstance3D:
@@ -205,29 +234,43 @@ func update_fans(wind: Vector2, strength: float, delta: float) -> void:
 		(f.blades as Node3D).rotation.z += float(f.spin) * delta
 
 
+func _place(name: String, pos: Vector3, yaw: float, scale: float, block_radius: float = 0.0) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = ModelLib.prop_mesh(name)
+	mi.position = pos
+	mi.rotation.y = yaw
+	mi.scale = Vector3.ONE * scale
+	add_child(mi)
+	if block_radius > 0.0:
+		obstacles.append([Vector2(pos.x, pos.z), block_radius])
+	return mi
+
+
 func _props() -> void:
 	var r := RandomNumberGenerator.new()
 	r.seed = 9
-	var stacks := [Vector3(-33, 0, -30), Vector3(-30.5, 0, -32), Vector3(31, 0, 30), Vector3(33, 0, 27.5),
-		Vector3(32, 0, -20), Vector3(-33, 0, 18)]
+	var stacks := [Vector3(-36, 0, -34), Vector3(-33.5, 0, -36), Vector3(35, 0, 34), Vector3(37, 0, 31.5),
+		Vector3(36, 0, -22), Vector3(-37, 0, 20)]
 	for p in stacks:
-		var mi := MeshInstance3D.new()
-		mi.mesh = ModelLib.prop_mesh("card_stack" if r.randf() < 0.6 else "pallet")
-		mi.position = p
-		mi.rotation.y = r.randf_range(-0.3, 0.3)
-		add_child(mi)
+		_place("card_stack" if r.randf() < 0.6 else "pallet", p, r.randf_range(-0.3, 0.3), 1.6)
 		if r.randf() < 0.5:
-			var top := MeshInstance3D.new()
-			top.mesh = ModelLib.prop_mesh("card_stack")
-			top.position = p + Vector3(r.randf_range(-0.1, 0.1), 0.47, r.randf_range(-0.1, 0.1))
-			top.rotation.y = r.randf_range(-0.4, 0.4)
-			add_child(top)
-	# Left where the builder stopped working: just past the south edge of the city.
-	var tools := [["tape_roll", Vector3(-6.0, 0, 30.5), 0.3], ["marker_pen", Vector3(5.0, 0, 31.0), -0.4],
-		["scissors", Vector3(8.5, 0, 29.6), 1.1], ["card_stack", Vector3(-10.5, 0, 31.5), 0.15]]
-	for t in tools:
-		var mi := MeshInstance3D.new()
-		mi.mesh = ModelLib.prop_mesh(t[0])
-		mi.position = t[1]
-		mi.rotation.y = t[2]
-		add_child(mi)
+			_place("card_stack", p + Vector3(r.randf_range(-0.1, 0.1), 0.74, r.randf_range(-0.1, 0.1)), r.randf_range(-0.4, 0.4), 1.6)
+	# Left where the builder stopped working, by the door.
+	_place("tape_roll", Vector3(-4.6, 0, 33.4), 0.3, 1.6)
+	_place("marker_pen", Vector3(3.8, 0, 35.2), -0.4, 1.6)
+	_place("scissors", Vector3(6.8, 0, 33.1), 1.1, 1.6)
+	_place("card_stack", Vector3(-9.0, 0, 34.4), 0.15, 1.6)
+	# The builder's own things, giant beside the city, standing in the bare floor
+	# between the districts (off the middle of the strip, where the wind-up cars drive).
+	_place("paint_can", Vector3(11.2, 0, 22.4), 0.4, 1.05, 0.62)
+	_place("tape_roll", Vector3(-10.5, 0, 24.1), 0.9, 3.0)
+	_place("mug", Vector3(-24.1, 0, -5.0), 2.2, 1.1, 0.6)
+	_place("pallet", Vector3(22.4, 0, 9.0), 0.05, 2.35)
+	_place("card_stack", Vector3(22.5, 0.3, 9.1), -0.08, 1.9)
+	_place("marker_pen", Vector3(-15.0, 0, 9.5), 1.5, 2.6)
+	_place("scissors", Vector3(16.6, 0, -11.0), 0.7, 2.4)
+	_place("paint_can", Vector3(-6.5, 0, -24.0), 2.0, 0.85, 0.5)
+	_place("mug", Vector3(24.0, 0, -18.0), -0.6, 0.95, 0.52)
+	_place("tape_roll", Vector3(-16.6, 0, -9.0), 0.2, 2.2)
+	# The castle stands on a pallet.
+	_place("castle_pallet", Vector3.ZERO, 0.0, 0.965)

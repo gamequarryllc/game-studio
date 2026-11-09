@@ -1,12 +1,14 @@
 class_name Craft
 extends RefCounted
 ## The game's look, from the fiction: cut-out cardboard tags held on with masking
-## tape, lettered in thick marker. Display font: Permanent Marker (Apache 2.0).
-## Body font: Patrick Hand (OFL). Icons are drawn for the game (icons/*.svg, built
-## by tools/make_icons.py). See the art bible in NOTES.md.
+## tape. Headers are stencilled like the markings on a shipping box (Saira Stencil
+## One, OFL); numbers and the chain stamp are thick marker (Permanent Marker,
+## Apache 2.0); notes are handwriting (Patrick Hand, OFL). Icons are drawn for the
+## game (icons/*.svg, built by tools/make_icons.py). See the art bible in NOTES.md.
 
 const MARKER_PATH := "res://fonts/PermanentMarker-Regular.ttf"
 const HAND_PATH := "res://fonts/PatrickHand-Regular.ttf"
+const STENCIL_PATH := "res://fonts/SairaStencilOne-Regular.ttf"
 
 # The palette (art bible).
 const KRAFT := Color("#c89a64")       # cardboard: panels, tags, the city
@@ -24,6 +26,7 @@ const RED_INK := Color("#c23a2b")
 
 static var _marker: Font
 static var _hand: Font
+static var _stencil: Font
 static var _icons := {}
 static var _icons3d := {}
 
@@ -31,6 +34,7 @@ static var _icons3d := {}
 static func clear() -> void:
 	_marker = null
 	_hand = null
+	_stencil = null
 	_icons.clear()
 	_icons3d.clear()
 
@@ -45,6 +49,10 @@ static func install_fonts() -> void:
 	var h := FontVariation.new()
 	h.base_font = load(HAND_PATH)
 	_hand = h
+	var st := FontVariation.new()
+	st.base_font = load(STENCIL_PATH)
+	st.spacing_glyph = 2
+	_stencil = st
 	ThemeDB.fallback_font = h
 	ThemeDB.get_default_theme().default_font = h
 
@@ -57,6 +65,12 @@ static func marker() -> Font:
 static func hand() -> Font:
 	install_fonts()
 	return _hand
+
+
+static func stencil() -> Font:
+	## Box markings: headers, tabs, titles, button words.
+	install_fonts()
+	return _stencil
 
 
 static func icon(name: String) -> Texture2D:
@@ -104,10 +118,10 @@ static func paper(seed: int = 1, tape: int = 0, hole: bool = false) -> CardStyle
 	return s
 
 
-static func tag_button(b: Button, fill: Color = KRAFT, size: int = 26, seed: int = 3) -> void:
-	## A cardboard tag of a button: marker lettering, pushed in when pressed.
+static func tag_button(b: Button, fill: Color = KRAFT, size: int = 26, seed: int = 3, font: Font = null) -> void:
+	## A cardboard tag of a button: stencilled words (or marker numbers), pushed in when pressed.
 	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_override("font", marker())
+	b.add_theme_font_override("font", font if font != null else stencil())
 	b.add_theme_font_size_override("font_size", size)
 	var normal := card(fill, seed)
 	normal.content_margin_left = 18
@@ -141,7 +155,7 @@ static func tag_button(b: Button, fill: Color = KRAFT, size: int = 26, seed: int
 
 static func price_button(b: Button, seed: int = 5) -> void:
 	## A paper price tag on a string (the buy buttons in the shop box).
-	tag_button(b, PAPER, 24, seed)
+	tag_button(b, PAPER, 24, seed, marker())
 	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		var s := b.get_theme_stylebox(k) as CardStyle
 		s.hole = true
@@ -165,7 +179,7 @@ static func hot(b: Button, on: bool) -> void:
 
 static func label(size: int, color: Color = INK, font: Font = null, outline: int = 0, outline_color: Color = PAPER) -> Label:
 	var l := Label.new()
-	l.add_theme_font_override("font", font if font != null else marker())
+	l.add_theme_font_override("font", font if font != null else stencil())
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", color)
 	if outline > 0:
@@ -199,12 +213,20 @@ static func rich(size: int = 22, color: Color = INK) -> RichTextLabel:
 	r.scroll_active = false
 	r.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	r.add_theme_font_override("normal_font", hand())
-	r.add_theme_font_override("bold_font", marker())
+	r.add_theme_font_override("bold_font", stencil())
 	r.add_theme_font_size_override("normal_font_size", size)
 	r.add_theme_font_size_override("bold_font_size", size)
 	r.add_theme_color_override("default_color", color)
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return r
+
+
+static func number_font(text: String) -> Font:
+	## Marker for numbers and prices, stencil for words.
+	var t := text.strip_edges()
+	if t != "" and (t[0] == "$" or t[0] == "+" or t[0].is_valid_int() or t[0] == "x"):
+		return marker()
+	return stencil()
 
 
 static func coins_bb(text: String, size: int) -> String:

@@ -30,7 +30,8 @@ CARD = 1.0       # corrugated cardboard: corrugation, chars and burns
 PAPER = 0.75     # thin paper and card stock: smooth, catches fast
 TAPE = 0.5       # masking tape: a little sheen
 SHINY = 0.25     # bottle caps, tin, brass, plastic: glossy, never chars
-DARK = 0.0       # holes and insides
+INKLINE = 0.1    # the drawn outline round the giant's hand and tools (inverted hull)
+DARK = 0.0       # holes and insides (and glass, on the held tools)
 
 
 def srgb(h):
@@ -64,6 +65,23 @@ STEEL = srgb("#7d8790")
 WOOD = srgb("#a06a3a")
 WAX = srgb("#f2ead8")
 INK = srgb("#221d1b")
+# Burnt (art bible: char is never black, ash is grey).
+CHAR = srgb("#2a2420")
+CHAR_LIGHT = srgb("#3e342c")
+SCORCH = srgb("#5c3e26")
+ASH = srgb("#8a8580")
+ASH_LIGHT = srgb("#a8a39c")
+# District materials.
+EGG_PULP = srgb("#bdb3a2")       # moulded egg-box pulp
+EGG_PULP_DARK = srgb("#9e9484")
+ROLL = srgb("#b59a74")           # toilet-roll tube
+ROLL_SEAM = srgb("#9a7f5c")
+PAPER_WHITE = srgb("#efede6")    # copy-paper boxes
+PAPER_SHADE = srgb("#dedbd2")
+CEREAL_IN = srgb("#9c9284")      # the grey inside of a cereal box
+SKIN = srgb("#dba68a")
+SKIN_DARK = srgb("#c98a63")
+DENIM = srgb("#3f5f86")
 
 
 # =====================================================================================
@@ -199,7 +217,8 @@ class Model:
             self.jitter(faces, min(jitter, 0.0035) if max(size) > 0.9 else jitter)
         return faces
 
-    def plate(self, hinge, along, out, length, width, color, thick=0.008, flag=CARD, edge=KRAFT_EDGE, jitter=0.002):
+    def plate(self, hinge, along, out, length, width, color, thick=0.008, flag=CARD, edge=KRAFT_EDGE, jitter=0.002,
+              under=None, cuts=2):
         """A flat sheet hinged on an edge: `hinge` is the middle of the hinge line,
         `along` the hinge direction, `out` the direction the sheet extends from it."""
         along = Vector(along).normalized()
@@ -216,15 +235,29 @@ class Model:
         faces = self._new()
         edges = list({e for f in faces for e in f.edges})
         long_edges = [e for e in edges if abs((e.verts[1].co - e.verts[0].co).normalized().dot(along)) > 0.9]
-        bmesh.ops.subdivide_edges(self.bm, edges=long_edges, cuts=2, use_grid_fill=True)
+        bmesh.ops.subdivide_edges(self.bm, edges=long_edges, cuts=cuts, use_grid_fill=True)
+        if cuts > 2:
+            faces = self._new()
+            edges = list({e for f in faces for e in f.edges})
+            wide = [e for e in edges if abs((e.verts[1].co - e.verts[0].co).normalized().dot(out)) > 0.9]
+            bmesh.ops.subdivide_edges(self.bm, edges=wide, cuts=max(1, cuts // 2), use_grid_fill=True)
         faces = self._new()
+        for f in faces:
+            f.normal_update()
         self._paint(faces, color, flag)
+        if under is not None:
+            # "under" is the side facing down (or, for an upright flap, the side facing in).
+            if abs(n.z) > 0.15:
+                n_up = n if n.z > 0 else -n
+            else:
+                n_up = n if n.dot(Vector((c.x, c.y, 0))) >= 0 else -n
+            self._paint([f for f in faces if f.normal.dot(n_up) < -0.4], under, flag)
         self._paint([f for f in faces if abs(f.normal.dot(n)) < 0.4], edge, flag)
         if jitter:
             self.jitter(faces, jitter, 9.0)
         return faces
 
-    def flap(self, hinge, along, out_dir, angle_deg, length, width, color, thick=0.008):
+    def flap(self, hinge, along, out_dir, angle_deg, length, width, color, thick=0.008, under=None, cuts=2):
         """A box flap: hinged at `hinge`, lying along `out_dir`, then swung up by `angle_deg`
         about the hinge (0 = flat outward, 90 = straight up, 180 = folded in)."""
         along = Vector(along).normalized()
@@ -232,7 +265,7 @@ class Model:
         up = Vector((0, 0, 1))
         a = math.radians(angle_deg)
         out = (out_dir * math.cos(a) + up * math.sin(a)).normalized()
-        return self.plate(hinge, along, out, length, width, color, thick)
+        return self.plate(hinge, along, out, length, width, color, thick, under=under, cuts=cuts)
 
     def tape(self, start, end, normal, width=0.07, color=TAPE_COL, wrap=None):
         """A strip of masking tape on a surface, with torn, zig-zag ends."""
@@ -351,7 +384,7 @@ class Model:
                       width=0.025, color=(color[0] * 0.8, color[1] * 0.8, color[2] * 0.8))
         return faces
 
-    def ball(self, center, radius, color, flag=PAPER, subdiv=2, crumple=0.25):
+    def ball(self, center, radius, color, flag=PAPER, subdiv=2, crumple=0.25, smooth=False):
         """Crumpled tissue paper: an icosphere pushed about hard."""
         self._begin()
         bmesh.ops.create_icosphere(self.bm, subdivisions=subdiv, radius=radius,
@@ -363,15 +396,16 @@ class Model:
             d = (v.co - c)
             k = 1.0 + noise.noise(d * (3.5 / radius) + off) * crumple + self.rng.uniform(-0.06, 0.06)
             v.co = c + d * k
-        self._paint(faces, color, flag)
+        self._paint(faces, color, flag, smooth=smooth)
         return faces
 
     def decal(self, name, center, normal, width, height=None, up=(0, 0, 1), rot=0.0, lift=0.007):
         """A marker drawing (models/marker_sheet.png) stuck on a surface facing `normal`."""
         u0, v0, u1, v1 = UV[name]
         if height is None:
-            px_w = (u1 - u0) * 1024.0
-            px_h = (v1 - v0) * 1280.0
+            sw, sh = UV.get("_size", (1024, 1280))
+            px_w = (u1 - u0) * sw
+            px_h = (v1 - v0) * sh
             height = width * px_h / px_w
         n = Vector(normal).normalized()
         upv = Vector(up)
@@ -394,6 +428,134 @@ class Model:
             l[self.uv].uv = uv
         self._paint([f], (1, 1, 1), 1.0, mat=1)
         return [f]
+
+    # --- shaping and painting what's already built -------------------------------------
+    def crumple(self, faces, amp, freq=7.0, ridged=True):
+        """Push vertices along their normals with folded (ridged) noise: crushed card."""
+        off = Vector((self.seed * 1.37, self.seed * 2.11, self.seed * 0.53))
+        self.bm.normal_update()
+        for v in self._verts(faces):
+            n = v.normal if v.normal.length > 0.1 else Vector((0, 0, 1))
+            k = noise.noise(v.co * freq + off)
+            if ridged:
+                k = 0.5 - abs(k) * 1.6
+            v.co += n * k * amp + noise.noise_vector(v.co * freq * 0.5 + off) * amp * 0.35
+
+    def squash(self, faces, center, factor, bulge=0.0):
+        """Flatten toward the floor (z) around `center`; `bulge` pushes the low part out."""
+        c = Vector(center)
+        for v in self._verts(faces):
+            h = v.co.z
+            v.co.z = h * factor
+            if bulge:
+                r = Vector((v.co.x - c.x, v.co.y - c.y, 0))
+                v.co += r * bulge * max(0.0, 1.0 - h * 2.0)
+
+    def curl(self, faces, hinge, along, out, radius):
+        """Bend geometry that sticks out from a hinge line round a cylinder of `radius`
+        (a flap that curled up in the heat)."""
+        hinge, along, out = Vector(hinge), Vector(along).normalized(), Vector(out).normalized()
+        up = along.cross(out).normalized()
+        for v in self._verts(faces):
+            rel = v.co - hinge
+            t = rel.dot(out)
+            if t <= 0:
+                continue
+            h = rel.dot(up)
+            a = t / radius
+            along_part = rel.dot(along)
+            r = radius - h
+            v.co = hinge + along * along_part + out * (math.sin(a) * r) + up * (radius - math.cos(a) * r)
+
+    def transform(self, faces, matrix):
+        m = Matrix(matrix)
+        for v in self._verts(faces):
+            v.co = m @ v.co
+
+    def paint_by(self, faces, fn, flag=None):
+        """Colour every corner by fn(position, normal) -> rgb (or rgba with a flag)."""
+        for f in faces:
+            for l in f.loops:
+                c = fn(l.vert.co, f.normal)
+                fl = l[self.col][3] if flag is None else flag
+                l[self.col] = (c[0], c[1], c[2], c[3] if len(c) > 3 else fl)
+
+    def streaks(self, faces, color, amount=0.12, freq=(3.0, 26.0, 3.0), under=None, misses=0.0):
+        """Poster paint put on with a brush: streaky along one direction, thin where it
+        missed (the print underneath shows through: `under`)."""
+        off = Vector((self.seed * 0.7, self.seed * 1.3, 0.4))
+        fx, fy, fz = freq
+
+        def fn(p, n):
+            q = Vector((p.x * fx, p.y * fy, p.z * fz)) + off
+            k = 1.0 + noise.noise(q) * amount
+            col = [color[i] * k for i in range(3)]
+            if under is not None and misses > 0.0:
+                m = noise.noise(p * 9.0 + off * 3.0)
+                if m > 1.0 - misses * 2.0:
+                    t = min(1.0, (m - (1.0 - misses * 2.0)) * 6.0)
+                    col = [col[i] * (1 - t) + under[i] * t for i in range(3)]
+            return col
+        self.paint_by(faces, fn)
+
+    def burnt(self, faces, ash_top=0.55, scorch_low=0.25, seed_off=0.0):
+        """Char (#2a2420, never black) with grey ash settled on what faces up and a
+        little scorched brown card left low down and on the edges."""
+        off = Vector((self.seed * 2.3 + seed_off, self.seed * 0.9, 1.7))
+
+        def fn(p, n):
+            k = noise.noise(p * 11.0 + off)
+            c = [CHAR[i] * (1.0 + k * 0.35) for i in range(3)]
+            if k > 0.25:
+                c = [c[i] * 0.4 + CHAR_LIGHT[i] * 0.6 for i in range(3)]
+            low = max(0.0, 1.0 - p.z / 0.12) * scorch_low * (0.6 + 0.4 * noise.noise(p * 5.0 + off))
+            c = [c[i] * (1 - low) + SCORCH[i] * low for i in range(3)]
+            up = max(0.0, n.z) ** 2
+            a = up * ash_top * (0.55 + 0.45 * noise.noise(p * 7.0 + off * 1.3))
+            a = max(0.0, min(1.0, a))
+            ash = ASH_LIGHT if noise.noise(p * 23.0) > 0.3 else ASH
+            return [c[i] * (1 - a) + ash[i] * a for i in range(3)]
+        self.paint_by(faces, fn)
+
+    def add_mesh(self, me, matrix=None, color=(1, 1, 1), flag=CARD, smooth=True):
+        """Append another mesh's geometry (e.g. a metaball hand) as a part."""
+        self._begin()
+        m = Matrix(matrix) if matrix is not None else Matrix.Identity(4)
+        vmap = [self.bm.verts.new(m @ v.co) for v in me.vertices]
+        for poly in me.polygons:
+            try:
+                self.bm.faces.new([vmap[i] for i in poly.vertices])
+            except ValueError:
+                pass
+        faces = self._new()
+        for f in faces:
+            f.normal_update()
+        self._paint(faces, color, flag, smooth=smooth)
+        return faces
+
+    def outline(self, faces, thickness=0.004):
+        """An inverted-hull ink line round some parts (drawn-cartoon look on the held tools)."""
+        self._begin()
+        src = list(faces)
+        vnorm = {}
+        for f in src:
+            for v in f.verts:
+                vnorm.setdefault(v, Vector((0, 0, 0)))
+                vnorm[v] += f.normal
+        vmap = {}
+        for v, n in vnorm.items():
+            nn = n.normalized() if n.length > 1e-6 else Vector((0, 0, 1))
+            vmap[v] = self.bm.verts.new(v.co + nn * thickness)
+        for f in src:
+            try:
+                self.bm.faces.new([vmap[v] for v in reversed(f.verts)])
+            except ValueError:
+                pass
+        hull = self._new()
+        for f in hull:
+            f.normal_update()
+        self._paint(hull, INK, INKLINE, smooth=True)
+        return hull
 
     # --- finish -----------------------------------------------------------------------------
     def build(self):
@@ -462,6 +624,29 @@ def _use_color(me):
         if a.name == "Color":
             ca.render_color_index = i
             ca.active_color_index = i
+
+
+def metaball_mesh(elements, resolution=0.012, threshold=0.6):
+    """A blobby organic mesh from metaball elements: [(type, co, radius, size_xyz, rot_quat)]."""
+    mb = bpy.data.metaballs.new("mb")
+    mb.resolution = resolution
+    mb.render_resolution = resolution
+    mb.threshold = threshold
+    for kind, co, radius, size, rot in elements:
+        e = mb.elements.new(type=kind)
+        e.co = co
+        e.radius = radius
+        if size is not None:
+            e.size_x, e.size_y, e.size_z = size
+        if rot is not None:
+            e.rotation = rot
+    obj = bpy.data.objects.new("mb", mb)
+    bpy.context.scene.collection.objects.link(obj)
+    dg = bpy.context.evaluated_depsgraph_get()
+    ev = obj.evaluated_get(dg)
+    me = bpy.data.meshes.new_from_object(ev)
+    bpy.data.objects.remove(obj, do_unlink=True)
+    return me
 
 
 def export(objs, filename):

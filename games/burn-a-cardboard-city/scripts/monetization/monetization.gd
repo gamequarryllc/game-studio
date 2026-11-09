@@ -55,7 +55,7 @@ func _ready() -> void:
 	provider.purchase_failed.connect(func(id, reason): purchase_error.emit(id, reason))
 	provider.interstitial_closed.connect(func(_p): _interstitial_open = false)
 	provider.initialize()
-	_last_interstitial = Time.get_unix_time_from_system()
+	_last_interstitial = 0.0
 
 
 func _create_provider() -> MonetizationProvider:
@@ -91,7 +91,7 @@ func is_showing_ad() -> bool:
 
 
 func _on_rewarded_completed(placement: String) -> void:
-	_last_interstitial = Time.get_unix_time_from_system()
+	_last_interstitial = GameState.now()
 	var cb: Callable = _reward_callbacks.get(placement, Callable())
 	_reward_callbacks.erase(placement)
 	if cb.is_valid():
@@ -111,8 +111,8 @@ func maybe_show_interstitial(placement: String) -> bool:
 	## Only at natural breaks; never with Remove Ads, never early, at most every 4 min.
 	if GameState.owns_remove_ads_2x or GameState.play_time < Balance.INTERSTITIAL_FIRST_AFTER:
 		return false
-	var t := Time.get_unix_time_from_system()
-	if t - _last_interstitial < Balance.INTERSTITIAL_COOLDOWN or is_showing_ad():
+	var t: float = GameState.now()
+	if (_last_interstitial > 0.0 and t - _last_interstitial < Balance.INTERSTITIAL_COOLDOWN) or is_showing_ad():
 		return false
 	_last_interstitial = t
 	_interstitial_open = true

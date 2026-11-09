@@ -100,10 +100,16 @@ float vnoise3(vec3 p) {
 	return vnoise(p.xz + p.y * vec2(0.71, 1.33));
 }
 
-// How burnt this point is (0 clean, 1 charred), from the building's char amount.
+// How far the burn has crept over this point: below 0 untouched, 0 the burning edge,
+// above it scorched and then charred. It starts low down and where the fire caught,
+// and its front wanders (cardboard doesn't burn in straight lines).
+float burn_field(vec3 obj, float amount, float vary) {
+	// One wavy front climbing from the floor: broad, slow noise, a little fine tearing.
+	float n = vnoise3(obj * 0.9 + vary * 17.0) * 0.32 + vnoise3(obj * 3.5 + vary * 3.0) * 0.1;
+	float lowness = clamp(1.0 - obj.y / 2.6, -0.8, 1.0) * 0.55;
+	return amount * 1.45 + lowness - n - 0.62;
+}
+
 float char_mask(vec3 obj, float amount, float vary) {
-	float n = vnoise3(obj * 3.1 + vary * 17.0) * 0.6 + vnoise3(obj * 9.0) * 0.4;
-	// Char creeps up from below and in from the edges where it burns.
-	float lowness = clamp(1.0 - obj.y * 0.35, 0.0, 1.0) * 0.25;
-	return smoothstep(0.0, 0.12, amount * 1.25 + lowness * amount - n);
+	return smoothstep(0.03, 0.16, burn_field(obj, amount, vary));
 }

@@ -278,27 +278,32 @@ func _disc(center: Vector2, radius: float, fill: Color, edge: Color, seed: int) 
 	draw_polyline(closed, edge, 2.5, true)
 
 
-func _cap(center: Vector2, radius: float, lit: float) -> void:
-	## A red bottle cap with a crimped rim.
+func _cap(center: Vector2, radius: float, lit: float, base: Color = Color("#c8402f"), crimps: int = 42) -> void:
+	## A bottle cap seen from above: a crimped skirt, a flat top with a pressed ring,
+	## a glint. All three phone controls are caps, in different colours.
 	var pts := PackedVector2Array()
-	for k in 42:
-		var a := TAU * k / 42.0
-		var rr := radius * (1.0 if k % 2 == 0 else 0.9)
+	for k in crimps:
+		var a := TAU * k / crimps
+		var rr := radius * (1.0 if k % 2 == 0 else 0.91)
 		pts.append(center + Vector2(cos(a), sin(a)) * rr)
 	var sh := PackedVector2Array()
 	for q in pts:
-		sh.append(q + Vector2(2, 4))
-	draw_colored_polygon(sh, Color(0, 0, 0, 0.3))
-	draw_colored_polygon(pts, Color("#c8402f").lightened(0.15 * lit))
-	draw_circle(center, radius * 0.72, Color("#d9564a").lightened(0.15 * lit))
-	draw_arc(center, radius * 0.72, 0, TAU, 32, Color("#8f2a20"), 2.0, true)
-	draw_arc(center + Vector2(-radius * 0.15, -radius * 0.2), radius * 0.4, 3.6, 4.6, 10, Color(1, 1, 1, 0.45), 3.0, true)
+		sh.append(q + Vector2(3, 5))
+	draw_colored_polygon(sh, Color(0, 0, 0, 0.32))
+	draw_colored_polygon(pts, base.darkened(0.12).lightened(0.15 * lit))
+	var closed := pts.duplicate()
+	closed.append(pts[0])
+	draw_polyline(closed, base.darkened(0.45), 2.0, true)
+	draw_circle(center, radius * 0.76, base.lightened(0.06 + 0.15 * lit))
+	draw_arc(center, radius * 0.76, 0, TAU, 40, base.darkened(0.35), 2.5, true)
+	draw_arc(center, radius * 0.66, 0, TAU, 40, Color(base.darkened(0.2), 0.6), 1.5, true)
+	draw_arc(center + Vector2(-radius * 0.16, -radius * 0.22), radius * 0.44, 3.6, 4.7, 12, Color(1, 1, 1, 0.42), 3.0, true)
 
 
 func _draw() -> void:
-	var font := Craft.marker()
+	var font := Craft.stencil()
 	var kraft := Craft.KRAFT
-	# The stick.
+	# The stick: a red cap on a card disc.
 	var base := _stick_origin if _stick_finger != NONE else stick_home()
 	var knob := _stick_pos if _stick_finger != NONE else base
 	var a := 0.95 if _stick_finger != NONE else 0.62
@@ -308,36 +313,35 @@ func _draw() -> void:
 		var p := base + Vector2(cos(ang), sin(ang)) * (STICK_RADIUS - 16.0)
 		var tip := base + Vector2(cos(ang), sin(ang)) * (STICK_RADIUS - 6.0)
 		draw_line(p, tip, Color(Craft.INK, 0.55 * a), 3.0, true)
-	_cap(knob, 32.0, 1.0 if _stick_finger != NONE else 0.0)
+	_cap(knob, 32.0, 1.0 if _stick_finger != NONE else 0.0, Color("#c8402f"), 30)
 	if _stick_finger == NONE:
-		_text(font, "walk", base + Vector2(0, STICK_RADIUS + 24), 22, Color(Craft.PAPER, 0.9))
-	# The fire badge: pushed in and ringed with marker while you hold it.
+		_text(font, "WALK", base + Vector2(0, STICK_RADIUS + 22), 20, Color(Craft.PAPER, 0.9))
+	# The fire cap: a big orange cap with a flame on it, pushed in while you hold it.
 	var fc := fire_center()
 	var press := Vector2(0, 4) if firing else Vector2.ZERO
-	var fill := Craft.KRAFT if heat_ok else Color(0.7, 0.66, 0.6)
-	if firing:
-		fill = fill.lerp(Craft.FLAME, 0.35)
-	_disc(fc + press, FIRE_RADIUS, Color(fill, 0.92), Color(Craft.KRAFT_DARK, 0.95), 23)
-	var t0 := fc + Vector2(-FIRE_RADIUS * 0.75, -FIRE_RADIUS * 0.82)
-	draw_colored_polygon(PackedVector2Array([t0, t0 + Vector2(46, -22), t0 + Vector2(54, -7), t0 + Vector2(8, 15)]), Color(Craft.TAPE, 0.88))
+	var col := Color("#e0682c") if heat_ok else Color("#9a8d80")
+	_cap(fc + press, FIRE_RADIUS, 1.0 if firing else 0.0, col, 52)
 	var ic := Craft.icon("flame")
 	if ic != null:
-		var s := 84.0 + (6.0 * sin(_t * 9.0) if firing else 0.0)
-		draw_texture_rect(ic, Rect2(fc + press - Vector2(s, s) * 0.5 - Vector2(0, 12), Vector2(s, s)), false)
-	_text(font, "hold", fc + press + Vector2(0, 44), 24, Craft.INK, false)
+		var sz := 74.0 + (6.0 * sin(_t * 9.0) if firing else 0.0)
+		draw_texture_rect(ic, Rect2(fc + press - Vector2(sz, sz) * 0.5 - Vector2(0, 10), Vector2(sz, sz)), false)
+	_text(font, "HOLD", fc + press + Vector2(0, 42), 20, Color("#3a1a10"), false)
 	if firing:
 		var r := RandomNumberGenerator.new()
 		r.seed = int(_t * 8.0)
-		var pts := PackedVector2Array()
+		var ring := PackedVector2Array()
 		for k in 34:
 			var ang := TAU * k / 32.0
-			pts.append(fc + press + Vector2(cos(ang), sin(ang)) * (FIRE_RADIUS + 9.0 + r.randf_range(-3, 3)))
-		draw_polyline(pts, Craft.FLAME, 5.0, true)
-	# Jump: a paper tag.
+			ring.append(fc + press + Vector2(cos(ang), sin(ang)) * (FIRE_RADIUS + 9.0 + r.randf_range(-3, 3)))
+		draw_polyline(ring, Craft.FLAME, 5.0, true)
+	# Jump: a blue cap with an arrow drawn on it.
 	var jc := jump_center()
 	var jp := Vector2(0, 3) if _jump_finger != NONE else Vector2.ZERO
-	_disc(jc + jp, JUMP_RADIUS, Color(Craft.PAPER, 0.9), Color(0.55, 0.5, 0.42, 0.95), 37)
-	_text(font, "jump", jc + jp, 22, Craft.INK, false)
+	_cap(jc + jp, JUMP_RADIUS, 1.0 if _jump_finger != NONE else 0.0, Color("#3d6fb8"), 36)
+	var tip2 := jc + jp + Vector2(0, -20)
+	draw_line(jc + jp + Vector2(0, 2), tip2, Craft.PAPER, 5.0, true)
+	draw_colored_polygon(PackedVector2Array([tip2 + Vector2(0, -6), tip2 + Vector2(-9, 6), tip2 + Vector2(9, 6)]), Craft.PAPER)
+	_text(font, "JUMP", jc + jp + Vector2(0, 20), 17, Craft.PAPER, false)
 
 
 func _text(font: Font, s: String, center: Vector2, font_size: int, color: Color, outline: bool = true) -> void:

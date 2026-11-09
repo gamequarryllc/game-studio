@@ -24,8 +24,11 @@ ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 OUT_PNG = os.path.join(ROOT, "models", "marker_sheet.png")
 OUT_JSON = os.path.join(HERE, "marker_sheet.json")
 FONT = os.path.join(ROOT, "fonts", "PermanentMarker-Regular.ttf")
-SIZE = 1024          # width
-SIZE_H = 1280        # height
+STENCIL = os.path.join(ROOT, "fonts", "SairaStencilOne-Regular.ttf")
+PRINT = os.path.join(ROOT, "art", "fonts", "ArchivoBlack-Regular.ttf")
+HAND = os.path.join(ROOT, "fonts", "PatrickHand-Regular.ttf")
+SIZE = 2048          # width
+SIZE_H = 2048        # height
 SS = 2  # supersampling
 
 INK = (34, 29, 27, 245)
@@ -146,8 +149,28 @@ def rect_poly(x0, y0, x1, y1):
     return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
 
 
-def text(img, s, cx, cy, size, color=INK, angle=0.0):
-    font = ImageFont.truetype(FONT, int(size * SS))
+def text(img, s, cx, cy, size, color=INK, angle=0.0, font_path=None, spacing=0):
+    font = ImageFont.truetype(font_path or FONT, int(size * SS))
+    if spacing:
+        # Letter-spaced (stencil markings are set wide): draw glyph by glyph.
+        widths = [font.getbbox(ch)[2] - font.getbbox(ch)[0] if ch != " " else size * SS * 0.35 for ch in s]
+        tw = int(sum(widths) + spacing * SS * (len(s) - 1))
+        asc, desc = font.getmetrics()
+        layer = Image.new("RGBA", (tw + 40 * SS, asc + desc + 40 * SS), (0, 0, 0, 0))
+        ld = ImageDraw.Draw(layer)
+        x = 20 * SS
+        for ch, w in zip(s, widths):
+            if ch != " ":
+                bb = font.getbbox(ch)
+                ld.text((x - bb[0], 20 * SS), ch, font=font, fill=color)
+            x += w + spacing * SS
+        layer = layer.crop(layer.getbbox() or (0, 0, 1, 1))
+        pad = Image.new("RGBA", (layer.width + 40 * SS, layer.height + 40 * SS), (0, 0, 0, 0))
+        pad.alpha_composite(layer, (20 * SS, 20 * SS))
+        layer = pad.rotate(angle, resample=Image.BICUBIC, expand=True)
+        img.alpha_composite(layer, (int(cx * SS - layer.width / 2), int(cy * SS - layer.height / 2)))
+        return
+
     bbox = font.getbbox(s)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
     layer = Image.new("RGBA", (tw + 40 * SS, th + 40 * SS), (0, 0, 0, 0))
@@ -412,6 +435,323 @@ def awning(img, d, w, h):
     line(d, (0, h - 6), (w, h - 6), 5, INK, 0)
 
 
+
+# =====================================================================================
+# Printed graphics: what was already on the boxes before anyone drew on them.
+# Flexo ink (one or two colours, a little faded and worn), stencil markings,
+# barcodes, made-up brands, cereal-box art, copy-paper and egg-box labels.
+# =====================================================================================
+P_BLACK = (38, 34, 32, 235)
+P_RED = (190, 46, 36, 230)
+P_BLUE = (36, 84, 160, 230)
+P_GREEN = (40, 118, 70, 230)
+P_YELLOW = (244, 196, 48, 240)
+P_ORANGE = (236, 120, 36, 240)
+P_WHITE = (246, 242, 232, 245)
+P_CREAM = (240, 230, 205, 245)
+P_NAVY = (30, 52, 104, 240)
+
+
+def worn(img, amount=0.35, scale=9.0):
+    """Printed ink on board is never perfect: rub some of it away in soft patches and specks."""
+    w, h = img.size
+    a = img.getchannel("A")
+    noise = Image.new("L", (max(1, int(w / (scale * SS))), max(1, int(h / (scale * SS)))))
+    noise.putdata([int(255 * (1.0 - amount * rng.random() ** 2)) for _ in range(noise.width * noise.height)])
+    noise = noise.resize((w, h), Image.BICUBIC)
+    specks = Image.new("L", (w // 2 or 1, h // 2 or 1), 255)
+    sd = ImageDraw.Draw(specks)
+    for _ in range(int(w * h / (SS * SS) / 900 * amount)):
+        x, y = rng.uniform(0, specks.width), rng.uniform(0, specks.height)
+        r = rng.uniform(0.5, 2.0) * SS
+        sd.ellipse((x - r, y - r, x + r, y + r), fill=int(255 * rng.uniform(0.2, 0.7)))
+    specks = specks.resize((w, h), Image.BILINEAR)
+    img.putalpha(ImageChops.multiply(ImageChops.multiply(a, noise), specks))
+
+
+def ptext(img, s, cx, cy, size, color=P_BLACK, font=None, angle=0.0, spacing=0, fit=None):
+    """Printed text; `fit` shrinks it until it is no wider than that many pixels."""
+    path = font or PRINT
+    if fit:
+        f = ImageFont.truetype(path, int(size * SS))
+        bb = f.getbbox(s)
+        wpx = (bb[2] - bb[0]) / SS + spacing * max(0, len(s) - 1) * (1.4 if spacing else 0)
+        if wpx > fit:
+            size *= fit / wpx
+    text(img, s, cx, cy, size, color, angle, path, spacing)
+
+
+def prect(d, x0, y0, x1, y1, color):
+    d.rectangle((x0 * SS, y0 * SS, x1 * SS, y1 * SS), fill=color)
+
+
+def pellipse(d, x0, y0, x1, y1, color, width=0):
+    if width:
+        d.ellipse((x0 * SS, y0 * SS, x1 * SS, y1 * SS), outline=color, width=int(width * SS))
+    else:
+        d.ellipse((x0 * SS, y0 * SS, x1 * SS, y1 * SS), fill=color)
+
+
+def ppoly(d, pts, color):
+    d.polygon([(x * SS, y * SS) for x, y in pts], fill=color)
+
+
+def brand(img, d, w, h, name, sub, color, icon=None):
+    if icon == "bird":
+        ppoly(d, [(18, h * 0.62), (44, h * 0.3), (60, h * 0.46), (88, h * 0.2), (74, h * 0.6), (50, h * 0.56), (34, h * 0.72)], color)
+        x0 = 100
+    elif icon == "kettle":
+        pellipse(d, 16, h * 0.3, 76, h * 0.86, color)
+        prect(d, 36, h * 0.18, 56, h * 0.3, color)
+        d.arc((60 * SS, h * 0.38 * SS, 92 * SS, h * 0.7 * SS), -80, 80, fill=color, width=6 * SS)
+        x0 = 100
+    elif icon == "arrow":
+        ppoly(d, [(14, h * 0.45), (60, h * 0.45), (60, h * 0.25), (92, h * 0.55), (60, h * 0.85), (60, h * 0.65), (14, h * 0.65)], color)
+        x0 = 100
+    elif icon == "fan":
+        pellipse(d, 16, h * 0.18, 84, h * 0.86, color, 5)
+        for k in range(3):
+            a = k * 2.094 + 0.4
+            cx, cy = 50, h * 0.52
+            ppoly(d, [(cx, cy), (cx + math.cos(a) * 28, cy + math.sin(a) * 28), (cx + math.cos(a + 0.7) * 26, cy + math.sin(a + 0.7) * 26)], color)
+        x0 = 100
+    else:
+        x0 = 14
+    ptext(img, name, (x0 + w) / 2, h * 0.42, h * 0.38, color, fit=(w - x0) * 0.9)
+    if sub:
+        ptext(img, sub, (x0 + w) / 2, h * 0.8, h * 0.16, color, STENCIL, spacing=3, fit=(w - x0) * 0.9)
+    worn(img, 0.3)
+
+
+def stencil(img, d, w, h, s, color=P_BLACK, size=None, spacing=6):
+    ptext(img, s, w / 2, h / 2, size or h * 0.55, color, STENCIL, spacing=spacing, fit=w * 0.92)
+    worn(img, 0.45, 6.0)
+
+
+def stencil_thisside(img, d, w, h):
+    for cx in (w * 0.12, w * 0.88):
+        ppoly(d, [(cx - 22, h * 0.45), (cx, h * 0.12), (cx + 22, h * 0.45), (cx + 8, h * 0.45), (cx + 8, h * 0.85),
+                  (cx - 8, h * 0.85), (cx - 8, h * 0.45)], P_BLACK)
+    ptext(img, "THIS SIDE UP", w / 2, h / 2, h * 0.36, P_BLACK, STENCIL, spacing=5, fit=w * 0.62)
+    worn(img, 0.4, 6.0)
+
+
+def icon_umbrella(img, d, w, h):
+    cx = w / 2
+    d.pieslice(((cx - 40) * SS, 18 * SS, (cx + 40) * SS, 98 * SS), 180, 360, fill=P_BLACK)
+    prect(d, cx - 3, 56, cx + 3, h - 30, P_BLACK)
+    d.arc(((cx - 16) * SS, (h - 44) * SS, (cx + 4) * SS, (h - 22) * SS), 0, 180, fill=P_BLACK, width=6 * SS)
+    for k in range(5):
+        x = cx - 34 + k * 17
+        prect(d, x, 8, x + 3, 16, P_BLACK)
+    prect(d, 6, 4, w - 6, 8, (0, 0, 0, 0))
+    d.rectangle((6 * SS, 6 * SS, (w - 6) * SS, (h - 6) * SS), outline=P_BLACK, width=4 * SS)
+    worn(img, 0.35)
+
+
+def icon_nostack(img, d, w, h):
+    d.rectangle((26 * SS, 40 * SS, (w - 26) * SS, (h - 16) * SS), outline=P_BLACK, width=6 * SS)
+    d.rectangle((38 * SS, 12 * SS, (w - 38) * SS, 34 * SS), outline=P_BLACK, width=5 * SS)
+    d.line((14 * SS, 8 * SS, (w - 14) * SS, (h - 8) * SS), fill=P_BLACK, width=7 * SS)
+    d.line(((w - 14) * SS, 8 * SS, 14 * SS, (h - 8) * SS), fill=P_BLACK, width=7 * SS)
+    worn(img, 0.35)
+
+
+def barcode(img, d, w, h, label=True):
+    if label:
+        prect(d, 0, 0, w, h, P_WHITE)
+        for k in range(3):
+            y = 12 + k * 13
+            prect(d, 12, y, 12 + rng.uniform(0.35, 0.9) * (w - 24), y + 6, (60, 58, 56, 220))
+        bx0, by0, by1 = 14, 58, h - 26
+        ptext(img, "%d %05d %05d %d" % (rng.randint(0, 9), rng.randint(0, 99999), rng.randint(0, 99999), rng.randint(0, 9)),
+              w / 2, h - 13, 13, P_BLACK, HAND)
+    else:
+        bx0, by0, by1 = 4, 4, h - 4
+    x = bx0
+    while x < w - bx0:
+        bw = rng.choice([2, 2, 3, 4, 6])
+        if rng.random() < 0.55:
+            prect(d, x, by0, x + bw, by1, P_BLACK)
+        x += bw + rng.choice([2, 3, 4])
+    if not label:
+        worn(img, 0.2)
+
+
+def cert_stamp(img, d, w, h):
+    cx, cy, r = w / 2, h / 2, min(w, h) / 2 - 8
+    pellipse(d, cx - r, cy - r, cx + r, cy + r, P_BLACK, 5)
+    pellipse(d, cx - r * 0.62, cy - r * 0.62, cx + r * 0.62, cy + r * 0.62, P_BLACK, 3)
+    msg = "BOX CERTIFICATE * BURST TEST 200 * MADE OF RECYCLED BOARD * "
+    font = ImageFont.truetype(STENCIL, int(13 * SS))
+    for k, ch in enumerate(msg):
+        a = -math.pi / 2 + k / len(msg) * math.tau
+        layer = Image.new("RGBA", (26 * SS, 26 * SS), (0, 0, 0, 0))
+        ImageDraw.Draw(layer).text((6 * SS, 2 * SS), ch, font=font, fill=P_BLACK)
+        layer = layer.rotate(-math.degrees(a) - 90, resample=Image.BICUBIC)
+        rr = r * 0.81
+        img.alpha_composite(layer, (int((cx + math.cos(a) * rr) * SS - 13 * SS), int((cy + math.sin(a) * rr) * SS - 13 * SS)))
+    ptext(img, "32 ECT", cx, cy - 10, 18, P_BLACK, STENCIL)
+    ptext(img, "LOT 7", cx, cy + 14, 14, P_BLACK, STENCIL)
+    worn(img, 0.4)
+
+
+def cereal_logo(img, d, w, h, name, bg, fg, outline):
+    ppoly(d, [(0, 10), (w, 0), (w, h), (0, h - 6)], bg)
+    for k in range(9):
+        x = rng.uniform(0, w)
+        y = rng.uniform(0, h)
+        r = rng.uniform(4, 10)
+        pellipse(d, x - r, y - r, x + r, y + r, (255, 255, 255, 60))
+    ptext(img, name, w / 2 + 3, h * 0.47 + 3, h * 0.42, outline, angle=4, fit=w * 0.84)
+    ptext(img, name, w / 2, h * 0.47, h * 0.42, fg, angle=4, fit=w * 0.84)
+    worn(img, 0.12)
+
+
+def cereal_bowl(img, d, w, h):
+    pellipse(d, 6, 6, w - 6, h - 6, P_YELLOW)
+    d.pieslice((24 * SS, 30 * SS, (w - 24) * SS, (h - 10) * SS), 0, 180, fill=P_WHITE)
+    pellipse(d, 24, h * 0.52 - 12, w - 24, h * 0.52 + 12, (240, 236, 226, 255))
+    for k in range(9):
+        x = 40 + rng.uniform(0, w - 80)
+        y = h * 0.52 - rng.uniform(4, 22)
+        pellipse(d, x - 9, y - 9, x + 9, y + 9, P_ORANGE)
+        pellipse(d, x - 3.5, y - 3.5, x + 3.5, y + 3.5, P_YELLOW)
+    d.line(((w - 40) * SS, 24 * SS, (w - 70) * SS, (h * 0.5) * SS), fill=(200, 200, 205, 255), width=7 * SS)
+    worn(img, 0.12)
+
+
+def cereal_nutrition(img, d, w, h):
+    prect(d, 0, 0, w, h, P_WHITE)
+    ptext(img, "Nutrition", w * 0.4, 16, 18, P_BLACK)
+    prect(d, 8, 30, w - 8, 34, P_BLACK)
+    y = 42
+    while y < h - 10:
+        prect(d, 10, y, 10 + rng.uniform(0.3, 0.6) * w, y + 4, (70, 66, 62, 230))
+        prect(d, w - 40, y, w - 12, y + 4, (70, 66, 62, 230))
+        y += 11
+    worn(img, 0.12)
+
+
+def cereal_burst(img, d, w, h):
+    cx, cy = w / 2, h / 2
+    pts = []
+    for k in range(28):
+        a = k / 28 * math.tau
+        r = (w / 2 - 4) * (1.0 if k % 2 == 0 else 0.78)
+        pts.append((cx + math.cos(a) * r, cy + math.sin(a) * r))
+    ppoly(d, pts, P_RED)
+    ptext(img, "NEW!", cx, cy - 12, 30, P_YELLOW, angle=12)
+    ptext(img, "more crunch", cx, cy + 22, 13, P_WHITE, HAND, angle=12)
+    worn(img, 0.1)
+
+
+def carton_label(img, d, w, h, kind):
+    if kind == "milk":
+        prect(d, 0, h * 0.55, w, h, P_BLUE)
+        for k in range(6):
+            x = rng.uniform(10, w - 10)
+            pellipse(d, x - 14, h * 0.55 - 8 + rng.uniform(-4, 4), x + 14, h * 0.55 + 10, P_BLUE)
+        ptext(img, "FRESH", w / 2, h * 0.24, h * 0.22, P_BLUE)
+        ptext(img, "MILK", w / 2, h * 0.76, h * 0.26, P_WHITE)
+    else:
+        prect(d, 0, 0, w, h, P_ORANGE)
+        for k in range(3):
+            cx = 30 + k * (w - 60) / 2
+            pellipse(d, cx - 24, h * 0.62 - 24, cx + 24, h * 0.62 + 24, P_YELLOW)
+            for j in range(6):
+                a = j / 6 * math.tau
+                d.line((cx * SS, h * 0.62 * SS, (cx + math.cos(a) * 20) * SS, (h * 0.62 + math.sin(a) * 20) * SS), fill=P_ORANGE, width=3 * SS)
+        ptext(img, "SUNNY JUICE", w / 2, h * 0.2, h * 0.17, P_WHITE, fit=w * 0.88)
+    worn(img, 0.12)
+
+
+def tissue_print(img, d, w, h):
+    prect(d, 0, 0, w, h, (196, 226, 214, 235))
+    for k in range(14):
+        cx, cy = rng.uniform(0, w), rng.uniform(0, h)
+        col = rng.choice([(236, 140, 160, 240), (250, 214, 110, 240), (140, 170, 220, 240)])
+        for j in range(5):
+            a = j / 5 * math.tau + rng.uniform(0, 1)
+            pellipse(d, cx + math.cos(a) * 9 - 7, cy + math.sin(a) * 9 - 7, cx + math.cos(a) * 9 + 7, cy + math.sin(a) * 9 + 7, col)
+        pellipse(d, cx - 4, cy - 4, cx + 4, cy + 4, (250, 246, 236, 255))
+    worn(img, 0.08)
+
+
+def paper_brand(img, d, w, h):
+    ppoly(d, [(0, h * 0.62), (w, h * 0.42), (w, h * 0.72), (0, h * 0.92)], P_BLUE)
+    ppoly(d, [(0, h * 0.95), (w, h * 0.76), (w, h * 0.82), (0, h)], (120, 170, 220, 230))
+    ptext(img, "PAPERLARK", w * 0.5, h * 0.2, h * 0.2, P_NAVY, fit=w * 0.86)
+    ptext(img, "COPY PAPER  A4  80gsm", w * 0.5, h * 0.42, h * 0.085, P_NAVY, STENCIL, spacing=2, fit=w * 0.86)
+    worn(img, 0.1)
+
+
+def paper_side(img, d, w, h):
+    ptext(img, "5 x 500", w / 2, h * 0.32, h * 0.3, P_NAVY)
+    ptext(img, "SHEETS - MULTI-PURPOSE", w / 2, h * 0.72, h * 0.13, P_NAVY, STENCIL, spacing=2)
+    worn(img, 0.12)
+
+
+def egg_label(img, d, w, h):
+    prect(d, 0, 0, w, h, P_CREAM)
+    d.rectangle((5 * SS, 5 * SS, (w - 5) * SS, (h - 5) * SS), outline=P_GREEN, width=4 * SS)
+    ptext(img, "FREE RANGE", w / 2, h * 0.36, h * 0.24, P_GREEN)
+    ptext(img, "12 LARGE EGGS", w / 2, h * 0.72, h * 0.15, P_BLACK, STENCIL, spacing=2)
+    worn(img, 0.15)
+
+
+def paint_label(img, d, w, h):
+    prect(d, 0, 0, w, h, P_WHITE)
+    prect(d, 0, h * 0.62, w, h, (122, 134, 146, 255))
+    ptext(img, "WAREHOUSE", w / 2, h * 0.2, h * 0.17, P_BLACK)
+    ptext(img, "FLOOR GREY", w / 2, h * 0.42, h * 0.15, P_RED)
+    ptext(img, "4 LITRES", w / 2, h * 0.81, h * 0.13, P_WHITE, STENCIL, spacing=3)
+    worn(img, 0.2)
+
+
+def mug_print(img, d, w, h):
+    ptext(img, "I LIKE BOXES", w / 2, h * 0.5, h * 0.42, P_RED, HAND)
+    worn(img, 0.25)
+
+
+def office_gaps(img, d, w, h, seed_kind):
+    """A floor of windows drawn in a hurry: not all the same, and some never drawn at all."""
+    n = rng.choice([3, 4, 4, 5])
+    xs = sorted(rng.uniform(0, 1) for _ in range(n))
+    slot = (w - 20) / n
+    for k in range(n):
+        if rng.random() < 0.22:
+            continue   # skipped this one
+        x0 = 10 + k * slot + rng.uniform(2, 8)
+        x1 = x0 + slot * rng.uniform(0.55, 0.85)
+        y0 = rng.uniform(10, 16)
+        y1 = h - rng.uniform(10, 16)
+        r = rng.random()
+        col = YELLOW if r < 0.3 else (SKY if r < 0.65 else (BLUE if r < 0.8 else None))
+        if col:
+            scribble(img, rect_poly(x0 + 3, y0 + 3, x1 - 3, y1 - 3), col, gap=rng.uniform(6, 9))
+        box(d, x0, y0, x1, y1, 5)
+        if rng.random() < 0.6:
+            line(d, ((x0 + x1) / 2, y0), ((x0 + x1) / 2, y1), 3)
+
+
+def sky_gaps(img, d, w, h):
+    cols = rng.choice([4, 5, 6])
+    for r in range(2):
+        for c in range(cols):
+            if rng.random() < 0.18:
+                continue
+            x0 = 10 + c * (w - 20) / cols
+            y0 = 10 + r * (h - 20) / 2
+            x1 = x0 + (w - 20) / cols - rng.uniform(8, 16)
+            y1 = y0 + (h - 20) / 2 - rng.uniform(10, 16)
+            q = rng.random()
+            col = YELLOW if q < 0.22 else ((150, 170, 200, 170) if q < 0.6 else None)
+            if col:
+                scribble(img, rect_poly(x0 + 2, y0 + 2, x1 - 2, y1 - 2), col, gap=7, width=5)
+            box(d, x0, y0, x1, y1, 4, (40, 44, 60, 235), 2)
+
+
 # name -> (w, h, painter)
 ITEMS = [
     ("win_blue", 96, 96, lambda i, d, w, h: window(i, d, w, h, BLUE)),
@@ -466,6 +806,50 @@ ITEMS = [
     ("sun", 72, 72, lambda i, d, w, h: doodle(i, d, w, h, "sun")),
     ("crown", 128, 96, crown),
     ("awning", 192, 48, awning),
+    # --- printed (flexo) graphics -------------------------------------------------
+    ("brand_kestrel", 320, 110, lambda i, d, w, h: brand(i, d, w, h, "KESTREL", "LAMPS + LIGHTING", P_BLACK, "bird")),
+    ("brand_parcelo", 320, 110, lambda i, d, w, h: brand(i, d, w, h, "PARCELO", "OVERNIGHT FREIGHT", P_RED, "arrow")),
+    ("brand_tinworks", 320, 110, lambda i, d, w, h: brand(i, d, w, h, "TINWORKS", "KITCHEN GOODS", P_BLUE)),
+    ("brand_mossy", 320, 110, lambda i, d, w, h: brand(i, d, w, h, "MOSSY", "KETTLE COMPANY", P_GREEN, "kettle")),
+    ("brand_bluefin", 320, 110, lambda i, d, w, h: brand(i, d, w, h, "BLUEFIN", "DESK FANS", P_BLUE, "fan")),
+    ("brand_no9", 256, 110, lambda i, d, w, h: brand(i, d, w, h, "No. 9", "SOAP FLAKES", P_RED)),
+    ("st_handle", 360, 64, lambda i, d, w, h: stencil(i, d, w, h, "HANDLE WITH CARE")),
+    ("st_fragile", 300, 80, lambda i, d, w, h: stencil(i, d, w, h, "FRAGILE", P_RED)),
+    ("st_keepdry", 260, 64, lambda i, d, w, h: stencil(i, d, w, h, "KEEP DRY")),
+    ("st_lot", 260, 64, lambda i, d, w, h: stencil(i, d, w, h, "LOT 0441", spacing=4)),
+    ("st_size", 300, 56, lambda i, d, w, h: stencil(i, d, w, h, "24 x 18 x 12", spacing=4)),
+    ("st_box3", 260, 64, lambda i, d, w, h: stencil(i, d, w, h, "BOX 3 OF 7", spacing=4)),
+    ("st_thisside", 340, 90, stencil_thisside),
+    ("ic_umbrella", 110, 140, icon_umbrella),
+    ("ic_nostack", 110, 120, icon_nostack),
+    ("ship_label", 200, 150, lambda i, d, w, h: barcode(i, d, w, h, True)),
+    ("barcode", 180, 70, lambda i, d, w, h: barcode(i, d, w, h, False)),
+    ("cert", 170, 170, cert_stamp),
+    ("cer_oat", 300, 150, lambda i, d, w, h: cereal_logo(i, d, w, h, "OAT LOOPS", P_BLUE, P_YELLOW, P_RED)),
+    ("cer_crunch", 300, 150, lambda i, d, w, h: cereal_logo(i, d, w, h, "CRUNCHOS", P_ORANGE, P_WHITE, P_RED)),
+    ("cer_honey", 300, 150, lambda i, d, w, h: cereal_logo(i, d, w, h, "HONEY STARS", (110, 48, 120, 240), P_YELLOW, P_ORANGE)),
+    ("cer_bowl", 220, 180, cereal_bowl),
+    ("cer_nutri", 150, 200, cereal_nutrition),
+    ("cer_burst", 140, 140, cereal_burst),
+    ("milk_label", 200, 200, lambda i, d, w, h: carton_label(i, d, w, h, "milk")),
+    ("juice_label", 200, 200, lambda i, d, w, h: carton_label(i, d, w, h, "juice")),
+    ("tissue_print", 256, 128, tissue_print),
+    ("paper_brand", 420, 220, paper_brand),
+    ("paper_side", 320, 110, paper_side),
+    ("egg_label", 300, 120, egg_label),
+    ("paint_label", 300, 200, paint_label),
+    ("mug_print", 300, 90, mug_print),
+    ("off_g1", 256, 80, lambda i, d, w, h: office_gaps(i, d, w, h, 1)),
+    ("off_g2", 256, 80, lambda i, d, w, h: office_gaps(i, d, w, h, 2)),
+    ("off_g3", 256, 80, lambda i, d, w, h: office_gaps(i, d, w, h, 3)),
+    ("off_g4", 256, 80, lambda i, d, w, h: office_gaps(i, d, w, h, 4)),
+    ("off_g5", 256, 80, lambda i, d, w, h: office_gaps(i, d, w, h, 5)),
+    ("off_g6", 256, 80, lambda i, d, w, h: office_gaps(i, d, w, h, 6)),
+    ("sky_g1", 256, 128, sky_gaps),
+    ("sky_g2", 256, 128, sky_gaps),
+    ("sky_g3", 256, 128, sky_gaps),
+    ("sky_g4", 256, 128, sky_gaps),
+    ("sky_g5", 256, 128, sky_gaps),
 ]
 
 
@@ -492,6 +876,7 @@ def main():
     # Ink bleeds a touch: spread colour into the transparent pixels so mipmaps don't go dark at edges.
     os.makedirs(os.path.dirname(OUT_PNG), exist_ok=True)
     sheet.save(OUT_PNG)
+    uv["_size"] = [SIZE, SIZE_H]
     with open(OUT_JSON, "w") as f:
         json.dump(uv, f, indent=1, sort_keys=True)
     print("wrote", OUT_PNG, "and", OUT_JSON, "(%d drawings)" % len(uv))

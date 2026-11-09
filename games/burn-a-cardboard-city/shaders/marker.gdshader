@@ -30,7 +30,7 @@ void vertex() {
 
 void fragment() {
 	vec4 ink = texture(sheet, UV);
-	float c = char_mask(v_obj, v_char, v_vary);
+	float c = smoothstep(-0.02, 0.1, burn_field(v_obj, v_char, v_vary));
 	// Felt-tip ink soaks into the board: slightly darker where the board is shaded.
 	ALBEDO = ink.rgb * mix(1.0, v_col.r, 0.5) * (1.0 - c * 0.8);
 	ALPHA = ink.a * (1.0 - smoothstep(0.6, 1.0, c)) * 0.94;

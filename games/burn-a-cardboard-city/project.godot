@@ -41,3 +41,22 @@ renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.13, 0.15, 0.18, 1)
 anti_aliasing/quality/msaa_3d=0
+
+[shader_globals]
+
+fire_l0={
+"type": "vec4",
+"value": Vector4(0, -100, 0, 0)
+}
+fire_l1={
+"type": "vec4",
+"value": Vector4(0, -100, 0, 0)
+}
+fire_l2={
+"type": "vec4",
+"value": Vector4(0, -100, 0, 0)
+}
+fire_l3={
+"type": "vec4",
+"value": Vector4(0, -100, 0, 0)
+}

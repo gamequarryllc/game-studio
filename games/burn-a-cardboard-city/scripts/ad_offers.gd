@@ -95,9 +95,9 @@ func pick() -> String:
 static func unlocks_tool() -> String:
 	## The next tool's name if the free coins would buy it, else "".
 	var i := GameState.next_tool_index()
-	if i < 0:
+	if i < 0 or not GameState.tool_gate_open(i):
 		return ""
-	var cost := float(Balance.TOOLS[i].cost)
+	var cost: float = GameState.tool_cost(i)
 	if GameState.coins < cost and GameState.coins + GameState.instant_amount() >= cost:
 		return str(Balance.TOOLS[i].name)
 	return ""

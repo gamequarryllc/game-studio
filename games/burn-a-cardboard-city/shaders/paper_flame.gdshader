@@ -1,88 +1,71 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled, shadows_disabled, depth_draw_opaque, fog_disabled;
-// Fire, cut from paper: flat layered flames (red rim, orange, yellow core) with a
-// darker cut edge, flickering at a stop-motion 8 frames a second. Drawn from a
-// MultiMesh of camera-facing quads that stay upright and lean with the wind.
-// INSTANCE_CUSTOM r = seed, g = strength 0..1, b = style (0 fire, 1 golden, 2 party, 3 blue gas), a = unused.
-// (A single MeshInstance gets its instance values from the `single` uniform instead.)
-// Alpha-scissored, so it draws in the opaque pass (cheap on phones, no sorting).
+// Fire, cut from paper (models/flames.png: six flame shapes, torn edges, a darker
+// red base). Camera-facing quads that stay upright and lean with the fans' wind,
+// flickering at a stop-motion 8 frames a second (a flame flips and stretches a little
+// on every frame). Flames within ~3 m of the eye fade out (dithered), so a fire you
+// walk into never fills the screen.
+// INSTANCE_CUSTOM r = seed, g = strength 0..1, b = style (0 fire, 1 golden, 2 party,
+// 3 blue gas), a = lead (1 for each building's one tall flame: it leans harder).
+// A single MeshInstance gets its values from the `single` uniform instead.
 
+uniform sampler2D flames : source_color, filter_linear_mipmap, repeat_disable;
 uniform vec2 wind = vec2(0.6, -0.4);
-uniform float brightness = 1.35;
-uniform float near_fade = 1.0;     // 0 for a flame held right in front of the eye (the candle)
+uniform float brightness = 1.25;
+uniform float near_fade = 1.0;     // 0 for a flame held right in front of the eye
+uniform vec4 single = vec4(0.0);
 
 varying vec4 v_c;
 varying float v_near;
+varying float v_flip;
+varying float v_variant;
 
-uniform vec4 single = vec4(0.0);
+float hash(float n) {
+	return fract(sin(n * 91.345) * 43758.5453);
+}
 
 void vertex() {
 	v_c = INSTANCE_CUSTOM + single;
 	vec3 o = MODEL_MATRIX[3].xyz;
 	float sx = length(MODEL_MATRIX[0].xyz);
 	float sy = length(MODEL_MATRIX[1].xyz);
+	float frame = floor(TIME * 8.0 + v_c.r * 13.0);
+	float jit = hash(frame + v_c.r * 71.0);
+	v_flip = step(0.5, jit);
+	v_variant = floor(v_c.r * 5.999);
+	sy *= 0.92 + 0.16 * hash(frame * 1.7 + v_c.r * 23.0);
 	vec3 right = normalize(vec3(INV_VIEW_MATRIX[0].x, 0.0, INV_VIEW_MATRIX[0].z));
 	float h = VERTEX.y + 0.5;
-	float step_t = floor(TIME * 8.0 + v_c.r * 13.0) / 8.0;
 	vec3 p = o + right * VERTEX.x * sx + vec3(0.0, h * sy, 0.0);
-	p.xz += (wind * 0.3 + vec2(sin(step_t * 5.0 + v_c.r * 30.0) * 0.08)) * h * h * sy;
+	float lean = 0.32 + 0.45 * v_c.a;
+	p.xz += (wind * lean + vec2(sin(frame * 2.1 + v_c.r * 30.0), cos(frame * 1.3 + v_c.r * 17.0)) * 0.05) * h * h * sy;
 	POSITION = PROJECTION_MATRIX * VIEW_MATRIX * vec4(p, 1.0);
-	v_near = distance(o, INV_VIEW_MATRIX[3].xyz);
-}
-
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float vnoise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+	v_near = distance(o + vec3(0.0, sy * 0.4, 0.0), INV_VIEW_MATRIX[3].xyz);
 }
 
 void fragment() {
-	float h = 1.0 - UV.y;
-	float x = (UV.x - 0.5) * 2.0;
-	float seed = v_c.r;
-	float t = floor(TIME * 8.0 + seed * 13.0) / 8.0;
-	float n1 = vnoise(vec2(x * 1.8 + seed * 9.0, h * 2.2 - t * 2.6));
-	float n2 = vnoise(vec2(x * 3.6 - seed * 3.0, h * 3.4 - t * 4.1));
-	float width = sqrt(clamp(h * 5.0, 0.0, 1.0)) * pow(1.0 - h, 0.85) * 1.05 + 0.02;
-	float sway = (n1 - 0.5) * 0.5 * h;
-	// Tongues: the top splits into licks that move on every frame.
-	float tongues = 0.16 * h * sin(x * 6.5 + t * 7.0 + seed * 20.0);
-	float shape = width + tongues - abs(x + sway) + (n2 - 0.5) * 0.3 * h;
-	float outer = step(0.0, shape);
-	float rim = outer * (1.0 - step(0.045, shape));
-	float mid = step(0.13 + 0.06 * h, shape);
-	float core = step(0.27 + 0.12 * h, shape) * step(h, 0.72);
-	vec3 c_out = vec3(0.93, 0.24, 0.07);
-	vec3 c_mid = vec3(1.0, 0.54, 0.1);
-	vec3 c_core = vec3(1.0, 0.88, 0.42);
-	vec3 c_rim = vec3(0.6, 0.1, 0.04);
-	if (v_c.b > 2.5) {
-		c_out = vec3(0.2, 0.42, 1.0);
-		c_mid = vec3(0.45, 0.7, 1.0);
-		c_core = vec3(0.9, 0.97, 1.0);
-		c_rim = vec3(0.1, 0.2, 0.6);
-	} else if (v_c.b > 1.5) {
-		float hue = fract(seed * 3.0 + t * 0.5);
-		c_out = 0.5 + 0.5 * cos(6.2832 * (hue + vec3(0.0, 0.33, 0.67)));
-		c_mid = 0.5 + 0.5 * cos(6.2832 * (hue + 0.25 + vec3(0.0, 0.33, 0.67)));
-		c_core = vec3(1.0, 0.96, 0.85);
-		c_rim = c_out * 0.5;
-	} else if (v_c.b > 0.5) {
-		c_out = vec3(1.0, 0.55, 0.12);
-		c_mid = vec3(1.0, 0.8, 0.25);
-		c_core = vec3(1.0, 0.98, 0.8);
-		c_rim = vec3(0.75, 0.38, 0.06);
+	vec2 uv = UV;
+	if (v_flip > 0.5) {
+		uv.x = 1.0 - uv.x;
 	}
-	vec3 col = mix(c_out, c_mid, mid);
-	col = mix(col, c_core, core);
-	col = mix(col, c_rim, rim);
-	ALBEDO = col * brightness * (0.75 + 0.35 * v_c.g);
-	// Flames right in front of the eye would fill the screen.
-	ALPHA = outer * mix(1.0, smoothstep(0.6, 1.6, v_near), near_fade);
+	vec4 t = texture(flames, vec2((v_variant + uv.x) / 6.0, uv.y));
+	vec3 col = t.rgb;
+	if (v_c.b > 2.5) {
+		float l = dot(col, vec3(0.3, 0.55, 0.15));
+		col = mix(vec3(0.12, 0.25, 0.85), vec3(0.85, 0.95, 1.0), smoothstep(0.35, 0.9, l));
+	} else if (v_c.b > 1.5) {
+		float hue = fract(v_c.r * 3.0 + floor(TIME * 8.0) * 0.07);
+		vec3 felt = 0.5 + 0.5 * cos(6.2832 * (hue + vec3(0.0, 0.33, 0.67)));
+		float l = dot(col, vec3(0.3, 0.55, 0.15));
+		col = mix(felt * 0.8, vec3(1.0, 0.97, 0.88), smoothstep(0.6, 0.95, l));
+	} else if (v_c.b > 0.5) {
+		float l = dot(col, vec3(0.3, 0.55, 0.15));
+		col = mix(vec3(0.62, 0.36, 0.06), vec3(1.0, 0.95, 0.7), smoothstep(0.25, 0.9, l));
+	}
+	ALBEDO = col * brightness * (0.82 + 0.25 * v_c.g);
+	// Close to the eye: fade out through a dither (alpha-scissored, so no sorting).
+	float fade = mix(1.0, smoothstep(1.4, 3.0, v_near), near_fade);
+	float d = fract(dot(FRAGCOORD.xy, vec2(0.7548776, 0.5698403)) + 0.5 * fract(FRAGCOORD.y * 0.618));
+	ALPHA = t.a * step(d, fade);
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 }

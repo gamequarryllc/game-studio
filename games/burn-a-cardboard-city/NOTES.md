@@ -25,20 +25,37 @@ screen so the fire always pops against the cool warehouse):
 | Warehouse steel | `#5c6b7a` | Concrete floor, walls, dim overlays: the cool backdrop |
 | Flame | `#ef7a28` | Fire, the crosshair when it can light, the one call-to-action colour |
 | Paper | `#f7f1e3` | Notes, price tags, luggage tags, item cards |
+| Char | `#2a2420` | Everything burnt (never `#000`), with grey ash `#8a8580` on top |
 
-**Type.** Display: *Permanent Marker* (Apache 2.0, `fonts/PermanentMarker-LICENSE.txt`),
-a thick felt-tip capital hand for titles, numbers and buttons. Body: *Patrick Hand* (OFL,
-`fonts/PatrickHand-OFL.txt`), a neat handwriting for notes and descriptions. Scale: 68
-(chain stamp) / 40 (coins, popup titles) / 30 (shop button) / 24-26 (labels, titles on
-cards) / 20-22 (body) / 18 (tabs).
+District materials (the city is a recycling-bin craft project): the suburbs are cereal
+boxes painted in chalky poster paint (teal, mustard, brick, chalk) with the print left
+showing on the back panels and the roofs folded from other boxes print side up, plus
+milk and juice cartons, a tissue box and an inside-out cereal box; trees are crumpled
+tissue on pencils in a blob of clay; lawns are green construction paper. Downtown is
+printed shipping boxes (made-up brands: Kestrel, Parcelo, Tinworks, Mossy, Bluefin,
+No. 9; stencilled handling marks, barcode labels, the box maker's round stamp).
+Skyscraper row is white copy-paper boxes with lids, stacked 2-3x downtown's height.
+The castle is egg boxes and toilet / kitchen rolls on a wooden pallet.
+
+**Type.** Headers: *Saira Stencil One* (OFL, `fonts/SairaStencilOne-OFL.txt`), stencilled
+like the markings on a shipping box: district names, the box's title and tabs, card
+titles, button words. Numbers: *Permanent Marker* (Apache 2.0, `fonts/PermanentMarker-LICENSE.txt`)
+only for coins, prices, floating numbers and the chain stamp. Body: *Patrick Hand* (OFL,
+`fonts/PatrickHand-OFL.txt`) for notes and descriptions. Box print (baked into the marker
+sheet, not used in the UI): *Archivo Black* (OFL, `art/fonts/`). Scale: 68 (chain stamp)
+/ 40 (coins, popup titles) / 30-34 (box title, featured card) / 22-24 (labels, card titles)
+/ 19-22 (body) / 18 (tabs).
 
 **UI motif: cut cardboard tags held on with masking tape.** Every panel is a piece of
 board or paper cut by hand (`scripts/card_style.gd`: irregular edges seeded per panel,
 faint corrugation lines, a darker cut edge, a soft drop shadow, tape strips with torn
 ends). Buy buttons are paper price tags with a punched hole; the timed offer is a luggage
 tag that swings on its string; first-run hints are notes taped up at both corners; chains
-are stamped on in red marker. Tags sit 1-3 degrees off true on purpose. The shop is a
-cardboard box that slides up and swings its flaps open, with divider tabs inside. Icons
+are stamped on in red marker. Tags sit 1-3 degrees off true on purpose. The shop is the
+inside of a cardboard box in perspective (darker inner walls, a corrugated cut rim, flaps
+standing open) with a divider of five tabs cut to different widths; the starter pack is a
+matchbox whose drawer slides out, the price on a tag tied on with string; phone controls
+are bottle caps; the wind is a ribbon tied to a drawn fan. One note at a time. Icons
 (`icons/*.svg`, drawn by `tools/make_icons.py`) are one style: a thick ink outline over a
 marker fill printed slightly off register, like a hand-coloured sticker. No emoji anywhere.
 
@@ -47,14 +64,21 @@ angles, corners are bevelled and wander a few millimetres. Round things are card
 tubes and rolled paper cones (turrets, the poster-tube hotel, paper trees), wheels are
 bottle caps. Windows, doors and box labels ("KITCHEN", "BOOKS", "FRAGILE") are felt-tip
 drawings with overshooting corners and scribbled fills (`models/marker_sheet.png`, drawn
-by `art/textures/make_marker_sheet.py`). Fire is cut paper too: flat layered flames with
-a dark red cut edge that flicker at a stop-motion 8 frames a second. Things fall with
+by `art/textures/make_marker_sheet.py`, which also prints the boxes' brands, stencils and
+labels). Fire is cut paper too: six flame shapes from layers of coloured paper with torn
+edges and a deep red base, one tall leading flame per building leaning with the fans,
+flipping at a stop-motion 8 frames a second; smoke is torn grey tissue. Burning creeps up
+the board as one dark-brown scorch front with a thin glowing edge. Things fall with
 weight: towers lean back before they go (anticipation), accelerate, bounce and squash
-flat on impact; houses fold down like a box being stamped on.
+flat on impact; houses fold down like a box being stamped on; what's left is a crumpled,
+torn shell or a fallen tower lying along its fall, in char and ash, embers cooling to grey.
+The giant's tools are held in a chunky cartoon hand with an ink outline.
 
-**Light.** Daylight from strips of skylights: a warm key from high up, a cool blue fill
-and blue-grey ambience, soft shafts of dusty light through the roof, depth haze across
-the warehouse. Warm fire against a cool room.
+**Light.** Late afternoon in a dim warehouse: a warm `#ffe2b0` key low through the west
+windows (28 degrees, long shadows: real shadow maps on computers, baked along the key
+into the floor on phones), a cool `#7f93b0` fill, low ambient (0.4), dusty light shafts.
+Four pooled fire lights (the biggest fires near you) are added in the shaders themselves,
+so phones get them too. The haze browns and thickens as the city burns.
 
 **Inspirations (outside games):** cardboard-box towns made in school craft lessons;
 felt-tip drawings in children's craft and activity books; stop-motion films shot on
@@ -66,13 +90,17 @@ colours = paint x ambient occlusion baked in Cycles; alpha = material: card, pap
 shiny, glass) and a "decal" surface (marker drawings from the marker sheet).
 
     python3 art/textures/make_marker_sheet.py     # the felt-tip drawings
-    python3 art/blender/build_all.py              # every model -> models/*.glb (about 6 s)
+    python3 art/textures/make_fire_sheets.py      # models/flames.png, models/smoke.png
+    python3 art/blender/build_all.py              # every model -> models/*.glb (about a minute)
+    godot --headless --import                     # always re-import after building models
     python3 art/blender/contact_sheet.py /tmp/sheet.png houses.glb offices.glb   # Cycles review render
+    BACKFACE=1 python3 art/blender/contact_sheet.py /tmp/tools.png tools.glb     # (culls the hand's outline hull)
     python3 tools/make_icons.py                   # icons/*.svg and icon.svg
 
-## Status: first playable
+## Status: first playable, art pass 2 and QA done
 
-Loads, phone and desktop controls work, fire spreads building to building, buildings
+Art pass 2 answered all 12 items of `ART_REVIEW.md`; the QA block played every profile start
+to finish (see QA). Loads, phone and desktop controls work, fire spreads building to building, buildings
 collapse and topple onto their neighbours in chains, coins come in (with chain bonuses),
 4 tools, 5 upgrades, 2 helpers, a working shop (the box), the 2x rewarded boost and
 the other rewarded ads, Remove Ads + permanent 2x, the timed offer tag, the starter pack,
@@ -83,8 +111,10 @@ first-run hints, generated sound effects, dev boosts, and an ending when the kee
 ## The design
 
 **The core: buildings are structures that burn, weaken and fall** (`scripts/city_grid.gd`).
-The floor is a 102 x 102 grid of 0.5 m cells (51 m across): 9 x 9 blocks of 8 cells with
-3-cell streets. Every house, car, paper tree, office box, skyscraper, castle piece and fire
+The floor is a 122 x 122 grid of 0.5 m cells (61 m across): 9 x 9 blocks of 8 cells. The
+streets inside a district are 3 cells of grey card with tape lines; between districts the
+streets widen to 5-7 cells of bare warehouse floor (`Balance.STREET_W`, `GAP_STREETS`),
+where the builder's giant paint cans, mugs, tape rolls, pallet, pen and scissors stand. Every house, car, paper tree, office box, skyscraper, castle piece and fire
 truck is a structure covering a rectangle of cells, with a height, an ignite threshold
 and an integrity. Heat builds up on structures (from the tool, helpers, burning neighbours,
 debris) and bleeds away (`COOL` per second); past the threshold it catches. A burning
@@ -99,22 +129,35 @@ Collapses within 3 s of each other make a **chain**: each link adds 20% to the c
 bonus, up to 3x.
 
 - **Tiers.** A structure heated steadily settles at heat / COOL, so a tool's *power* lights
-  anything whose threshold is below it. Houses, cars and trees (7-15) take the magnifying
-  glass (20); office boxes (56-88) and fire trucks the candle (120); skyscrapers (224-350)
-  the blowtorch (480); the castle (720-1250, double if damp) the rockets (2600). A
-  falling tower's spill can light its own tier on the far side of a street; it can't jump
-  a tier (except the keep, which only rockets reach).
+  anything whose threshold is below it. Houses, cars and trees (6-15) take the magnifying
+  glass (20); office boxes (56-88) and fire trucks the candle (120); skyscrapers (272-425)
+  the blowtorch (480); the castle (760-1225, up to 2,470 where the moat makes it damp) the
+  rockets (2600; bursts pile up to that, so a dry wall takes one rocket and a damp one two
+  or three). Damp doubles a threshold but never past what the building's own tool lights
+  at base power (`Balance.TIER`): nothing needs upgrades to reach (the bot once stalled at
+  97% with rockets that couldn't light the damp towers). A falling tower's spill can light
+  its own tier on the far side of a street; it can't jump a tier.
 - **Streets** stop radiant heat. Fire crosses them on cars parked in the middle lane
   (a car is one cell from both kerbs), on toppling towers, on burning scraps blown off
   tall buildings (spotting), and with Dry cardboard.
 - **Wind** comes from four big floor fans, one per wall; every 70-130 s a different one
   comes on (the wind swings round, its blades spin up). The HUD arrow shows it relative
   to where you look.
-- **Obstacles.** Toy fire trucks (5) squirt water at the nearest fire within 3.6 m every
-  2.4 s (knocking half the fire off; a doused building stays wet for 8 s) until you burn
-  them (candle). Puddles from the leaky roof make the buildings within 2 cells damp (2x
+- **Obstacles.** Toy fire trucks (9) squirt water at the nearest fire within 4.2 m every
+  2 s (knocking half the fire off; a doused building stays wet for 8 s) until you burn
+  them (candle) or their tank runs dry (12 squirts, saved; the bot found a deadlock without
+  it). Puddles from the leaky roof make the buildings within 2 cells damp (2x
   harder); the castle has a moat.
 - **Districts** (square rings): the suburbs, downtown, skyscraper row, the cardboard castle.
+  The block in front of the castle gate is a low square of paper trees, so the castle stays
+  in sight straight up the main street from the warehouse door (where you start).
+- **District gating** (`Balance.TOOL_GATE`): the next tool only goes on sale once 85% of
+  the suburbs (candle), 86% of downtown (blowtorch) or 86% of skyscraper row (rockets) is
+  down. The district tag shows a notch where that is; the box says what it's waiting for.
+- **The keep's walls** (`Balance.KEEP_GATE`): the keep won't catch until 75% of the rest
+  of the castle is down. You breach the walls first.
+- **No dead ends:** if nothing you can light is left and you can't afford the next tool,
+  it goes on clearance for what you've got (`GameState.tool_cost()`; the bot found this).
 
 **First person, as the giant** (`scripts/giant.gd`). Eye height 3.3 m, looking down at the
 streets. You stride over anything below 1.25 m (houses, cars), jumping clears downtown;
@@ -133,35 +176,43 @@ your stride. Big collapses near you shake the view.
 | | M mute, Esc frees the mouse, F1 dev boosts (playtest) |
 
 **Progression** (all numbers in `scripts/balance.gd`):
-- Tools, bought in order (`scripts/tool_fx.gd` draws each): Magnifying glass (a shaft of
-  skylight into the lens, a white-hot point), Candle (drips of burning wax, 150), Blowtorch
-  (blue jet, 2,000), Firework rockets (fly in an arc and burst where they land, 12,000).
-- Upgrades: Hotter flame (+25% power), Dry cardboard (+8% spread), Loose change (+15% coins),
-  Cheap glue (buildings fall 6% sooner: faster chains), Big boots (+12% speed).
-- Helpers (`scripts/helpers.gd`): wind-up cars with a sparkler taped on (drive the street
+- Tools, bought in order, each held in the giant's drawn hand (`scripts/tool_fx.gd` draws
+  the effects): Magnifying glass (a brass ring whose lens shows the city magnified and
+  bent, a white-hot focus dot and a wisp of smoke), Candle (drips of burning wax),
+  Blowtorch (gas canister, valve, brass nozzle, a hissing blue jet), Firework rockets
+  (paper rockets on sticks out of a glass bottle; spark trails, felt-tip star bursts).
+  250, 9,000 and 24,000 coins (`Balance.TOOLS`). Each tool has to **focus** on one thing for a moment before it
+  gives its full heat (`Balance.FOCUS`: the glass 3 s, wax 2.2 s, the torch 1.2 s); the
+  crosshair's ring fills meanwhile. Sweeping the tool about barely warms anything.
+- Upgrades: Hotter flame (+12% power), Dry cardboard (+4% spread), Loose change (+12% coins),
+  Cheap glue (buildings fall 5% sooner: faster chains), Big boots (+8% speed). Each level
+  costs about 2.1-2.3x the last.
+- Helpers (`scripts/helpers.gd`, each one 1.75x the price of the last): wind-up cars with a sparkler taped on (drive the street
   grid by breadth-first search, pull up beside a house and hold the sparkler to it), and
   paper planes with a lit fuse (circle office roofs).
 - Paper citizens (`scripts/citizens.gd`) hop out of burning buildings, skip away and fold
   themselves up. Finds pop out of falling buildings (5% of houses, 15% offices, 35%
   skyscrapers, every castle piece): a rubber duck, a lost sock, a toy robot, marbles, a
-  yo-yo, a very small teddy (0.4 min of income each), and 7% of the time a golden ticket
-  (2 min of income, and a rewarded ad doubles it). The shop's Finds tab collects them.
+  yo-yo, a very small teddy (0.4 min of income each, capped by what the building was
+  worth; finds don't count as income, or they compound), drawn from a shuffled bag so all
+  six turn up, and 7% of the time a golden ticket (2 min of income, one for sure after 18
+  finds without; a rewarded ad doubles it). The shop's Finds tab collects them.
 
 ## Money
 
 Architecture as in the studio's reference game: the game only talks to the `Monetization`
 autoload, which forwards to one `MonetizationProvider`; right now the
 `StubMonetizationProvider` (fake 3-second ads, purchases succeed, everything counted in the
-dev tab). To go live, write an AdMob + RevenueCat provider and return it from
+playtest tools). To go live, write an AdMob + RevenueCat provider and return it from
 `Monetization._create_provider()`.
 
 **Rewarded ad placements** (AdMob rewarded units):
 
 | Placement ID | Reward | Where |
 |---|---|---|
-| `boost_2x_fire` | 2x fire for 5 min (coins and tool power), stacks to 15 min | Shop > Free stuff, offer tag |
-| `helper_rush` | Helpers work 3x (and hurry) for 3 min | Shop > Free stuff, offer tag |
-| `instant_coins` | 3 min of recent income, capped at 60% of the next tool, 4 min cooldown | Shop > Free stuff, offer tag |
+| `boost_2x_fire` | 2x fire for 5 min (coins and tool power), stacks to 15 min | The box > Extras, offer tag |
+| `helper_rush` | Helpers work 3x (and hurry) for 3 min | The box > Extras, offer tag |
+| `instant_coins` | 3 min of recent income, capped at 60% of the next tool, 4 min cooldown | The box > Extras, offer tag |
 | `double_find` | Double a golden ticket | Tag for 9 s after a golden ticket pops out |
 
 **Interstitial placement:** `shop_close` (closing the box is the natural break). Never in
@@ -174,8 +225,8 @@ the first 5 min, at most every 4 min, never right after a rewarded ad, never wit
 | `remove_ads_2x` | non-consumable | $4.99 | Remove ads + permanent 2x (the anchor offer) |
 | `starter_pack` | non-consumable (one time) | $1.99 | 2,500 coins + party sparks (exclusive cosmetic: every tool's sparks in felt-tip colours). Offered once in a popup after 10 min, and in the shop |
 | `golden_lens` | non-consumable | $2.99 | Premium cosmetic: gold fire and a gilded tool, +10% power (toggle in the shop) |
-| `coins_small` / `coins_medium` / `coins_large` | consumable | $0.99 / $2.99 / $9.99 | 35% / 100% / 400% of the next tool's cost (at least 400 / 1.5K / 8K). Shown in the Tools tab when you're short for the next tool, and always in the Shop tab |
-| Restore purchases | | | Shop tab |
+| `coins_small` / `coins_medium` / `coins_large` | consumable | $0.99 / $2.99 / $9.99 | 35% / 100% / 400% of the next tool's cost (at least 400 / 1.5K / 8K). Shown in the Tools tab when you're short for the next tool, and always in the Extras tab |
+| Restore purchases | | | Extras tab |
 
 **Timed offer tag** (`scripts/ad_offers.gd`): a luggage tag hanging off the shop button
 that names what it buys ("Free: +[coin]1.20K, enough for the blowtorch"). Gentle rules:
@@ -188,24 +239,46 @@ Guardrails: finishable without paying; Remove Ads and boosts speed it up.
 
 ## Dev boosts and code-driven play (playtest builds)
 
-The shop box has a **Dev** tab (and F1 opens it) only when the `playtest` feature tag is
-on (or in a debug build): time scale 1x/5x/10x/50x (`Engine.time_scale`), income x1/x10/x100,
-give coins, unlock everything, skip to downtown / skyscraper row / the castle, burn the
-district you're in, fake ad and purchase counts, and start over.
+Not a tab in the box any more. In playtest builds (the `playtest` feature tag, or a debug
+build): F1 on a computer, or hold the box's stencilled name ("THE BOX") for a second on a
+phone, or Settings (the dial by the lid) > Playtest tools. It has: time scale 1x/5x/10x/50x
+(`Engine.time_scale`), income x1/x10/x100, give coins, unlock everything (every tool,
+upgrades to 5, helpers, every district open), skip to downtown / skyscraper row / the
+castle, burn the district you're in, fake ad and purchase counts, and start over.
 
 For the QA block's playthrough bot, every action is a call: `world.ignite_at(point)`,
 `world.move_giant_to(point, look_at)` (nudged out of anything tall), `world.giant.aim_at(point)`,
-`world.force_fire = true` (hold the tool), `GameState.buy("tool:candle" | "upgrade:dry" |
+`world.force_fire = true` (hold the tool), `world.bot_move = Vector2(x, forward)` (a thumb on the stick), `GameState.buy("tool:candle" | "upgrade:dry" |
 "helper:windup")`, `world.skip_to_district(z)`, `hud.open_shop(tab)`, `hud.watch_ad(kind)`,
 `Monetization.buy(id)`.
 
-## What's done (this block)
+## What's done (art pass 2 + QA block)
+
+- Light: dimmer cool ambient, a warm low key with long shadows, cool fill, four pooled fire
+  lights in the shaders, haze that thickens as the city burns.
+- Fire: cut-paper flame atlas, a tall leaning lead flame per building, tissue smoke on the
+  wind, a burn front with a thin glowing edge, char that's never black; 16 burnt states
+  (crumpled heaps, fallen towers along their fall line) with embers cooling to grey.
+- Models rebuilt per district (cereal-box suburbs, printed shipping boxes, copy-paper towers
+  2-3x downtown, egg-carton castle on a pallet), floor gaps with the builder's giant props,
+  FOV 60, the castle up the main sightline.
+- The giant's drawn hand holds every tool; the magnifier's lens really magnifies.
+- UI: stencil headers, marker numbers, one note at a time, device-aware wording, the shop as
+  the inside of a box with five uneven tabs and the next tool up front, the matchbox
+  starter pack, bottle-cap controls, the wind ribbon on a fan.
+- Dev access without a tab (F1, hold THE BOX, Settings); the playthrough bot and the six
+  balance passes; the bugs it found (QA).
+- Tests: `tests/smoke_test.gd` (passes, 93 checks), `tests/playthrough.gd`, `tests/screenshots.gd`,
+  `tests/quick_shot.gd`, `tests/fire_bench.gd`.
+
+## What was done in the first block
 
 - Structure fire simulation: heat, gaps and wind, fill, integrity, crumple and topple with
   impact spill, debris, spotting, chains, fire trucks, puddles and the moat, districts.
-- 29 Blender-built models (5 houses, 5 office boxes, 5 skyscrapers, 5 castle pieces, 3 cars,
-  the fire truck, 3 trees, wind-up car, paper plane, rocket, 4 tools, 7 warehouse props),
-  AO baked into vertex colours, decals from a hand-drawn marker sheet.
+- Blender-built models (rebuilt in art pass 2: 6 houses, 5 office boxes, 5 skyscrapers, 5
+  castle pieces, 3 cars, the fire truck, 4 trees, wind-up car, paper plane, rocket, 4 tools
+  in the hand, 16 burnt states, the warehouse props), AO baked into vertex colours (not the
+  hand), decals from a hand-drawn marker sheet.
 - Rendering: one MultiMesh per model; the burn (scorch, char creeping up from below, glowing
   edges, a dark glowing inside) and the fall (lean back, topple, bounce, squash; or fold
   down) are animated in the shader from per-instance data, so the CPU only touches a
@@ -226,13 +299,11 @@ For the QA block's playthrough bot, every action is a call: `world.ignite_at(poi
   scale fitted to the screen (`World._fit_render_scale()`, 1 MP budget on touch screens) and
   turned down further when the frame rate drops. The sim costs about 2 ms per 0.1 s tick at
   the height of a 180-building fire on desktop (`tests/fire_bench.gd`).
-- Tests: `tests/smoke_test.gd` (passes, 63 checks), `tests/screenshots.gd`, `tests/fire_bench.gd`.
 
 ## Next steps toward the polish bar (STUDIO.md)
 
-1. **Pacing bot and balance** (`tests/playthrough.gd`, keen / casual / boosted): spread is
-   generous right now (one match in the suburbs takes down 25-90 buildings), which feels
-   great but may make the run short; tune gaps, spill and tool costs for a 30-60 min run.
+1. **Pacing with people**: the bots finish in about 22-25 (keen) and 50 (casual) minutes; watch
+   two or three real players before pushing the numbers further (see QA below).
 2. **Music**: a couple of generated tunes (warehouse radio?) with a music slider.
 3. **More juice**: scraps flying on the wind (the sim already reports them), the fire-truck
    squirt as a visible arc, coins flying to the HUD tag, a camera nudge toward big topples,
@@ -247,26 +318,137 @@ For the QA block's playthrough bot, every action is a call: `world.ignite_at(poi
 
 - The held tool draws on top of everything (depth test off), so in rare poses it can show
   through a wall you're pressed against; it never clips into one, which was the point.
-- Toppled towers lie across the cells they landed on visually, but the giant can walk
-  through rubble (rubble has no height).
+- The giant can walk through rubble (it has no collision), including fallen towers.
+- On 4:3 tablets the fire cap sits on top of the giant's hand (on phones the hand passes
+  between the jump and fire caps). The caps draw over it, so nothing is hidden, but the
+  hand could move up and left on squarer screens.
+- The bots finish in about 22-25 / 50 minutes against a 30 / 60 target (see QA).
 - A big blaze is one endless chain (chain stamps show only at 3, 5, 8, 12, 20, 30, 50).
 - MultiMesh custom data is stored as half floats by the Compatibility renderer, so the
   shaders' clock steps back every 5 min (`CityView._rebase`). If a falling building ever
   "jumps" in its animation, look there.
 - MultiMeshes need `use_colors` with white instance colours in Compatibility or the vertex
   colours come out black (set on every structure MultiMesh).
-- Headless runs print "resources still in use at exit" (dummy audio teardown).
+- Headless runs print "resources still in use at exit" (dummy audio teardown). The
+  playthrough bot ignores exactly that line and the ObjectDB leak warning at exit.
+
+## QA
+
+Every profile below played the game start to finish with no hand-holding. The bot
+(`tests/playthrough.gd`) plays through the real controls: it walks with the stick
+(`world.bot_move`, A* round anything it can't step over), aims the crosshair, holds the fire
+button, and shops by pressing the box's own buttons. The parent process runs the game as a
+child with its own save file (`CITY_SAVE`) and fails the run on any engine or script error in
+the child's output (only the two known exit-teardown lines are ignored).
+
+```
+godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- keen|casual|boosted|chaos|castle [ads]
+xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 --fixed-fps 20 \
+    -s res://tests/playthrough.gd -- boosted visual /tmp/city-visual
+python3 tools/browser_check.py games/burn-a-cardboard-city      (from the studio root)
+```
+
+It fails the run on: no ending; no progress for 3 minutes; the controls off with nothing on
+screen for 15 s (softlock); the giant leaving the warehouse; a save/reload at 12, 35, 62 and
+85% down that doesn't bring back every building's state, coins, upgrades, helpers, finds and
+the fire trucks' water; a tool, upgrade, helper or find it never got; a stubbed ad or purchase
+flow that doesn't pay out (three rewarded ads from the Extras tab, double-a-find, the
+interstitial and its 5-minute rule, all six products, no interstitials after Remove Ads,
+restore); the ending's delivery note not showing, or the HUD not coming back after it.
+
+**Results (final balance):**
+
+| Run | Game time | Real time | Result |
+|---|---|---|---|
+| keen (plays well, never idles) | 21m 48s | 85 s | passed |
+| casual (nearest target, watches its fires 8 s, wanders, shops now and then) | 50m 04s | 121 s | passed |
+| boosted (keen with dev income x10) | 18m 14s | 90 s | passed |
+| chaos (6 min of random keys, touches, buttons, shop, ads, backgrounding, resizes) | 6m 07s | 28 s | passed |
+| visual (boosted, screenshots every 12 s at 844x390, 932x430, 1024x768) | 17m 14s | 558 s | passed (84 shots) |
+| browser (`tools/browser_check.py`: web export, headless Chromium as a phone with touch) | | | passed: loads at 844x390, 932x430 and 1024x768, taps work, no console errors |
+
+**Pacing (game time):**
+
+| Milestone | keen | casual |
+|---|---|---|
+| first upgrade | 30s | 57s |
+| candle on sale / bought | 5m 46s / 5m 47s | 17m 22s / 17m 44s |
+| suburbs 90% down | 7m 19s | 18m 07s |
+| starter pack offered | 10m 00s | 10m 00s |
+| blowtorch on sale / bought | 13m 27s / 15m 27s | 33m 20s / 36m 51s |
+| downtown 90% down | 13m 53s | 33m 43s |
+| firework rockets on sale / bought | 19m 03s / 19m 38s | 44m 41s / 47m 12s |
+| skyscraper row 90% down | 19m 11s | 45m 03s |
+| the keep falls | 21m 48s | 50m 04s |
+| longest chain, finds, upgrades at the end | 62, 61, heat 9 | 19, 59, heat 8 |
+
+Against the target of about 30 (keen) and 60 (casual) minutes the bots come in at 22-25 and
+48-50 (the previous pass, same balance but rockets at 45K: 24m 31s and 48m 38s; runs vary
+by 2-3 min with the wind and the first fires). Both bots know every building's threshold and
+never miss or hesitate, so people should take longer. It took six passes (keen 16 -> 19 ->
+22 -> 22 -> 19 -> 20 -> 25 min): see Balance notes for what moved it and what didn't.
+
+**Bugs the runs found, all fixed, each with a smoke-test check (`tests/smoke_test.gd`):**
+
+1. Finds paid "0.4 min of recent income" and counted as income themselves, so they compounded
+   into trillions late on. Finds no longer count as income and are capped by what the
+   building was worth. (Check: a find's coins don't count as income.)
+2. A save made while a building was falling stored it as fallen: after reloading it lay in
+   the rubble without paying its coins or setting its neighbours alight. Falling now saves
+   as burning. (Checks: a save made while a house is falling keeps it burning; the reloaded
+   city doesn't count it as down.)
+3. Dead end: the keen bot spent everything on upgrades, ran out of things the blowtorch could
+   light and could never afford the rockets. The next tool now goes on clearance for what
+   you've got when nothing is left to light. (Check: out of things to light and short, the
+   next tool goes on clearance.)
+4. Deadlock: fire trucks kept dousing the last suburbs while the candle (the only thing that
+   lights them) waited for those suburbs to come down. Trucks now carry 12 squirts and run
+   dry; the water is saved. (Checks: a fire truck runs out of water and stops squirting.)
+5. Stall at 97%: the castle pieces by the moat were damp (2x) and out of the rockets' reach
+   at base power, and a casual player who hadn't bought Hotter flame had no way to earn it.
+   Damp is now capped at what each building's own tool lights, and the rockets' bursts pile
+   up to exactly their stated power. (Check: every building can be lit by its own tool at
+   base power.)
+6. Two runs at once shared one save file and loaded each other's cities: `CITY_SAVE`
+   environment override (also used by the tests).
+7. Notes stacked on top of each other, floating numbers sat over the chain stamp, and phone
+   hints said "click" / "press G": one note at a time, the stamp clears the numbers,
+   device-aware wording. (Checks for each.)
+8. The ending's card was drawn under the HUD: the HUD steps aside and "Walk around the ashes"
+   brings it back. (Checks for both.)
+9. The 2x boost timed itself on the wall clock, so it ran out while the game was in the
+   background: it runs on play time now. (Check: the boost lasts its five minutes of play.)
+10. Visual run: when the keep paid out, two coin numbers sat on top of each other and filled a
+   third of the screen. Every floating number now shares one gap (on game time, so slow
+   frames don't let them pile up) and none is drawn bigger than it would be 9 m away.
+   (Check: two coin numbers at once, only one shows.)
+11. Visual run: the district tag showed the whole city's progress and never drew the notch
+   for the next tool. It shows the district you're standing in, with the notch where the
+   next tool goes on sale (the keep's breach in the castle). (Check: the district tag.)
+12. Screenshot run: with the focus time, half a second of the glass no longer lit anything,
+   so "street on fire" showed no fire: the screenshot script lights it directly now.
+13. Screenshot run: the ending's delivery note was placed before its backdrop had a size,
+   so it was pinned up off the right edge of the screen; it's centred now. (Check: the
+   delivery note is pinned up on screen.) It also said "1 buildings"; plurals fixed.
+
+The bot's own failures (stand spots inside the castle walls, interleaved logs from parallel
+runs, the interstitial check not knowing the 5-minute rule, and in the first visual run its
+shopping coroutine pressing a box the ending had already shut) were fixed in the bot.
 
 ## Balance notes
 
-- The city (seed 20261110): 232 houses, 128 cars, 118 paper trees, 90 office boxes, 39
-  skyscrapers, 11 walls, 4 towers, a gatehouse, the keep, 5 fire trucks. Base value
-  ~108K coins (keep 40K, castle ~65K); chains and Loose change multiply it.
-- `tests/fire_bench.gd` (wind 0.6, one building lit): suburbs 25-90 fall in 20-48 s for
-  160-600 coins; downtown 55-90 fall for 660-1,380; skyscraper row 1 (an isolated tower)
-  to 180 (a fire that runs out into downtown) for up to 7.9K. So the candle (150) comes with
-  the first fire, the blowtorch (2K) after a couple of downtown fires, rockets (12K) partway
-  through skyscraper row.
+- The city (seed 20261110): 565 structures: 232 houses, 56 cars, 122 paper trees, 90 office
+  boxes, 39 skyscrapers, 11 walls, 4 towers, a gatehouse, the keep, 9 fire trucks. Base
+  value ~111K coins (keep 40K); chains, Loose change and finds multiply it.
+- What sets the pace (found by the bot over six passes): the keen bot is never idle, so the
+  run is as long as the number of things it has to light by hand, not the fire's speed or
+  the prices. The knobs that moved it: the tools' focus time (`FOCUS`), how far fire jumps
+  on its own (house/car `heat`, office/skyscraper `spill`, `WIND_GAIN`), the district gates
+  (`TOOL_GATE`), and how much upgrades and helpers multiply that (Dry cardboard and Cheap
+  glue per level, `HELPER_GROWTH`). Raising tool prices barely moved it: late income is
+  large, and when there's nothing left to light the next tool goes on clearance anyway.
+- Rockets cost 24K because that's about what players hold when skyscraper row runs out
+  (at 45K every bot got them on clearance).
 - Knobs: `KINDS[].heat / ignite / spill / burn`, `GAP_WEIGHT`, `COOL`, `CHAIN_*`, car chance
   per street (`_cars_and_trucks`), `DEBRIS_HEAT`.
 
@@ -285,8 +467,8 @@ scripts/tool_fx.gd          each tool's effect, rockets
 scripts/helpers.gd          wind-up cars (street pathfinding) and paper planes
 scripts/citizens.gd         paper people and finds
 scripts/world.gd            builds it all, the loop, controls, wind, coins, hints, actions for bots
-scripts/hud.gd              the HUD, offer tag, finds tag, chain stamps, toasts, popups
-scripts/shop_box.gd         the shop: a cardboard box (and the dev tab)
+scripts/hud.gd              the HUD, wind ribbon, offer tag, finds tag, chain stamps, one-at-a-time notes, matchbox starter pack, ending
+scripts/shop_box.gd         the shop: the inside of a box (5 tabs, featured next tool, settings, playtest tools)
 scripts/touch_controls.gd   phone controls
 scripts/craft.gd            palette, fonts, styles, icons
 scripts/card_style.gd       the cut-cardboard StyleBox
@@ -295,14 +477,17 @@ scripts/game_state.gd       autoload: economy, purchases' effects, save/load, de
 scripts/ad_offers.gd        when the timed offer tag shows and what it offers
 scripts/monetization/       provider interface, stub, autoload facade (product and placement IDs)
 scripts/audio/sound.gd      autoload: effects, loops, volume
-shaders/                    cardboard + marker (+ collapse.gdshaderinc), paper_flame, smoke, floor, tape, light_shaft, metal_wall, prop
-models/                     *.glb from art/blender, marker_sheet.png
-art/blender/                model scripts (kit.py, city_buildings.py, castle.py, vehicles.py, nature_props.py, tools.py, build_all.py, contact_sheet.py)
-art/textures/               make_marker_sheet.py (+ the UV map it writes)
+shaders/                    cardboard + marker (+ collapse.gdshaderinc: the burn front), rubble (cooling embers), held_tool (drawn style, the lens),
+                            firelight.gdshaderinc (4 pooled fire lights as shader globals), paper_flame, smoke, floor, tape, light_shaft, metal_wall, prop
+models/                     *.glb from art/blender (rubble.glb: the burnt states), marker_sheet.png, flames.png, smoke.png
+art/blender/                model scripts: kit.py, suburbs.py, downtown.py, skyline.py, castle.py, rubble.py, vehicles.py,
+                            nature_props.py, tools.py, build_all.py, contact_sheet.py
+art/textures/               make_marker_sheet.py (+ the UV map it writes), make_fire_sheets.py (cut-paper flames, tissue smoke)
+art/fonts/                  Archivo Black (OFL), only for baking box print into the marker sheet
 icons/                      drawn SVG icons (tools/make_icons.py)
 audio/                      generated by tools/make_audio.py
-fonts/                      Permanent Marker (Apache 2.0), Patrick Hand (OFL)
-tests/                      smoke_test, screenshots, fire_bench
+fonts/                      Saira Stencil One (OFL), Permanent Marker (Apache 2.0), Patrick Hand (OFL)
+tests/                      smoke_test, playthrough (the pacing/QA bot), screenshots, quick_shot (one view), fire_bench
 ```
 
 Run: `godot --headless --import`, then `godot --headless -s res://tests/smoke_test.gd`;

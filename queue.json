@@ -8,7 +8,7 @@
       "color": "#e8642c",
       "tagline": "A cursed forest swallowed the valley overnight. Burn it back with a match, then a torch, then a dragon.",
       "status": "first-playable",
-      "note": "Critic: almost. Polishing toward ready to play (fire at scale, keeper, meadow, ending, phone readability)"
+      "note": "Critic: almost. Polish pass in progress (fire at scale, keeper, meadow, ending, phone readability)"
     },
     {
       "slug": "dig-to-the-core",
@@ -26,7 +26,7 @@
       "color": "#c9a46a",
       "tagline": "Someone built a whole city out of cardboard. It would be a shame if it caught fire.",
       "status": "building",
-      "note": "Reuses the fire system from Burn Down a Forest"
+      "note": "Playable end to end (bot: keen 22 min, casual 50); second critic review in progress"
     },
     {
       "slug": "drain-an-ocean",

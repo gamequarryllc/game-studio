@@ -11,8 +11,9 @@ signal changed                       # anything changed; the HUD and the shop re
 signal tool_bought(index: int)
 signal won
 
-const SAVE_PATH := "user://city_save.json"
-const SAVE_VERSION := 1
+const SAVE_FILE := "user://city_save.json"
+var SAVE_PATH := SAVE_FILE           # tests running side by side each get their own (CITY_SAVE=name)
+const SAVE_VERSION := 2
 const AUTOSAVE_INTERVAL := 10.0
 const INCOME_BUCKET := 5.0
 const INCOME_BUCKETS := 48           # 4 minutes of history
@@ -43,18 +44,26 @@ var giant_pos := Vector3.INF
 var giant_yaw := 0.0
 var giant_pitch := -0.6
 var city_save := ""
+var water_save := ""
 var packs_bought := 0
+var clock: float = 0.0                # seconds of play: boosts and cooldowns run on this
+var finds_since_golden := 0
+var out_of_fuel := false              # nothing left your tool can light (set by the world): clearance prices
 
 # --- Runtime -----------------------------------------------------------------------
 var city: CityGrid                    # set by the world
 var giant: Node3D
 var dev_income := 1.0                 # dev menu: income x10 / x100
+var dev_gates_open := false           # dev menu: every district open
 var _autosave_t := 0.0
 var _income: Array = []
 var _income_t := 0.0
 
 
 func _ready() -> void:
+	var tag := OS.get_environment("CITY_SAVE")
+	if tag != "":
+		SAVE_PATH = "user://city_save_%s.json" % tag.validate_filename()
 	reset_state()
 	load_game()
 
@@ -90,16 +99,23 @@ func reset_state(keep_purchases: bool = false) -> void:
 	giant_yaw = 0.0
 	giant_pitch = -0.6
 	city_save = ""
+	water_save = ""
 	packs_bought = 0
+	clock = 0.0
+	finds_since_golden = 0
+	dev_gates_open = false
 	_income = []
 
 
 func now() -> float:
-	return Time.get_unix_time_from_system()
+	## The game's clock: seconds of play. Boosts ("2x for 5 minutes") and cooldowns run
+	## on it, so they last the play time they promise (and sped-up test runs stay honest).
+	return clock
 
 
 func _process(delta: float) -> void:
-	var d := minf(delta, 1.0)
+	var d := minf(delta, 1.0 * maxf(1.0, Engine.time_scale))
+	clock += d
 	if not has_won:
 		play_time += d
 	_income_t += d
@@ -239,14 +255,17 @@ func instant_amount() -> float:
 	var amount := maxf(Balance.INSTANT_MIN, income_per_minute() * Balance.INSTANT_MINUTES)
 	var nt := next_tool_index()
 	if nt >= 0:
-		amount = minf(amount, maxf(Balance.INSTANT_MIN, float(Balance.TOOLS[nt].cost) * 0.6))
+		amount = minf(amount, maxf(Balance.INSTANT_MIN, tool_cost(nt) * 0.6))
 	return floorf(amount)
 
 
-func find_amount(golden: bool) -> float:
+func find_amount(golden: bool, worth: float = -1.0) -> float:
+	## A find pays a little of your recent income, but never more than a few times what
+	## the building it fell out of was worth.
+	var cap := INF if worth < 0.0 else worth * coin_mult() * (6.0 if golden else 1.5)
 	if golden:
-		return floorf(maxf(Balance.GOLDEN_MIN, income_per_minute() * Balance.GOLDEN_MINUTES))
-	return floorf(maxf(Balance.FIND_MIN, income_per_minute() * Balance.FIND_MINUTES))
+		return floorf(maxf(Balance.GOLDEN_MIN, minf(income_per_minute() * Balance.GOLDEN_MINUTES, cap)))
+	return floorf(maxf(Balance.FIND_MIN, minf(income_per_minute() * Balance.FIND_MINUTES, cap)))
 
 
 # =====================================================================================
@@ -283,10 +302,38 @@ func next_tool_index() -> int:
 	return tool_index + 1 if tool_index + 1 < Balance.TOOLS.size() else -1
 
 
-func buy_tool(i: int) -> bool:
-	if i != next_tool_index():
-		return false
+func tool_cost(i: int) -> float:
+	## What a tool costs. If there's nothing left that your tool can light and you can't
+	## afford the next one, it goes on clearance for what you've got (no dead ends).
 	var cost := float(Balance.TOOLS[i].cost)
+	if i == next_tool_index() and out_of_fuel and coins < cost and tool_gate_open(i):
+		return floorf(maxf(coins, 0.0))
+	return cost
+
+
+func on_clearance(i: int) -> bool:
+	return tool_cost(i) < float(Balance.TOOLS[i].cost)
+
+
+func tool_gate_open(i: int) -> bool:
+	## A tool goes on sale once enough of the district before it has come down.
+	if i <= 0 or i >= Balance.TOOLS.size() or dev_gates_open or city == null:
+		return true
+	return city.zone_progress(i - 1) >= float(Balance.TOOL_GATE[i]) - 0.0001
+
+
+func tool_gate_text(i: int) -> String:
+	if i < 0 or tool_gate_open(i):
+		return ""
+	var z: String = str(Balance.ZONES[i - 1].name).to_lower()
+	return "On sale once %d%% of %s is down (%d%% so far)" % [int(round(float(Balance.TOOL_GATE[i]) * 100.0)), z,
+		int(floor(city.zone_progress(i - 1) * 100.0))]
+
+
+func buy_tool(i: int) -> bool:
+	if i != next_tool_index() or not tool_gate_open(i):
+		return false
+	var cost := tool_cost(i)
 	if coins < cost:
 		return false
 	coins -= cost
@@ -387,13 +434,13 @@ func grant_ad_reward(kind: String) -> String:
 func coin_pack_amount(pack: int) -> float:
 	var p: Dictionary = Balance.COIN_PACKS[pack]
 	var nt := next_tool_index()
-	var cost := float(Balance.TOOLS[nt].cost) if nt >= 0 else income_per_minute() * 10.0
+	var cost := float(Balance.TOOLS[nt].cost) if nt >= 0 else maxf(100.0, income_per_minute() * 10.0)
 	return floorf(maxf(float(p.min), cost * float(p.share)))
 
 
 func short_for_next_tool() -> bool:
 	var nt := next_tool_index()
-	return nt >= 0 and coins < float(Balance.TOOLS[nt].cost)
+	return nt >= 0 and coins < tool_cost(nt) and tool_gate_open(nt)
 
 
 func note_find(key: String) -> void:
@@ -418,6 +465,7 @@ func dev_enabled() -> bool:
 
 
 func dev_unlock_everything() -> void:
+	dev_gates_open = true
 	tool_index = Balance.TOOLS.size() - 1
 	for u in Balance.UPGRADES:
 		upgrade_levels[u.key] = mini(int(u.max), 5)
@@ -461,6 +509,7 @@ func _notification(what: int) -> void:
 func to_dict() -> Dictionary:
 	if city != null:
 		city_save = city.to_save_string()
+		water_save = city.water_string()
 	if giant != null and is_instance_valid(giant):
 		giant_pos = giant.position
 		giant_yaw = giant.yaw
@@ -492,7 +541,10 @@ func to_dict() -> Dictionary:
 		"giant_yaw": giant_yaw,
 		"giant_pitch": giant_pitch,
 		"city": city_save,
+		"water": water_save,
 		"packs_bought": packs_bought,
+		"clock": clock,
+		"finds_since_golden": finds_since_golden,
 	}
 
 
@@ -550,7 +602,10 @@ func from_dict(data: Dictionary) -> void:
 	giant_yaw = float(data.get("giant_yaw", 0.0))
 	giant_pitch = float(data.get("giant_pitch", -0.6))
 	city_save = str(data.get("city", ""))
+	water_save = str(data.get("water", ""))
 	packs_bought = int(data.get("packs_bought", 0))
+	clock = float(data.get("clock", play_time))
+	finds_since_golden = int(data.get("finds_since_golden", 0))
 
 
 func wipe_save(keep_purchases: bool = true) -> void:

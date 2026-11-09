@@ -8,14 +8,16 @@ extends Node3D
 ## The tool you hold is drawn at the bottom right of the view.
 
 const TOOL_POSE := [
-	# camera-space position of the grip, rotation (x, y, z), tip in the model's space
-	[Vector3(0.2, -0.19, -0.42), Vector3(0.3, -0.25, 0.18), Vector3(0, 0.13, 0.012)],
-	[Vector3(0.23, -0.27, -0.46), Vector3(0.05, -0.15, 0.08), Vector3(0, 0.2, 0)],
-	[Vector3(0.22, -0.2, -0.42), Vector3(-0.15, -0.12, 0.05), Vector3(0, 0.04, -0.215)],
-	[Vector3(0.25, -0.2, -0.44), Vector3(0.12, 0.55, 0.12), Vector3(0, 0, -0.3)],
+	# camera-space position of the grip, rotation (x, y, z), tip in the model's space.
+	# Everything held stays within ~0.3 m of the eye, nearer than any wall can get
+	# (the giant's body keeps 0.32 m off), so it's depth-tested normally and never clips.
+	[Vector3(0.128, -0.088, -0.24), Vector3(0.1, -0.38, 0.12), Vector3(0, 0.25, -0.012)],
+	[Vector3(0.118, -0.098, -0.24), Vector3(0.12, -0.2, 0.06), Vector3(0, 0.205, 0)],
+	[Vector3(0.112, -0.09, -0.23), Vector3(0.0, -0.22, 0.04), Vector3(0, 0.19, -0.235)],
+	[Vector3(0.112, -0.1, -0.24), Vector3(0.1, -0.25, 0.08), Vector3(0, 0.245, 0)],
 ]
-const TOOL_MODELS := ["magnifier", "candle", "blowtorch", "launcher"]
-const TOOL_SCALE := 0.6
+const TOOL_MODELS := ["hand_magnifier", "hand_candle", "hand_blowtorch", "hand_bottle"]
+const TOOL_SCALE := 0.3
 
 var grid: CityGrid
 var camera: Camera3D
@@ -24,12 +26,20 @@ var pitch := -0.6
 var move_input := Vector2.ZERO       # x = right, y = forward
 var firing := false
 var input_enabled := true
-var bounds := Rect2(-36, -36, 72, 72)
+var bounds := Rect2(-Warehouse.HALF + 1.6, -Warehouse.HALF + 1.6, Warehouse.HALF * 2.0 - 3.2, Warehouse.HALF * 2.0 - 3.2)
 var aim := {"point": Vector3.ZERO, "sid": -1, "in_range": true, "hit": false}
 var steps := 0
 var jumped := 0
 var landed := 0
 var fx: ToolFx
+var obstacles: Array = []            # [Vector2 centre, radius]: the warehouse props too tall to step over
+var held_rocket: MeshInstance3D
+var _reload := 0.0
+var focus := 0.0                      # 0..1 how well the tool is focused on what it's pointed at
+var _focus_sid := -2
+var _lens_vp: SubViewport
+var _lens_cam: Camera3D
+const LENS_MAGNIFY := 1.9
 
 var _vel_y := 0.0
 var _feet := 0.0
@@ -47,7 +57,7 @@ var _sway := Vector2.ZERO
 
 func _ready() -> void:
 	camera = Camera3D.new()
-	camera.fov = 70.0
+	camera.fov = 60.0
 	camera.near = 0.05
 	camera.far = 140.0
 	camera.current = true
@@ -56,20 +66,24 @@ func _ready() -> void:
 	_hold = Node3D.new()
 	_hold.scale = Vector3.ONE * TOOL_SCALE
 	camera.add_child(_hold)
-	var sh := Shader.new()
-	# The held tool: the prop shader, drawn on top of the world, with see-through glass
-	# (vertex alpha 0) for the magnifying glass's lens.
-	sh.code = (load("res://shaders/prop.gdshader") as Shader).code.replace(
-		"render_mode diffuse_lambert_wrap, specular_schlick_ggx, cull_disabled;",
-		"render_mode diffuse_lambert_wrap, specular_schlick_ggx, cull_back, depth_test_disabled, fog_disabled;").replace(
-		"	EMISSION = glow;",
-		"	EMISSION = glow;\n	float glass = 1.0 - step(0.1, flag);\n	float rim = pow(1.0 - abs(dot(NORMAL, VIEW)), 2.0);\n	ALPHA = mix(1.0, 0.18 + rim * 0.6, glass);\n	ALBEDO = mix(ALBEDO, vec3(0.85, 0.95, 1.0), glass * 0.5);\n	ROUGHNESS = mix(ROUGHNESS, 0.05, glass);")
 	_tool_mat = ShaderMaterial.new()
-	_tool_mat.shader = sh
-	_tool_mat.render_priority = 20
+	_tool_mat.shader = load("res://shaders/held_tool.gdshader")
 	fx = ToolFx.new()
 	fx.giant = self
 	add_child(fx)
+	# What you see through the magnifying glass: a small, narrow camera looking out
+	# through the lens (it doesn't see the hand, which is on layer 2).
+	_lens_vp = SubViewport.new()
+	_lens_vp.size = Vector2i(224, 224)
+	_lens_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_lens_vp.msaa_3d = Viewport.MSAA_DISABLED
+	add_child(_lens_vp)
+	_lens_cam = Camera3D.new()
+	_lens_cam.cull_mask = 1
+	_lens_cam.near = 0.3
+	_lens_cam.far = 90.0
+	_lens_vp.add_child(_lens_cam)
+	_tool_mat.set_shader_parameter("lens_tex", _lens_vp.get_texture())
 	_apply_view()
 
 
@@ -131,6 +145,10 @@ func is_blocked(p: Vector2, feet: float) -> bool:
 		var q: Vector2 = p + o
 		if grid.top_at(q.x, q.y) > feet + Balance.STEP_OVER:
 			return true
+	if feet < 0.4:
+		for ob in obstacles:
+			if p.distance_to(ob[0]) < float(ob[1]) + r:
+				return true
 	return false
 
 
@@ -244,8 +262,15 @@ func tool_tip() -> Vector3:
 	return _tool.global_transform * (pose[2] as Vector3)
 
 
+func tool_basis() -> Basis:
+	return _tool.global_transform.basis if _tool != null else camera.global_transform.basis
+
+
 func kick(amount: float) -> void:
 	_kick = minf(1.0, _kick + amount)
+	if held_rocket != null:
+		held_rocket.visible = false
+		_reload = Balance.ROCKET_EVERY * 0.7
 
 
 func _build_tool() -> void:
@@ -255,8 +280,23 @@ func _build_tool() -> void:
 	_tool = MeshInstance3D.new()
 	_tool.mesh = ModelLib.prop_mesh(TOOL_MODELS[_shown_tool], _tool_mat)
 	_tool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_tool.layers = 1
+	_tool.layers = 2
 	_hold.add_child(_tool)
+	_lens_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if _shown_tool == 0 else SubViewport.UPDATE_DISABLED
+	_tool_mat.set_shader_parameter("bottle", 1.0 if _shown_tool == 3 else 0.0)
+	_tool_mat.set_shader_parameter("lens_local", TOOL_POSE[_shown_tool][2])
+	if held_rocket != null:
+		held_rocket.queue_free()
+		held_rocket = null
+	if _shown_tool == 3:
+		# A paper rocket stood in the bottle, ready to go.
+		held_rocket = MeshInstance3D.new()
+		held_rocket.mesh = ModelLib.prop_mesh("rocket")
+		held_rocket.position = Vector3(0.0, 0.2, 0.0)
+		held_rocket.scale = Vector3.ONE * 0.62
+		held_rocket.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		held_rocket.layers = 2
+		_tool.add_child(held_rocket)
 	fx.setup(_shown_tool)
 
 
@@ -264,11 +304,27 @@ func _update_tool(d: float) -> void:
 	if _shown_tool != GameState.tool_index:
 		_build_tool()
 	_tool_mat.set_shader_parameter("gold", 1.0 if GameState.golden_on else 0.0)
+	if held_rocket != null and not held_rocket.visible:
+		_reload -= d
+		if _reload <= 0.0:
+			held_rocket.visible = true
 	var active := firing and input_enabled and grid != null
 	var point: Vector3 = aim.point
 	var continuous := GameState.tool_index < 3
+	# Focusing: the heat builds up only while the tool stays on the same thing.
+	var f_time: float = Balance.FOCUS[clampi(GameState.tool_index, 0, Balance.FOCUS.size() - 1)]
 	if active and continuous and aim.in_range:
-		grid.set_source("tool", Vector2(point.x, point.z), GameState.tool_radius(), GameState.tool_power() * Balance.COOL)
+		if aim.sid != _focus_sid:
+			_focus_sid = aim.sid
+			focus = 0.0
+		focus = minf(1.0, focus + (d / f_time if f_time > 0.0 else 1.0))
+	else:
+		focus = maxf(0.0, focus - d * 2.0)
+		if not active:
+			_focus_sid = -2
+	if active and continuous and aim.in_range:
+		var k := 0.12 + 0.88 * focus * focus
+		grid.set_source("tool", Vector2(point.x, point.z), GameState.tool_radius(), GameState.tool_power() * Balance.COOL * k)
 	elif grid != null:
 		grid.clear_source("tool")
 	fx.update(active, point, d)
@@ -279,8 +335,24 @@ func _update_tool(d: float) -> void:
 	_sway = _sway.lerp(stride, 1.0 - exp(-d * 10.0))
 	var lean := Vector3(0, 0, 0)
 	if active:
-		lean = Vector3(-0.06, 0.03, 0.04)
-	var pos: Vector3 = pose[0] + Vector3(_sway.x, _sway.y, 0) + Vector3(0, 0, _kick * 0.08) + (Vector3(-0.03, 0.03, -0.04) if active else Vector3.ZERO)
+		lean = Vector3(-0.05, 0.03, 0.03)
+	var pos: Vector3 = pose[0] + Vector3(_sway.x, _sway.y, 0) * 0.45 + Vector3(0, 0, _kick * 0.035) + (Vector3(-0.012, 0.012, -0.015) if active else Vector3.ZERO)
 	_hold.position = _hold.position.lerp(pos, 1.0 - exp(-d * 14.0))
 	var rot: Vector3 = pose[1] + lean + Vector3(_kick * 0.35, 0, 0)
 	_hold.rotation = _hold.rotation.lerp(rot, 1.0 - exp(-d * 12.0))
+	if _shown_tool == 0 and _tool != null:
+		_aim_lens()
+
+
+func _aim_lens() -> void:
+	## Point the lens camera from the eye through the middle of the glass, narrowed so the
+	## disc of glass shows the world LENS_MAGNIFY times bigger.
+	var lens: Vector3 = _tool.global_transform * (TOOL_POSE[0][2] as Vector3)
+	var eye := camera.global_position
+	var d := lens - eye
+	if d.length() < 0.01:
+		return
+	var r := 0.099 * TOOL_SCALE
+	var ang := rad_to_deg(2.0 * atan(r / d.length()))
+	_lens_cam.fov = clampf(ang / LENS_MAGNIFY, 2.0, 60.0)
+	_lens_cam.global_transform = Transform3D(Basis.looking_at(d.normalized(), Vector3.UP), eye)

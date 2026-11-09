@@ -97,10 +97,15 @@ func _run() -> void:
 	var hud = world.hud
 	var giant = world.giant
 	var city = world.city
-	hud.set_touch_mode(false)
+	hud.set_touch_mode(true)
 	hud.show_desktop_hint = false
 	await _frames(10)
 	await _shot("01_spawn_suburbs")
+	# The bare floor between districts, with the builder's things standing in it.
+	world.move_giant_to(Vector3(6.0, 0, 26.6), Vector3(11.2, 0.6, 22.4))
+	giant.set_view(giant.yaw + 0.35, -0.3)
+	await _frames(6)
+	await _shot("01b_district_gap")
 
 	# The magnifying glass on a house at the edge of the suburbs.
 	var h1: int = -1
@@ -110,9 +115,10 @@ func _run() -> void:
 			break
 	world.move_giant_to(Vector3(city.s_center[h1].x - 1.2, 0, city.s_center[h1].y + 3.8), _center3(h1, 0.4))
 	world.force_fire = true
-	await _frames(30)
+	await _frames(100)   # the glass has to gather the light (Balance.FOCUS) before it smokes
 	await _shot("02_magnifier")
 	world.force_fire = false
+	world.ignite_at(_center3(h1, 0.4))
 	_ff(9.0)
 	world.move_giant_to(Vector3(city.s_center[h1].x - 2.0, 0, city.s_center[h1].y + 5.5), _center3(h1, 0.0) + Vector3(0, 0, -2.5))
 	await _frames(6)
@@ -121,13 +127,14 @@ func _run() -> void:
 	await _frames(4)
 	await _shot("03b_fire_spreading")
 
-	# Phone layout.
-	hud.set_touch_mode(true)
-	await _frames(4)
-	await _shot("04_touch_overlay")
+	# Computer layout (keys and mouse).
 	hud.set_touch_mode(false)
+	await _frames(4)
+	await _shot("04_desktop_layout")
+	hud.set_touch_mode(true)
 
 	# Downtown: a tower toppling.
+	gs.dev_gates_open = true
 	gs.grant_coins(1e6)
 	gs.buy_tool(1)
 	gs.tutorial_step = 9
@@ -144,8 +151,13 @@ func _run() -> void:
 	await _frames(2)
 	await _shot("06_tower_collapsing")
 	_ff(2.5)
+	_view_time(0.5)
 	await _frames(4)
 	await _shot("06b_tower_down")
+	_ff(30.0)
+	_view_time(30.0)
+	await _frames(4)
+	await _shot("06c_ashes")
 
 	# The shop box.
 	gs.coins = 1800.0
@@ -153,9 +165,9 @@ func _run() -> void:
 	hud.open_shop("tools")
 	await _frames(40)
 	await _shot("07_shop_box")
-	hud.shop.select("shop")
+	hud.shop.select("extras")
 	await _frames(6)
-	await _shot("07b_shop_iap")
+	await _shot("07b_shop_extras")
 	hud.close_shop()
 	await _frames(2)
 
@@ -177,14 +189,23 @@ func _run() -> void:
 
 	# Skyscraper row with the blowtorch.
 	gs.tool_index = 2
-	var s1: int = _find(4, 2, 2)
-	world.move_giant_to(_street_spot(s1, 5.0), _center3(s1, 2.0))
+	# The copy-paper tower nearest the main street, seen from the street (room to step back).
+	var s1 := -1
+	var bd := INF
+	for s in city.count:
+		if city.s_kind[s] == 4 and city.s_state[s] == 0:
+			var dd: float = city.s_center[s].distance_to(Vector2(1.0, 18.0))
+			if dd < bd:
+				bd = dd
+				s1 = s
+	world.move_giant_to(Vector3(1.0, 0, 18.5), _center3(s1, 2.4))
 	world.force_fire = true
-	await _frames(24)
+	await _frames(40)
 	await _shot("09_blowtorch")
 	world.force_fire = false
 	city.ignite(s1)
-	_ff(6.0)
+	_ff(10.0)
+	world.move_giant_to(Vector3(1.0, 0, 21.5), _center3(s1, 3.6))
 	await _frames(4)
 	await _shot("10_skyscraper_fire")
 
@@ -199,16 +220,33 @@ func _run() -> void:
 	await _shot("12_rockets")
 	world.force_fire = false
 
+	# The ending: the keep comes down.
+	city.ignite(city.keep_id)
+	city.s_fire[city.keep_id] = 1.0
+	city.s_integ[city.keep_id] = 0.001
+	_ff(1.5)
+	_view_time(1.0)
+	world.move_giant_to(Vector3(2.0, 0, 13.0), Vector3(0, 1.0, 0))
+	gs.check_win()
+	# Wait for the delivery note to be pinned up (it fades in after the letterbox closes).
+	for _i in 900:
+		await process_frame
+		if not hud._last_popup.is_empty() and (hud._last_popup.note as Control).modulate.a >= 0.99:
+			break
+	await _frames(4)
+	await _shot("15_ending")
+	hud._last_popup.button.pressed.emit()
+	await _frames(2)
 	# A big blaze across the suburbs and a chain.
 	city.burn_zone(0)
-	_ff(5.0)
-	world.move_giant_to(Vector3(-4.0, 0, 27.5), Vector3(-3.0, 0.0, 17.0))
+	_ff(2.5)
+	world.move_giant_to(Vector3(0.6, 0, 34.0), Vector3(-2.0, 0.0, 25.0))
 	hud.show_chain(7)
 	await _frames(8)
 	await _shot("13_blaze_chain")
 
 	hud.show_starter_offer()
-	await _frames(12)
+	await _frames(70)
 	await _shot("14_starter_popup")
 	_close_popups()
 	gs.wipe_save(false)

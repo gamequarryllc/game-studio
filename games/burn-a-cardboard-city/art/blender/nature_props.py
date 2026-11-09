@@ -143,9 +143,64 @@ def scissors(seed=67):
     return m.build()
 
 
-def build_trees():
-    return [tree_cone(), tree_ball(), tree_pom()]
+def paint_can(seed=68):
+    """A tin of floor paint, lid hammered back on, a drip down the side."""
+    m = Model("paint_can", seed)
+    r, h = 0.5, 1.15
+    grey = srgb("#7a8692")
+    m.cylinder((0, 0, 0), r, h, srgb("#c9ced2"), 32, SHINY, cuts=3, jitter=0.0)
+    for z in (0.02, h - 0.06):
+        m.cylinder((0, 0, z), r + 0.02, 0.05, srgb("#aab0b5"), 32, SHINY, cuts=0, jitter=0.0)
+    m.cylinder((0, 0, h), r - 0.02, 0.03, srgb("#b5bbc0"), 32, SHINY, cuts=0, jitter=0.0)
+    m.cylinder((0, 0, h + 0.02), r - 0.12, 0.012, grey, 28, SHINY, cuts=0, jitter=0.0)
+    m.decal("paint_label", (0, -r, h * 0.5), (0, -1, 0), 0.62, 0.42, lift=0.02)
+    m.decal("paint_label", (0, r, h * 0.5), (0, 1, 0), 0.62, 0.42, lift=0.02)
+    # A drip of grey paint down the side, and the wire handle.
+    m.box((0.3, -0.4, h - 0.2), (0.07, 0.03, 0.42), grey, SHINY, cuts=(0, 0, 2), bevel=0.012, rot=(0, 0, 0.64))
+    for s in (-1, 1):
+        m.cylinder((s * (r + 0.02), 0, h * 0.75), 0.03, 0.05, srgb("#9aa0a6"), 8, SHINY, rot=(0, math.pi / 2, 0), cuts=0)
+    m.cylinder((-r - 0.03, 0, h * 0.78), 0.012, (r + 0.03) * 2, srgb("#9aa0a6"), 6, SHINY, rot=(0, math.pi / 2 - 0.5, 0),
+               cuts=1, jitter=0.0)
+    return m.build()
+
+
+def mug(seed=69):
+    """The builder's tea mug, left on the floor: a stain inside, a slogan on the side."""
+    m = Model("mug", seed)
+    r, h = 0.48, 0.95
+    m.tube((0, 0, 0), r, h, srgb("#e9e4d8"), srgb("#6b4a33"), 0.05, 32, SHINY)
+    m.cylinder((0, 0, 0.02), r - 0.04, 0.42, srgb("#5a3c26"), 28, SHINY, cuts=0, jitter=0.0)   # cold tea
+    m.cylinder((0, 0, 0), r, 0.03, srgb("#d8d2c4"), 32, SHINY, cuts=0, jitter=0.0)
+    # The handle: a ring of short segments.
+    pts = [(r * 0.96 + 0.26 * math.sin(t * math.pi), 0, 0.22 + 0.5 * t) for t in [k / 10 for k in range(11)]]
+    for a, b in zip(pts, pts[1:]):
+        mid = ((a[0] + b[0]) / 2, 0, (a[2] + b[2]) / 2)
+        ln = math.hypot(b[0] - a[0], b[2] - a[2])
+        ang = math.atan2(b[0] - a[0], b[2] - a[2])
+        m.cylinder((mid[0], 0, mid[2] - ln / 2), 0.055, ln + 0.02, srgb("#e9e4d8"), 12, SHINY, cuts=0, jitter=0.0,
+                   rot=(0, ang, 0))
+    m.decal("mug_print", (0, -r - 0.004, h * 0.55), (0, -1, 0), 0.7, lift=0.012)
+    m.decal("mug_print", (-r - 0.004, 0, h * 0.55), (-1, 0, 0), 0.7, lift=0.012)
+    return m.build()
+
+
+def castle_pallet(seed=70):
+    """The edge of the pallet the castle stands on: stringers and blocks round a 15 m square."""
+    m = Model("castle_pallet", seed)
+    wood = srgb("#b98a55")
+    wood2 = srgb("#c79c66")
+    s = 7.6
+    for k, (cx, cy, lx, ly) in enumerate([(0, -s, 2 * s + 0.5, 0.5), (0, s, 2 * s + 0.5, 0.5), (-s, 0, 0.5, 2 * s),
+                                           (s, 0, 0.5, 2 * s)]):
+        m.box((cx, cy, 0.22), (lx, ly, 0.12), wood2 if k % 2 else wood, cuts=(8, 1, 0) if lx > ly else (1, 8, 0), bevel=0.02,
+              jitter=0.01)
+        for j in range(5):
+            t = -s + j * s / 2
+            p = (t, cy, 0.08) if lx > ly else (cx, t, 0.08)
+            m.box(p, (0.62, 0.58, 0.16), srgb("#a97b48"), cuts=(1, 1, 0), bevel=0.02, jitter=0.01)
+    return m.build()
 
 
 def build_props():
-    return [fan_body(), fan_blades(), pallet(), card_stack(), tape_roll(), marker_pen(), scissors()]
+    return [fan_body(), fan_blades(), pallet(), card_stack(), tape_roll(), marker_pen(), scissors(), paint_can(), mug(),
+            castle_pallet()]

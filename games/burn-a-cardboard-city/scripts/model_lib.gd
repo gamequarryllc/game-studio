@@ -5,7 +5,7 @@ extends RefCounted
 ## and a "decal" surface (marker ink from models/marker_sheet.png). City structures get
 ## the burning/collapsing shaders; props, helpers and tools get plain ones.
 
-const FILES := ["houses", "offices", "skyscrapers", "castle", "vehicles", "helpers", "trees", "props", "tools"]
+const FILES := ["houses", "offices", "skyscrapers", "castle", "vehicles", "helpers", "trees", "props", "tools", "rubble"]
 
 static var _meshes := {}
 static var _city := {}
@@ -13,7 +13,9 @@ static var _props := {}
 static var card_mat: ShaderMaterial
 static var ink_mat: ShaderMaterial
 static var prop_mat: ShaderMaterial
+static var rubble_mat: ShaderMaterial
 static var sheet: Texture2D
+static var _rubble := {}
 
 
 static func _load() -> void:
@@ -28,6 +30,8 @@ static func _load() -> void:
 	ink_mat.render_priority = 1
 	prop_mat = ShaderMaterial.new()
 	prop_mat.shader = load("res://shaders/prop.gdshader")
+	rubble_mat = ShaderMaterial.new()
+	rubble_mat.shader = load("res://shaders/rubble.gdshader")
 	var ink := StandardMaterial3D.new()
 	ink.albedo_texture = sheet
 	ink.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -86,6 +90,14 @@ static func city_mesh(name: String) -> Mesh:
 	return _city[name]
 
 
+static func rubble_mesh(name: String) -> Mesh:
+	## What's left of a building: char and ash, embers that cool with its instance data.
+	_load()
+	if not _rubble.has(name):
+		_rubble[name] = _with(name, rubble_mat, _ink_std)
+	return _rubble[name]
+
+
 static func prop_mesh(name: String, card: Material = null) -> Mesh:
 	_load()
 	if card != null:
@@ -105,12 +117,15 @@ static func set_time(now: float) -> void:
 	if card_mat != null:
 		card_mat.set_shader_parameter("now", now)
 		ink_mat.set_shader_parameter("now", now)
+		rubble_mat.set_shader_parameter("now", now)
 
 
 static func clear() -> void:
 	_meshes.clear()
 	_city.clear()
 	_props.clear()
+	_rubble.clear()
+	rubble_mat = null
 	card_mat = null
 	ink_mat = null
 	prop_mat = null

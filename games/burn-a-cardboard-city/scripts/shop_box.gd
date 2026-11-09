@@ -1,27 +1,28 @@
 class_name ShopBox
 extends Control
-## The shop is a cardboard box. It slides up from the bottom of the screen and its
-## flaps swing open; inside, divider tabs (tools, upgrades, helpers, free stuff,
-## the shop, finds, settings, and dev boosts in playtest builds) and paper cards
-## taped in, each with a price tag on a string.
+## The shop is a cardboard box, seen from above and in front: it slides up, its
+## flaps swing open, and you look down inside it at darker inner walls, a corrugated
+## rim and a card divider with five tabs cut to different widths (tools, tricks,
+## helpers, extras, finds). The next tool you can buy is propped up at the front; the
+## rest are paper strips taped in. Settings are behind the little dial by the lid.
+## Dev boosts (playtest builds only) aren't a tab: F1, or hold the box's stencilled
+## name for a second.
 
 signal closed
 
 const TABS := [
-	["tools", "magnifier", "Tools"],
-	["upgrades", "heat", "Upgrades"],
-	["helpers", "windup", "Helpers"],
-	["free", "tv", "Free stuff"],
-	["shop", "gift", "Shop"],
-	["finds", "duck", "Finds"],
-	["settings", "gear", "Settings"],
+	# key, icon, label, extra width (the tabs were cut by hand)
+	["tools", "magnifier", "Tools", 52],
+	["upgrades", "heat", "Tricks", 0],
+	["helpers", "windup", "Helpers", 30],
+	["extras", "tv", "Extras", 10],
+	["finds", "duck", "Finds", 22],
 ]
 const NOTES := {
 	"tools": "Each one burns hotter. Thicker card needs a hotter tool.",
 	"upgrades": "Little tricks of the trade.",
 	"helpers": "Toys that like fire as much as you do.",
-	"free": "Watch a short ad and get a hand for a while.",
-	"shop": "For giants in a hurry. Everything here can be earned by burning, too.",
+	"extras": "A hand for a while, for a short ad. Or for giants in a hurry.",
 	"finds": "Things that were in the boxes.",
 	"settings": "Knobs and dials.",
 	"dev": "Playtest builds only. None of this is in the real game.",
@@ -30,148 +31,213 @@ const NOTES := {
 var hud
 var tab := "tools"
 var _tab_buttons := {}
-var _list: GridContainer
+var _list: VBoxContainer
 var _note: Label
 var _coins: Label
 var _refreshers: Array = []
 var _t := 0.0
 var _open := 0.0
 var _scroll: ScrollContainer
-var _box: PanelContainer
-var _flaps: Flaps
+var _content: Control
+var _inside: BoxInside
 var _card_seed := 100
+var _title_hold := 0.0
+var _title_down := false
 
 
-class Flaps:
+class BoxInside:
 	extends Control
-	## The box's two top flaps, swinging open about the top edge.
+	## The box: two flaps standing open above the opening, inner walls in perspective,
+	## the back wall the cards sit on, a corrugated cut rim all round.
 	var open := 0.0
-	var box_rect := Rect2()
+	var opening := Rect2()        # the mouth of the box on screen
+	var back := Rect2()           # the back wall
+
+	func _flute_edge(a: Vector2, b: Vector2, depth: float, col: Color) -> void:
+		## A cut edge of corrugated board: a band with the flutes showing.
+		var n := (b - a).normalized().orthogonal() * depth
+		draw_colored_polygon(PackedVector2Array([a, b, b + n, a + n]), col)
+		var count := int(a.distance_to(b) / 7.0)
+		var pts := PackedVector2Array()
+		for k in count + 1:
+			var p := a.lerp(b, float(k) / count) + n * (0.5 + 0.32 * (1.0 if k % 2 == 0 else -1.0))
+			pts.append(p)
+		draw_polyline(pts, col.darkened(0.25), 1.6, true)
+		draw_line(a, b, col.darkened(0.35), 2.0, true)
+		draw_line(a + n, b + n, col.darkened(0.35), 2.0, true)
 
 	func _draw() -> void:
-		var top := box_rect.position.y + 4.0
-		var x0 := box_rect.position.x + 10.0
-		var x1 := box_rect.end.x - 10.0
-		var mid := (x0 + x1) * 0.5
-		var h := minf(130.0, box_rect.size.y * 0.3)
-		# Closed (angle 180) the flaps lie down over the front; open they stand up and splay out.
-		var a := deg_to_rad(lerpf(180.0, 48.0, open))
+		var o := opening
+		var bk := back
+		var wall := Craft.KRAFT.darkened(0.3)
+		var side_l := Craft.KRAFT.darkened(0.42)
+		var side_r := Craft.KRAFT.darkened(0.36)
+		var floor_c := Craft.KRAFT.darkened(0.5)
+		# Flaps first (behind): standing up and splaying out from the top edge.
+		var a := deg_to_rad(lerpf(180.0, 52.0, open))
+		var h := minf(120.0, o.size.y * 0.28)
 		for side in [-1.0, 1.0]:
-			var ha := Vector2(x0 if side < 0 else mid + 4.0, top)
-			var hb := Vector2(mid - 4.0 if side < 0 else x1, top)
-			var out := Vector2(side * sin(a) * 70.0, -cos(a) * h)
-			var lean := Vector2(side * sin(a) * 24.0, 0)
+			var x0 := o.position.x + 8.0 if side < 0 else o.position.x + o.size.x * 0.5 + 3.0
+			var x1 := o.position.x + o.size.x * 0.5 - 3.0 if side < 0 else o.end.x - 8.0
+			var ha := Vector2(x0, o.position.y)
+			var hb := Vector2(x1, o.position.y)
+			var out := Vector2(side * sin(a) * 64.0, -cos(a) * h)
+			var lean := Vector2(side * sin(a) * 22.0, 0)
 			var pts := PackedVector2Array([ha, hb, hb + out + lean * (0.3 if side < 0 else 1.0), ha + out + lean * (1.0 if side < 0 else 0.3)])
-			var inside := cos(a) > 0.0
-			var col := Craft.KRAFT.darkened(0.18) if inside else Craft.KRAFT
 			var sh := PackedVector2Array()
 			for p in pts:
-				sh.append(p + Vector2(4, 5))
+				sh.append(p + Vector2(4, 6))
 			draw_colored_polygon(sh, Color(0, 0, 0, 0.25))
-			draw_colored_polygon(pts, col)
-			var closed_pts := pts.duplicate()
-			closed_pts.append(pts[0])
-			draw_polyline(closed_pts, Craft.KRAFT_DARK.darkened(0.2), 2.5, true)
-			# The corrugated cut edge along the free side.
-			var e0 := pts[2]
-			var e1 := pts[3]
-			for k in 18:
-				var p := e0.lerp(e1, (k + 0.5) / 18.0)
-				draw_line(p, p + Vector2(0, 3.0 if k % 2 == 0 else -3.0), Craft.KRAFT_PALE, 2.0)
+			draw_colored_polygon(pts, Craft.KRAFT.darkened(0.12) if cos(a) > 0.0 else Craft.KRAFT)
+			var cl := pts.duplicate()
+			cl.append(pts[0])
+			draw_polyline(cl, Craft.KRAFT_DARK.darkened(0.2), 2.5, true)
+			_flute_edge(pts[3], pts[2], 5.0, Craft.KRAFT_PALE)
+		# Inside: floor, side walls, back wall.
+		draw_colored_polygon(PackedVector2Array([bk.position + Vector2(0, bk.size.y), bk.end, o.end, Vector2(o.position.x, o.end.y)]), floor_c)
+		draw_colored_polygon(PackedVector2Array([o.position, bk.position, Vector2(bk.position.x, bk.end.y), Vector2(o.position.x, o.end.y)]), side_l)
+		draw_colored_polygon(PackedVector2Array([Vector2(o.end.x, o.position.y), Vector2(bk.end.x, bk.position.y), bk.end, o.end]), side_r)
+		draw_colored_polygon(PackedVector2Array([o.position, Vector2(o.end.x, o.position.y), Vector2(bk.end.x, bk.position.y), bk.position]), wall.darkened(0.15))
+		draw_rect(bk, wall)
+		# Corrugation lines on the inner walls, and the creases in the corners.
+		var y := bk.position.y + 10.0
+		while y < bk.end.y - 4.0:
+			draw_line(Vector2(bk.position.x + 4, y), Vector2(bk.end.x - 4, y), Color(wall.darkened(0.08), 0.6), 1.0)
+			y += 7.0
+		for c in [[o.position, bk.position], [Vector2(o.end.x, o.position.y), Vector2(bk.end.x, bk.position.y)],
+				[Vector2(o.position.x, o.end.y), Vector2(bk.position.x, bk.end.y)], [o.end, bk.end]]:
+			draw_line(c[0], c[1], Color(0, 0, 0, 0.35), 2.0, true)
+		draw_rect(bk, Color(0, 0, 0, 0.3), false, 2.0)
+		# The rim: the cut top edges of the four walls.
+		_flute_edge(o.position, Vector2(o.end.x, o.position.y), -9.0, Craft.KRAFT_PALE)
+		_flute_edge(Vector2(o.position.x, o.end.y), o.end, 10.0, Craft.KRAFT)
+		_flute_edge(o.position, Vector2(o.position.x, o.end.y), 9.0, Craft.KRAFT_PALE.darkened(0.06))
+		_flute_edge(Vector2(o.end.x, o.end.y), Vector2(o.end.x, o.position.y), 9.0, Craft.KRAFT_PALE.darkened(0.06))
+		# A strip of tape that held the flaps shut, torn and left hanging over the front.
+		var tp := Vector2(o.position.x + o.size.x * 0.62, o.end.y - 4.0)
+		draw_colored_polygon(PackedVector2Array([tp, tp + Vector2(46, 0), tp + Vector2(42, 34), tp + Vector2(4, 30)]), Color(Craft.TAPE, 0.85))
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var dim := ColorRect.new()
-	dim.color = Color(0.07, 0.08, 0.1, 0.55)
+	dim.color = Color(0.06, 0.07, 0.09, 0.6)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
-	_flaps = Flaps.new()
-	_flaps.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_flaps.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_flaps)
-	_box = PanelContainer.new()
-	var bs := Craft.card(Craft.KRAFT, 77, 0)
-	bs.content_margin_left = 26
-	bs.content_margin_right = 26
-	bs.content_margin_top = 18
-	bs.content_margin_bottom = 14
-	bs.wobble = 4.0
-	_box.add_theme_stylebox_override("panel", bs)
-	_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_box.offset_left = 44
-	_box.offset_right = -44
-	_box.offset_top = 92
-	_box.offset_bottom = 30
-	add_child(_box)
+	_inside = BoxInside.new()
+	_inside.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_inside.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_inside)
+	_content = Control.new()
+	_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_content)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 8)
-	_box.add_child(v)
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	v.add_theme_constant_override("separation", 6)
+	_content.add_child(v)
 	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 14)
+	head.add_theme_constant_override("separation", 12)
 	v.add_child(head)
-	var title := Craft.label(36)
-	title.text = "The box"
-	title.rotation = -0.03
+	var title := Craft.label(34, Craft.PAPER)
+	title.text = "THE BOX"
+	title.rotation = -0.025
+	title.mouse_filter = Control.MOUSE_FILTER_STOP
+	title.gui_input.connect(_on_title_input)
 	head.add_child(title)
-	head.add_child(Craft.icon_rect("coin", 40))
-	_coins = Craft.label(34)
+	head.add_child(Craft.icon_rect("coin", 38))
+	_coins = Craft.label(34, Craft.PAPER, Craft.marker())
 	head.add_child(_coins)
 	var fill := Control.new()
 	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(fill)
+	var gear := Button.new()
+	gear.icon = Craft.icon("gear")
+	gear.expand_icon = true
+	gear.custom_minimum_size = Vector2(54, 50)
+	Craft.tag_button(gear, Craft.KRAFT_PALE, 20, 79)
+	gear.tooltip_text = "Settings"
+	gear.pressed.connect(func():
+		Sound.play("tape", -10.0, 1.0, 0.1)
+		select("settings"))
+	head.add_child(gear)
 	var close := Button.new()
 	close.text = "Close"
 	close.icon = Craft.icon("close")
-	Craft.tag_button(close, Craft.PAPER, 24, 78)
-	close.custom_minimum_size = Vector2(0, 54)
+	Craft.tag_button(close, Craft.PAPER, 22, 78)
+	close.custom_minimum_size = Vector2(0, 50)
 	close.pressed.connect(func(): closed.emit())
 	head.add_child(close)
+	# The divider: tabs of different widths standing up off a strip of card.
 	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 6)
+	tabs.add_theme_constant_override("separation", 3)
+	tabs.custom_minimum_size = Vector2(0, 52)
 	v.add_child(tabs)
-	var all := TABS.duplicate()
-	if GameState.dev_enabled():
-		all.append(["dev", "gear", "Dev"])
-	for t in all:
+	for t in TABS:
 		var b := Button.new()
-		b.text = t[2]
+		b.text = str(t[2]).to_upper()
 		b.icon = Craft.icon(t[1])
 		b.custom_minimum_size = Vector2(0, 46)
+		b.size_flags_vertical = Control.SIZE_SHRINK_END
 		var key: String = t[0]
+		b.set_meta("extra", int(t[3]))
 		b.pressed.connect(func():
 			Sound.play("tape", -10.0, 1.0, 0.1)
 			select(key))
 		tabs.add_child(b)
 		_tab_buttons[key] = b
-	_note = Craft.body(21, Color(Craft.INK, 0.8))
+	var strip := ColorRect.new()
+	strip.color = Craft.KRAFT_PALE
+	strip.custom_minimum_size = Vector2(0, 5)
+	v.add_child(strip)
+	_note = Craft.body(21, Color(Craft.PAPER, 0.88))
 	v.add_child(_note)
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	v.add_child(_scroll)
-	_list = GridContainer.new()
-	_list.columns = 2
+	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_list.add_theme_constant_override("h_separation", 14)
-	_list.add_theme_constant_override("v_separation", 12)
+	_list.add_theme_constant_override("separation", 10)
 	_scroll.add_child(_list)
 	select(tab)
-	_box.position.y += 400.0
+	_layout()
+
+
+func _on_title_input(e: InputEvent) -> void:
+	## Hold the box's name for a second to get the dev boosts (playtest builds only).
+	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
+		_title_down = e.pressed
+		_title_hold = 0.0
+
+
+func _layout() -> void:
+	var vp := get_viewport_rect().size if is_inside_tree() else Vector2(1280, 720)
+	var mx := clampf(vp.x * 0.035, 16.0, 60.0)
+	var top := clampf(vp.y * 0.15, 70.0, 120.0)
+	var u := clampf(_open * 1.6, 0.0, 1.0)
+	var back_ease := 1.0 + 2.2 * pow(u - 1.0, 3.0) + 1.2 * pow(u - 1.0, 2.0)
+	var slide := (1.0 - back_ease) * vp.y * 0.6
+	var o := Rect2(mx, top + slide, vp.x - mx * 2.0, vp.y - top - 8.0)
+	var inset := Vector2(clampf(vp.x * 0.035, 18.0, 48.0), clampf(vp.y * 0.03, 10.0, 26.0))
+	var bk := Rect2(o.position + inset, o.size - Vector2(inset.x * 2.0, inset.y * 2.6))
+	_inside.opening = o
+	_inside.back = bk
+	_content.position = bk.position + Vector2(16, 6)
+	_content.size = bk.size - Vector2(32, 10)
 
 
 func _process(delta: float) -> void:
-	# Slides up with a little overshoot, then the flaps swing open.
 	_open = minf(1.0, _open + delta * 2.6)
-	var u := clampf(_open * 1.6, 0.0, 1.0)
-	var back := 1.0 + 2.2 * pow(u - 1.0, 3.0) + 1.2 * pow(u - 1.0, 2.0)
-	_box.offset_top = 92.0 + (1.0 - back) * 420.0
-	_box.offset_bottom = 30.0 + (1.0 - back) * 420.0
 	var f := clampf((_open - 0.35) / 0.65, 0.0, 1.0)
-	_flaps.open = 1.0 - pow(1.0 - f, 3.0) * (1.0 - 0.0) + sin(f * PI) * 0.06
-	_flaps.box_rect = Rect2(Vector2(44 + 0.0, _box.offset_top), Vector2(size.x - 88, size.y))
-	_flaps.queue_redraw()
+	_inside.open = 1.0 - pow(1.0 - f, 3.0) + sin(f * PI) * 0.06
+	_layout()
+	_inside.queue_redraw()
+	if _title_down:
+		_title_hold += delta
+		if _title_hold > 1.0 and GameState.dev_enabled() and tab != "dev":
+			_title_down = false
+			select("dev")
 	_t += delta
 	if _t >= 0.2:
 		_t = 0.0
@@ -179,16 +245,24 @@ func _process(delta: float) -> void:
 
 
 func select(key: String) -> void:
+	if key == "dev" and not GameState.dev_enabled():
+		key = "tools"
 	tab = key
+	var keys := _tab_buttons.keys()
 	for k in _tab_buttons:
 		var b: Button = _tab_buttons[k]
-		Craft.tag_button(b, Craft.PAPER if k == key else Craft.KRAFT_PALE, 18, 90 + _tab_buttons.keys().find(k))
+		var on: bool = k == key
+		Craft.tag_button(b, Craft.PAPER if on else Craft.KRAFT_PALE, 18, 90 + keys.find(k))
 		b.add_theme_constant_override("icon_max_width", 24)
+		var extra: int = b.get_meta("extra")
 		for st in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 			var sb := b.get_theme_stylebox(st) as CardStyle
-			sb.content_margin_left = 10
-			sb.content_margin_right = 10
-		b.rotation = -0.03 if k == key else 0.0
+			sb.content_margin_left = 10 + extra * 0.5
+			sb.content_margin_right = 10 + extra * 0.5
+			sb.content_margin_top = 12 if on else 8
+			sb.shadow = Vector2(2, 0)
+		b.custom_minimum_size = Vector2(0, 50 if on else 42)
+		b.rotation = (-0.02 if on else 0.0) + (keys.find(k) % 3 - 1) * 0.006
 	_note.text = NOTES.get(key, "")
 	rebuild()
 
@@ -205,10 +279,8 @@ func rebuild() -> void:
 			_build_upgrades()
 		"helpers":
 			_build_helpers()
-		"free":
-			_build_free()
-		"shop":
-			_build_shop()
+		"extras":
+			_build_extras()
 		"finds":
 			_build_finds()
 		"settings":
@@ -226,46 +298,54 @@ func refresh() -> void:
 
 
 # =====================================================================================
-# Cards
+# Rows: paper strips taped into the box, each a little crooked and indented its own way
 # =====================================================================================
-func _card(icon: String, title: String, desc: String) -> Dictionary:
+func _card(icon: String, title: String, desc: String, big: bool = false) -> Dictionary:
 	_card_seed += 1
+	var wrap := MarginContainer.new()
+	var jitter := (_card_seed * 37) % 23
+	wrap.add_theme_constant_override("margin_left", 4 + jitter)
+	wrap.add_theme_constant_override("margin_right", 26 - jitter)
 	var p := PanelContainer.new()
 	var s := Craft.paper(_card_seed, 1 if _card_seed % 3 == 0 else (3 if _card_seed % 3 == 1 else 0))
-	s.content_margin_left = 14
+	s.content_margin_left = 16 if not big else 22
 	s.content_margin_right = 14
-	s.content_margin_top = 12
-	s.content_margin_bottom = 10
+	s.content_margin_top = 10 if not big else 16
+	s.content_margin_bottom = 8 if not big else 14
+	if big:
+		s.fill = Color("#fbf4e2")
 	p.add_theme_stylebox_override("panel", s)
-	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	p.custom_minimum_size = Vector2(500, 0)
+	p.rotation = ((_card_seed * 13) % 7 - 3) * 0.002
+	wrap.add_child(p)
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 12)
+	h.add_theme_constant_override("separation", 14)
 	p.add_child(h)
-	var ic := Craft.icon_rect(icon, 62)
+	var ic := Craft.icon_rect(icon, 84 if big else 54)
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(ic)
 	var v := VBoxContainer.new()
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_theme_constant_override("separation", 0)
 	h.add_child(v)
-	var tl := Craft.label(25)
+	var tl := Craft.label(30 if big else 22)
 	tl.text = title
 	v.add_child(tl)
-	var dl := Craft.body(20, Color(Craft.INK, 0.85))
+	var dl := Craft.body(22 if big else 19, Color(Craft.INK, 0.85))
 	dl.text = desc
-	dl.custom_minimum_size = Vector2(220, 0)
+	dl.custom_minimum_size = Vector2(200, 0)
 	v.add_child(dl)
 	var xl := Craft.body(19, Craft.FLAME_DEEP)
-	xl.custom_minimum_size = Vector2(220, 0)
+	xl.custom_minimum_size = Vector2(200, 0)
 	xl.visible = false
 	v.add_child(xl)
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(150, 60)
+	b.custom_minimum_size = Vector2(170 if big else 140, 64 if big else 54)
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	Craft.price_button(b, _card_seed + 300)
+	if big:
+		b.add_theme_font_size_override("font_size", 30)
 	h.add_child(b)
-	_list.add_child(p)
+	_list.add_child(wrap)
 	return {"panel": p, "title": tl, "desc": dl, "extra": xl, "button": b, "icon": ic}
 
 
@@ -273,6 +353,7 @@ func _set_btn(card: Dictionary, text: String, enabled: bool, hot: bool = false, 
 	var b: Button = card.button
 	if b.text != text:
 		b.text = text
+		b.add_theme_font_override("font", Craft.number_font(text))
 	var tex: Texture2D = Craft.icon(icon) if icon != "" else null
 	if b.icon != tex:
 		b.icon = tex
@@ -288,11 +369,10 @@ func _extra(card: Dictionary, text: String) -> void:
 
 
 func _section(text: String) -> void:
-	var l := Craft.label(26, Craft.INK)
-	l.text = text
-	l.rotation = -0.02
+	var l := Craft.label(22, Craft.PAPER)
+	l.text = text.to_upper()
+	l.rotation = -0.015
 	_list.add_child(l)
-	_list.add_child(Control.new())
 
 
 func _buy_feedback(ok: bool, what: String) -> void:
@@ -304,32 +384,48 @@ func _buy_feedback(ok: bool, what: String) -> void:
 	refresh()
 
 
-func _build_tools() -> void:
-	for i in Balance.TOOLS.size():
-		var t: Dictionary = Balance.TOOLS[i]
-		var card := _card(str(t.key), str(t.name), str(t.desc))
-		var idx := i
-		card.button.pressed.connect(func():
-			_buy_feedback(GameState.buy_tool(idx), "%s in hand" % t.name))
-		_refreshers.append(func():
-			_extra(card, "Lights %s" % t.lights)
-			if idx == GameState.tool_index:
-				_set_btn(card, "In hand", false, false, "check")
-			elif idx < GameState.tool_index:
-				_set_btn(card, "Owned", false, false, "check")
-			elif idx == GameState.next_tool_index():
-				var cost := float(t.cost)
+func _tool_row(i: int, big: bool) -> void:
+	var t: Dictionary = Balance.TOOLS[i]
+	var title := ("Next: the %s" % str(t.name).to_lower()) if big else str(t.name)
+	var card := _card(str(t.key), title, str(t.desc), big)
+	var idx := i
+	card.button.pressed.connect(func():
+		_buy_feedback(GameState.buy_tool(idx), "%s in hand" % t.name))
+	_refreshers.append(func():
+		_extra(card, "Lights %s" % t.lights)
+		if idx == GameState.tool_index:
+			_set_btn(card, "In hand", false, false, "check")
+		elif idx < GameState.tool_index:
+			_set_btn(card, "Owned", false, false, "check")
+		elif idx == GameState.next_tool_index():
+			var cost := GameState.tool_cost(idx)
+			var gate := GameState.tool_gate_text(idx)
+			if GameState.on_clearance(idx):
+				_extra(card, "Clearance: the last one in the box, yours for what you've got")
+			if gate != "":
+				_set_btn(card, Fmt.num(cost), false, false, "lock")
+				_extra(card, gate)
+			else:
 				var can := GameState.coins >= cost
 				_set_btn(card, Fmt.num(cost), can, can, "coin")
-			else:
-				_set_btn(card, Fmt.num(float(t.cost)), false, false, "lock")
-				_extra(card, "Buy the %s first" % str(Balance.TOOLS[idx - 1].name).to_lower()))
-	if GameState.short_for_next_tool():
+		else:
+			_set_btn(card, Fmt.num(float(t.cost)), false, false, "lock")
+			_extra(card, "Buy the %s first" % str(Balance.TOOLS[idx - 1].name).to_lower()))
+
+
+func _build_tools() -> void:
+	var nt := GameState.next_tool_index()
+	if nt >= 0:
+		_tool_row(nt, true)
+	for i in Balance.TOOLS.size():
+		if i != nt:
+			_tool_row(i, false)
+	if GameState.short_for_next_tool() and GameState.tool_gate_text(nt) == "":
 		_section("Short of coins?")
-		_packs(true)
+		_packs()
 
 
-func _packs(only_useful: bool) -> void:
+func _packs() -> void:
 	var icons := ["sock_coins", "jar", "shoebox"]
 	for k in Monetization.PACK_PRODUCTS.size():
 		var id: String = Monetization.PACK_PRODUCTS[k]
@@ -341,7 +437,7 @@ func _packs(only_useful: bool) -> void:
 			var amount := GameState.coin_pack_amount(pack)
 			card.desc.text = "+%s coins, right now." % Fmt.num(amount)
 			var nt := GameState.next_tool_index()
-			if nt >= 0 and GameState.coins + amount >= float(Balance.TOOLS[nt].cost):
+			if nt >= 0 and GameState.coins + amount >= GameState.tool_cost(nt):
 				_extra(card, "Enough for the %s" % str(Balance.TOOLS[nt].name).to_lower())
 			else:
 				_extra(card, "")
@@ -380,7 +476,8 @@ func _build_helpers() -> void:
 			_set_btn(card, Fmt.num(cost), can, can, "coin"))
 
 
-func _build_free() -> void:
+func _build_extras() -> void:
+	_section("Free, for a short ad")
 	var boost := _card("flame", "2x fire for 5 minutes", "Everything burns twice as hot and pays twice the coins. Watch again to stack it, up to 15 minutes.")
 	boost.button.pressed.connect(func(): hud.watch_ad("boost"))
 	_refreshers.append(func():
@@ -412,9 +509,7 @@ func _build_free() -> void:
 			_set_btn(instant, Fmt.duration(GameState.instant_ready_at - GameState.now()), false)
 		else:
 			_set_btn(instant, "Watch", not Monetization.is_watching(), hud.offers.current == "instant", "tv"))
-
-
-func _build_shop() -> void:
+	_section("For giants in a hurry")
 	var ra := Monetization.PRODUCT_REMOVE_ADS_2X
 	var card := _card("noads", "No ads, and 2x for good", "No more ads between breaks, and everything burns twice as hot and pays twice the coins, forever.")
 	card.button.pressed.connect(func(): Monetization.buy(ra))
@@ -424,7 +519,7 @@ func _build_shop() -> void:
 		else:
 			_set_btn(card, Monetization.price(ra), true, true))
 	var sp := Monetization.PRODUCT_STARTER
-	var starter := _card("gift", "Starter pack", "+%s coins and party sparks: every tool throws sparks in every colour of the felt-tip set. One time only." % Fmt.num(Balance.STARTER_COINS))
+	var starter := _card("gift", "A box of matches", "The starter pack: +%s coins and party sparks (every tool throws sparks in every colour of the felt-tip set). One time only." % Fmt.num(Balance.STARTER_COINS))
 	starter.button.pressed.connect(func(): Monetization.buy(sp))
 	_refreshers.append(func():
 		_set_btn(starter, "Yours" if Monetization.owns(sp) else Monetization.price(sp), not Monetization.owns(sp), false, "check" if Monetization.owns(sp) else ""))
@@ -447,8 +542,7 @@ func _build_shop() -> void:
 			GameState.party_on = not GameState.party_on
 			refresh())
 		_refreshers.append(func(): _set_btn(party, "On" if GameState.party_on else "Off", true))
-	_section("Coins")
-	_packs(false)
+	_packs()
 	var restore := _card("restore", "Restore purchases", "Bought something on another device? Get it back here.")
 	restore.button.pressed.connect(func():
 		Monetization.restore()
@@ -473,12 +567,12 @@ func _build_settings() -> void:
 	var h: HBoxContainer = vol.button.get_parent()
 	var minus := Button.new()
 	minus.text = "-"
-	minus.custom_minimum_size = Vector2(64, 60)
+	minus.custom_minimum_size = Vector2(64, 54)
 	minus.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	Craft.tag_button(minus, Craft.PAPER, 30, 201)
+	Craft.tag_button(minus, Craft.PAPER, 30, 201, Craft.marker())
 	h.add_child(minus)
 	h.move_child(minus, vol.button.get_index())
-	vol.button.custom_minimum_size = Vector2(64, 60)
+	vol.button.custom_minimum_size = Vector2(64, 54)
 	minus.pressed.connect(func():
 		Sound.set_volume(Sound.volume - 0.1)
 		refresh())
@@ -490,11 +584,15 @@ func _build_settings() -> void:
 		vol.title.text = "Sound  %d%%" % int(round(Sound.volume * 100.0))
 		_set_btn(vol, "+", Sound.volume < 1.0)
 		minus.disabled = Sound.volume <= 0.0)
-	var mute := _card("mute", "Mute everything", "On a computer, M does this too.")
+	var mute := _card("mute", "Mute everything", "")
 	mute.button.pressed.connect(func():
 		Sound.set_muted(not Sound.muted)
 		refresh())
 	_refreshers.append(func(): _set_btn(mute, "Unmute" if Sound.muted else "Mute", true))
+	if GameState.dev_enabled():
+		var dev := _card("gear", "Playtest tools", "Time scale, income, skip ahead. Not in the real game.")
+		dev.button.pressed.connect(func(): select("dev"))
+		_set_btn(dev, "Open", true)
 
 
 func _build_dev() -> void:
@@ -516,7 +614,7 @@ func _build_dev() -> void:
 		GameState.grant_coins(maxf(1000.0, GameState.coins * 10.0))
 		refresh())
 	_set_btn(cash, "Add", true)
-	var unlock := _card("lock", "Unlock everything", "Every tool, upgrades to 5, three of each helper.")
+	var unlock := _card("lock", "Unlock everything", "Every tool, upgrades to 5, three of each helper, every district open.")
 	unlock.button.pressed.connect(func():
 		GameState.dev_unlock_everything()
 		refresh())

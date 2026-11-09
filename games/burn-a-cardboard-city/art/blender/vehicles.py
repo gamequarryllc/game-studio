@@ -161,4 +161,4 @@ def build_vehicles():
 
 
 def build_helpers():
-    return [windup_car(), paper_plane(), rocket()]
+    return [windup_car(), paper_plane()]   # the paper rocket is in tools.py now

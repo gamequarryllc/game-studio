@@ -27,6 +27,27 @@ def load(names):
     return objs
 
 
+def drop_ink(objs):
+    """Remove the held tools' ink-outline hull (vertex alpha 0.1): the game draws it with
+    back-face culling as a cartoon outline; a path tracer would just see a black shell."""
+    import bmesh
+    for o in objs:
+        me = o.data
+        if not me.color_attributes:
+            continue
+        bm = bmesh.new()
+        bm.from_mesh(me)
+        layer = bm.loops.layers.color.get("Color") or bm.loops.layers.float_color.get("Color")
+        if layer is None:
+            bm.free()
+            continue
+        gone = [f for f in bm.faces if abs(f.loops[0][layer][3] - 0.1) < 0.04]
+        if gone:
+            bmesh.ops.delete(bm, geom=gone, context="FACES")
+            bm.to_mesh(me)
+        bm.free()
+
+
 def fix_materials(objs):
     """The exported files carry no textures: put the marker sheet back on the decals."""
     img = bpy.data.images.load(kit.SHEET_PNG, check_existing=True)
@@ -52,6 +73,16 @@ def fix_materials(objs):
                 vc.layer_name = "Color"
                 nt.links.new(vc.outputs["Color"], bsdf.inputs["Base Color"])
                 bsdf.inputs["Roughness"].default_value = 0.8
+                if os.environ.get("BACKFACE"):
+                    # Cull back faces like the game does for the held tools (their ink outline is an inverted hull).
+                    out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
+                    geo = nt.nodes.new("ShaderNodeNewGeometry")
+                    tr = nt.nodes.new("ShaderNodeBsdfTransparent")
+                    mix = nt.nodes.new("ShaderNodeMixShader")
+                    nt.links.new(geo.outputs["Backfacing"], mix.inputs[0])
+                    nt.links.new(bsdf.outputs[0], mix.inputs[1])
+                    nt.links.new(tr.outputs[0], mix.inputs[2])
+                    nt.links.new(mix.outputs[0], out.inputs["Surface"])
 
 
 def main():
@@ -60,6 +91,8 @@ def main():
     per_row = int(os.environ.get("PER_ROW", "6"))
     bpy.ops.wm.read_factory_settings(use_empty=True)
     objs = load(names)
+    if os.environ.get("BACKFACE"):
+        drop_ink(objs)
     fix_materials(objs)
     kit.lay_out(objs, spacing=0.35, per_row=per_row)
     lo = Vector((min(o.location.x - o.dimensions.x / 2 for o in objs), min(o.location.y - o.dimensions.y / 2 for o in objs), 0))

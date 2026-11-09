@@ -30,7 +30,15 @@ var flame_style := 0.0             # 0 fire, 1 golden (Golden lens), 2 party (st
 var flame_mat: ShaderMaterial
 var smoke_mat: ShaderMaterial
 var floor_mat: ShaderMaterial
-var fire_light: OmniLight3D
+var shadow_dir := Vector2(0.62, 0.78)   # the way shadows fall across the floor (grid x, grid y), set by World
+var shadow_slope := 0.58                # tan of the key light's height above the floor
+var lights: Array = []                  # the pooled fire lights: [Vector3 position, float brightness]
+var _hgt := PackedFloat32Array()        # height of what stands on each cell (0: nothing, or burned)
+var _rub_mm := {}                       # rubble model -> MultiMesh
+var _rub_used := {}
+var _rub_aabb := {}
+var _rub_done := {}                     # structure -> [rubble model, instance] once its rubble is down
+var _pending: Array = []                # [structure, view time to swap in its rubble]
 
 var _mm := {}                      # model name -> MultiMesh
 var _smm: Array = []               # structure -> its MultiMesh
@@ -62,8 +70,9 @@ func build(g: CityGrid) -> void:
 	grid = g
 	_rng.seed = Balance.WORLD_SEED + 7
 	ModelLib.set_time(now)
-	_build_floor()
 	_build_structures()
+	_build_rubble()
+	_build_floor()
 	_build_tape()
 	_build_fire()
 	_build_debris()
@@ -88,7 +97,7 @@ func _build_floor() -> void:
 	floor_mat.set_shader_parameter("city_origin", grid.origin)
 	floor_mat.set_shader_parameter("city_size", n * Balance.CELL)
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(84, 84)
+	plane.size = Vector2(Warehouse.HALF * 2.0 + 2.0, Warehouse.HALF * 2.0 + 2.0)
 	plane.subdivide_width = 8
 	plane.subdivide_depth = 8
 	var mi := MeshInstance3D.new()
@@ -96,37 +105,60 @@ func _build_floor() -> void:
 	mi.material_override = floor_mat
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
+	_hgt.resize(n * n)
+	_refresh_heights(Rect2i(0, 0, n, n))
 	for i in n * n:
 		_update_shadow(i)
 	_burn_tex.update(_burn_img)
 
 
 func _update_shadow(c: int) -> void:
-	## The soft contact shadow standing buildings throw on the floor round them
-	## (heavier on the side away from the skylights).
+	## The shadow standing buildings throw across the floor, baked per cell: a soft
+	## contact shadow round each one, and a long shadow along the key light (which is
+	## all a phone gets; computers also have the real one).
 	var n := grid.n
 	var x := c % n
 	var y := c / n
 	var sh := 0.0
-	for oy in range(-2, 3):
-		for ox in range(-2, 3):
-			if ox == 0 and oy == 0:
-				continue
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
 			var xx := x + ox
 			var yy := y + oy
-			if xx < 0 or yy < 0 or xx >= n or yy >= n:
-				continue
-			var s := grid.sid[xx + yy * n]
-			if s < 0 or grid.s_state[s] > CityGrid.BURNING:
-				continue
-			var d := Vector2(ox, oy).length()
-			var tall := clampf(grid.s_height[s] / 1.6, 0.35, 1.0)
-			var side := 1.0 + 0.6 * clampf(Vector2(-ox, -oy).normalized().dot(Vector2(0.55, 0.83)), 0.0, 1.0)
-			sh += tall * side * (0.42 if d < 1.5 else 0.12)
+			if xx >= 0 and yy >= 0 and xx < n and yy < n and (ox != 0 or oy != 0) and _hgt[xx + yy * n] > 0.0:
+				sh = maxf(sh, 0.3 * clampf(_hgt[xx + yy * n] / 1.0, 0.4, 1.0))
+	var step := Balance.CELL * shadow_slope
+	for k in range(1, 28):
+		var xx := int(round(x - shadow_dir.x * k))
+		var yy := int(round(y - shadow_dir.y * k))
+		if xx < 0 or yy < 0 or xx >= n or yy >= n:
+			break
+		var h := _hgt[xx + yy * n]
+		if h > k * step:
+			sh = maxf(sh, 0.8 - 0.45 * (k * step / h))
+			if sh > 0.7:
+				break
 	var col := _burn_img.get_pixel(x, y)
 	col.b = clampf(sh, 0.0, 0.85)
 	_burn_img.set_pixel(x, y, col)
 	_burn_dirty = true
+
+
+func _refresh_heights(r: Rect2i) -> void:
+	for yy in range(maxi(0, r.position.y), mini(grid.n, r.end.y)):
+		for xx in range(maxi(0, r.position.x), mini(grid.n, r.end.x)):
+			var s := grid.sid[xx + yy * grid.n]
+			_hgt[xx + yy * grid.n] = grid.s_height[s] if s >= 0 and grid.s_state[s] <= CityGrid.BURNING else 0.0
+
+
+func _reshadow_around(r: Rect2i) -> void:
+	## After something falls: its shadow goes (and the cells downwind of the light change).
+	_refresh_heights(r)
+	var reach := 28
+	var rr := r.grow(2)
+	rr = rr.merge(Rect2i(rr.position + Vector2i(int(shadow_dir.x * reach), int(shadow_dir.y * reach)), rr.size))
+	for yy in range(maxi(0, rr.position.y), mini(grid.n, rr.end.y)):
+		for xx in range(maxi(0, rr.position.x), mini(grid.n, rr.end.x)):
+			_update_shadow(xx + yy * grid.n)
 
 
 func _set_burn(c: int, scorch: float, glow: float) -> void:
@@ -185,6 +217,112 @@ func _build_structures() -> void:
 		_write(s)
 
 
+func _rubble_for(s: int) -> String:
+	var k := grid.s_kind[s]
+	if k == Balance.SKY and grid.s_model[s] == "sky_tube":
+		return "fall_sky_1"
+	var list: Array = Balance.RUBBLE.get(k, ["rub_small_0"])
+	return list[int(grid.s_vary[s] * 997.0) % list.size()]
+
+
+func _build_rubble() -> void:
+	## One MultiMesh per burnt-out model, filled in as things come down.
+	var want := {}
+	for s in grid.count:
+		var r := _rubble_for(s)
+		want[r] = int(want.get(r, 0)) + 1
+	var whole := AABB(Vector3(grid.origin.x - 8, -1, grid.origin.y - 8), Vector3(grid.n * Balance.CELL + 16, 6, grid.n * Balance.CELL + 16))
+	for r in want:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.use_custom_data = true
+		mm.mesh = ModelLib.rubble_mesh(r)
+		mm.instance_count = int(want[r])
+		mm.visible_instance_count = 0
+		_rub_mm[r] = mm
+		_rub_used[r] = 0
+		_rub_aabb[r] = mm.mesh.get_aabb()
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.custom_aabb = whole
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		add_child(mmi)
+
+
+func _place_rubble(s: int, landed: float) -> void:
+	if _rub_done.has(s):
+		return
+	_rub_done[s] = []
+	# The standing model goes; what's left of it takes its place.
+	var smm: MultiMesh = _smm[s]
+	var t0 := smm.get_instance_transform(_slot[s])
+	smm.set_instance_transform(_slot[s], Transform3D(Basis().scaled(Vector3(0.0001, 0.0001, 0.0001)), t0.origin - Vector3(0, 50, 0)))
+	var name := _rubble_for(s)
+	var mm: MultiMesh = _rub_mm[name]
+	var at: int = _rub_used[name]
+	if at >= mm.instance_count:
+		return
+	_rub_used[name] = at + 1
+	mm.visible_instance_count = at + 1
+	_rub_done[s] = [name, at]
+	var box: AABB = _rub_aabb[name]
+	var r: Rect2i = grid.s_rect[s]
+	var c: Vector2 = grid.s_center[s]
+	var xf: Transform3D
+	var f := grid.s_fall[s]
+	if f == CityGrid.CRUMPLE:
+		var odd := grid.s_rot[s] % 2 == 1
+		var wx := r.size.x * Balance.CELL
+		var wz := r.size.y * Balance.CELL
+		var lx := wz if odd else wx
+		var lz := wx if odd else wz
+		var sx := lx / maxf(box.size.x, 0.1) * 1.0
+		var sz := lz / maxf(box.size.z, 0.1) * 1.0
+		var sy := clampf(sqrt(sx * sz), 0.6, 1.4)
+		var yaw := grid.s_rot[s] * PI * 0.5 + (grid.s_vary[s] - 0.5) * 0.3
+		if grid.s_kind[s] in [Balance.HOUSE, Balance.CAR, Balance.TREE, Balance.TRUCK]:
+			yaw = grid.s_vary[s] * TAU
+			sx = minf(sx, sz)
+			sz = sx
+		xf = Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(sx, sy, sz)), Vector3(c.x, 0.0, c.y))
+	else:
+		var d: Vector2i = CityGrid.FALL_DIRS[f]
+		var along := (r.size.x if d.x != 0 else r.size.y) * Balance.CELL
+		var across := (r.size.y if d.x != 0 else r.size.x) * Balance.CELL
+		var key := name.substr(0, name.rfind("_")) if name.begins_with("fall_") and name != "fall_turret" else name
+		var size: Vector2 = Balance.FALL_SIZE.get(key, Vector2(2.2, 1.3))
+		var sx := grid.s_height[s] / size.x
+		var sz := across / size.y
+		var sy := clampf(along * 0.3 / maxf(box.size.y, 0.1), 0.45, 1.25)
+		var yaw: float = [0.0, PI, -PI * 0.5, PI * 0.5][f]
+		var pivot := c + Vector2(d) * along * 0.5
+		xf = Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(sx, sy, sz)), Vector3(pivot.x, 0.0, pivot.y))
+	mm.set_instance_transform(at, xf)
+	mm.set_instance_color(at, Color.WHITE)
+	mm.set_instance_custom_data(at, Color(landed, grid.s_vary[s], 0.0, 0.0))
+
+
+func rubble_transform(s: int) -> Transform3D:
+	## Where a fallen structure's rubble lies (tests).
+	var e: Array = _rub_done.get(s, [])
+	if e.is_empty():
+		return Transform3D(Basis(), Vector3.INF)
+	return (_rub_mm[e[0]] as MultiMesh).get_instance_transform(int(e[1]))
+
+
+func rubble_aabb(s: int) -> AABB:
+	var e: Array = _rub_done.get(s, [])
+	return AABB() if e.is_empty() else rubble_transform(s) * (_rub_aabb[e[0]] as AABB)
+
+
+func rubble_count() -> int:
+	var t := 0
+	for k in _rub_used:
+		t += int(_rub_used[k])
+	return t
+
+
 func _code(s: int) -> float:
 	var code := 0.0
 	var f := grid.s_fall[s]
@@ -218,6 +356,8 @@ func show_loaded_state() -> void:
 				_char[s] = 1.0
 				_write(s, now - 60.0)
 				_scorch_fall(s)
+				_place_rubble(s, now - 999.0)
+	_refresh_heights(Rect2i(0, 0, grid.n, grid.n))
 	for i in grid.n * grid.n:
 		_update_shadow(i)
 	_burn_tex.update(_burn_img)
@@ -246,13 +386,9 @@ func apply_events(ignited: Array, collapsed: Array, impacts: Array, extinguished
 		_char[s] = 1.0
 		_write(s)
 		_scorch_fall(s)
-		var r: Rect2i = grid.s_rect[s].grow(3)
-		if grid.s_fall[s] != CityGrid.CRUMPLE:
-			r = r.merge(grid.fall_strip(s).grow(2))
-		for y in range(maxi(0, r.position.y), mini(grid.n, r.end.y)):
-			for x in range(maxi(0, r.position.x), mini(grid.n, r.end.x)):
-				_update_shadow(x + y * grid.n)
+		_reshadow_around(grid.s_rect[s])
 		burst(impact_point(s), grid.s_kind[s])
+		_pending.append([s, now + (0.3 if grid.s_fall[s] != CityGrid.CRUMPLE else 0.04)])
 	for c in debris_new:
 		_add_debris(c)
 		_set_burn(c, 0.55, 1.0)
@@ -339,7 +475,7 @@ func _add_debris(c: int) -> void:
 	var s := _rng.randf_range(0.9, 1.5)
 	_debris.set_instance_transform(at, Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(s, s, s)), Vector3(p.x, 0.0, p.y)))
 	_debris.set_instance_color(at, Color.WHITE)
-	_debris.set_instance_custom_data(at, Color(0.55, _rng.randf(), NEVER, 8.0))
+	_debris.set_instance_custom_data(at, Color(0.92, _rng.randf(), NEVER, 8.0))
 	_debris.visible_instance_count = _debris_n
 
 
@@ -348,7 +484,7 @@ func _set_debris_burning(c: int, on: bool) -> void:
 		return
 	var at: int = _debris_at[c]
 	var cd := _debris.get_instance_custom_data(at)
-	_debris.set_instance_custom_data(at, Color(0.55 if on else 0.95, cd.g, NEVER, 8.0 if on else 0.0))
+	_debris.set_instance_custom_data(at, Color(0.92 if on else 1.0, cd.g, NEVER, 8.0 if on else 0.0))
 
 
 # =====================================================================================
@@ -356,32 +492,29 @@ func _set_debris_burning(c: int, on: bool) -> void:
 # =====================================================================================
 func _build_tape() -> void:
 	var strips: Array = []
-	var period := Balance.BLOCK + Balance.STREET
 	var c := Balance.CELL
 	for by in Balance.BLOCKS:
 		for bx in Balance.BLOCKS:
 			var ring := maxi(absi(bx - 4), absi(by - 4))
 			if ring <= 1:
 				continue
-			var x0 := grid.origin.x + (Balance.STREET + bx * period) * c
-			var z0 := grid.origin.y + (Balance.STREET + by * period) * c
+			var x0 := grid.origin.x + Balance.block_start(bx) * c
+			var z0 := grid.origin.y + Balance.block_start(by) * c
 			var L := Balance.BLOCK * c
 			var inset := -0.05
 			strips.append([Vector3(x0 + L * 0.5, 0, z0 + inset), L + 0.1, 0.0])
 			strips.append([Vector3(x0 + L * 0.5, 0, z0 + L - inset), L + 0.1, 0.0])
 			strips.append([Vector3(x0 + inset, 0, z0 + L * 0.5), L + 0.1, PI * 0.5])
 			strips.append([Vector3(x0 + L - inset, 0, z0 + L * 0.5), L + 0.1, PI * 0.5])
-	# Dashed middle lines.
+	# Dashed middle lines, only on the grey card roads (not the bare floor between districts).
 	for k in Balance.BLOCKS + 1:
-		var lane := grid.origin.x + (k * period + 1.5) * c
+		var lane := grid.origin.x + (Balance.lane(k) + 0.5) * c
 		var t := grid.origin.y + 1.6
 		while t < -grid.origin.y - 1.6:
 			for horiz in [true, false]:
 				var p := Vector3(t, 0, lane) if horiz else Vector3(lane, 0, t)
 				var cell := grid.cell_at(p.x, p.z)
-				if cell < 0 or grid.ground[cell] != CityGrid.G_STREET:
-					continue
-				if Balance.zone_for_cell(cell % grid.n, cell / grid.n) >= 3:
+				if cell < 0 or grid.ground[cell] != CityGrid.G_ROAD or grid.sid[cell] >= 0:
 					continue
 				strips.append([p, 0.42, 0.0 if horiz else PI * 0.5])
 			t += 0.75
@@ -413,9 +546,10 @@ func _build_tape() -> void:
 func _build_fire() -> void:
 	flame_mat = ShaderMaterial.new()
 	flame_mat.shader = load("res://shaders/paper_flame.gdshader")
+	flame_mat.set_shader_parameter("flames", load("res://models/flames.png"))
 	smoke_mat = ShaderMaterial.new()
 	smoke_mat.shader = load("res://shaders/smoke.gdshader")
-	smoke_mat.set_shader_parameter("puff", Gfx.soft_dot())
+	smoke_mat.set_shader_parameter("tissue", load("res://models/smoke.png"))
 	var quad := QuadMesh.new()
 	quad.size = Vector2(1, 1)
 	var whole := AABB(Vector3(grid.origin.x - 5, -2, grid.origin.y - 5), Vector3(grid.n * Balance.CELL + 10, 30, grid.n * Balance.CELL + 10))
@@ -445,15 +579,9 @@ func _build_fire() -> void:
 	add_child(sm)
 	_buf.resize(MAX_FLAMES * 16)
 	_smoke_buf.resize(MAX_SMOKE * 16)
-	fire_light = OmniLight3D.new()
-	fire_light.light_color = Color(1.0, 0.55, 0.22)
-	fire_light.omni_range = 9.0
-	fire_light.omni_attenuation = 1.3
-	fire_light.light_energy = 0.0
-	fire_light.shadow_enabled = false
-	# Each omni light costs extra passes in Compatibility: phones go without.
-	fire_light.visible = not DisplayServer.is_touchscreen_available()
-	add_child(fire_light)
+	for _i in 4:
+		lights.append([Vector3(0, -100, 0), 0.0])
+	_push_lights()
 
 
 func set_wind(w: Vector2) -> void:
@@ -482,73 +610,126 @@ func _put(buf: PackedFloat32Array, i: int, pos: Vector3, sx: float, sy: float, c
 
 
 func update_fire(cam: Vector3) -> void:
-	## Rebuild the flames and smoke from what's burning (once per fire tick).
+	## Rebuild the flames and smoke from what's burning (once per fire tick): one tall
+	## flame per building leaning with the wind, smaller ones over the cells that are
+	## alight, some climbing the walls of tall ones; a few pieces of tissue smoke each.
 	var nf := 0
 	var ns := 0
-	var lsum := Vector3.ZERO
-	var lw := 0.0
 	var n := grid.n
+	var cands: Array = []
 	for s in grid.burning:
 		var k := grid.s_kind[s]
 		var fs: Vector2 = FLAME[k]
 		var fire := grid.s_fire[s]
-		var grow := 0.55 + 0.45 * fire
-		var h := grid.s_height[s] * (0.55 + 0.4 * grid.s_integ[s])
+		var grow := 0.5 + 0.5 * fire
+		var h := grid.s_height[s] * (0.6 + 0.4 * grid.s_integ[s])
 		var r: Rect2i = grid.s_rect[s]
 		var order: PackedInt32Array = grid.s_order[s]
 		var on := grid.flames_on(s)
+		var sc: Vector2 = grid.s_center[s]
+		var vary := grid.s_vary[s]
+		# The lead flame: tall, in the middle of what's alight, leaning hardest.
+		if nf < MAX_FLAMES - 2:
+			var lead_c := sc.lerp(grid.cell_center(order[mini(on - 1, order.size() - 1) / 2]), 0.5)
+			var tall_f := fs.y * (1.15 + 0.45 * fire) * grow
+			_put(_buf, nf, Vector3(lead_c.x, h - tall_f * 0.15, lead_c.y), fs.x * 1.1 * grow, tall_f,
+				Color(fmod(vary * 7.31, 1.0), fire, flame_style, 1.0))
+			nf += 1
 		var tall := h > 1.2
-		for i in on:
+		var step := 2 if order.size() <= 8 else 3
+		var i := 0
+		while i < on:
 			if nf >= MAX_FLAMES - 2:
 				break
 			var c := order[i]
 			var cx := c % n
 			var cy := c / n
 			var seed := fmod(float(c) * 0.6180339, 1.0)
-			var cp := grid.cell_center(c) + Vector2(seed - 0.5, fmod(seed * 7.3, 1.0) - 0.5) * 0.2
-			var top := h * (0.82 + 0.18 * seed)
-			_put(_buf, nf, Vector3(cp.x, top - fs.y * 0.18, cp.y), fs.x * grow, fs.y * grow * (0.8 + 0.4 * seed),
+			var cp := grid.cell_center(c) + Vector2(seed - 0.5, fmod(seed * 7.3, 1.0) - 0.5) * 0.25
+			var top := h * (0.84 + 0.16 * seed)
+			var size := 0.4 + 0.45 * fmod(seed * 3.3, 1.0)
+			_put(_buf, nf, Vector3(cp.x, top - fs.y * 0.15, cp.y), fs.x * grow * size, fs.y * grow * size * (0.8 + 0.5 * seed),
 				Color(seed, fire, flame_style, 0.0))
 			nf += 1
-			if tall and (cx == r.position.x or cy == r.position.y or cx == r.end.x - 1 or cy == r.end.y - 1):
-				# Fire climbing the outside walls.
+			if tall and (cx == r.position.x or cy == r.position.y or cx == r.end.x - 1 or cy == r.end.y - 1) and seed > 0.35:
 				var out := Vector2(cx + 0.5, cy + 0.5) - Vector2(r.position) - Vector2(r.size) * 0.5
-				out = out.normalized() * 0.32
-				var hy := h * (0.25 + 0.5 * fmod(seed * 3.7, 1.0))
-				_put(_buf, nf, Vector3(cp.x + out.x, hy, cp.y + out.y), fs.x * grow * 0.8, fs.y * grow * 0.9,
+				out = out.normalized() * 0.3
+				var hy := h * (0.2 + 0.55 * fmod(seed * 3.7, 1.0))
+				_put(_buf, nf, Vector3(cp.x + out.x, hy, cp.y + out.y), fs.x * grow * 0.7, fs.y * grow * 0.85,
 					Color(fmod(seed * 5.1, 1.0), fire * 0.8, flame_style, 0.0))
 				nf += 1
-		if ns < MAX_SMOKE:
-			var sc: Vector2 = grid.s_center[s]
-			_put(_smoke_buf, ns, Vector3(sc.x, h + 0.2, sc.y), 1.0, 1.0,
-				Color(grid.s_vary[s], 0.5 + 0.35 * fs.x * fire, 0.6, 0.4 + grid.s_vary[s]))
+			i += step
+		var puffs := 1 + int(fs.x > 0.9) + int(fs.x > 1.3)
+		for p in puffs:
+			if ns >= MAX_SMOKE:
+				break
+			var off := Vector2(fmod(vary * (3.1 + p), 1.0) - 0.5, fmod(vary * (5.7 + p), 1.0) - 0.5) * Vector2(r.size) * Balance.CELL * 0.6
+			_put(_smoke_buf, ns, Vector3(sc.x + off.x, h + 0.15, sc.y + off.y), 1.0, 1.0,
+				Color(fmod(vary + p * 0.37, 1.0), 0.55 + 0.4 * fs.x * fire, 0.65, 0.4 + vary))
 			ns += 1
-		var d2 := Vector3(grid.s_center[s].x, h, grid.s_center[s].y).distance_squared_to(cam)
-		if d2 < 400.0:
-			var w := (1.0 + fs.x) * fire
-			lsum += Vector3(grid.s_center[s].x, h * 0.7 + 0.4, grid.s_center[s].y) * w
-			lw += w
+		var d2 := Vector3(sc.x, h, sc.y).distance_squared_to(cam)
+		if d2 < 900.0:
+			cands.append([Vector3(sc.x, h * 0.6 + 0.3, sc.y), (1.0 + fs.x) * fire, d2])
 	for c in grid.debris:
 		if nf >= MAX_FLAMES:
 			break
 		var fuel := clampf(grid.deb_fuel[c] / 3.0, 0.25, 1.0)
 		var seed := fmod(float(c) * 0.7548776, 1.0)
 		var cp := grid.cell_center(c) + Vector2(seed - 0.5, fmod(seed * 5.3, 1.0) - 0.5) * 0.25
-		_put(_buf, nf, Vector3(cp.x, 0.0, cp.y), 0.42 * fuel, 0.55 * fuel * (0.8 + 0.4 * seed), Color(seed, fuel * 0.7, flame_style, 0.0))
+		_put(_buf, nf, Vector3(cp.x, 0.0, cp.y), 0.36 * fuel, 0.5 * fuel * (0.8 + 0.4 * seed), Color(seed, fuel * 0.7, flame_style, 0.0))
 		nf += 1
-		if ns < MAX_SMOKE and (c % 5) == 0:
-			_put(_smoke_buf, ns, Vector3(cp.x, 0.3, cp.y), 1.0, 1.0, Color(seed, 0.4, 0.9, 0.5))
+		if ns < MAX_SMOKE and (c % 7) == 0:
+			_put(_smoke_buf, ns, Vector3(cp.x, 0.25, cp.y), 1.0, 1.0, Color(seed, 0.4, 0.9, 0.5))
 			ns += 1
 	_flames.buffer = _buf
 	_flames.visible_instance_count = nf
 	_smoke.buffer = _smoke_buf
 	_smoke.visible_instance_count = ns
-	if lw > 0.0:
-		var target := lsum / lw
-		fire_light.position = fire_light.position.lerp(target, 0.35) if fire_light.light_energy > 0.05 else target
-		fire_light.light_energy = lerpf(fire_light.light_energy, clampf(lw * 0.25, 0.4, 2.6), 0.3)
-	else:
-		fire_light.light_energy = lerpf(fire_light.light_energy, 0.0, 0.3)
+	_pool_lights(cands)
+
+
+func _pool_lights(cands: Array) -> void:
+	## The four warm lights the fires cast: the biggest fire near the giant takes the
+	## first, everything within 5 m of it pools into it, and so on.
+	cands.sort_custom(func(a, b): return float(a[1]) / (1.0 + float(a[2]) * 0.004) > float(b[1]) / (1.0 + float(b[2]) * 0.004))
+	var used := {}
+	var want: Array = []
+	for i in cands.size():
+		if used.has(i) or want.size() >= 4:
+			continue
+		var p: Vector3 = cands[i][0]
+		var wsum := float(cands[i][1])
+		var psum: Vector3 = p * wsum
+		for j in range(i + 1, cands.size()):
+			if not used.has(j) and (cands[j][0] as Vector3).distance_to(p) < 5.0:
+				used[j] = true
+				wsum += float(cands[j][1])
+				psum += (cands[j][0] as Vector3) * float(cands[j][1])
+		want.append([psum / maxf(wsum, 0.001), clampf(0.35 + wsum * 0.18, 0.0, 2.4)])
+	for k in 4:
+		var l: Array = lights[k]
+		if k < want.size():
+			var target: Vector3 = want[k][0]
+			l[0] = target if float(l[1]) < 0.05 else (l[0] as Vector3).lerp(target, 0.3)
+			l[1] = lerpf(float(l[1]), float(want[k][1]), 0.3)
+		else:
+			l[1] = lerpf(float(l[1]), 0.0, 0.3)
+	_push_lights()
+
+
+func _push_lights() -> void:
+	for k in 4:
+		var l: Array = lights[k]
+		var p: Vector3 = l[0]
+		RenderingServer.global_shader_parameter_set("fire_l%d" % k, Vector4(p.x, p.y, p.z, float(l[1])))
+
+
+func fire_glow() -> float:
+	## How much fire light there is round the giant (the world darkens the haze with it).
+	var t := 0.0
+	for l in lights:
+		t += float(l[1])
+	return t
 
 
 func flame_count() -> int:
@@ -638,6 +819,13 @@ func _rebase(by: float) -> void:
 		mm.set_instance_custom_data(_slot[s], Color(cd.r, cd.g, maxf(cd.b - by, -20000.0), cd.a))
 	for c in _glow.keys():
 		_glow[c] = float(_glow[c]) - by
+	for name in _rub_mm:
+		var mm: MultiMesh = _rub_mm[name]
+		for i in int(_rub_used[name]):
+			var cd := mm.get_instance_custom_data(i)
+			mm.set_instance_custom_data(i, Color(maxf(cd.r - by, -20000.0), cd.g, cd.b, cd.a))
+	for e in _pending:
+		e[1] = float(e[1]) - by
 
 
 func advance(delta: float) -> void:
@@ -645,6 +833,14 @@ func advance(delta: float) -> void:
 	if now > REBASE_AT:
 		_rebase(REBASE_BY)
 	ModelLib.set_time(now)
+	if not _pending.is_empty():
+		var keep: Array = []
+		for e in _pending:
+			if now >= float(e[1]):
+				_place_rubble(int(e[0]), now)
+			else:
+				keep.append(e)
+		_pending = keep
 	_char_t += delta
 	if _char_t >= 0.25:
 		_char_t = 0.0
