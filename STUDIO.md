@@ -68,6 +68,18 @@ The owner wants every game and UI to look like a small, skilled studio made it, 
 2. A fresh-eyes critic agent that has NOT seen the build process reviews them with one question: "what here looks AI-generated, generic or template-made, and what would a skilled indie artist change?" It must return concrete findings.
 3. The builder fixes every finding, then re-shoots. A game isn't "first playable" or "ready to play" while the critic still flags it.
 
+## Playtesting: Claude plays every game end to end (the owner's request)
+
+The owner wants every game played start to finish so the quirks are worked out before they play it. Every game gets:
+
+1. **Dev boosts** in playtest builds only (`playtest` feature tag, hidden in release): time scale 1x/5x/10x/50x (`Engine.time_scale`), income x10/x100, give currency, unlock everything, skip to a stage, reset the save.
+2. **A playthrough bot**, `tests/playthrough.gd`: plays from a fresh save to the ending through the game's real systems (moving, aiming, using tools, shopping the way a player would), sped up with `--fixed-fps` and time scale. Profiles: `keen`, `casual`, and `boosted` (dev x10, for speed). It reports when each tool was bought and each stage finished (pacing), and fails if the ending isn't reached; if progress stalls for too long; if any tool, upgrade, helper or find is unreachable; if the player leaves the world or gets stuck in geometry; if a save and reload at several points mid-run doesn't restore the same state; if an ad or purchase flow (stubbed) breaks anywhere it appears; or if anything is printed as an error.
+3. **A chaos run**: several game-minutes of random input (every button, every panel opened and closed, random purchases, background and resume). No crash, no softlock, no broken UI state.
+4. **A visual run**: the playthrough rendered under xvfb with a screenshot every N game-seconds, reviewed as a contact sheet for clipping, z-fighting, UI overlap and text overflow, at phone and tablet sizes.
+5. **A browser run**: `python3 tools/browser_check.py games/<slug>` exports the web build locally, loads it in headless Chromium as an iPhone in landscape with touch at three sizes, and fails on any console or page error. (Rendering here is software GL at about 1 fps, so smoothness is judged on a real phone; loading, errors, touch and layout are judged here. The live github.io site is not reachable from the workspace, so always test a local export.)
+6. **Every bug found gets fixed and becomes a smoke-test assertion** so it can't come back. Results go in the game's NOTES.md under "QA".
+7. **When:** after first playable (catch the big quirks early), after each art pass, and before "ready to play". CI runs the `boosted` playthrough on every push when a game has one.
+
 ## Making money (the point of the studio)
 
 The goal is revenue. Every game is designed around its monetization from the first build, not bolted on at the end. Reference implementation: Melt a Glacier's `scripts/monetization/` (provider interface + stub), `scripts/ad_offers.gd` and `Balance.AD_REWARDS` (copy the architecture, not the look).
@@ -108,7 +120,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 8. Smooth on a phone (render scale), no errors in the console.
 9. The full "Making money" set above is in and tuned: every rewarded ad, timed offer tags, light interstitials, all IAPs, restore. Pacing bot runs both with and without ads.
 10. Icon, splash, store name, bundle ID.
-11. Smoke test, pacing test and screenshot script all pass; CI green.
+11. Smoke test, screenshot script and the playthrough bot (keen, casual and boosted) all reach the ending cleanly; the chaos, visual and browser runs are clean; CI green.
 
 ## App Store pipeline
 
@@ -122,6 +134,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 - 2026-11-08: "The goal is to make money": every game needs incentives to spend, through IAPs or rewarded ads ("watch an ad for 2x mining"). → Added the "Making money" section; monetization is part of first playable.
 - 2026-11-09: Keep personal information (names and anything like it) out of the public repo, and keep checking. → Added the Privacy section and `tools/privacy_check.py`.
 - 2026-11-09: Screenshots "look pretty sweet so far". Strain to make the UI and game NOT look AI-generated; put in the leg work. Models must look very good too: use Blender or custom-build them as needed. → Added "Look and feel" (art bible, Blender pipeline, custom icons, fresh-eyes critic). Next free slot: a full art pass on Burn Down a Forest before starting a new game.
+- 2026-11-09: Play every game end to end to work out the quirks; use temporary dev boosts (time speed-up, 10x income) for speed. → Added "Playtesting" (dev boosts, playthrough bot, chaos, visual and browser runs, `tools/browser_check.py`, CI playthrough). Each game gets a QA block after first playable and after its art pass.
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 

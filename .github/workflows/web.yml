@@ -73,6 +73,9 @@ jobs:
               if [ -f tests/smoke_test.gd ]; then
                 timeout 300 ~/godot/godot --headless -s res://tests/smoke_test.gd
               fi
+              if [ -f tests/playthrough.gd ]; then
+                timeout 900 ~/godot/godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- boosted
+              fi
               mkdir -p "$site/$slug"
               timeout 600 ~/godot/godot --headless --export-release "Web" "$site/$slug/index.html"
               test -s "$site/$slug/index.wasm"
