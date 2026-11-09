@@ -41,7 +41,7 @@ Every money figure below that is ours is an **estimate**. Nothing the studio has
 
 Sanity checks from real games: Card Crawl Adventure (free, no paid marketing, 2022) made roughly $2,000 from 55,000 first-month downloads after an Apple feature, about **$0.036 per download**, close to our low case. Published ads-only revenue per daily player for casual games is $0.01 to $0.05 (Playio, 2026, vendor ranges), which brackets our base case.
 
-**Per game.** With five games live, the base case needs about **16 installs a day per game** (about 40 daily players each). With one game live it needs all 82 a day. Ten installs a day across the whole catalog, which is already more than an unmarketed indie app usually gets, is worth about $28 a month in the base case.
+**Per game.** With five games live, the base case needs about **16 installs a day per game** (about 40 daily players each). With one game live it needs all 82 a day. Ten installs a day across the whole catalog, which is already more than an unmarketed indie app usually gets, is worth about $26 a month in the base case.
 
 **Timing.** Even after launch, money arrives late: Apple pays out some weeks after each month ends, and ad networks hold earnings until a minimum balance is reached (both from general knowledge, not checked this week; confirm before planning around them).
 
