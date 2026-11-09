@@ -34,8 +34,8 @@
       "emoji": "🌊",
       "color": "#2a7fc1",
       "tagline": "Pump the sea dry and watch shipwrecks, sunken treasure and finally Atlantis come up for air.",
-      "status": "building",
-      "note": "Being built by the daily backstop (started 2026-11-09)"
+      "status": "queued",
+      "note": "Next to start in the conversation loop (the 2026-11-09 backstop run stopped at the usage limit before building it)"
     },
     {
       "slug": "eat-a-giant-cake",
