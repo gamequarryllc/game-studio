@@ -183,6 +183,8 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 - 2026-11-09: The heart of the goal: earn at least $200/month to cover the studio's running cost; find the markets and methods that get there. → Added 'North star', research/market.md and money-first priorities.
 - 2026-11-09: Melt a Glacier is the first game to go through to the App Store; the owner is playing it through before sending it to review. → It ships from its own repo's publish branch, which another conversation is working on (real ads, purchases, TestFlight and a launch checklist are already there). The studio engines don't touch that repo; the studio games follow with the same ad and purchase stack.
 
+- 2026-11-10: Keep the daily backstop daily (not more often): the plan's usage limit is hit quickly by the builders. → No schedule change; if the conversation loop goes idle, the owner nudges it.
+
 ## Block log (newest first; roll entries older than a week into one summary line)
 
 - 2026-11-10 ~04:00 UTC: **Claimed by the conversation loop: shipping-list item 1 on Burn Down a Forest** (move it to Godot 4.7.2, copy Melt a Glacier's AdMob + RevenueCat stack behind the provider interface, `<bundle id>.<key>` product ids, release check, debug leftovers out of release builds, and the CI and iOS-pipeline changes needed for a per-game Godot version). Daily backstop: until this lands, don't edit `.github/workflows/`, `tools/ios_*`, `tools/fetch_plugins.sh` or the forest's folder; take items 2-3 instead (privacy policy and support pages on the site, `app-ads.txt`, 1024 px icons, store screenshots for the other games).
