@@ -165,7 +165,9 @@ the 4.7.2 web export (10 MB of game data: the plugins add only their scripts) lo
 at 844x390, 932x430 and 1024x768 with the touch controls, a tap reaches the game, no console
 or page errors. **iOS:** `tools/fetch_plugins.sh` fetches both native halves for this game and
 `tools/ios_preset.py` writes its preset (iOS 15.0, the tracking prompt's text, RevenueCat on);
-the iOS check build on GitHub's Mac runner is the proof that it compiles and links.
+the iOS check build on GitHub's Mac runner is the proof that it compiles and links, and it
+passed on the ship-prep push (AdMob's app id, Swift package and libraries and RevenueCat in
+the Xcode project; arm64, landscape, iOS 15.0, 120 MB unsigned).
 
 **Bugs found and fixed in this block** (numbered on from the QA list; each has a smoke check):
 

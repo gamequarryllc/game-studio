@@ -32,12 +32,12 @@ release leftovers from ART_REVIEW 3 that show on the money screens.
 
 Smoke 122 checks pass. Ads and purchases test 37 pass. Boosted passes (18:13). Keen passes
 (22:12). Chaos passes (6:07). Screenshots: 22, looked at. Browser run passes at three sizes.
-Release check: fails as it should (four placeholders).
+Release check: fails as it should (four placeholders). On GitHub, the web build and the iOS
+check build both passed for the ship-prep push.
 
 ### Next (for whoever picks this game up)
 
-1. If the iOS check build on GitHub failed for this game, fix that first (the web build and
-   the iOS build both run on the push; see the block log in STUDIO.md).
+1. Nothing is half done: this block is finished.
 2. Store assets: a 1024 px icon and App Store screenshots in `store/burn-a-cardboard-city/`.
 3. The one budgeted polish pass left: ART_REVIEW 3, items 1 to 6, then what's open in 7 to 9.
 4. When the owner sends the ids: `store_config.gd` and `project.godot` (`[admob]`), then the
