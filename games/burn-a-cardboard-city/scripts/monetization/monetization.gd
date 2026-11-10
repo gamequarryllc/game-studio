@@ -5,33 +5,39 @@ extends Node
 ##   Monetization.buy(Monetization.PRODUCT_REMOVE_ADS_2X)
 ##   Monetization.maybe_show_interstitial(Monetization.PLACEMENT_INTERSTITIAL)
 ##
-## To go live, implement a MonetizationProvider subclass (AdMob for ads,
-## RevenueCat or the store plugins for purchases) and return it from
-## _create_provider(). The ids below are the ones to create in the store
-## consoles and in AdMob (see NOTES.md).
+## Providers (_create_provider): on iPhone release builds the real one
+## (MobileMonetizationProvider: AdMob + RevenueCat, ids in store_config.gd); in
+## playtest builds (the web play links, the iOS playtest flavor), the editor and
+## the tests, the stub with pretend ads and purchases. NOTES.md, "Money", says
+## how the owner switches the real ones on.
 
 signal purchases_changed
 signal purchase_error(product_id: String, reason: String)
 signal purchase_granted(product_id: String, text: String)
+signal restore_done(found: int, error: String)
 
-# Rewarded ad placements (also the AdMob ad unit keys). Each is a reward in Balance.AD_REWARDS.
+# Rewarded ad placements. Each is a reward in Balance.AD_REWARDS. They all share
+# one AdMob rewarded unit unless StoreConfig.ADMOB_REWARDED_BY_PLACEMENT splits them.
 const PLACEMENT_BOOST := "boost_2x_fire"
 const PLACEMENT_INSTANT := "instant_coins"
 const PLACEMENT_HELPER_RUSH := "helper_rush"
 const PLACEMENT_DOUBLE_FIND := "double_find"     # double a golden ticket
 const PLACEMENT_INTERSTITIAL := "shop_close"
 
-# Store product ids (create the same ids in App Store Connect / Play Console).
-const PRODUCT_REMOVE_ADS_2X := "remove_ads_2x"      # non-consumable
-const PRODUCT_STARTER := "starter_pack"             # non-consumable, one time
-const PRODUCT_GOLDEN := "golden_lens"               # non-consumable cosmetic + 10% power
-const PRODUCT_COINS_S := "coins_small"              # consumable
-const PRODUCT_COINS_M := "coins_medium"             # consumable
-const PRODUCT_COINS_L := "coins_large"              # consumable
+# Store product ids: "<bundle id>.<key>" (create exactly these in App Store Connect;
+# store/burn-a-cardboard-city/listing.json lists the keys, prices and names).
+const PRODUCT_REMOVE_ADS_2X := StoreConfig.BUNDLE_ID + ".remove_ads_2x"   # non-consumable
+const PRODUCT_STARTER := StoreConfig.BUNDLE_ID + ".starter_pack"          # non-consumable, one time
+const PRODUCT_GOLDEN := StoreConfig.BUNDLE_ID + ".golden_lens"            # non-consumable cosmetic + 10% power
+const PRODUCT_COINS_S := StoreConfig.BUNDLE_ID + ".coins_small"           # consumable
+const PRODUCT_COINS_M := StoreConfig.BUNDLE_ID + ".coins_medium"          # consumable
+const PRODUCT_COINS_L := StoreConfig.BUNDLE_ID + ".coins_large"           # consumable
 
+# The titles are the names the box shows; the store listing's display names match
+# them, so the payment sheet names the thing the player tapped.
 const PRODUCTS = {
-	PRODUCT_REMOVE_ADS_2X: {"title": "Remove ads and burn 2x for good", "fallback_price": "$4.99", "consumable": false},
-	PRODUCT_STARTER: {"title": "Starter pack", "fallback_price": "$1.99", "consumable": false},
+	PRODUCT_REMOVE_ADS_2X: {"title": "No ads, and 2x for good", "fallback_price": "$4.99", "consumable": false},
+	PRODUCT_STARTER: {"title": "A box of matches", "fallback_price": "$1.99", "consumable": false},
 	PRODUCT_GOLDEN: {"title": "The golden lens", "fallback_price": "$2.99", "consumable": false},
 	PRODUCT_COINS_S: {"title": "A sock of coins", "fallback_price": "$0.99", "consumable": true},
 	PRODUCT_COINS_M: {"title": "A jar of coins", "fallback_price": "$2.99", "consumable": true},
@@ -53,14 +59,39 @@ func _ready() -> void:
 	provider.purchase_succeeded.connect(_grant)
 	provider.purchase_restored.connect(_grant)
 	provider.purchase_failed.connect(func(id, reason): purchase_error.emit(id, reason))
+	provider.restore_finished.connect(func(found, error): restore_done.emit(found, error))
 	provider.interstitial_closed.connect(func(_p): _interstitial_open = false)
 	provider.initialize()
 	_last_interstitial = 0.0
 
 
 func _create_provider() -> MonetizationProvider:
-	# TODO when shipping: detect the plugins and return the real provider.
-	return StubMonetizationProvider.new()
+	if OS.has_feature("playtest") or OS.has_feature("stub_store"):
+		return StubMonetizationProvider.new()      # play links, iOS playtest flavor
+	var os_name := OS.get_name()
+	if os_name == "iOS" or os_name == "Android":
+		return MobileMonetizationProvider.new()    # the App Store build
+	if OS.is_debug_build():
+		return StubMonetizationProvider.new()      # the editor and the tests
+	return MonetizationProvider.new()              # a release desktop build: no ads, no store
+
+
+func provider_name() -> String:
+	return provider.provider_name()
+
+
+func is_stub() -> bool:
+	return provider is StubMonetizationProvider
+
+
+# --- Privacy (ad consent) ----------------------------------------------------------------
+func privacy_options_required() -> bool:
+	## EEA/UK players must be able to reopen Google's consent form (Settings shows a button).
+	return provider.privacy_options_required()
+
+
+func show_privacy_options() -> void:
+	provider.show_privacy_options()
 
 
 # --- Rewarded ---------------------------------------------------------------------------
@@ -147,14 +178,18 @@ func restore() -> void:
 
 
 func _grant(product_id: String) -> void:
+	if not PRODUCTS.has(product_id):
+		push_warning("Unknown product: %s" % product_id)
+		return
+	if not bool(PRODUCTS[product_id].consumable) and owns(product_id):
+		return   # restores and store updates repeat grants: keep the player's own settings
 	var text := ""
 	match product_id:
 		PRODUCT_REMOVE_ADS_2X:
 			GameState.owns_remove_ads_2x = true
+			provider.set_ads_removed(true)
 			text = "No more ads, and everything burns twice over. Thank you."
 		PRODUCT_STARTER:
-			if GameState.owns_starter:
-				return
 			GameState.owns_starter = true
 			GameState.starter_offered = true
 			GameState.party_on = true
@@ -169,9 +204,6 @@ func _grant(product_id: String) -> void:
 			GameState.grant_coins(amount)
 			GameState.packs_bought += 1
 			text = "+%s coins" % Fmt.num(amount)
-		_:
-			push_warning("Unknown product: %s" % product_id)
-			return
 	GameState.save_game()
 	GameState.changed.emit()
 	purchases_changed.emit()

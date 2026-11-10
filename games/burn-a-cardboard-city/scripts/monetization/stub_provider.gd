@@ -5,6 +5,8 @@ extends MonetizationProvider
 ## succeed after a short delay and are remembered in GameState's save.
 ## Every fake ad and purchase is counted (`counts`) for the developer menu, so
 ## pacing with and without ads can be compared.
+## Used in playtest builds (the web play links, the iOS playtest flavor), in the
+## editor and in tests; never in an iOS release build (Monetization._create_provider).
 
 const FAKE_AD_SECONDS := 3
 
@@ -25,11 +27,11 @@ func is_rewarded_ready(_placement: String) -> bool:
 
 
 func show_rewarded(placement: String) -> void:
-	_show_fake_ad("REWARDED AD", placement, true)
+	_show_fake_ad("A pretend rewarded ad", placement, true)
 
 
 func show_interstitial(placement: String) -> void:
-	_show_fake_ad("INTERSTITIAL AD", placement, false)
+	_show_fake_ad("A pretend ad between breaks", placement, false)
 
 
 func purchase(product_id: String) -> void:
@@ -41,15 +43,23 @@ func purchase(product_id: String) -> void:
 func restore_purchases() -> void:
 	# A real store returns what the account owns. The stub owns nothing extra;
 	# GameState already remembers stub purchases in the save file.
-	pass
+	await get_tree().create_timer(0.4).timeout
+	restore_finished.emit(0, "")
 
 
 func price_string(_product_id: String, fallback: String) -> String:
-	return fallback + " (test)"
+	# The "(test)" label marks pretend prices on the play links and other
+	# playtest builds only; everywhere else the stub shows the plain price.
+	return fallback + " (test)" if OS.has_feature("playtest") else fallback
 
 
 func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:
 	if _layer != null:
+		# one ad at a time: say so, never drop a request without an answer
+		if rewarded:
+			rewarded_failed.emit.call_deferred(placement, "another ad is showing")
+		else:
+			interstitial_closed.emit.call_deferred(placement)
 		return
 	_layer = CanvasLayer.new()
 	_layer.layer = 100
@@ -65,7 +75,7 @@ func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:
 	bg.add_child(box)
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var label := Label.new()
-	label.text = "%s\n(placeholder: %s)\n\nA real ad would play here." % [title, placement]
+	label.text = "%s\nplacement: %s\n\nA real ad plays here once the ad network is connected." % [title, placement]
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_override("font", Craft.marker())
 	label.add_theme_font_size_override("font_size", 34)
@@ -81,18 +91,19 @@ func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:
 	if rewarded:
 		var skip := Button.new()
 		skip.focus_mode = Control.FOCUS_NONE
-		skip.text = "Close early (no reward)"
+		skip.text = "Close early, no reward"
 		Craft.tag_button(skip, Craft.KRAFT_PALE, 22, 502)
 		skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		box.add_child(skip)
 		skip.pressed.connect(func():
 			_close()
 			rewarded_failed.emit(placement, "closed early"))
+	var mine := _layer
 	for i in range(FAKE_AD_SECONDS, 0, -1):
-		btn.text = "Close in %d..." % i
+		btn.text = "Close in %d" % i
 		await get_tree().create_timer(1.0).timeout
-		if _layer == null:
-			return  # closed early
+		if _layer != mine or not is_instance_valid(btn):
+			return  # closed early (maybe with another ad open by now: that one isn't ours)
 	btn.text = "Close ad"
 	btn.disabled = false
 	await btn.pressed

@@ -1,5 +1,5 @@
 {
-  "_status": "draft 2026-11-09. Check the name is free when creating the listing. Screenshots and icon come after the polish pass.",
+  "_status": "draft 2026-11-09; product ids and entitlements final 2026-11-10 (the game uses them). Check the name is free when creating the listing. Screenshots and icon come after the last polish pass.",
   "bundle_id": "com.gamequarry.burnacardboardcity",
   "name": "Burn a Cardboard City",
   "subtitle": "Incremental destruction game",
@@ -13,6 +13,12 @@
   ],
   "support_url": "https://gamequarryllc.github.io/game-studio/support/",
   "privacy_url": "https://gamequarryllc.github.io/game-studio/privacy/",
+  "support": {
+    "_about": "This game's section on the support page (tools/site_pages.py). Every answer must match what the game shows.",
+    "restore": "Tap Shop at the top right, open the Extras tab and scroll to the end: Restore is on the last strip.",
+    "ad_choices": "Tap Shop, then the small dial beside Close, and tap Change beside Ad privacy choices. The entry is only there in countries where the law asks for it.",
+    "sound": "Tap Shop, then the small dial beside Close: the minus and plus tags set the sound, and Mute turns everything off."
+  },
   "age_rating": {
     "note": "Draft answers for the age-rating questions; the owner confirms them in App Store Connect.",
     "cartoon_or_fantasy_violence": "infrequent or mild",
@@ -26,40 +32,49 @@
       "key": "remove_ads_2x",
       "type": "non-consumable",
       "price_usd": 4.99,
-      "display_name": "Remove ads and burn 2x for good"
+      "display_name": "No ads, and 2x for good",
+      "product_id": "com.gamequarry.burnacardboardcity.remove_ads_2x",
+      "revenuecat_entitlement": "remove_ads"
     },
     {
       "key": "starter_pack",
       "type": "non-consumable",
       "price_usd": 1.99,
-      "display_name": "Starter pack"
+      "display_name": "A box of matches",
+      "product_id": "com.gamequarry.burnacardboardcity.starter_pack",
+      "revenuecat_entitlement": "starter_pack"
     },
     {
       "key": "golden_lens",
       "type": "non-consumable",
       "price_usd": 2.99,
-      "display_name": "The golden lens"
+      "display_name": "The golden lens",
+      "product_id": "com.gamequarry.burnacardboardcity.golden_lens",
+      "revenuecat_entitlement": "golden_lens"
     },
     {
       "key": "coins_small",
       "type": "consumable",
       "price_usd": 0.99,
-      "display_name": "A sock of coins"
+      "display_name": "A sock of coins",
+      "product_id": "com.gamequarry.burnacardboardcity.coins_small"
     },
     {
       "key": "coins_medium",
       "type": "consumable",
       "price_usd": 2.99,
-      "display_name": "A jar of coins"
+      "display_name": "A jar of coins",
+      "product_id": "com.gamequarry.burnacardboardcity.coins_medium"
     },
     {
       "key": "coins_large",
       "type": "consumable",
       "price_usd": 9.99,
-      "display_name": "A shoebox of coins"
+      "display_name": "A shoebox of coins",
+      "product_id": "com.gamequarry.burnacardboardcity.coins_large"
     }
   ],
-  "product_id_note": "Store product id = bundle id + '.' + key. The game code still uses the bare keys; it must switch to the full ids before products are created (product ids can't repeat across apps on one account).",
+  "product_id_note": "Store product id = bundle id + '.' + key (the product_id field). The game uses exactly these ids (scripts/monetization/monetization.gd). In RevenueCat, attach each non-consumable to the entitlement named in revenuecat_entitlement (scripts/monetization/store_config.gd ENTITLEMENT_TO_KEY); the coin packs are consumables and need no entitlement.",
   "ad_placements": {
     "rewarded": [
       "boost_2x_fire",
@@ -70,5 +85,6 @@
     "interstitial": [
       "shop_close"
     ]
-  }
+  },
+  "ad_placements_note": "All rewarded placements share one AdMob rewarded ad unit and the interstitial uses one interstitial unit (store_config.gd); the placement names are only for the game's own bookkeeping."
 }

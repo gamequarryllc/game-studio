@@ -31,6 +31,18 @@ func _frames(n: int) -> void:
 		await process_frame
 
 
+func _all_text(node) -> String:
+	## Every visible label and button text under a node, one per line.
+	var out := ""
+	if node is CanvasItem and not node.visible:
+		return out
+	if node is Label or node is Button or node is RichTextLabel:
+		out += str(node.text) + "\n"
+	for c in node.get_children():
+		out += _all_text(c)
+	return out
+
+
 func _touch(index: int, pos: Vector2, pressed: bool) -> void:
 	var ev := InputEventScreenTouch.new()
 	ev.index = index
@@ -350,6 +362,34 @@ func _run() -> void:
 	var lv: int = gs.upgrade_levels["dry"]
 	check(gs.buy("upgrade:dry") and gs.upgrade_levels["dry"] == lv + 1, "bought dry cardboard by id")
 	check(gs.buy("helper:windup") and gs.helper_counts[0] == 1, "got a wind-up car by id")
+	# Developer tools belong to playtest builds only: not in an editor run, a
+	# screenshot or a store build (they used to show in every debug build).
+	check(not gs.dev_enabled(), "developer tools are off without the playtest feature")
+	hud.shop.select("settings")
+	await _frames(1)
+	var settings_text: String = _all_text(hud.shop)
+	check(not settings_text.contains("Playtest tools"), "Settings has no playtest tools card outside playtest builds")
+	check(settings_text.contains("Privacy policy"), "Settings links to the privacy policy")
+	check(not settings_text.contains("Ad privacy choices"), "no ad privacy choices where the ad network doesn't ask for them")
+	for read_btn in hud.shop.find_children("*", "Button", true, false):
+		if read_btn.text == "Read" and read_btn.is_visible_in_tree():
+			read_btn.pressed.emit()
+	check(hud.opened_links.size() == 1 and str(hud.opened_links[0]).ends_with("/game-studio/privacy/"),
+		"Read opens the studio's privacy policy page")
+	hud.shop.select("dev")
+	await _frames(1)
+	check(hud.shop.tab != "dev", "the dev tools can't be opened outside playtest builds")
+	hud.shop.select("extras")
+	await _frames(1)
+	var extras_text: String = _all_text(hud.shop)
+	check(not extras_text.contains("(test)"), "no '(test)' on prices outside playtest builds")
+	check(extras_text.contains("$4.99") and extras_text.contains("Restore"), "the box shows the prices and Restore purchases")
+	var restore_answers := []
+	mon.restore_done.connect(func(n, e): restore_answers.append([n, e]), CONNECT_ONE_SHOT)
+	mon.restore()
+	await create_timer(0.6).timeout
+	check(restore_answers == [[0, ""]], "Restore purchases always gets an answer")
+	gs.dev_forced = true    # from here on the tests use the developer tools, as a playtest build would
 	for tab in ["tools", "upgrades", "helpers", "extras", "finds", "settings", "dev"]:
 		hud.shop.select(tab)
 		await _frames(1)
@@ -469,9 +509,27 @@ func _run() -> void:
 	await _frames(2)
 	var sp: Dictionary = hud._last_popup
 	check(sp.has("tag") and sp.has("nope") and sp.box is Control, "the starter pack is a matchbox with a tag and \"not now\"")
+	# One thing on screen: the HUD (and any timed offer tag) fades away under it, and
+	# the price tag on its string stays inside the screen once the drawer is open.
+	await create_timer(1.3).timeout
+	check(hud.hud_box.modulate.a < 0.05, "the HUD is gone while the starter offer is up")
+	var screen := Rect2(Vector2.ZERO, hud.root.get_viewport_rect().size)
+	var tag_rect: Rect2 = sp.tag.get_global_rect()
+	check(screen.encloses(tag_rect), "the price tag is inside the screen (%s in %s)" % [str(tag_rect), str(screen.size)])
+	check(not str(sp.tag.text).contains("(test)") and str(sp.tag.text).begins_with("$"), "the tag shows a plain price (%s)" % sp.tag.text)
 	sp.nope.pressed.emit()
 	await _frames(2)
 	check(not hud.is_blocking() and giant.input_enabled, "\"not now\" closes it and hands the game back")
+	await create_timer(0.4).timeout
+	check(hud.hud_box.modulate.a > 0.95 and hud.hud_box.visible, "and the HUD comes back")
+
+	# Numbers a player reads: whole coins, a rate with one decimal while it's small,
+	# payouts that never say "+0", and time in words on the ending note.
+	check(Fmt.num(3.2) == "3" and Fmt.num(999.9) == "999" and Fmt.num(1500.0) == "1.50K", "coins print whole below a thousand")
+	check(Fmt.rate(0.7) == "0.7" and Fmt.rate(4.0) == "4" and Fmt.rate(12.6) == "12", "a small rate keeps one decimal")
+	check(Fmt.gain(0.4) == "1" and Fmt.gain(2.7) == "3" and Fmt.gain(2400.0) == "2.40K", "payouts round to the coin and never read +0")
+	check(Fmt.spell_time(20.0) == "under a minute" and Fmt.spell_time(60.0) == "1 minute"
+		and Fmt.spell_time(1380.0) == "23 minutes" and Fmt.spell_time(3900.0) == "1 hour 5 minutes", "the ending prints time in words")
 
 	# Boosts run on play time.
 	var clk: float = gs.clock
@@ -580,7 +638,12 @@ func _run() -> void:
 	await _frames(2)
 	check(gs.has_won, "bringing down the keep ends the game")
 	check(hud.popups.get_child_count() > 0, "the ending shows its stats")
-	check(not hud.coin_tag.visible and not hud.shop_button.visible, "the HUD steps aside for the ending")
+	check(not hud.coin_tag.is_visible_in_tree() and not hud.shop_button.is_visible_in_tree() and not hud.hint.is_visible_in_tree(),
+		"the HUD steps aside for the ending")
+	var note_text: String = _all_text(hud._last_popup.root)
+	var time_rx := RegEx.new()
+	time_rx.compile("(Under a minute|\\d+ (minute|minutes|hour|hours)( \\d+ (minute|minutes))?) of burning")
+	check(time_rx.search(note_text) != null, "the delivery note prints the time in words")
 	check(not giant.hand_visible and giant.cinematic, "the ending hides the hand and moves the camera itself")
 	for _k in 80:
 		city.tick(0.1)
@@ -592,7 +655,9 @@ func _run() -> void:
 		"the delivery note is pinned up on screen (%s)" % str(note_rect))
 	hud._last_popup.button.pressed.emit()
 	await _frames(2)
-	check(hud.coin_tag.visible and not hud.is_blocking(), "\"Walk around the ashes\" brings the HUD back")
+	check(hud.coin_tag.is_visible_in_tree() and hud.shop_button.is_visible_in_tree() and not hud.is_blocking(),
+		"\"Walk around the ashes\" brings the HUD back (box %s, coins %s, shop %s, blocking %s)" % [
+			hud.hud_box.visible, hud.coin_tag.visible, hud.shop_button.visible, hud.is_blocking()])
 	check(giant.hand_visible and not giant.cinematic, "and the giant's own eyes and hand")
 
 	gs.wipe_save(false)

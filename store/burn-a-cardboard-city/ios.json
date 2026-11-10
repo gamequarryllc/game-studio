@@ -1,0 +1,8 @@
+{
+  "_about": "iOS build settings for tools/ios_preset.py. The game has the real AdMob + RevenueCat code (scripts/monetization/); its store ids are placeholders until the owner provides them (store/README.md, 'Burn a Cardboard City'), and tests/release_check.gd stops a release upload until they're filled in.",
+  "min_ios": "15.0",
+  "plugins": ["GodotxRevenueCat"],
+  "plist_extra": "<key>NSUserTrackingUsageDescription</key>\n<string>Lets the ads in the game be more relevant to you. The game plays the same either way.</string>",
+  "tracking_enabled": false,
+  "real_monetization": true
+}

@@ -789,6 +789,7 @@ func _chaos() -> void:
 	var minutes := 6.0
 	var keys := [KEY_E, KEY_TAB, KEY_B, KEY_G, KEY_M, KEY_SPACE, KEY_ESCAPE, KEY_F1, KEY_W, KEY_A, KEY_S, KEY_D]
 	gs.dev_income = 50.0
+	gs.dev_forced = true    # chaos presses the developer tools too, as in a playtest build
 	var end: float = gs.play_time + minutes * 60.0
 	var last_print := 0.0
 	while gs.play_time < end:
@@ -947,7 +948,7 @@ func _after_ending() -> void:
 	else:
 		if p.note.modulate.a < 0.9:
 			fail("the delivery note never faded in")
-		if hud.coin_tag.visible or hud.shop_button.visible:
+		if hud.coin_tag.is_visible_in_tree() or hud.shop_button.is_visible_in_tree():
 			fail("the HUD was still up over the ending")
 		p.button.pressed.emit()
 		await _frames(2)

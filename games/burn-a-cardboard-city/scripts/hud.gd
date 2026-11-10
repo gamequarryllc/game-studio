@@ -19,6 +19,7 @@ var shop: ShopBox
 var offers := AdOffers.new()
 
 var root: Control
+var hud_box: Control                  # holds every HUD piece (not the popups, the box or the touch controls)
 var coins_label: Label
 var rate_label: Label
 var coin_tag: PanelContainer
@@ -39,6 +40,7 @@ var coach: PanelContainer
 var coach_label: Label
 var hint: PanelContainer
 var toast_box: Control
+var opened_links: Array[String] = []
 var chain_label: Label
 var find_tag: PanelContainer
 var popups: Control
@@ -296,10 +298,16 @@ func _ready() -> void:
 	vig.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	vig.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(vig)
+	# Every HUD piece lives in hud_box, so an offer or the ending can take the whole
+	# HUD away in one go (it used to show through the starter offer and collide with it).
+	hud_box = Control.new()
+	hud_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hud_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(hud_box)
 	floats_layer = Control.new()
 	floats_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	floats_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(floats_layer)
+	hud_box.add_child(floats_layer)
 	_build_top()
 	_build_center()
 	_build_bottom()
@@ -326,6 +334,15 @@ func _ready() -> void:
 		toast(text)
 		if shop != null:
 			shop.rebuild())
+	Monetization.restore_done.connect(func(found: int, error: String):
+		if error != "":
+			toast("Couldn't bring them back: %s" % error)
+		elif found == 0:
+			toast("The store has nothing to bring back for this account")
+		else:
+			toast("Brought back %d %s" % [found, "purchase" if found == 1 else "purchases"])
+		if shop != null:
+			shop.rebuild())
 	_shown_coins = GameState.coins
 
 
@@ -343,7 +360,7 @@ func _panel(style: StyleBox, rot: float = 0.0) -> PanelContainer:
 func _build_top() -> void:
 	coin_tag = _panel(Craft.card(Craft.KRAFT, 11, 1), -0.025)
 	coin_tag.position = Vector2(14, 12)
-	root.add_child(coin_tag)
+	hud_box.add_child(coin_tag)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 10)
 	coin_tag.add_child(h)
@@ -360,7 +377,7 @@ func _build_top() -> void:
 
 	var wt := _panel(Craft.paper(12), 0.03)
 	wt.position = Vector2(26, 104)
-	root.add_child(wt)
+	hud_box.add_child(wt)
 	var wh := HBoxContainer.new()
 	wh.add_theme_constant_override("separation", 6)
 	wt.add_child(wh)
@@ -372,7 +389,7 @@ func _build_top() -> void:
 	boosts.position = Vector2(18, 228)
 	boosts.add_theme_constant_override("separation", 6)
 	boosts.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(boosts)
+	hud_box.add_child(boosts)
 
 	var zt := _panel(Craft.card(Craft.KRAFT_PALE, 13, 0), 0.012)
 	zt.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
@@ -380,7 +397,7 @@ func _build_top() -> void:
 	zt.offset_right = 235
 	zt.offset_top = 12
 	zt.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	root.add_child(zt)
+	hud_box.add_child(zt)
 	var zv := VBoxContainer.new()
 	zv.add_theme_constant_override("separation", 2)
 	zt.add_child(zv)
@@ -409,7 +426,7 @@ func _build_top() -> void:
 	shop_button.offset_bottom = 82
 	shop_button.rotation = 0.03
 	shop_button.pressed.connect(toggle_shop)
-	root.add_child(shop_button)
+	hud_box.add_child(shop_button)
 	_build_offer_tag()
 
 
@@ -428,7 +445,7 @@ func _build_offer_tag() -> void:
 		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT \
 				and e.device != InputEvent.DEVICE_ID_EMULATION:
 			take_offer())
-	root.add_child(offer_tag)
+	hud_box.add_child(offer_tag)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 4)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -459,14 +476,14 @@ func _build_center() -> void:
 	crosshair.offset_top = -30
 	crosshair.offset_bottom = 30
 	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(crosshair)
+	hud_box.add_child(crosshair)
 	target_tag = _panel(Craft.paper(16), -0.015)
 	target_tag.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	target_tag.offset_left = -16
 	target_tag.offset_top = 34
 	target_tag.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	target_tag.visible = false
-	root.add_child(target_tag)
+	hud_box.add_child(target_tag)
 	target_label = Craft.rich(24)
 	target_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	target_tag.add_child(target_label)
@@ -478,7 +495,7 @@ func _build_center() -> void:
 	coach.offset_top = 104
 	coach.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	coach.visible = false
-	root.add_child(coach)
+	hud_box.add_child(coach)
 	coach_label = Craft.body(28)
 	coach_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	coach.add_child(coach_label)
@@ -490,7 +507,7 @@ func _build_center() -> void:
 	chain_label.offset_top = -170
 	chain_label.offset_bottom = -90
 	chain_label.visible = false
-	root.add_child(chain_label)
+	hud_box.add_child(chain_label)
 
 	hint = _panel(Craft.paper(18, 1), 0.01)
 	hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -498,7 +515,7 @@ func _build_center() -> void:
 	hint.offset_right = 330
 	hint.offset_top = 150
 	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	root.add_child(hint)
+	hud_box.add_child(hint)
 	var hl := Craft.body(22)
 	hl.text = "Mouse button to start.  The mouse looks, WASD walks, hold the button down to burn, Space jumps.\nE opens the box, M mutes, Esc lets go of the mouse."
 	hint.add_child(hl)
@@ -513,7 +530,7 @@ func _build_bottom() -> void:
 	tool_tag.offset_bottom = -14
 	tool_tag.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	tool_tag.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	root.add_child(tool_tag)
+	hud_box.add_child(tool_tag)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
 	h.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -536,7 +553,7 @@ func _build_bottom() -> void:
 		if e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT \
 				and e.device != InputEvent.DEVICE_ID_EMULATION:
 			take_find())
-	root.add_child(find_tag)
+	hud_box.add_child(find_tag)
 	var fh := HBoxContainer.new()
 	fh.add_theme_constant_override("separation", 10)
 	fh.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -618,7 +635,7 @@ func _process(delta: float) -> void:
 
 func _refresh() -> void:
 	var rate := GameState.income_per_second_now()
-	rate_label.text = "+%s a second" % Fmt.num(rate) if rate > 0.05 else "nothing burning"
+	rate_label.text = "+%s a second" % Fmt.rate(rate) if rate > 0.05 else "nothing burning"
 	if city != null:
 		var z := Balance.zone_for_cell(clampi(int((giant.position.x - city.origin.x) / Balance.CELL), 0, city.n - 1),
 			clampi(int((giant.position.z - city.origin.y) / Balance.CELL), 0, city.n - 1))
@@ -698,7 +715,7 @@ func _update_target() -> void:
 		elif st == CityGrid.STANDING:
 			var power := GameState.tool_power()
 			if city.can_light(s, power):
-				text = "%s  [coin]%s" % [def.name, Fmt.num(float(def.coins) * GameState.coin_mult())]
+				text = "%s  [coin]%s" % [def.name, Fmt.gain(float(def.coins) * GameState.coin_mult())]
 				if city.is_truck(s):
 					text += "  (out of water)" if city.truck_dry(s) else "  (it squirts water at fires near it)"
 			elif city.keep_shielded(s):
@@ -793,6 +810,14 @@ var _note_panel: PanelContainer
 var _note_label: RichTextLabel
 var _note_t := 0.0
 var _note_key := ""
+
+
+func open_link(url: String) -> void:
+	## A link the player asked for (the privacy policy). Remembered so tests can
+	## see it; a headless run has no browser to hand it to.
+	opened_links.append(url)
+	if DisplayServer.get_name() != "headless":
+		OS.shell_open(url)
 
 
 func toast(text: String, key: String = "") -> void:
@@ -1085,9 +1110,20 @@ func close_popup(p: Dictionary) -> void:
 	var r: Control = p.root
 	popups.remove_child(r)
 	r.queue_free()
+	if popups.get_child_count() == 0:
+		_set_hud_shown(true)
 	if popups.get_child_count() == 0 and shop == null:
 		giant.input_enabled = true
 		touch.visible = touch_mode
+
+
+func _set_hud_shown(on: bool) -> void:
+	## Fades the whole HUD out under a modal and back in after it. Uses alpha, not
+	## `visible`, so each piece keeps its own show/hide state while it's away.
+	if _hud_tween != null and _hud_tween.is_valid():
+		_hud_tween.kill()
+	_hud_tween = hud_box.create_tween()
+	_hud_tween.tween_property(hud_box, "modulate:a", 1.0 if on else 0.0, 0.25 if on else 0.15)
 
 
 func show_starter_offer() -> void:
@@ -1103,22 +1139,28 @@ func show_starter_offer() -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	popups.add_child(dim)
+	_set_hud_shown(false)     # one thing on screen: no HUD, no timed offer tag under it
 	var p := {"root": dim}
 	var vp := root.get_viewport_rect().size
 	var box := Matchbox.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var w := minf(vp.x * 0.42, 520.0)
-	box.sleeve = Rect2(vp.x * 0.14, vp.y * 0.36, w, w * 0.46)
+	# The sleeve, the open drawer, the string and the price tag must all fit: on a
+	# 16:9 or 4:3 screen the tag used to hang off the right edge.
+	var tag_w := 210.0
+	var reach := w * 1.62 + 6.0 + 56.0 + tag_w + 14.0
+	var left := clampf(vp.x - 28.0 - reach, 40.0, vp.x * 0.14)
+	box.sleeve = Rect2(left, vp.y * 0.36, w, w * 0.46)
 	dim.add_child(box)
 	var title := Craft.label(40, Craft.PAPER)
 	title.text = "A BOX OF MATCHES"
-	title.position = Vector2(vp.x * 0.14, vp.y * 0.36 - 118)
+	title.position = Vector2(left, vp.y * 0.36 - 118)
 	title.rotation = -0.02
 	dim.add_child(title)
 	var body := Craft.rich(23, Craft.PAPER)
 	body.custom_minimum_size = Vector2(minf(vp.x * 0.62, 760.0), 0)
-	body.position = Vector2(vp.x * 0.14, vp.y * 0.36 - 66)
+	body.position = Vector2(left, vp.y * 0.36 - 66)
 	body.text = Craft.coins_bb("+[coin]%s coins right away, and party sparks: every tool throws sparks in all the colours of a felt-tip set. Only offered once." % Fmt.num(Balance.STARTER_COINS), 23)
 	dim.add_child(body)
 	var tag := Button.new()
@@ -1126,7 +1168,7 @@ func show_starter_offer() -> void:
 	Craft.price_button(tag, 61)
 	Craft.hot(tag, true)
 	tag.add_theme_font_size_override("font_size", 28)
-	tag.custom_minimum_size = Vector2(210, 70)
+	tag.custom_minimum_size = Vector2(tag_w, 70)
 	tag.rotation = 0.12
 	tag.pressed.connect(func():
 		close_popup(p)
@@ -1140,7 +1182,7 @@ func show_starter_offer() -> void:
 	nope.add_theme_font_size_override("font_size", 26)
 	for k in ["font_color", "font_hover_color", "font_pressed_color"]:
 		nope.add_theme_color_override(k, Color(Craft.PAPER, 0.85))
-	nope.position = Vector2(vp.x * 0.14 + 8, box.sleeve.end.y + 46)
+	nope.position = Vector2(left + 8, box.sleeve.end.y + 46)
 	nope.rotation = -0.05
 	nope.pressed.connect(func(): close_popup(p))
 	dim.add_child(nope)
@@ -1169,6 +1211,7 @@ func show_starter_offer() -> void:
 
 
 var _last_popup := {}
+var _hud_tween: Tween
 
 
 func show_ending() -> void:
@@ -1177,6 +1220,7 @@ func show_ending() -> void:
 	for c in root.get_children():
 		if c != popups and c is Control:
 			(c as Control).visible = false
+	hint.visible = false
 	touch.release_all()
 	giant.input_enabled = false
 	giant.firing = false
@@ -1223,8 +1267,10 @@ func show_ending() -> void:
 	var b := Craft.rich(23)
 	b.custom_minimum_size = Vector2(500, 0)
 	var n_finds := _count_finds()
+	var spent := Fmt.spell_time(GameState.play_time)      # "23 minutes", "under a minute"
+	spent = spent.left(1).to_upper() + spent.substr(1)
 	b.text = Craft.coins_bb("One cardboard city, returned as ash. The keep went last; the warehouse is quiet again apart from the fans.\n\n%s of burning\n[coin]%s coins earned\n%d %s brought down, longest chain %d\n%d paper %s hopped to safety\n%d %s out of the boxes" % [
-		Fmt.duration(GameState.play_time), Fmt.num(GameState.lifetime_coins), GameState.collapses,
+		spent, Fmt.num(GameState.lifetime_coins), GameState.collapses,
 		"building" if GameState.collapses == 1 else "buildings", GameState.best_chain,
 		GameState.citizens_saved, "person" if GameState.citizens_saved == 1 else "people",
 		n_finds, "find" if n_finds == 1 else "finds"], 23)
@@ -1238,9 +1284,10 @@ func show_ending() -> void:
 		if world != null:
 			world.end_ending_camera()
 		for c in root.get_children():
-			if c != popups and c is Control and c != rotate_overlay and c != hint:
+			if c != popups and c is Control and c != rotate_overlay:
 				(c as Control).visible = true
-		set_touch_mode(touch_mode))
+		set_touch_mode(touch_mode)
+		_refresh())     # each HUD piece back to what the game says it should be, at once
 	v.add_child(btn)
 	p["note"] = note
 	p["button"] = btn

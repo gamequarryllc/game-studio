@@ -568,6 +568,18 @@ def hand():
     return i
 
 
+def policy():
+    """A typed sheet with a folded corner and a red seal: the privacy policy."""
+    i = Icon()
+    i.shape([(14, 8), (40, 8), (51, 19), (51, 57), (14, 57)], WHITE)
+    i.fill([(40, 8), (51, 19), (40, 19)], PALE, off=(0.8, 0.8))
+    i.ink([(40, 8), (40, 19), (51, 19)], False, False, 3.5)
+    for y, x1 in ((27, 43), (34, 39), (41, 43)):
+        i.line((21, y), (x1, y), 3.0)
+    i.circle(38, 49, 5.6, RED, 2.5, 10)
+    return i
+
+
 def app_icon():
     """The app icon: a box house on fire, on kraft, with a strip of tape."""
     s = 64
@@ -601,6 +613,12 @@ ICONS = {
     "citizen_2": lambda: citizen(2, ORANGE), "citizen_3": lambda: citizen(0, PINK),
     "citizen_4": lambda: citizen(1, RED), "citizen_5": lambda: citizen(2, SKY),
 }
+# Icons added after the first set. The wobble comes from one seeded stream, so
+# these are drawn last (after the app icon) and the older files stay byte for
+# byte the same. Add new icons here, at the end.
+LATER_ICONS = {
+    "policy": policy,
+}
 
 
 def main():
@@ -610,7 +628,10 @@ def main():
             f.write(make().svg())
     with open(os.path.join(ROOT, "icon.svg"), "w") as f:
         f.write(app_icon().svg())
-    print("wrote %d icons and icon.svg" % len(ICONS))
+    for name, make in LATER_ICONS.items():
+        with open(os.path.join(OUT, name + ".svg"), "w") as f:
+            f.write(make().svg())
+    print("wrote %d icons and icon.svg" % (len(ICONS) + len(LATER_ICONS)))
 
 
 if __name__ == "__main__":

@@ -7,8 +7,9 @@ eyes: the houses come up to your knees, the offices to your chest. Burn it all d
 block by block. It's a craft project: nobody lives there but flat paper cut-out people,
 who hop out and skip off to safety.
 
-Godot 4.4, Compatibility renderer, landscape 1280x720 (stretch: canvas_items / expand).
-Bundle ID (when it ships): `com.gamequarry.burnacardboardcity`.
+Godot 4.7.2 (`godot_version.txt`; moved from 4.4.1 in the ship prep), Compatibility renderer,
+landscape 1280x720 (stretch: canvas_items / expand).
+Bundle ID: `com.gamequarry.burnacardboardcity`.
 
 ## Art bible
 
@@ -116,7 +117,12 @@ shiny, glass) and a "decal" surface (marker drawings from the marker sheet).
     BACKFACE=1 python3 art/blender/contact_sheet.py /tmp/tools.png tools.glb     # (culls the hand's outline hull)
     python3 tools/make_icons.py                   # icons/*.svg and icon.svg
 
-## Status: first playable, polish pass (review 2) and QA done
+## Status: first playable; review-3 critic "almost"; ship prep done (Godot 4.7.2, real AdMob + RevenueCat with placeholder ids, release leftovers out; see "Ship prep")
+
+Ship prep (2026-11-10) put the studio's shipping stack in: see "Ship prep" and "Money". It earns
+nothing until the owner's ids are in (`store/README.md`, "Burn a Cardboard City"). Still open from
+ART_REVIEW 3: its art items 1 to 6 and most of 8 and 9 (the one budgeted polish pass left).
+
 
 Art pass 2 answered all 12 items of review 1, and the polish pass all 10 items of review 2
 (plus its phone-readability notes) in `ART_REVIEW.md`; the QA blocks played every profile
@@ -127,6 +133,51 @@ the other rewarded ads, Remove Ads + permanent 2x, the timed offer tag, the star
 the golden lens, coin packs and restore (all stubbed), finds (with "double this find"),
 paper citizens, toy fire trucks that douse fires, autosave + save on backgrounding,
 first-run hints, generated sound effects, dev boosts, and an ending when the keep falls.
+
+## Ship prep (2026-11-10): Godot 4.7.2, real ads and purchases, release leftovers out
+
+STUDIO.md shipping-list item 1 on this game, the second after Burn Down a Forest.
+**Engine:** 4.4.1 to 4.7.2 (`godot_version.txt`); no script, shader or MultiMesh needed
+changing, and the screenshots match the 4.4.1 ones. **Money:** the AdMob + RevenueCat stack
+behind the provider interface (see "Money"), product ids `<bundle id>.<key>`,
+`store_config.gd` placeholders, `tests/release_check.gd`, `tests/monetization_test.gd`.
+**Release leftovers** (ART_REVIEW 3, items 7 to 9, the parts that show on the money screens):
+
+- No "(test)" on prices outside playtest builds; developer tools only with the `playtest`
+  feature (they used to show in every debug build, so in editor runs and screenshots).
+- The starter offer has the screen to itself: every HUD piece now lives in `hud.hud_box`, which
+  fades out under the offer and back after it, so the title no longer runs into the wind tag
+  and no timed offer tag hangs behind it. The matchbox, its open drawer, the string and the
+  price tag are placed to fit the screen (the tag used to hang off the right edge at 16:9 and 4:3).
+- Coins print whole below a thousand ("3", not "3.2"); payouts round to the coin and never
+  read "+0"; the rate keeps one decimal while it's small ("+0.7 a second").
+- The delivery note prints time in words ("23 minutes of burning", "Under a minute of
+  burning"), not "20s of burning".
+- Restore purchases answers with what it found; the last strip of a list is no longer cut off
+  by the box's lip; the store names of the products match the names the box shows.
+
+**Results (Godot 4.7.2):** smoke test 122 checks pass (18 new); the ads and purchases test
+passes (37 checks); the release check fails as it should, listing the four placeholders;
+boosted passes (the keep falls at 18:13); keen passes and ends at 22:12 (candle 5:35, blowtorch
+15:33, rockets 20:20); chaos passes (6:07 of random input, 96% of the city down); screenshots
+render clean (22, two new: the purchases at the end of Extras, and Settings). **Browser run:**
+the 4.7.2 web export (10 MB of game data: the plugins add only their scripts) loads and starts
+at 844x390, 932x430 and 1024x768 with the touch controls, a tap reaches the game, no console
+or page errors. **iOS:** `tools/fetch_plugins.sh` fetches both native halves for this game and
+`tools/ios_preset.py` writes its preset (iOS 15.0, the tracking prompt's text, RevenueCat on);
+the iOS check build on GitHub's Mac runner is the proof that it compiles and links.
+
+**Bugs found and fixed in this block** (numbered on from the QA list; each has a smoke check):
+
+21. "(test)" on every price in screenshots and any non-playtest build.
+22. Developer tools showed in editor runs and screenshots (any debug build).
+23. The starter offer's title and text ran into the HUD's wind tag, with the timed offer tag
+    still hanging behind it.
+24. The starter offer's price tag hung off the right edge of a 1280-wide screen.
+25. "3.2" coins on the counter and decimal payouts.
+26. "20s of burning" on the delivery note.
+27. Restore purchases never said what happened.
+28. After "Walk around the ashes" every HUD piece was forced visible, whatever its own state.
 
 ## The design
 
@@ -223,12 +274,47 @@ with your stride. Big collapses near you shake the view.
 ## Money
 
 Architecture as in the studio's reference game: the game only talks to the `Monetization`
-autoload, which forwards to one `MonetizationProvider`; right now the
-`StubMonetizationProvider` (fake 3-second ads, purchases succeed, everything counted in the
-playtest tools). To go live, write an AdMob + RevenueCat provider and return it from
-`Monetization._create_provider()`.
+autoload, which forwards to one `MonetizationProvider` (`Monetization._create_provider()`):
 
-**Rewarded ad placements** (AdMob rewarded units):
+| Build | Provider | Ads | Purchases |
+|---|---|---|---|
+| iOS release (what ships) | `MobileMonetizationProvider` | AdMob (`admob_ads.gd`): rewarded + interstitial, Google's consent form (UMP) first, the iPhone tracking prompt (when the IDFA message is on in AdMob), retry with back-off (4 s to 2 min) | RevenueCat (`revenuecat_store.gd`): purchase, restore, local prices from the store |
+| playtest (web play links, iOS playtest flavor) | `StubMonetizationProvider` | pretend 3-second ads | pretend purchases, counted in the playtest tools; prices say "(test)" |
+| editor and tests (debug, no `playtest` feature) | `StubMonetizationProvider` | pretend | pretend, plain prices |
+| a release desktop build | base `MonetizationProvider` | none | none |
+
+Each half of the real provider switches itself off when its plugin or ids are missing (ads
+report "not ready", so no offer tag shows; purchases fail politely). Debug builds and builds
+with the `test_ads` feature only ever load Google's test ad units. The stack (Poing Studios
+AdMob v5.1.0, GodotX RevenueCat 2.6.0) is the one Burn Down a Forest took from the reference
+game: the GDScript halves are in `addons/`, the native iOS halves are fetched at build time by
+`tools/fetch_plugins.sh` (pinned in `tools/plugin_versions.env`, never committed). Both editor
+plugins are on in `project.godot`; on a headless import the AdMob plugin downloads its small
+native libraries into `addons/admob/*/bin` by itself (ignored by git).
+
+**Ids that ship in the app** (`scripts/monetization/store_config.gd`, each a clearly marked
+PLACEHOLDER until the owner provides it):
+- `REVENUECAT_KEY_IOS`: RevenueCat's public App Store key (`appl_...`).
+- `ADMOB_REWARDED["iOS"]`, `ADMOB_INTERSTITIAL["iOS"]`: one rewarded and one interstitial ad
+  unit (`ca-app-pub-.../...`); every rewarded placement shares the one unit.
+- The AdMob **app** id (`ca-app-pub-...~...`) goes in `project.godot` as `[admob]`
+  `general/ios/app_id="..."`. Until then it is Google's sample app id (the plugin's default).
+- `PRIVACY_POLICY_URL` is already set: the studio's page, https://gamequarryllc.github.io/game-studio/privacy/.
+
+`tests/release_check.gd -- iOS` lists every placeholder still left (four today) and checks the
+product ids, the store listing and that the iOS preset has no `playtest` feature;
+`tools/ios_build.sh` runs it on every iOS build, and a TestFlight upload of the release flavor
+stops until it passes. `tests/monetization_test.gd` drives the real AdMob and RevenueCat code
+against fake plugin singletons (37 checks). To switch the real ones on: put the ids in (or send
+them to Claude; none is secret), run the release check, then Actions > "iOS build" >
+`burn-a-cardboard-city`, `testflight`, `release`. The owner's account steps are in
+`store/README.md`, "Burn a Cardboard City".
+
+In the box: Extras ends with Restore purchases, which says what it found in a note; Settings
+(the dial beside Close) has "Privacy policy" and, where Google says the player must be able
+to reopen the consent form (EEA/UK), "Ad privacy choices".
+
+**Rewarded ad placements** (all share the one AdMob rewarded unit; the names are the game's own bookkeeping):
 
 | Placement ID | Reward | Where |
 |---|---|---|
@@ -240,15 +326,19 @@ playtest tools). To go live, write an AdMob + RevenueCat provider and return it 
 **Interstitial placement:** `shop_close` (closing the box is the natural break). Never in
 the first 5 min, at most every 4 min, never right after a rewarded ad, never with Remove Ads.
 
-**In-app purchase product IDs:**
+**In-app purchase product ids** (each is `com.gamequarry.burnacardboardcity.` + the key; ids
+can't repeat across the account's apps; `store/burn-a-cardboard-city/listing.json` has the same list):
 
-| Product ID | Type | Price | What |
-|---|---|---|---|
-| `remove_ads_2x` | non-consumable | $4.99 | Remove ads + permanent 2x (the anchor offer) |
-| `starter_pack` | non-consumable (one time) | $1.99 | 2,500 coins + party sparks (exclusive cosmetic: every tool's sparks in felt-tip colours). Offered once in a popup after 10 min, and in the shop |
-| `golden_lens` | non-consumable | $2.99 | Premium cosmetic: gold fire and a gilded tool, +10% power (toggle in the shop) |
-| `coins_small` / `coins_medium` / `coins_large` | consumable | $0.99 / $2.99 / $9.99 | 35% / 100% / 400% of the next tool's cost (at least 400 / 1.5K / 8K). Shown in the Tools tab when you're short for the next tool, and always in the Extras tab |
-| Restore purchases | | | Extras tab |
+| Key (product id = bundle id + "." + key) | Type | Price | RevenueCat entitlement | What |
+|---|---|---|---|---|
+| `remove_ads_2x` | non-consumable | $4.99 | `remove_ads` | No ads between breaks + permanent 2x (the anchor offer) |
+| `starter_pack` | non-consumable (one time) | $1.99 | `starter_pack` | "A box of matches": 2,500 coins + party sparks (exclusive cosmetic: every tool's sparks in felt-tip colours). Offered once after 10 min as a matchbox with the price on a tag, and in the shop |
+| `golden_lens` | non-consumable | $2.99 | `golden_lens` | Premium cosmetic: gold fire and a gilded tool, +10% power (toggle in the shop) |
+| `coins_small` / `coins_medium` / `coins_large` | consumable | $0.99 / $2.99 / $9.99 | none | 35% / 100% / 400% of the next tool's cost (at least 400 / 1.5K / 8K). Shown in the Tools tab when you're short for the next tool, and always in the Extras tab |
+| Restore purchases | | | | The last strip of the Extras tab |
+
+A restore (or RevenueCat's startup report) grants a non-consumable once and never flips the
+player's own settings back (the golden lens toggle stays where they left it).
 
 **Timed offer tag** (`scripts/ad_offers.gd`): a luggage tag hanging off the shop button
 that names what it buys ("Free: +[coin]1.20K, enough for the blowtorch"). Gentle rules:
@@ -261,8 +351,9 @@ Guardrails: finishable without paying; Remove Ads and boosts speed it up.
 
 ## Dev boosts and code-driven play (playtest builds)
 
-Not a tab in the box any more. In playtest builds (the `playtest` feature tag, or a debug
-build): F1 on a computer, or hold the box's stencilled name ("THE BOX") for a second on a
+Not a tab in the box any more. In playtest builds only (the `playtest` feature tag: the web
+play links and the iOS playtest flavor; no longer in every debug build, so they stay out of
+editor runs and screenshots; tests switch them on with `GameState.dev_forced`): F1 on a computer, or hold the box's stencilled name ("THE BOX") for a second on a
 phone, or Settings (the dial by the lid) > Playtest tools. It has: time scale 1x/5x/10x/50x
 (`Engine.time_scale`), income x1/x10/x100, give coins, unlock everything (every tool,
 upgrades to 5, helpers, every district open), skip to downtown / skyscraper row / the
@@ -344,6 +435,10 @@ For the QA block's playthrough bot, every action is a call: `world.ignite_at(poi
 
 ## Next steps toward the polish bar (STUDIO.md)
 
+0. **To ship:** the owner's ids (`store/README.md`, "Burn a Cardboard City"), a 1024 px store
+   icon and App Store screenshots (`store/burn-a-cardboard-city/`), then the one budgeted polish
+   pass left: ART_REVIEW 3 items 1 to 6 (fire, ruins, lighting, layout, models, the shop), the
+   rest of 8 (the HUD's height, "0%, candle at 85%") and the art half of 9 (the ending's light).
 1. **Pacing with people**: the bots finish in about 22-25 (keen) and 50 (casual) minutes; watch
    two or three real players before pushing the numbers further (see QA below).
 2. **Music**: a couple of generated tunes (warehouse radio?) with a music slider.
@@ -547,7 +642,8 @@ scripts/tool_fx.gd          each tool's effect, rockets
 scripts/helpers.gd          wind-up cars (street pathfinding) and paper planes
 scripts/citizens.gd         paper people and finds
 scripts/world.gd            builds it all, the loop, controls, wind, coins, hints, actions for bots
-scripts/hud.gd              the HUD, wind ribbon, offer tag, finds tag, chain stamps, one-at-a-time notes, matchbox starter pack, ending
+scripts/hud.gd              the HUD (every piece in hud_box), wind ribbon, offer tag, finds tag, chain stamps, one-at-a-time notes,
+                            matchbox starter pack, ending
 scripts/shop_box.gd         the shop: the inside of a box (5 tabs, featured next tool, settings, playtest tools)
 scripts/touch_controls.gd   phone controls
 scripts/craft.gd            palette, fonts, styles, icons
@@ -555,7 +651,10 @@ scripts/card_style.gd       the cut-cardboard StyleBox
 scripts/gfx.gd              particles and textures for effects
 scripts/game_state.gd       autoload: economy, purchases' effects, save/load, dev boosts
 scripts/ad_offers.gd        when the timed offer tag shows and what it offers
-scripts/monetization/       provider interface, stub, autoload facade (product and placement IDs)
+scripts/monetization/       provider interface, stub, the real provider (mobile_provider, admob_ads, revenuecat_store),
+                            store_config (the ids that ship), autoload facade (product and placement ids)
+addons/                     the GDScript halves of the AdMob and RevenueCat plugins (native halves: tools/fetch_plugins.sh)
+godot_version.txt           4.7.2 (CI, the iOS pipeline and tools/browser_check.py read it)
 scripts/audio/sound.gd      autoload: effects, loops, volume
 shaders/                    cardboard (+ box stock) + marker (+ window pens; collapse.gdshaderinc: the burn front), rubble (cooling embers),
                             held_tool (drawn style, the lens), firelight.gdshaderinc (4 pooled fire lights as shader globals),
@@ -569,7 +668,8 @@ art/fonts/                  Archivo Black (OFL), only for baking box print into 
 icons/                      drawn SVG icons (tools/make_icons.py)
 audio/                      generated by tools/make_audio.py
 fonts/                      Saira Stencil One (OFL), Permanent Marker (Apache 2.0), Patrick Hand (OFL)
-tests/                      smoke_test, playthrough (the pacing/QA bot), screenshots, quick_shot (one view), fire_bench
+tests/                      smoke_test, playthrough (the pacing/QA bot), screenshots, quick_shot (one view), fire_bench,
+                            monetization_test (the real ad and store code against fake plugins), release_check (store ids)
 ```
 
 Run: `godot --headless --import`, then `godot --headless -s res://tests/smoke_test.gd`;

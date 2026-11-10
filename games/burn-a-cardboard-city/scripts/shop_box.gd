@@ -302,6 +302,12 @@ func rebuild() -> void:
 			_build_settings()
 		"dev":
 			_build_dev()
+	# A little floor under the last strip, so it isn't cut off by the box's lip
+	# when the list is scrolled to the end (Restore purchases is the last one).
+	var foot := Control.new()
+	foot.custom_minimum_size = Vector2(0, 14)
+	foot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_list.add_child(foot)
 	_scroll.scroll_vertical = 0
 	refresh()
 
@@ -669,7 +675,7 @@ func _build_extras() -> void:
 	var restore := _card("restore", "Restore purchases", "Bought something on another device? Get it back here.")
 	restore.button.pressed.connect(func():
 		Monetization.restore()
-		hud.toast("Asked the store for your purchases"))
+		hud.toast("Asking the store for your purchases"))
 	_set_btn(restore, "Restore", true)
 
 
@@ -712,6 +718,15 @@ func _build_settings() -> void:
 		Sound.set_muted(not Sound.muted)
 		refresh())
 	_refreshers.append(func(): _set_btn(mute, "Unmute" if Sound.muted else "Mute", true))
+	if Monetization.privacy_options_required():
+		# Players in Europe must be able to change what they told Google about ads.
+		var choices := _card("lock", "Ad privacy choices", "Change what you agreed to about ads.")
+		choices.button.pressed.connect(Monetization.show_privacy_options)
+		_set_btn(choices, "Change", true)
+	if StoreConfig.PRIVACY_POLICY_URL != "":
+		var policy := _card("policy", "Privacy policy", "What the game and its ads keep about you. Opens in your browser.")
+		policy.button.pressed.connect(func(): hud.open_link(StoreConfig.PRIVACY_POLICY_URL))
+		_set_btn(policy, "Read", true)
 	if GameState.dev_enabled():
 		var dev := _card("gear", "Playtest tools", "Time scale, income, skip ahead. Not in the real game.")
 		dev.button.pressed.connect(func(): select("dev"))

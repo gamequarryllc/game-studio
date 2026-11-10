@@ -20,13 +20,36 @@ import subprocess
 import sys
 import threading
 
-GODOT = os.environ.get("GODOT", "/home/claude/dl/godot/Godot_v4.4.1-stable_linux.x86_64")
+# Local Godot binaries by version (STUDIO.md). A game says which it needs in
+# games/<slug>/godot_version.txt (4.4.1 when it has none); GODOT overrides.
+GODOT_BY_VERSION = {
+    "4.4.1": "/home/claude/dl/godot/Godot_v4.4.1-stable_linux.x86_64",
+    "4.7.2": "/home/claude/dl/godot47/bin/Godot_v4.7.2-stable_linux.x86_64",
+}
+GODOT = os.environ.get("GODOT", "")
 SIZES = [("iphone", 844, 390), ("iphone-max", 932, 430), ("ipad", 1024, 768)]
 UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 "
       "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1")
 
 
+def godot_for(project):
+    """The Godot binary for this game: $GODOT, or the one its godot_version.txt names."""
+    if GODOT:
+        return GODOT
+    version = "4.4.1"
+    path = os.path.join(project, "godot_version.txt")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            version = f.read().strip()
+    if version not in GODOT_BY_VERSION:
+        sys.exit(f"No local Godot {version} known to this tool: set GODOT=/path/to/godot")
+    return GODOT_BY_VERSION[version]
+
+
 def export(project, out_dir):
+    GODOT = godot_for(project)
+    if not os.path.exists(GODOT):
+        sys.exit(f"Godot not found at {GODOT}: download it (STUDIO.md) or set GODOT=/path/to/godot")
     os.makedirs(out_dir, exist_ok=True)
     subprocess.run([GODOT, "--headless", "--import"], cwd=project, capture_output=True, timeout=300)
     r = subprocess.run([GODOT, "--headless", "--export-release", "Web", os.path.join(out_dir, "index.html")],

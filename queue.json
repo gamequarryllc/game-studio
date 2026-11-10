@@ -26,7 +26,7 @@
       "color": "#c9a46a",
       "tagline": "Someone built a whole city out of cardboard. It would be a shame if it caught fire.",
       "status": "first-playable",
-      "note": "Critic: almost (after polish 1). One more polish pass budgeted, then waits for owner feedback"
+      "note": "Ship prep done (Godot 4.7.2, real ads and purchases with placeholder ids). Needs the owner's ids, store assets and its last polish pass"
     },
     {
       "slug": "drain-an-ocean",

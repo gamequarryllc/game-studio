@@ -55,6 +55,7 @@ var city: CityGrid                    # set by the world
 var giant: Node3D
 var dev_income := 1.0                 # dev menu: income x10 / x100
 var dev_gates_open := false           # dev menu: every district open
+var dev_forced := false               # tests only: developer tools on without the playtest feature (never saved)
 var _autosave_t := 0.0
 var _income: Array = []
 var _income_t := 0.0
@@ -461,7 +462,10 @@ func check_win() -> void:
 # Developer boosts (playtest builds only)
 # =====================================================================================
 func dev_enabled() -> bool:
-	return OS.has_feature("playtest") or OS.is_debug_build()
+	## Developer tools exist only in playtest builds (the `playtest` feature: the
+	## web play links and the iOS playtest flavor). Never in a store build, an
+	## editor run or a screenshot. Tests switch them on with dev_forced.
+	return OS.has_feature("playtest") or dev_forced
 
 
 func dev_unlock_everything() -> void:

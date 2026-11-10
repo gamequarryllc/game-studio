@@ -274,7 +274,7 @@ func _after_tick() -> void:
 	for e in impacts:
 		_on_impact(e[0], e[1], e[2])
 	if _tick_float > 0.0 and _float_clock >= _next_float_t and not hud.chain_label.visible:
-		_float_text(_tick_float_at, "+" + Fmt.num(_tick_float), _tick_float)
+		_float_text(_tick_float_at, "+" + Fmt.gain(_tick_float), _tick_float)
 	for e in city.take("sprays"):
 		var t: int = e[0]
 		var s: int = e[1]
@@ -451,7 +451,7 @@ func _show_burn_pay() -> void:
 			continue
 		if hud.chain_label.visible:
 			break
-		_float_text(top, "+" + Fmt.num(v), v * 0.5)
+		_float_text(top, "+" + Fmt.gain(v), v * 0.5)
 		shown += 1
 		if shown >= 1:
 			break

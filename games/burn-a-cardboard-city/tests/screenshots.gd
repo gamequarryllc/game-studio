@@ -176,6 +176,13 @@ func _run() -> void:
 	hud.shop.select("extras")
 	await _frames(6)
 	await _shot("07b_shop_extras")
+	# The purchases and Restore at the bottom of Extras, then Settings (the privacy links).
+	hud.shop._scroll.scroll_vertical = 100000
+	await _frames(6)
+	await _shot("07c_shop_purchases")
+	hud.shop.select("settings")
+	await _frames(6)
+	await _shot("07d_shop_settings")
 	hud.close_shop()
 	await _frames(2)
 

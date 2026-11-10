@@ -58,6 +58,27 @@ Do these in order, after the general steps above (bundle id `com.gamequarry.burn
 8. **The first real build.** WHAT: once the ids are in, `godot --headless -s res://tests/release_check.gd -- iOS` in the game folder must say every store id is filled in; then start the upload. WHEN: after steps 4 to 6. WHERE: GitHub > Actions > "iOS build" > Run workflow: `burn-down-a-forest`, mode `testflight`, flavor `release`. Buy something with a Sandbox account in TestFlight to check purchases end to end.
 9. **After launch.** WHAT: link the App Store listing to the AdMob app, and set up `app-ads.txt` (next section). WHERE: AdMob > Apps > App settings.
 
+## Burn a Cardboard City: what the owner provides to switch on real ads and purchases
+
+The same code as Burn Down a Forest is in (Godot 4.7.2; the game's NOTES.md, "Money"), so the steps are the forest's steps 2 to 8 above with this game's names. The Paid Apps agreement (step 1), the `SUPPORT_EMAIL` variable and the privacy and support links are done once for the whole account and site. Do this game after the forest is in review: one launch at a time is easier to follow, and the store name "Burn a Cardboard City" should be checked when the app record is created.
+
+- **Bundle id and app record:** `com.gamequarry.burnacardboardcity`, name "Burn a Cardboard City" (general steps 4 and 5 at the top).
+- **The six in-app purchases** (App Store Connect > Apps > Burn a Cardboard City > Monetization > In-App Purchases; display names are in `listing.json`; the review screenshot can be any shot of the box's Extras tab):
+
+   | Product id | Type | Price |
+   |---|---|---|
+   | `com.gamequarry.burnacardboardcity.remove_ads_2x` | Non-Consumable | $4.99 |
+   | `com.gamequarry.burnacardboardcity.starter_pack` | Non-Consumable | $1.99 |
+   | `com.gamequarry.burnacardboardcity.golden_lens` | Non-Consumable | $2.99 |
+   | `com.gamequarry.burnacardboardcity.coins_small` | Consumable | $0.99 |
+   | `com.gamequarry.burnacardboardcity.coins_medium` | Consumable | $2.99 |
+   | `com.gamequarry.burnacardboardcity.coins_large` | Consumable | $9.99 |
+
+- **RevenueCat:** a project "Burn a Cardboard City" with an App Store app for the bundle id (the In-App Purchase key from the forest's step 3 can be reused: it belongs to the account, not to one app); import the six products; three entitlements named exactly `remove_ads`, `starter_pack` and `golden_lens`, each with the product of the same key (`remove_ads` gets `remove_ads_2x`). **Send Claude:** the public App Store SDK key (`appl_...`) for `REVENUECAT_KEY_IOS`.
+- **AdMob:** an iOS app "Burn a Cardboard City" with one Rewarded and one Interstitial ad unit; the GDPR and IDFA explainer messages published for it under Privacy & messaging. **Send Claude:** the app id (with a `~`) and the two ad unit ids (with a `/`).
+- **Links and App Privacy:** the same two links and the same App Privacy answers as the forest (steps 6 and 7).
+- **The first real build:** `godot --headless -s res://tests/release_check.gd -- iOS` in the game folder must say every store id is filled in (today it lists the four placeholders); then Actions > "iOS build" > Run workflow: `burn-a-cardboard-city`, mode `testflight`, flavor `release`.
+
 ## app-ads.txt (once for the whole account, after the first game is live)
 
 `app-ads.txt` is a one-line text file that tells ad buyers the studio's AdMob account really is the seller of its ad space. Google calls it "not mandatory, but highly recommended": without a verified file, the ad buyers that check it don't bid, so ads pay less. One file covers every app on the AdMob account, Melt a Glacier included.
@@ -71,7 +92,7 @@ Afterwards: AdMob > Apps > View all apps > app-ads.txt > "Check for updates". Ve
 
 ## Still needed before a game can be sent to App Review
 
-- Real ads and purchases in the game (see STUDIO.md, "App Store pipeline"). Burn Down a Forest has them (ids pending, above); the other games still have pretend ones.
+- Real ads and purchases in the game (see STUDIO.md, "App Store pipeline"). Burn Down a Forest and Burn a Cardboard City have them (ids pending, above); Dig to the Core and Drain an Ocean still have pretend ones.
 - In-app products created in App Store Connect with the ids and prices in `listing.json`. A product id is the bundle id, a dot, and the key, for example `com.gamequarry.digtothecore.remove_ads_2x`. Product ids can't repeat across apps on one account, which is why they carry the bundle id. The game's code must use the same full ids (Burn Down a Forest does).
 - An AdMob app for the game with one rewarded and one interstitial ad unit (one of each per game is enough; the game tracks which offer was shown). `app-ads.txt` (section above) can follow the launch.
 - The privacy policy and support links in the listing (the pages exist; `privacy_url` and `support_url` in `listing.json`), the `SUPPORT_EMAIL` repository variable set, and a `support` block in the game's `listing.json` that matches the game.
