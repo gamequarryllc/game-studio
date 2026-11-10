@@ -248,11 +248,11 @@ func _build_fence() -> void:
 			continue
 		_rope(Vector3(p.x, 0.92, p.y), Vector3(q.x, 0.92, q.y), 0.16 + rng.randf_range(-0.03, 0.04), rope_m)
 	# The sign, beside the south gap, facing the path in.
-	var sign := _place("shaft_sign", Vector3(GATE_S.y + 0.9, 0.0, h + 0.25), 0.18, 1.3)   # enamel face (+Z) towards the path in, big enough to read from the path
+	var sign := _place("shaft_sign", Vector3(GATE_S.y + 0.9, 0.0, h + 0.25), 0.18, 1.55)   # enamel face (+Z) towards the path in, big enough to read from the path
 	# Its face, lettering painted on. The sun is low behind the site, so the
 	# face is in its own shadow: glossy enamel still catches the bright sky,
 	# so it glows a little.
-	var face := Models.sign("res://textures/signs/shaft.png", Vector2(0.86, 0.48), 0.35)
+	var face := Models.sign("res://textures/signs/shaft.png", Vector2(0.86, 0.48), 0.18)
 	face.position = Vector3(0.0, 1.25, 0.124)
 	sign.add_child(face)
 

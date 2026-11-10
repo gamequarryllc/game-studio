@@ -119,6 +119,29 @@ func _run() -> void:
 		player.look_at_point(gs.lift_stop + Vector3(0, 0.2, 0))
 		await _frames(150)
 		await _shot("moles")
+	if _want("dig"):
+		gs.tool_index = 0
+		world.move_player(Vector3(0.5, 0.05, 8.0), 0.3, -0.9)
+		await _frames(5)
+		world.force_dig = true
+		await _frames(150)
+		world.force_dig = false
+		await _frames(10)
+		await _shot("dig")
+	if _want("ending"):
+		world.skip_to_zone(9)
+		await _frames(20)
+		gs.has_won = false
+		world._ended_shown = false
+		gs.discover(load("res://scripts/balance.gd").core_find())
+		await _frames(400)
+		var heart = world.field.zones[9].landmark if world.field.zones[9] != null else null
+		print("heart ", heart.global_position if heart != null else "none", " cam ", world._end_cam.global_position if world._end_cam != null else "none")
+		for e in world.hud.popups.get_children():
+			print("popup ", e, " vis ", e.visible, " rect ", e.get_global_rect())
+			for c in e.get_children():
+				print("   child ", c, " rect ", c.get_global_rect(), " mod ", c.modulate, " vis ", c.visible)
+		await _shot("ending")
 	if _want("ride"):
 		await _chamber(world, -60.0, 2)
 		gs.lift_stop = player.position

@@ -132,8 +132,11 @@ def check():
 
 @icon
 def close():
-    return svg(line([(18, 18), (46, 46)], SOOT, 9.0), line([(46, 18), (18, 46)], SOOT, 9.0),
-               line([(18, 18), (46, 46)], CREAM, 4.4), line([(46, 18), (18, 46)], CREAM, 4.4))
+    # The shack's door swung open on the dark, the way back out to the dig.
+    return svg(poly([(14, 8), (50, 8), (50, 58), (14, 58)], UMBER), poly([(19, 13), (45, 13), (45, 58), (19, 58)], "#2a2018", SOOT, 2.0),
+               poly([(19, 13), (34, 18), (34, 62), (19, 58)], WOOD), line([(26, 16), (26, 60)], SOOT, 1.6),
+               circ(30, 38, 2.0, BRASS, SOOT, 1.2), line([(38, 36), (56, 36)], CREAM, 3.4), poly([(52, 30), (60, 36), (52, 42)], CREAM, CREAM, 1.0),
+               hl([(16, 11), (46, 11)]))
 
 
 @icon
@@ -176,7 +179,12 @@ def golden():
 
 @icon
 def unknown():
-    return svg(circ(32, 32, 20, BRASS), path("M25 26 a7 7 0 1 1 10 6 q-3 2 -3 6", "none", SOOT, 4.4), circ(32, 45, 2.6, SOOT, SOOT, 0))
+    # Still buried: a lump of rock, cracked, with something glinting inside.
+    return svg(poly([(10, 40), (16, 22), (30, 14), (46, 18), (56, 32), (52, 48), (34, 54), (16, 52)], "#7d6c58"),
+               poly([(16, 22), (30, 14), (46, 18), (40, 26), (24, 28)], "#9c8a72", SOOT, 2.0),
+               line([(30, 30), (34, 38), (30, 44), (36, 50)], SOOT, 2.4),
+               poly([(38, 34), (41, 38), (38, 42), (35, 38)], AMBER, SOOT, 1.6), line([(44, 33), (47, 30)], AMBER, 1.8),
+               line([(44, 40), (48, 41)], AMBER, 1.8), hl([(18, 24), (28, 17)]))
 
 
 # --- Tools ------------------------------------------------------------------------------------
@@ -239,8 +247,13 @@ def power():
 
 @icon
 def size():
-    return svg(circ(32, 32, 9, AMBER), poly([(6, 32), (16, 24), (16, 40)], BRASS), poly([(58, 32), (48, 24), (48, 40)], BRASS),
-               poly([(32, 6), (24, 16), (40, 16)], BRASS), poly([(32, 58), (24, 48), (40, 48)], BRASS))
+    # A bigger bite: a block of rock with a scoop taken out of it, the line of
+    # the next, wider scoop chalked round it, and the spade that took it.
+    return svg(poly([(6, 24), (58, 22), (60, 58), (4, 58)], "#8a7660"),
+               path("M18 24 Q32 48 46 23 Z", "#2a2018", SOOT, 2.4),
+               path("M11 24 Q32 60 53 22", "none", CREAM, 2.4).replace('stroke-linecap="round"', 'stroke-linecap="round" stroke-dasharray="4 4"'),
+               line([(40, 4), (50, 16)], SOOT, 6.0), line([(40, 4), (50, 16)], WOOD, 2.8),
+               poly([(46, 14), (56, 12), (58, 22), (50, 24)], STEEL), hl([(8, 27), (20, 26)]))
 
 
 @icon

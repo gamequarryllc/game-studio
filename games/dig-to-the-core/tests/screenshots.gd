@@ -167,6 +167,14 @@ func _run() -> void:
 		await _landmark_view(world, spec[1], spec[2])
 		await _frames(20)
 		await _shot(spec[0])
+	# The layer stamp at full strength (it thumps down on entering a layer).
+	if _want("04a"):
+		await _landmark_view(world, 1, 2)
+		await _frames(10)
+		var zd: Dictionary = load("res://scripts/balance.gd").ZONES[1]
+		hud.big_toast(str(zd.name), str(load("res://scripts/balance.gd").ZONE_LINES[1]), zd.band)
+		await _frames(6)
+		await _shot("04a_layer_stamp")
 
 	# The drill working a wall up close (no dust over the lens, no clipping).
 	if _want("05h"):
@@ -257,11 +265,13 @@ func _run() -> void:
 	await _frames(200)
 	await _shot("11_back_at_top")
 
-	# The ending.
+	# The ending: down at the core (its set piece loaded), then the win.
+	world.skip_to_zone(Balance.zone_count() - 1)
+	await _frames(30)
 	gs.has_won = false
 	world._ended_shown = false
 	gs.discover(Balance.core_find())
-	await _frames(120)
+	await _frames(420)
 	await _shot("12_the_core")
 	gs.reset_state(false)
 	gs.save_game()

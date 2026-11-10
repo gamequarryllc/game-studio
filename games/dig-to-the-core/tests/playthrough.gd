@@ -679,8 +679,11 @@ func _handle_popups() -> void:
 			(buttons[buttons.size() - 1] as Button).pressed.emit()
 		note("starter pack offered")
 	elif title.begins_with("You reached"):
-		var body: String = (labels[1] as Label).text if labels.size() > 1 else ""
+		var body := ""
+		for l in labels:
+			body += (l as Label).text + "\n"
 		_expect(body.contains("Time") and body.contains("Finds"), "the ending shows the run's stats")
+		_expect(hud.ending and not hud.gauge.visible and not player.vm_layer.visible, "the ending hides the HUD and the tool")
 		(buttons[0] as Button).pressed.emit()
 
 

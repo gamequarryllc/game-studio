@@ -81,9 +81,11 @@ func _ready() -> void:
 	mrow.add_child(_money)
 	top.add_child(mbox)
 	var close := Button.new()
+	close.text = "Back to the dig"
 	close.icon = UiTheme.icon("close")
-	close.custom_minimum_size = Vector2(64, 56)
-	UiTheme.style_button(close, UiTheme.ENAMEL_RED, 28)
+	close.expand_icon = false
+	close.custom_minimum_size = Vector2(0, 56)
+	UiTheme.style_button(close, UiTheme.ENAMEL_RED, 22)
 	close.pressed.connect(close_shop)
 	top.add_child(close)
 	# What's on the wall: five different objects, not five equal tabs.
@@ -284,8 +286,8 @@ func _build_tools() -> void:
 	pb.seed = 11
 	pb.content_margin_left = 22
 	pb.content_margin_right = 22
-	pb.content_margin_top = 16
-	pb.content_margin_bottom = 16
+	pb.content_margin_top = 8
+	pb.content_margin_bottom = 10
 	board.add_theme_stylebox_override("panel", pb)
 	board.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_list.add_child(board)
@@ -304,17 +306,17 @@ func _build_tools() -> void:
 		grid.add_child(slot)
 		# The tool on its hook.
 		var hang := Control.new()
-		hang.custom_minimum_size = Vector2(0, 96)
+		hang.custom_minimum_size = Vector2(0, 74)
 		slot.add_child(hang)
-		var ic := _icon(str(t.icon), 92)
+		var ic := _icon(str(t.icon), 72)
 		hang.add_child(ic)
 		ic.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-		ic.offset_left = -46
-		ic.offset_right = 46
-		ic.offset_top = -40
-		ic.offset_bottom = 52
+		ic.offset_left = -36
+		ic.offset_right = 36
+		ic.offset_top = -30
+		ic.offset_bottom = 42
 		ic.rotation = (float(i % 3) - 1.0) * 0.06
-		ic.pivot_offset = Vector2(46, 4)
+		ic.pivot_offset = Vector2(36, 4)
 		hang.draw.connect(func():
 			var cx := hang.size.x * 0.5
 			hang.draw_line(Vector2(cx - 10, 6), Vector2(cx - 10, 16), Color(0.15, 0.13, 0.12), 3.0)
@@ -361,7 +363,7 @@ func _build_tools() -> void:
 	# The note on the bench: what's next, in the shack's own words.
 	var ni := GameState.next_tool_index()
 	var note := PanelContainer.new()
-	note.add_theme_stylebox_override("panel", UiTheme.paper(Vector4(26, 16, 22, 14), 77, true))
+	note.add_theme_stylebox_override("panel", UiTheme.paper(Vector4(26, 10, 22, 10), 77, true))
 	note.rotation = -0.006
 	_list.add_child(note)
 	var nv := VBoxContainer.new()
@@ -664,7 +666,7 @@ func _build_bonus() -> void:
 		var rw: Dictionary = Balance.AD_REWARDS[kind]
 		var k: String = kind
 		var card := PanelContainer.new()
-		card.add_theme_stylebox_override("panel", UiTheme.paper(Vector4(16, 18, 16, 12), 120 + k.length(), false, UiTheme.MANILA.lightened(0.12)))
+		card.add_theme_stylebox_override("panel", UiTheme.paper(Vector4(14, 12, 14, 10), 120 + k.length(), false, UiTheme.MANILA.lightened(0.12)))
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		trow.add_child(card)
 		_pin(card, 0.5)
@@ -674,16 +676,18 @@ func _build_bonus() -> void:
 		var hrow := HBoxContainer.new()
 		hrow.add_theme_constant_override("separation", 8)
 		cv.add_child(hrow)
-		hrow.add_child(_icon(str(rw.icon), 44))
+		hrow.add_child(_icon(str(rw.icon), 40))
+		var tv2 := VBoxContainer.new()
+		tv2.add_theme_constant_override("separation", 0)
+		tv2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hrow.add_child(tv2)
 		var tl := _ink(str(rw.title), 21, INK, true)
-		tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		hrow.add_child(tl)
-		var desc := _ink("", 20, INK.lightened(0.2))
-		desc.custom_minimum_size = Vector2(0, 52)
-		cv.add_child(desc)
+		tv2.add_child(tl)
+		var desc := _ink("", 20, INK.lightened(0.15))
+		tv2.add_child(desc)
 		var b := Button.new()
 		b.text = "Watch"
-		b.custom_minimum_size = Vector2(0, 52)
+		b.custom_minimum_size = Vector2(0, 48)
 		UiTheme.style_ticket(b, 21)
 		b.pressed.connect(func(): _watch(k))
 		cv.add_child(b)
@@ -692,26 +696,54 @@ func _build_bonus() -> void:
 			var ok := AdOffers.eligible(k) or (k == "boost" and GameState.boost_can_stack())
 			match k:
 				"boost":
-					desc.text = "Swing twice as fast. Stacks up to 15 minutes." + (" %s left now." % Fmt.duration(GameState.boost_seconds_left()) if GameState.is_boost_active() else "")
+					desc.text = ("%s left, stacks to 15" % Fmt.duration(GameState.boost_seconds_left())) if GameState.is_boost_active() else "Stacks up to 15 minutes"
 				"cash":
-					desc.text = "+%s cash, right now." % Fmt.num(GameState.instant_cash_amount())
+					desc.text = "+%s, right now" % Fmt.num(GameState.instant_cash_amount())
 				"helper_rush":
-					desc.text = "The crew digs three times as hard for 3 minutes." if GameState.has_helpers() else "Hire some crew first."
+					desc.text = "Every mole, three times as hard" if GameState.has_helpers() else "Hire some crew first"
 			if k == "helper_rush":
 				ok = GameState.has_helpers()
 			if k == "cash":
 				ok = true
 			b.disabled = not ok or Monetization.is_watching())
-	# Price tags for the rest.
-	_list.add_child(_wall_heading("For sale"))
+	# Price tags for the rest, and the two small settings plates beside the
+	# heading (so nothing hangs half off the bottom of the wall).
+	var hrow2 := HBoxContainer.new()
+	hrow2.add_theme_constant_override("separation", 10)
+	_list.add_child(hrow2)
+	var fs := _wall_heading("For sale")
+	fs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hrow2.add_child(fs)
+	var mute := Button.new()
+	mute.custom_minimum_size = Vector2(0, 46)
+	hrow2.add_child(mute)
+	buttons["mute"] = mute
+	var upd_mute := func():
+		mute.text = "Sound off" if Sound.muted else "Sound on"
+		mute.icon = UiTheme.icon("sound_off" if Sound.muted else "sound_on")
+		UiTheme.style_button(mute, UiTheme.IRON_LIGHT, 20)
+	upd_mute.call()
+	mute.pressed.connect(func():
+		Sound.set_muted(not Sound.muted)
+		upd_mute.call())
+	var restore := Button.new()
+	restore.text = "Restore purchases"
+	restore.icon = UiTheme.icon("restore")
+	restore.custom_minimum_size = Vector2(0, 46)
+	UiTheme.style_button(restore, UiTheme.IRON_LIGHT, 20)
+	restore.pressed.connect(func():
+		Monetization.restore()
+		message.emit("Purchases restored"))
+	hrow2.add_child(restore)
+	buttons["restore"] = restore
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 12)
 	_list.add_child(grid)
 	if not GameState.owns_starter:
-		_product_tag(grid, Monetization.PRODUCT_STARTER, "gift", "%s cash and the crystal tools, which glow purple. Once only." % Fmt.num(GameState.starter_cash()))
-	_product_tag(grid, Monetization.PRODUCT_GOLDEN, "golden", "Every tool in polished gold, and 10% more digging power.")
+		_product_tag(grid, Monetization.PRODUCT_STARTER, "gift", "%s cash, crystal tools" % Fmt.num(GameState.starter_cash()))
+	_product_tag(grid, Monetization.PRODUCT_GOLDEN, "golden", "Gold tools, 10% more power")
 	for id in [Monetization.PRODUCT_CASH_SMALL, Monetization.PRODUCT_CASH_MEDIUM, Monetization.PRODUCT_CASH_LARGE]:
 		var pk: String = Monetization.PRODUCTS[id].pack
 		_product_tag(grid, id, {"small": "sack", "medium": "crate", "large": "cart"}[pk], "+%s cash" % Fmt.num(GameState.cash_pack_amount(pk)))
@@ -738,34 +770,6 @@ func _build_bonus() -> void:
 				GameState.changed.emit()
 				show_tab("bonus"))
 			h.add_child(b)
-	# Settings: two small enamel plates.
-	_list.add_child(_wall_heading("Settings"))
-	var srow := HBoxContainer.new()
-	srow.add_theme_constant_override("separation", 10)
-	_list.add_child(srow)
-	var mute := Button.new()
-	mute.custom_minimum_size = Vector2(0, 52)
-	mute.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	srow.add_child(mute)
-	buttons["mute"] = mute
-	var upd_mute := func():
-		mute.text = "Sound off" if Sound.muted else "Sound on"
-		mute.icon = UiTheme.icon("sound_off" if Sound.muted else "sound_on")
-		UiTheme.style_button(mute, UiTheme.IRON_LIGHT, 21)
-	upd_mute.call()
-	mute.pressed.connect(func():
-		Sound.set_muted(not Sound.muted)
-		upd_mute.call())
-	var restore := Button.new()
-	restore.text = "Restore purchases"
-	restore.custom_minimum_size = Vector2(0, 52)
-	restore.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	UiTheme.style_button(restore, UiTheme.IRON_LIGHT, 21)
-	restore.pressed.connect(func():
-		Monetization.restore()
-		message.emit("Purchases restored"))
-	srow.add_child(restore)
-	buttons["restore"] = restore
 	if OS.has_feature("editor") or OS.has_feature("playtest"):
 		_build_dev()
 
@@ -778,21 +782,22 @@ func _product_tag(into: Container, id: String, icon: String, desc: String) -> vo
 	card.add_theme_stylebox_override("panel", pb)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	into.add_child(card)
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 10)
-	card.add_child(h)
-	h.add_child(_icon(icon, 56))
 	var v := VBoxContainer.new()
-	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_theme_constant_override("separation", 2)
-	h.add_child(v)
+	card.add_child(v)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 8)
+	v.add_child(h)
+	h.add_child(_icon(icon, 44))
 	var tl := _ink(str(Monetization.PRODUCTS[id].title), 21, INK, true)
-	v.add_child(tl)
-	var dl := _ink(desc, 20, INK.lightened(0.2))
-	v.add_child(dl)
-	var b := _stamp_button(130.0)
+	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(tl)
+	var b := _stamp_button(110.0)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_END
-	v.add_child(b)
+	h.add_child(b)
+	var dl := _ink(desc, 20, INK.lightened(0.15))
+	dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(dl)
 	b.pressed.connect(func(): Monetization.buy(id))
 	buttons[id] = b
 	_refreshers.append(func():
@@ -812,9 +817,22 @@ func _watch(kind: String) -> void:
 		show_tab(tab))
 
 
+static var dev_open := false
+
+
 func _build_dev() -> void:
-	## Playtest builds only (the "playtest" feature tag, or the editor).
-	_list.add_child(_wall_heading("Playtest tools (not in the store build)"))
+	## Playtest builds only (the "playtest" feature tag, or the editor), folded
+	## away behind one plate until it's wanted.
+	var tog := Button.new()
+	tog.text = "Playtest tools (not in the store build): %s" % ("hide" if dev_open else "show")
+	tog.custom_minimum_size = Vector2(0, 46)
+	UiTheme.style_button(tog, UiTheme.IRON_LIGHT, 20)
+	tog.pressed.connect(func():
+		dev_open = not dev_open
+		show_tab("bonus"))
+	_list.add_child(tog)
+	if not dev_open:
+		return
 	var row := func() -> HBoxContainer:
 		var h := HBoxContainer.new()
 		h.add_theme_constant_override("separation", 6)

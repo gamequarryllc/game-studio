@@ -149,6 +149,7 @@ func _particles(shaded: bool, size: float, amount: int) -> CPUParticles3D:
 	p.top_level = true
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
+	mat.vertex_color_is_srgb = true   # rock colours are picked in sRGB, like the rock's painted texture
 	# Nothing kicked up by the tool may cover the lens: fade out right in front of it.
 	mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
 	mat.distance_fade_min_distance = 0.45
@@ -301,7 +302,7 @@ func _stream(on: bool, target: Dictionary, k: String, _delta: float) -> void:
 			_sparks.explosiveness = 0.0
 			_sparks.emitting = k != "jackhammer" or _hard > 3.0
 			_stream_on = true
-		_debris.color = _rock_color
+		_debris.color = _rock_color.darkened(0.25)
 		_dust.color = _rock_color.darkened(0.2)
 		var light := _hard > 2.0 or k == "laser"
 		_sparks.emitting = light or k == "drill" or k == "borer"
@@ -512,12 +513,23 @@ func _apply_skin(n: Node, m: Material) -> void:
 		_apply_skin(c, m)
 
 
+# Where each tool sits in the view (camera space, added to its modelled
+# pose): left of the right thumb's buttons and above the tool plate, so the
+# working end is always in the clear (TouchControls lays out the buttons).
+const FRAME := {
+	"shovel": Vector3(-0.07, 0.03, 0.0), "pickaxe": Vector3(-0.09, 0.02, 0.0), "jackhammer": Vector3(-0.17, 0.05, 0.0),
+	"drill": Vector3(-0.16, 0.045, 0.0), "dynamite": Vector3(-0.11, 0.03, 0.0), "laser": Vector3(-0.17, 0.05, 0.0),
+	"borer": Vector3(-0.16, 0.055, 0.0),
+}
+
+
 func _build_model() -> void:
 	_shown = GameState.tool_index
 	_shown_skin = GameState.skin
 	if _model != null:
 		_model.queue_free()
 	var k := kind()
+	position = FRAME.get(k, Vector3.ZERO)
 	_model = Models.instance("tool_" + k)
 	add_child(_model)
 	_bit = Models.find(_model, "Bit")

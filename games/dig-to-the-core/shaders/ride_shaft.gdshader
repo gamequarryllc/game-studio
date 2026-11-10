@@ -1,20 +1,31 @@
 shader_type spatial;
 // The walls of the lift shaft seen from the moving cage. The tube travels
 // with the cage but everything here is in world space, so the rock streams
-// past: each layer's own colour (zone_tex, one texel per layer, 24 m each),
-// the painted stone texture and the strata bands, as on the dig site, with a
-// glow in the layers that glow by themselves.
+// past: each layer's own hand-painted wall (textures/rock_walls.png, as on the
+// dig site, 24 m a layer), smeared along the shaft by the cage's speed (four
+// taps spread over how far the wall moves in a frame or so), so even a still
+// shows you're moving; a glow in the cracks of the layers that glow.
 render_mode cull_back, diffuse_lambert;
 
-uniform sampler2D paint_tex : filter_linear_mipmap, repeat_enable;
-uniform sampler2D strata_tex : filter_linear, repeat_enable;
-uniform sampler2D zone_tex : filter_nearest, repeat_disable;
-uniform sampler2D glow_tex : filter_nearest, repeat_disable;
+uniform sampler2DArray wall_tex : source_color, filter_linear_mipmap, repeat_enable;
 uniform float zones = 10.0;
 uniform float zone_depth = 24.0;
+uniform float ride_speed = 0.0;          // metres a second, World._update_ride
+uniform vec4 glow_color[10];             // rgb the layer's glow, a how hot (0 = none)
 
 varying vec3 wpos;
 varying vec3 wnrm;
+
+vec4 wall(vec3 p, vec3 w, float layer, float smear) {
+	vec4 acc = vec4(0.0);
+	for (int i = 0; i < 4; i++) {
+		float o = (float(i) - 1.5) * smear;
+		vec3 q = p + vec3(0.0, o, 0.0);
+		acc += texture(wall_tex, vec3(vec2(q.z, -q.y) * 0.45, layer)) * w.x
+			+ texture(wall_tex, vec3(vec2(q.x, -q.y) * 0.45, layer)) * w.z;
+	}
+	return acc * 0.25;
+}
 
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -22,24 +33,19 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 w = pow(abs(wnrm), vec3(4.0));
-	w /= (w.x + w.y + w.z);
-	vec4 a = texture(paint_tex, wpos.zy * 0.43) * w.x + texture(paint_tex, wpos.xz * 0.43) * w.y + texture(paint_tex, wpos.xy * 0.43) * w.z;
-	float p = a.r;
-	float crack = a.b;
-	float depth = clamp(-wpos.y / (zones * zone_depth), 0.0, 0.999);
-	vec3 base = texture(zone_tex, vec2(depth, 0.5)).rgb;
-	float glow = texture(glow_tex, vec2(depth, 0.5)).r;
+	vec3 w = pow(abs(wnrm), vec3(6.0));
+	w /= (w.x + w.y + w.z + 0.0001);
+	float yb = wpos.y + 0.7 * sin(wpos.x * 0.61 + wpos.z * 0.37);
+	int li = clamp(int(floor(-yb / zone_depth)), 0, int(zones) - 1);
+	float smear = clamp(ride_speed * 0.018, 0.0, 0.45);
+	vec4 t = wall(wpos, w, float(li), smear);
+	vec3 rock = t.rgb;
 	if (wpos.y > -0.6) {
-		base = vec3(0.42, 0.3, 0.18);
+		rock = vec3(0.3, 0.2, 0.12);
 	}
-	float sy = wpos.y + 0.35 * sin(wpos.x * 0.37 + wpos.z * 0.21) + 0.22 * sin(wpos.z * 0.53 - wpos.x * 0.11);
-	vec3 st = texture(strata_tex, vec2(sy / 64.0, 0.5)).rgb;
-	float strata = mix(1.0, st.r * 1.25, 1.35);
-	vec3 warmth = mix(vec3(0.9, 0.95, 1.07), vec3(1.08, 1.0, 0.88), st.g);
-	vec3 rock = base * (0.7 + 0.9 * (p - 0.69)) * strata * warmth * (1.0 - 0.45 * crack);
 	ALBEDO = rock;
 	ROUGHNESS = 0.95;
 	SPECULAR = 0.2;
-	EMISSION = base * glow * (0.35 + 0.55 * p + 0.9 * crack);
+	vec4 g = glow_color[li];
+	EMISSION = g.rgb * g.a * t.a * 1.4;
 }

@@ -102,7 +102,7 @@ const JUMP_VELOCITY := 6.4      # about 1.15 m up: enough to climb out of a shal
 const LOOK_SENSITIVITY_TOUCH := 0.0034
 const LOOK_SENSITIVITY_MOUSE := 0.0025
 const HEADLAMP_RANGE := 11.0     # metres (Headlamp Range upgrade adds to it)
-const HEADLAMP_ANGLE := 58.0     # degrees, half-angle of the beam (wide and soft: it falls off across the pool)
+const HEADLAMP_ANGLE := 34.0     # degrees, half-angle of the beam (the rock shader works out its pool; the spot matches it)
 
 # --- Tools (bought in order at the shack) -------------------------------------------------
 # damage: per strike, at the centre of the dig zone (see the header).

@@ -25,6 +25,14 @@ var riding := false:
 		riding = v
 		_sync_touch()
 		_sync_play()
+		if _ride_dial != null:
+			_ride_dial.visible = v
+var ride_depth := 0.0:               # the lift's depth dial reads this while riding
+	set(v):
+		ride_depth = v
+		if _ride_dial != null and riding:
+			_ride_dial.queue_redraw()
+var _ride_dial: Control
 
 var _money: Label
 var _rate: Label
@@ -37,12 +45,12 @@ var _tool_icon: TextureRect
 var _next_label: Label
 var _next_bar: ProgressBar
 var _cross: Control
-var _target_icon: TextureRect
 var _play: Array = []              # HUD pieces hidden during the lift ride
 var _boost_window := 0.0           # seconds left that the boost ticket is worth showing
 var _boost_cool := 0.0             # seconds before it may show again
 var _hard_t := 0.0                 # how long you've been chipping at slow rock
-var _banner_t := 0.0               # a layer banner is having its moment
+var _banner_t := 0.0               # a layer stamp is having its moment
+var _stamp: Control                # the layer stamp on screen (if any)
 var _queued: Array = []            # toasts waiting for the banner to finish
 var _keycap: PanelContainer
 var _toasts: VBoxContainer
@@ -79,6 +87,7 @@ func _ready() -> void:
 	_build_center()
 	_build_bottom()
 	_build_find_card()
+	_build_ride_dial()
 	popups = Control.new()
 	popups.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(popups)
@@ -108,11 +117,35 @@ func _sync_touch() -> void:
 	## The phone controls show only while you're actually playing: never over
 	## the shop, a popup, an ad screen or the lift ride, not even for a frame.
 	if touch != null and popups != null:
-		touch.visible = touch_mode and not is_blocking() and not riding
+		touch.visible = touch_mode and not is_blocking() and not riding and not ending
 
 
 func is_blocking() -> bool:
 	return shop != null or popups.get_child_count() > 0 or Monetization.is_showing_ad()
+
+
+var ending := false
+var _ending_vis := {}
+
+
+func set_ending(on: bool) -> void:
+	## The ending has the screen to itself: every HUD element steps aside (the
+	## popups layer, where the certificate lives, and the fade stay).
+	if on == ending:
+		return
+	ending = on
+	for c in root.get_children():
+		if c == popups or c == fade or c == _rotate:
+			continue
+		if on:
+			_ending_vis[c] = (c as CanvasItem).visible
+			(c as CanvasItem).visible = false
+		elif _ending_vis.has(c) and is_instance_valid(c):
+			(c as CanvasItem).visible = _ending_vis[c]
+	if not on:
+		_ending_vis.clear()
+		_sync_play()
+	_sync_touch()
 
 
 # --- Building ------------------------------------------------------------------------------------
@@ -168,7 +201,7 @@ func _build_top() -> void:
 	_money = UiTheme.label("0", 38, UiTheme.AMBER, 0)
 	_money.custom_minimum_size = Vector2(110, 0)
 	mrow.add_child(_money)
-	_rate = UiTheme.label("", 20, Color(0.2, 0.12, 0.05), 0)
+	_rate = UiTheme.label("", 23, Color(0.13, 0.08, 0.03), 0)
 	_rate.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(_rate)
 	# Boost button and the offer tag, top right.
@@ -199,15 +232,15 @@ func _build_top() -> void:
 	ov.add_theme_constant_override("separation", 2)
 	ov.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_offer_tag.add_child(ov)
-	_offer_title = UiTheme.label("", 19, UiTheme.INK, 0)
+	_offer_title = UiTheme.label("", 23, UiTheme.INK, 0)
 	_offer_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_offer_title.custom_minimum_size = Vector2(256, 0)
 	ov.add_child(_offer_title)
 	var srow := HBoxContainer.new()
 	srow.add_theme_constant_override("separation", 6)
 	srow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	srow.add_child(_icon_rect("ad", 22))
-	srow.add_child(UiTheme.label("tap to watch a short ad", 20, UiTheme.INK.lightened(0.2), 0, false))
+	srow.add_child(_icon_rect("ad", 24))
+	srow.add_child(UiTheme.label("tap to watch a short ad", 22, UiTheme.INK, 0, false))
 	ov.add_child(srow)
 	_offer_bar = ProgressBar.new()
 	_offer_bar.show_percentage = false
@@ -245,30 +278,28 @@ func _build_center() -> void:
 	_cross.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	_cross.size = Vector2(40, 40)
 	_cross.position -= Vector2(20, 20)
-	# Rock your tool can't touch: a cracked-rock mark beside the crosshair
-	# (no words, no labels under it).
-	_target_icon = _icon_rect("too_hard", 46)
-	_target_icon.visible = false
-	root.add_child(_target_icon)
-	_target_icon.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_target_icon.offset_left = 22
-	_target_icon.offset_top = -50
-	_target_icon.offset_right = 68
-	_target_icon.offset_bottom = -4
-	_play.append_array([_cross, _target_icon])
+	# Rock your tool can't touch: the reticle itself turns red and is struck
+	# through (no floating icon, no words).
+	_play.append(_cross)
 	_coach = PanelContainer.new()
 	_coach.add_theme_stylebox_override("panel", UiTheme.enamel(UiTheme.CREAM, Vector4(28, 12, 28, 14), 7))
 	_coach.rotation = -0.012
 	_coach.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_coach.visible = false
 	root.add_child(_coach)
-	_coach.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	# Low on the screen, above the tool plate: the view's landmarks (the
+	# headframe's wheel, the shack) sit high, and must stay clear.
+	_coach.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	_coach.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_coach.offset_top = 150
+	_coach.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_coach.offset_bottom = -212
+	_coach.offset_top = -212
+	_coach.offset_left = -140
+	_coach.offset_right = -140
 	_coach_label = UiTheme.label("", 23, UiTheme.SOOT, 0)
 	_coach_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_coach_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_coach_label.custom_minimum_size = Vector2(520, 0)
+	_coach_label.custom_minimum_size = Vector2(460, 0)
 	_coach.add_child(_coach_label)
 
 
@@ -308,9 +339,9 @@ func _build_bottom() -> void:
 	kc.content_margin_bottom = 2
 	_keycap.add_theme_stylebox_override("panel", kc)
 	_keycap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_keycap.add_child(UiTheme.label("E", 20, UiTheme.SOOT, 0))
+	_keycap.add_child(UiTheme.label("E", 22, UiTheme.SOOT, 0))
 	prow.add_child(_keycap)
-	_prompt_label = UiTheme.label("", 21, UiTheme.CREAM, 5)
+	_prompt_label = UiTheme.label("", 23, UiTheme.CREAM, 5)
 	_prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prow.add_child(_prompt_label)
 	var plate := PanelContainer.new()
@@ -346,10 +377,73 @@ func _build_bottom() -> void:
 	_next_bar.add_theme_stylebox_override("background", bg)
 	_next_bar.add_theme_stylebox_override("fill", fg)
 	v.add_child(_next_bar)
-	_next_label = UiTheme.label("", 20, Color(0.9, 0.85, 0.75), 4, false)
+	_next_label = UiTheme.label("", 22, UiTheme.CREAM, 5, false)
 	_next_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(_next_label)
 	_play.append(box)
+
+
+func _build_ride_dial() -> void:
+	## The hoist's depth indicator, for the lift ride (the rest of the HUD
+	## steps aside): a brass-rimmed dial, a tick at every layer and each
+	## layer's colour round the edge, the needle sweeping as you go, the
+	## depth in a little window.
+	_ride_dial = Control.new()
+	_ride_dial.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ride_dial.visible = false
+	root.add_child(_ride_dial)
+	_ride_dial.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_ride_dial.offset_left = -290
+	_ride_dial.offset_top = -290
+	_ride_dial.offset_right = -30
+	_ride_dial.offset_bottom = -30
+	_ride_dial.draw.connect(_draw_ride_dial)
+
+
+func _draw_ride_dial() -> void:
+	var d := _ride_dial
+	var c := d.size * 0.5
+	var R := minf(d.size.x, d.size.y) * 0.5 - 6.0
+	var total := Balance.ZONE_DEPTH * Balance.zone_count()
+	var a0 := PI * 0.75
+	var sweep := PI * 1.5
+	d.draw_circle(c + Vector2(0, 6), R + 6, Color(0, 0, 0, 0.4))
+	d.draw_circle(c, R + 6, UiTheme.SOOT)
+	d.draw_circle(c, R + 3, UiTheme.BRASS_DARK)
+	d.draw_circle(c, R, UiTheme.BRASS)
+	d.draw_arc(c, R - 1, PI * 1.1, PI * 1.9, 32, UiTheme.BRASS_LIGHT, 3.0)
+	d.draw_circle(c, R - 10, UiTheme.SOOT)
+	d.draw_circle(c, R - 13, UiTheme.CREAM)
+	for k in 8:
+		var ra := TAU * k / 8.0 + 0.2
+		UiTheme.draw_rivet(d, c + Vector2(cos(ra), sin(ra)) * (R - 4.5), 2.8, UiTheme.BRASS)
+	# each layer's colour round the edge, a tick between layers
+	for z in Balance.zone_count():
+		var s0 := a0 + sweep * (z * Balance.ZONE_DEPTH) / total
+		var s1 := a0 + sweep * ((z + 1) * Balance.ZONE_DEPTH) / total
+		d.draw_arc(c, R - 22, s0, s1, 8, Balance.ZONES[z].band, 12.0)
+		var tv := Vector2(cos(s0), sin(s0))
+		d.draw_line(c + tv * (R - 30), c + tv * (R - 14), UiTheme.SOOT, 2.5)
+	var te := Vector2(cos(a0 + sweep), sin(a0 + sweep))
+	d.draw_line(c + te * (R - 30), c + te * (R - 14), UiTheme.SOOT, 2.5)
+	var bold := UiTheme.bold_font()
+	var disp := UiTheme.display_font()
+	UiTheme.draw_text_centered(d, disp, "Depth", c + Vector2(0, -R * 0.38), 24, UiTheme.INK)
+	UiTheme.draw_text_centered(d, bold, "0", c + Vector2(cos(a0), sin(a0)) * (R - 46), 20, UiTheme.INK)
+	UiTheme.draw_text_centered(d, bold, "%d" % int(total), c + te * (R - 50), 20, UiTheme.INK)
+	# the reading, in a little window
+	var win := Rect2(c + Vector2(-52, R * 0.3), Vector2(104, 38))
+	d.draw_rect(win.grow(3), UiTheme.BRASS_DARK)
+	d.draw_rect(win, UiTheme.SOOT)
+	UiTheme.draw_text_centered(d, bold, "%d m" % int(ride_depth), win.get_center(), 25, UiTheme.AMBER)
+	# the needle, a soot pointer with a red tip, and its hub
+	var na := a0 + sweep * clampf(ride_depth / total, 0.0, 1.0)
+	var nv := Vector2(cos(na), sin(na))
+	var nn := Vector2(-nv.y, nv.x)
+	d.draw_colored_polygon(PackedVector2Array([c - nv * 18 + nn * 6, c + nv * (R - 28), c - nv * 18 - nn * 6]), UiTheme.SOOT)
+	d.draw_colored_polygon(PackedVector2Array([c + nv * (R - 60) + nn * 3.5, c + nv * (R - 28), c + nv * (R - 60) - nn * 3.5]), UiTheme.ENAMEL_RED)
+	d.draw_circle(c, 11, UiTheme.BRASS_DARK)
+	d.draw_circle(c, 7, UiTheme.BRASS)
 
 
 func _build_find_card() -> void:
@@ -478,9 +572,7 @@ func _update_cross(delta: float = 0.0) -> void:
 	if st != _cross_state:
 		_cross_state = st
 		_cross.queue_redraw()
-		_target_icon.texture = UiTheme.icon("wall" if st == "wall" else "too_hard")
 	_cross.visible = not is_blocking() and not riding
-	_target_icon.visible = _cross.visible and (st == "hard" or st == "wall")
 
 
 func _draw_cross() -> void:
@@ -495,7 +587,12 @@ func _draw_cross() -> void:
 			col = UiTheme.AMBER
 	_cross.draw_arc(c, 9.0, 0, TAU, 24, Color(0, 0, 0, 0.5), 4.0)
 	_cross.draw_arc(c, 9.0, 0, TAU, 24, col, 2.0)
-	_cross.draw_circle(c, 2.2, col)
+	if _cross_state == "hard" or _cross_state == "wall":
+		var d := Vector2(7.0, -7.0)
+		_cross.draw_line(c - d, c + d, Color(0, 0, 0, 0.55), 4.5)
+		_cross.draw_line(c - d, c + d, col, 2.2)
+	else:
+		_cross.draw_circle(c, 2.2, col)
 
 
 # --- Toasts, hints, prompts ---------------------------------------------------------------------------
@@ -524,40 +621,73 @@ func toast(text: String, color: Color = UiTheme.CREAM, seconds: float = 3.2) -> 
 
 
 func big_toast(title: String, sub: String, color: Color) -> void:
-	## Breaking into a new layer: an enamel banner with the layer's name and
-	## one line about it. It has the stage to itself (other toasts wait), lands
-	## with a little overshoot, holds, then lifts away and fades.
+	## Breaking into a new layer: the layer's name stamped on the view like an
+	## assay office's rubber stamp (a double ruled box in the layer's own ink,
+	## a little crooked), low on the screen so it covers nothing you're looking
+	## at, with its one line under it. It thumps down, holds about two
+	## seconds, and fades; other toasts wait for it.
 	for c in _toasts.get_children():
 		c.queue_free()
-	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", UiTheme.enamel(color.darkened(0.35), Vector4(38, 10, 38, 14), title.length()))
-	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", -2)
-	p.add_child(v)
-	var a := UiTheme.label(title, 38, UiTheme.CREAM, 0)
-	UiTheme.sign_text(a, 40, UiTheme.CREAM, 7)
-	a.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(a)
-	var b := UiTheme.label(sub, 22, UiTheme.CREAM, 4, false)
-	b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(b)
-	p.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_toasts.add_child(p)
-	_toasts.move_child(p, 0)
-	p.pivot_offset = Vector2(220, 40)
-	p.scale = Vector2(0.7, 0.7)
-	p.modulate.a = 0.0
-	var tw := p.create_tween()
-	tw.tween_property(p, "modulate:a", 1.0, 0.18)
-	tw.parallel().tween_property(p, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_interval(3.4)
-	tw.tween_property(p, "modulate:a", 0.0, 0.7).set_ease(Tween.EASE_IN)
-	tw.parallel().tween_property(p, "position:y", p.position.y - 18.0, 0.7).set_ease(Tween.EASE_IN)
-	tw.tween_callback(p.queue_free)
-	_banner_t = 4.4
+	if _stamp != null and is_instance_valid(_stamp):
+		_stamp.queue_free()
+	var ink := color.lightened(0.45)
+	ink.s = minf(ink.s, 0.55)
+	ink.v = maxf(ink.v, 0.88)
+	var st := Control.new()
+	st.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var font := UiTheme.display_font()
+	var body := UiTheme.bold_font()
+	var tw_ := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, 44).x
+	# The line under it wraps to two short lines, so the stamp stays compact.
+	var lines := _wrap(sub, body, 23, 420.0)
+	var sw := 0.0
+	for ln in lines:
+		sw = maxf(sw, body.get_string_size(ln, HORIZONTAL_ALIGNMENT_LEFT, -1, 23).x)
+	var w := maxf(tw_ + 70.0, sw + 30.0)
+	st.size = Vector2(w, 86 + 30 * lines.size())
+	st.draw.connect(func():
+		var r := Rect2(Vector2(14, 4), Vector2(w - 28, 62))
+		var shade := Color(0, 0, 0, 0.45)
+		st.draw_rect(r.grow(3), shade, false, 6.0)
+		st.draw_rect(r, ink, false, 3.0)
+		st.draw_rect(r.grow(-6), ink, false, 1.5)
+		UiTheme.draw_text_centered(st, font, title, Vector2(w * 0.5, 34), 44, ink, 7)
+		for i in lines.size():
+			UiTheme.draw_text_centered(st, body, lines[i], Vector2(w * 0.5, 90 + 29 * i), 23, UiTheme.CREAM, 6))
+	root.add_child(st)
+	_stamp = st
+	var vs := root.get_viewport_rect().size
+	# Left of centre and low: clear of the crosshair, the held tool (right of
+	# centre), the depth tube (far left) and the tool plate (bottom).
+	st.position = Vector2(clampf(vs.x * 0.36 - w * 0.5, 220.0, vs.x - w - 20.0), vs.y * 0.56)
+	st.pivot_offset = st.size * 0.5
+	st.rotation = -0.035
+	st.scale = Vector2(1.3, 1.3)
+	st.modulate.a = 0.0
+	var tw := st.create_tween()
+	tw.tween_property(st, "modulate:a", 1.0, 0.1)
+	tw.parallel().tween_property(st, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_interval(1.9)
+	tw.tween_property(st, "modulate:a", 0.0, 0.4).set_ease(Tween.EASE_IN)
+	tw.tween_callback(st.queue_free)
+	_banner_t = 2.5
 	gauge.flash_zone()
 	boost_relevant()
+
+
+static func _wrap(text: String, font: Font, size: int, max_w: float) -> Array:
+	var out: Array = []
+	var cur := ""
+	for word in text.split(" "):
+		var t := word if cur == "" else cur + " " + word
+		if cur != "" and font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > max_w:
+			out.append(cur)
+			cur = word
+		else:
+			cur = t
+	if cur != "":
+		out.append(cur)
+	return out
 
 
 func set_coach(text: String) -> void:
@@ -565,8 +695,11 @@ func set_coach(text: String) -> void:
 	if _coach_label.text != text:
 		_coach_label.text = text
 		_coach.reset_size()
-		_coach.offset_left = -_coach.size.x * 0.5
-		_coach.offset_right = _coach.size.x * 0.5
+		# A little left of centre: the held tool hangs right of centre.
+		_coach.offset_left = -_coach.size.x * 0.5 - 140.0
+		_coach.offset_right = _coach.size.x * 0.5 - 140.0
+		_coach.offset_top = -212.0 - _coach.size.y
+		_coach.offset_bottom = -212.0
 
 
 func set_prompt(text: String) -> void:
@@ -765,6 +898,13 @@ func _double_find(f: int) -> void:
 
 func find_card_up() -> bool:
 	return _find_index >= 0
+
+
+func dismiss_find() -> void:
+	## Clears the find card at once (a layer skip, the lift ride: never left
+	## over from somewhere else).
+	_find_index = -1
+	_find_card.visible = false
 
 
 func _update_find_card(delta: float) -> void:
