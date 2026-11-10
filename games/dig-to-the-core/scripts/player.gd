@@ -17,7 +17,8 @@ const WORLD_LAYER := 1       # the field, the shack, the lift
 const ROCK_LAYER := 2        # the dig site
 const MAX_STRIKES_PER_FRAME := 3
 const VIEWMODEL_LAYER := 1 << 10   # the tool and hands: drawn only by the viewmodel camera
-const LAMP_COLOR := Color(1.0, 0.83, 0.58)   # lamp amber, a little whiter in the middle of the beam
+const ROCK_VIS_LAYER := 1 << 2     # render layer of the rock and what lies on it: the headlamp is worked out in their shaders
+const LAMP_COLOR := Color(1.0, 0.94, 0.86)   # warm but near neutral, so each layer keeps its own colour
 
 var field: DigField
 var bounds_min := Vector3(-36.0, -300.0, -36.0)
@@ -38,6 +39,8 @@ var vm_env: Environment
 var head: Node3D
 var rig: ToolRig
 var lamp: SpotLight3D
+var lamp_scale := 1.0                 # World dims the headlamp for the ending shot
+var vm_layer: CanvasLayer             # the tool in your hands (hidden for the ending)
 var fill: OmniLight3D
 var target: Dictionary = {"hit": false}   # what the crosshair is on: {hit, pos, normal, dist}
 var steps := 0
@@ -84,16 +87,21 @@ func _ready() -> void:
 	head.add_child(camera)
 	_build_viewmodel_camera()
 
+	# The headlamp. On the rock (and what lies on it) the pool is worked out in
+	# the shaders (shaders/headlamp.gdshaderinc), so this spot skips them
+	# (light_cull_mask) and lights the props, the crew and the tool to match:
+	# a near-neutral warm beam that falls off fast.
 	lamp = SpotLight3D.new()
 	lamp.light_color = LAMP_COLOR
 	lamp.light_energy = 1.5
 	lamp.spot_range = Balance.HEADLAMP_RANGE
 	lamp.spot_angle = Balance.HEADLAMP_ANGLE
-	lamp.spot_angle_attenuation = 0.85  # falls off across the whole pool: no torch circle
-	lamp.spot_attenuation = 0.55  # a flat falloff (no blow-out at the lens): the zone-tinted fog takes it the rest of the way to black
+	lamp.spot_angle_attenuation = 1.6
+	lamp.spot_attenuation = 0.7   # close to the rock shader's 1 / (1 + 0.07 d²), so props sit in the same pool as the rock
 	lamp.light_specular = 0.6
 	lamp.position = Vector3(0.0, 0.12, 0.0)
 	lamp.layers = 1 | VIEWMODEL_LAYER   # lights only reach cameras whose cull mask includes their layers
+	lamp.light_cull_mask = 0xFFFFF & ~ROCK_VIS_LAYER
 	camera.add_child(lamp)
 	# A cool fill close round you (the bounce off the rock you're lighting),
 	# so props and the tool beside the beam aren't black.
@@ -104,6 +112,7 @@ func _ready() -> void:
 	fill.omni_attenuation = 1.6
 	fill.light_specular = 0.0
 	fill.layers = 1 | VIEWMODEL_LAYER
+	fill.light_cull_mask = 0xFFFFF & ~ROCK_VIS_LAYER
 	camera.add_child(fill)
 
 	rig = ToolRig.new()
@@ -122,6 +131,7 @@ func _build_viewmodel_camera() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 1
 	add_child(layer)
+	vm_layer = layer
 	var box := SubViewportContainer.new()
 	box.stretch = true
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -356,18 +366,17 @@ func _update_tool(delta: float) -> void:
 			for _i in n:
 				strike(dmg)
 	rig.update(delta, active, _strike_acc, target)
-	# Headlamp: brighter underground, reach from the upgrade.
-	var under := clampf(-position.y / 6.0, 0.0, 1.0)
-	lamp.spot_range = GameState.lamp_range() * 0.86
-	lamp.light_energy = lerpf(0.4, 2.8, under)
-	fill.light_energy = lerpf(0.0, 0.16, under)
+	# Headlamp: on underground, reach from the upgrade.
+	var under := clampf((-position.y - 0.5) / 5.0, 0.0, 1.0)
+	var lamp_reach := GameState.lamp_range() * 0.8
+	lamp.spot_range = lamp_reach
+	lamp.light_energy = lerpf(0.3, 1.4, under)   # matched to the rock shader's pool
+	fill.light_energy = lerpf(0.0, 0.08, under)
 	if field != null and field.material != null:
-		var eye := eye_pos()
-		field.material.set_shader_parameter("lamp_pos", eye)
-		field.material.set_shader_parameter("lamp_range", lamp.spot_range)
-		for m in field.decor_mats.values():
-			(m as ShaderMaterial).set_shader_parameter("lamp_range", lamp.spot_range)
-			(m as ShaderMaterial).set_shader_parameter("lamp_pos", eye)
+		for m in [field.material, ToolRig.chip_material()] + field.decor_mats.values():
+			(m as ShaderMaterial).set_shader_parameter("lamp_on", under * lamp_scale)
+			(m as ShaderMaterial).set_shader_parameter("lamp_range", lamp_reach)
+			(m as ShaderMaterial).set_shader_parameter("lamp_color", Vector3(LAMP_COLOR.r, LAMP_COLOR.g, LAMP_COLOR.b))
 
 
 func strike(damage: float) -> Dictionary:

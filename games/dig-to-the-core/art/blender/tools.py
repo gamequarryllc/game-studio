@@ -16,12 +16,21 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bpy  # noqa: E402
-from mathutils import Matrix, Vector  # noqa: E402
-from kit import (box, cyl, sphere, torus, from_profile, join, wobble, export, reset, mat,  # noqa: E402
-                 twist, bend, subdivide, bar, lathe, place, strut, glove, ao, smooth, tube, handle, tape_wrap, paint_by, grain)
+from mathutils import Matrix, Vector, noise  # noqa: E402
+from kit import (box, cyl, sphere, torus, from_profile, join, wobble, export, reset,  # noqa: E402
+                 twist, bend, subdivide, bar, lathe, place, strut, glove, ao, smooth, tube, handle, tape_wrap, paint_by, grain, paint_rgb)
 from kit import tube as ktube  # noqa: E402
+from kit import mat as kit_mat  # noqa: E402
 
 R90 = math.radians(90)
+
+
+def mat(name, color=None, metal=0.0, rough=0.7, emit=0.0):
+    """kit.mat with metal turned well down: the game has no reflections, so
+    a highly metallic surface renders nearly black there and hides its paint
+    (the worn bright edges, pits and scratches baked into the vertex colour).
+    The wear does the work; a little metal keeps a sheen."""
+    return kit_mat(name, color=color, metal=metal * 0.4, rough=rough, emit=emit)
 
 
 def bake(o):
@@ -110,13 +119,17 @@ def _edge_dist(p, outline):
 
 
 def shovel():
-    wood = mat("wood", rough=0.8)
+    wood = mat("hickory", rough=0.8)
     steel = mat("tool_steel", metal=0.45, rough=0.45)
     iron = mat("iron", metal=0.6, rough=0.6)
     grip = Vector((0.44, 0.32, -0.27))      # D-grip, right hand (low, by the hip)
     collar = Vector((0.33, 0.68, -0.31))    # where the blade starts
     d = (collar - grip).normalized()
-    parts = [handle(grip, collar, 0.021, 0.023, wood, name="shaft")]
+    shaft = handle(grip, collar, 0.021, 0.023, wood, name="shaft")
+    # darker and polished where the hands go
+    paint_rgb(shaft, lambda p, n: (lambda t: (t, t * 0.97, t * 0.93))(
+        0.72 + 0.28 * min(1.0, abs((p - grip).dot(d) - 0.26) / 0.12)))
+    parts = [shaft]
     # D-grip: a cross bar and two cheeks, the same ash as the shaft.
     side = d.cross(Vector((0, 0, 1))).normalized()
     up = side.cross(d).normalized()
@@ -134,15 +147,34 @@ def shovel():
     outline = [(-0.14, 0.0), (-0.035, 0.0), (0.0, 0.026), (0.035, 0.0), (0.14, 0.0), (0.146, 0.2),
                (0.1, 0.315), (0.0, 0.375), (-0.1, 0.315), (-0.146, 0.2)]
     blade = from_profile(outline, 0.008, steel, bevel=0.003, name="blade")
-    subdivide(blade, 3)
+    # Fan the flat faces into triangles first: subdividing an n-gon only
+    # splits its edges, so the blade's face had no inside vertices and the
+    # wear painted below came out as one flat grey.
+    bpy.ops.object.select_all(action="DESELECT")
+    blade.select_set(True)
+    bpy.context.view_layer.objects.active = blade
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.poke()
+    bpy.ops.mesh.subdivide(number_cuts=3)
+    bpy.ops.object.mode_set(mode="OBJECT")
     cut = outline[4:] + outline[:1]
 
-    def worn(p):
+    def worn(p, n):
+        # bright where the edge has been ground by stone, blackened and
+        # pitted in the middle, rust in the pits, long scratches
         e = _edge_dist((p.x, p.z), outline)
-        rim = max(0.0, 1.0 - e / 0.028) * (1.0 if p.z > 0.05 else 0.3)
-        scratch = 0.12 * max(0.0, math.sin(p.x * 160.0 + p.z * 9.0) - 0.7) * 3.0
-        return min(1.0, 0.5 + 0.5 * rim - scratch * (1.0 - rim))
-    paint_by(blade, worn)
+        rim = max(0.0, 1.0 - e / 0.03) * (1.0 if p.z > 0.05 else 0.35)
+        pit = noise.noise(Vector((p.x * 120.0, p.z * 120.0, 3.0)))
+        rust = max(0.0, noise.noise(Vector((p.x * 18.0, p.z * 18.0, 7.0))) - 0.15) * 1.6
+        scratch = 1.0 if math.sin(p.x * 140.0 + p.z * 31.0 + 3.0 * noise.noise(Vector((p.x * 9, p.z * 9, 1.0)))) > 0.93 else 0.0
+        k = 0.52 + 0.55 * rim ** 0.7
+        if pit > 0.45 and rim < 0.5:
+            k *= 0.55
+        k = min(1.0, k + 0.35 * scratch * (1.0 - rim))
+        r = min(1.0, rust * (1.0 - rim))
+        return (k * (1.0 + 0.35 * r), k * (1.0 - 0.05 * r), k * (1.0 - 0.35 * r))
+    paint_rgb(blade, worn)
     bend(blade, math.radians(-35), "Z")
     bake(blade)
     bm = frame(side, -up, d).to_4x4() @ Matrix.Rotation(math.radians(22), 4, "X")
@@ -160,14 +192,16 @@ def shovel():
 
 
 def pickaxe():
-    wood = mat("wood", rough=0.8)
+    wood = mat("hickory", rough=0.8)
     steel = mat("tool_steel", metal=0.55, rough=0.4)
     tape = mat("tape", rough=0.95)
     hand = Vector((0.26, 0.32, -0.25))
     head = Vector((0.22, 0.86, 0.05))
     d = (head - hand).normalized()
     L = (head - hand).length
-    parts = [handle(hand - d * 0.06, head, 0.022, 0.03, wood, name="haft")]
+    haft = handle(hand - d * 0.06, head, 0.022, 0.03, wood, name="haft")
+    paint_rgb(haft, lambda p, n: (lambda t: (t, t * 0.97, t * 0.93))(0.7 + 0.3 * min(1.0, max(0.0, ((p - hand).dot(d) - 0.2) / 0.15))))
+    parts = [haft]
     # Cloth grip tape wound round the end, a tail of it hanging loose.
     parts.append(tape_wrap(hand - d * 0.04, hand + d * 0.17, 0.0255, 8, tape, 0.0085))
     side = d.cross(Vector((0, 0, 1))).normalized()
@@ -193,7 +227,21 @@ def pickaxe():
     wedge = box((0.05, 0.012, 0.012), (0, 0, 0.074), mat("iron", metal=0.6, rough=0.6), bevel=0.002)
     bake(wedge)
     hh = join([hd, eye, wedge], "head")
-    paint_by(hh, lambda p: 0.45 + 0.55 * min(1.0, max(0.0, (abs(p.x) - 0.17) / 0.17)) ** 1.5 + 0.06 * math.sin(p.x * 90.0))
+    def forged(p, n):
+        # blackened from the forge and pitted at the eye, worn bright towards
+        # both working ends, hammer facets catching the light
+        bright = min(1.0, max(0.0, (abs(p.x) - 0.15) / 0.17)) ** 1.4
+        pit = noise.noise(p * 140.0)
+        k = 0.34 + 0.66 * bright + 0.05 * math.sin(p.x * 90.0)
+        if pit > 0.4 and bright < 0.4:
+            k *= 0.6
+        return (k, k * 0.99, k * 0.97)
+    paint_rgb(hh, forged)
+    # two rivets through the eye, holding the wedge
+    for s_ in (-1, 1):
+        rv = sphere(0.007, (s_ * 0.03, 0.0, 0.07), mat("iron", metal=0.6, rough=0.5), scale=(1, 1, 0.6), segs=8, rings=5)
+        bake(rv)
+        hh = join([hh, rv], "head")
     smooth(hh, 55)
     a = math.radians(38)
     pick = (fwd * math.cos(a) + side * math.sin(a)).normalized()
@@ -284,6 +332,18 @@ def drill():
     shell.append(place(box((0.05, 0.065, 0.16), (0, 0, 0), soot, bevel=0.014), (0, -0.07, -0.12), (math.radians(16), 0, 0)))
     shell.append(box((0.016, 0.028, 0.04), (0, -0.01, -0.07), brass, bevel=0.004))
     shell.append(cyl(0.03, 0.03, (0, -0.15, -0.0), iron, (-R90, 0, 0), 10))
+    # What you see of it from behind: ribbed iron cooling rings round the
+    # motor end, a riveted brass maker's plate on top, and the rubber cord
+    # out of the back cap, looping down out of sight.
+    for i in range(4):
+        shell.append(torus(0.058 - i * 0.004, 0.0055, (0, -0.075 - i * 0.016, 0), iron, (R90, 0, 0), 16, 4))
+    shell.append(box((0.034, 0.05, 0.004), (0, -0.02, 0.066), brass, bevel=0.0015))
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            shell.append(sphere(0.0028, (sx * 0.013, -0.02 + sy * 0.02, 0.068), iron, segs=6, rings=4))
+    shell.append(ktube([Vector((0, -0.16, 0.0)), Vector((0.0, -0.21, -0.01)), Vector((0.02, -0.24, -0.07)),
+                        Vector((0.05, -0.22, -0.16)), Vector((0.08, -0.18, -0.3))], [0.009, 0.009, 0.009, 0.009, 0.009], soot, sides=6, name="cord"))
+    shell.append(cyl(0.013, 0.03, (0, -0.17, 0), soot, (-R90, 0, 0), 8, r2=0.009))
     m = frame(side, aim, up).to_4x4()
     m.translation = body_c
     for p in shell:
@@ -291,6 +351,13 @@ def drill():
     parts += shell
     o = bake(join(parts, "Drill"))
     wobble(o, 0.001, 14)
+    # Chipped enamel: dark iron showing through in scattered chips, the red
+    # rubbed thin and darker towards the back where the hand goes.
+    def chips(p_, n_):
+        c = noise.noise(p_ * 70.0 + Vector((2.0, 5.0, 1.0)))
+        k = 0.5 if c > 0.42 else (0.85 if c > 0.3 else 1.0)
+        return (k, k * (1.05 if k < 1 else 1.0), k * (1.1 if k < 1 else 1.0))
+    paint_rgb(o, chips)
     ao(o, 0.08)
     # The spinning bit: a twisted fluted bar with a point, its own node.
     b = bar(4, 0.017, 0.32, 28, (0, 0, 0), steel, name="bitbar")

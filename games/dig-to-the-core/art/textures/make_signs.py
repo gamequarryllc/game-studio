@@ -120,11 +120,14 @@ def shaft():
     im, inner = enamel(w, h, 1)
     d = ImageDraw.Draw(im)
     x0, y0, x1, y1 = inner
-    f = fit(d, "Open shaft", "Rye-Regular.woff2", (x1 - x0) * 0.84, 150)
-    centred(d, (x0, y0, x1, y0 + (y1 - y0) * 0.66), "Open shaft", f, SOOT, 8, 7)
-    d.line([(x0 + 60, y0 + (y1 - y0) * 0.64), (x1 - 60, y0 + (y1 - y0) * 0.64)], fill=RED, width=5)
-    f2 = font("ZillaSlab-700.woff2", 40)
-    centred(d, (x0, y0 + (y1 - y0) * 0.64, x1, y1), "Mind the edge. Lift at the headframe.", f2, RED, -4, 1)
+    # Big soot lettering on the cream, one short red line under it: it has to
+    # read from the path, metres away, in low sun. Only a light stroke: a
+    # heavy one filled the letters' counters and they read as blobs.
+    f = fit(d, "Open shaft", "Rye-Regular.woff2", (x1 - x0) * 0.92, 176)
+    centred(d, (x0, y0, x1, y0 + (y1 - y0) * 0.64), "Open shaft", f, SOOT, 6, 3)
+    d.line([(x0 + 50, y0 + (y1 - y0) * 0.64), (x1 - 50, y0 + (y1 - y0) * 0.64)], fill=SOOT, width=7)
+    f2 = font("ZillaSlab-700.woff2", 78)
+    centred(d, (x0, y0 + (y1 - y0) * 0.64, x1, y1), "Mind the edge", f2, RED, -2, 2)
     return finish(im, 1, 5)
 
 

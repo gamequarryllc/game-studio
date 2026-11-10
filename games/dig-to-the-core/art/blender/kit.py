@@ -50,6 +50,8 @@ PAL.update({
     "wood": mix(mix("umber", "amber", 0.28), "cream", 0.08),
     "wood_dark": mix("umber", "soot", 0.42),
     "wood_grey": mix(mix("umber", "cream", 0.32), "soot", 0.12),
+    # tool handles: old hickory, darker and browner so it never reads as plastic under the lamp
+    "hickory": mix(mix("umber", "soot", 0.12), "amber", 0.14),
     "leather": mix("umber", "amber", 0.42),
     "leather_dark": mix("umber", "soot", 0.25),
     "canvas": mix("umber", "soot", 0.55),
@@ -270,6 +272,9 @@ def twist(o, angle, axis="Y"):
 
 
 def subdivide(o, cuts=1):
+    # Only this object: edit mode takes in every selected mesh.
+    bpy.ops.object.select_all(action="DESELECT")
+    o.select_set(True)
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
@@ -461,6 +466,31 @@ def arc(center, axis_u, axis_v, radius, a0, a1, steps):
     return out
 
 
+def stitches(points, m, dash=0.006, gap=0.004, r=0.0019, name="stitch"):
+    """A line of hand stitching along a polyline: short raised dashes with
+    gaps between, not a continuous cord."""
+    pts = [Vector(p) for p in points]
+    out = []
+    total = 0.0
+    segs = []
+    for a, b in zip(pts[:-1], pts[1:]):
+        segs.append((a, b, total))
+        total += (b - a).length
+    t = 0.0
+    while t + dash < total:
+        ends = []
+        for tt in (t, t + dash):
+            for a, b, t0 in segs:
+                L = (b - a).length
+                if t0 <= tt <= t0 + L + 1e-9:
+                    ends.append(a + (b - a) * ((tt - t0) / max(L, 1e-9)))
+                    break
+        if len(ends) == 2:
+            out.append(tube(ends, [r, r], m, sides=4, cap=True, name=name))
+        t += dash + gap
+    return out
+
+
 def glove(m_leather=None, m_cuff=None, m_sleeve=None, r=0.022, name="Glove", sleeve_len=0.32):
     """A worn leather work glove gripping a handle of radius r that runs along
     X through the origin, and the work-shirt sleeve behind it. The back of the
@@ -475,7 +505,7 @@ def glove(m_leather=None, m_cuff=None, m_sleeve=None, r=0.022, name="Glove", sle
     m_cuff = m_cuff or mat("leather_dark", rough=0.9)
     m_sleeve = m_sleeve or mat("work_shirt", rough=0.95)
     m_stitch = mat("rope", rough=0.9)
-    m_brass = mat("brass", metal=0.8, rough=0.35)
+    m_brass = mat("brass", metal=0.32, rough=0.35)   # low metal: no reflections in the game, high metal renders black
     parts = []
     # The hand: a rounded block behind and above the handle.
     hand = box((0.098, 0.062, 0.07), (0, -0.048, 0.016), m_leather, rot=(0.35, 0, 0), bevel=0.024, segs=3, name="hand")
@@ -506,10 +536,15 @@ def glove(m_leather=None, m_cuff=None, m_sleeve=None, r=0.022, name="Glove", sle
     tp = [Vector((-0.042, -0.06, -0.004)), Vector((-0.05, -0.03, -0.024)), Vector((-0.046, 0.0, -0.034)),
           Vector((-0.032, 0.026, -0.03)), Vector((-0.016, 0.036, -0.016))]
     parts.append(tube(tp, [0.016, 0.0145, 0.0118, 0.012, 0.0105], m_leather, sides=8, name="thumb"))
-    # Stitched seams down the back of the hand, between the fingers.
+    # Hand stitching: down the back of the hand between the fingers, along
+    # the outside edge of the hand, and round the base of the thumb.
     for x in (-0.023, 0.0, 0.023):
-        seam = [Vector((x, -0.085, 0.03)), Vector((x * 1.02, -0.06, 0.044)), Vector((x * 1.05, -0.035, 0.048))]
-        parts.append(tube(seam, [0.0022] * 3, m_stitch, sides=4, name="seam"))
+        seam = [Vector((x, -0.088, 0.03)), Vector((x * 1.02, -0.06, 0.046)), Vector((x * 1.05, -0.032, 0.05))]
+        parts += stitches(seam, m_stitch)
+    edge_seam = [Vector((0.05, -0.09, 0.0)), Vector((0.052, -0.06, 0.02)), Vector((0.05, -0.03, 0.03))]
+    parts += stitches(edge_seam, m_stitch)
+    thumb_seam = arc((-0.04, -0.055, 0.0), (0, 1, 0), (0, 0, 1), 0.022, 200, 340, 7)
+    parts += stitches(thumb_seam, m_stitch)
     # Wrist strap with a brass stud.
     strap = arc((0, -0.098, 0.0), (1, 0, 0), (0, 0.32, 0.95), 0.05, -100, 100, 9)
     parts.append(tube(strap, [0.0068] * 9, m_cuff, sides=6, flat=0.4, name="strap"))
@@ -523,6 +558,9 @@ def glove(m_leather=None, m_cuff=None, m_sleeve=None, r=0.022, name="Glove", sle
     side = back.cross(Vector((1, 0, 0))).normalized()
     ring = arc(edge, Vector((1, 0, 0)), side, 0.054, 0, 360, 15)
     parts.append(tube(ring, [0.0065] * 15, m_cuff, sides=6, cap=False, name="cuffroll"))
+    # a row of stitching round the gauntlet, just inside the rolled edge
+    sring = arc(edge - back * 0.012, Vector((1, 0, 0)), side, 0.0545, 0, 350, 24)
+    parts += stitches(sring, m_stitch, dash=0.007, gap=0.005, r=0.0022)
     # The sleeve: bunched in soft folds near the wrist, easing out further back.
     n = 12
     sl = [edge + back * 0.004 + back * (sleeve_len * i / (n - 1)) for i in range(n)]
@@ -551,6 +589,12 @@ def glove(m_leather=None, m_cuff=None, m_sleeve=None, r=0.022, name="Glove", sle
     o = join(parts, name)
     smooth(o, 70)
     wobble(o, 0.0008, 77)
+    # Worn leather: mottled where it's been handled, creased dark, the high
+    # points (knuckles, finger backs) rubbed pale.
+    from mathutils import noise as _noise
+    paint_rgb(o, lambda p, n: (lambda k: (k, k * 0.98, k * 0.95))(
+        0.86 + 0.2 * _noise.noise(p * 70.0) + 0.08 * _noise.noise(p * 190.0)))
+    edge_wear(o, 1.35, 0.6, 1.6)
     ao(o, 0.05, strength=0.6, edge=0.5)
     return o
 
@@ -590,6 +634,85 @@ def paint_by(o, fn):
             col.data[li].color = (c[0] * k, c[1] * k, c[2] * k, 1.0)
 
 
+# Blender keeps vertex colours in linear space (and the glTF export writes them
+# as they are, which is right). The painting helpers below take colours and
+# factors as a painter thinks of them (sRGB) and convert.
+def _lin(k):
+    return (max(0.0, k[0]) ** 2.2, max(0.0, k[1]) ** 2.2, max(0.0, k[2]) ** 2.2)
+
+
+def paint_rgb(o, fn):
+    """Multiplies the vertex colour by fn(position, normal) -> (r, g, b)
+    (sRGB factors): colour gradients, stains, banding."""
+    me = o.data
+    white_col([o])
+    # Read everything first: writing colours makes Blender recompute normals
+    # on the next read, which is ruinous inside the loop.
+    cos = [v.co.copy() for v in me.vertices]
+    nrm = [v.normal.copy() for v in me.vertices]
+    per_vert = [_lin(fn(cos[i], nrm[i])) for i in range(len(cos))]
+    loops = [lp.vertex_index for lp in me.loops]
+    col = me.color_attributes["Col"]
+    for li, vi in enumerate(loops):
+        k = per_vert[vi]
+        c = col.data[li].color
+        col.data[li].color = (min(1.0, c[0] * k[0]), min(1.0, c[1] * k[1]), min(1.0, c[2] * k[2]), 1.0)
+
+
+def paint_faces(o, fn):
+    """Multiplies each face's vertex colour by one flat fn(centre, normal,
+    index) -> (r, g, b) (sRGB factors): chipped facets, each its own value."""
+    me = o.data
+    white_col([o])
+    polys = [(p.center.copy(), p.normal.copy(), p.index, list(p.loop_indices)) for p in me.polygons]
+    col = me.color_attributes["Col"]
+    for (cen, n, idx, lis) in polys:
+        k = _lin(fn(cen, n, idx))
+        for li in lis:
+            c = col.data[li].color
+            col.data[li].color = (min(1.0, c[0] * k[0]), min(1.0, c[1] * k[1]), min(1.0, c[2] * k[2]), 1.0)
+
+
+def fill_col(o, rgb):
+    """Sets the whole vertex colour to one colour (sRGB; painting starts from it)."""
+    rgb = srgb_to_linear(rgb)
+    me = o.data
+    if "Col" not in me.color_attributes:
+        me.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+    col = me.color_attributes["Col"]
+    me.color_attributes.active_color = col
+    for d in col.data:
+        d.color = (rgb[0], rgb[1], rgb[2], 1.0)
+
+
+def edge_wear(o, bright=1.25, dark=0.75, strength=1.0):
+    """Edge wear on top of whatever colour is there: convex edges rubbed
+    bright, creases darker (no AO rays: for parts already shaded)."""
+    me = o.data
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    bm.normal_update()
+    conv = {}
+    for v in bm.verts:
+        c = 0.0
+        for e in v.link_edges:
+            d = e.other_vert(v).co - v.co
+            if d.length > 1e-6:
+                c += -d.normalized().dot(v.normal)
+        conv[v.index] = c / max(1, len(v.link_edges))
+    bm.free()
+    white_col([o])
+    col = me.color_attributes["Col"]
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            cv = conv[me.loops[li].vertex_index] * strength
+            k = 1.0 + (bright - 1.0) * max(0.0, min(1.0, cv * 3.0)) - (1.0 - dark) * max(0.0, min(1.0, -cv * 3.0))
+            k = max(0.0, k) ** 2.2
+            c = col.data[li].color
+            col.data[li].color = (min(1.0, c[0] * k), min(1.0, c[1] * k), min(1.0, c[2] * k), 1.0)
+
+
 def handle(a, b, r0, r1, m, sides=12, rings=28, name="handle"):
     """A turned wooden handle from a to b (radius r0 to r1), with enough rings
     for the grain to show along it."""
@@ -606,7 +729,7 @@ def handle(a, b, r0, r1, m, sides=12, rings=28, name="handle"):
     mm = q.to_matrix().to_4x4()
     mm.translation = a
     o.data.transform(mm)
-    grain(o, b - a, 0.28, 60.0, sides + rings)
+    grain(o, b - a, 0.4, 70.0, sides + rings)
     smooth(o, 50)
     return o
 

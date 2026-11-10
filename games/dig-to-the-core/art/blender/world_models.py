@@ -16,7 +16,7 @@ import bpy  # noqa: E402
 import bmesh  # noqa: E402
 from mathutils import Matrix, Vector, noise  # noqa: E402
 from kit import (box, cyl, sphere, torus, join, wear, wobble, export, reset, mat, taper, subdivide, bar, attach,  # noqa: E402
-                 lathe, place, strut, ao, smooth, tube, arc, apply_mods, white_col, paint_by, from_profile)
+                 lathe, place, strut, ao, smooth, tube, arc, apply_mods, white_col, paint_by, from_profile, paint_rgb, paint_faces, fill_col, edge_wear)
 
 R90 = math.radians(90)
 
@@ -255,8 +255,9 @@ def shack():
     door.append(sphere(0.045, (w / 2 + 0.12, 0.4, 0.3 + 1.1), mat("brass", metal=0.9, rough=0.3), segs=10, rings=6))
     parts += door
     parts.append(box((0.14, 1.45, 0.14), (w / 2 + 0.05, 0.0, 0.3 + 2.28), woods[1], bevel=0.02))
-    # Windows: warm glass, frames, crossbars.
-    glass = mat("glass", rough=0.2, emit=1.6)
+    # Windows: dark old glass by day, catching a little of the sky (no lamp
+    # lit inside at this hour), frames, crossbars.
+    glass = mat("window_glass", color=(0.16, 0.19, 0.22), rough=0.12, metal=0.2)
     for wy in (-1.65, 1.65):
         parts.append(box((0.05, 0.85, 0.75), (w / 2 + 0.02, wy, 0.3 + 1.7), glass))
         parts.append(box((0.1, 1.0, 0.1), (w / 2 + 0.06, wy, 0.3 + 2.12), woods[1], bevel=0.015))
@@ -292,9 +293,21 @@ def shack():
     # Stove pipe.
     parts.append(cyl(0.12, 1.4, (-1.5, 1.0, 0.3 + h + 1.3), mat("dark_steel", metal=0.7, rough=0.5), verts=10))
     parts.append(cyl(0.2, 0.08, (-1.5, 1.0, 0.3 + h + 2.02), mat("dark_steel", metal=0.7, rough=0.5), verts=10, r2=0.12))
-    # Lantern by the door and a porch step.
-    parts.append(box((0.18, 0.18, 0.26), (w / 2 + 0.25, 0.95, 2.75), mat("glass", rough=0.2, emit=3.0)))
-    parts.append(box((0.22, 0.22, 0.04), (w / 2 + 0.25, 0.95, 2.9), mat("soot")))
+    # Lantern by the door, unlit by day (it glowed white at noon): a sooty
+    # frame with corner posts, a peaked cap and a ring, dull amber glass round
+    # a dark wick, on a bracket from the wall. And a porch step.
+    soot = mat("soot")
+    lx, ly, lz = w / 2 + 0.25, 0.95, 2.72
+    parts.append(box((0.13, 0.13, 0.2), (lx, ly, lz), mat("lantern_glass", color=(0.42, 0.33, 0.2), rough=0.15, metal=0.1)))
+    parts.append(cyl(0.02, 0.07, (lx, ly, lz - 0.02), soot, verts=6))
+    for cx in (-1, 1):
+        for cy in (-1, 1):
+            parts.append(box((0.022, 0.022, 0.24), (lx + cx * 0.07, ly + cy * 0.07, lz), soot))
+    parts.append(box((0.19, 0.19, 0.035), (lx, ly, lz - 0.12), soot, bevel=0.006))
+    parts.append(cyl(0.13, 0.08, (lx, ly, lz + 0.15), soot, verts=4, r2=0.02, rot=(0, 0, math.radians(45))))
+    parts.append(torus(0.03, 0.007, (lx, ly, lz + 0.22), soot, rot=(math.radians(90), 0, 0), maj=10, mi=4))
+    parts.append(box((0.28, 0.025, 0.025), (w / 2 + 0.13, ly, lz + 0.27), soot))
+    parts.append(box((0.025, 0.025, 0.18), (w / 2 + 0.03, ly, lz + 0.19), soot))
     parts.append(box((0.9, 1.6, 0.12), (w / 2 + 0.5, 0, 0.12), woods[0], bevel=0.02))
     o = join(parts, "Shack")
     wobble(o, 0.006, 31)
@@ -576,7 +589,8 @@ def liftstop():
         parts.append(place(box((0.2, 0.08, 0.12), (0, 0, 0), old, bevel=0.01), (s * 0.15, 0.0, 0.15), (0, s * 0.5, 0)))
     # Hanging lantern.
     parts.append(cyl(0.006, 0.18, (0.62, 0, 2.02), iron, verts=4))
-    parts.append(box((0.16, 0.16, 0.22), (0.62, 0, 1.82), mat("glass", rough=0.2, emit=3.0), bevel=0.02))
+    # warm amber glass, not a white-hot box filling the corner of the view up close
+    parts.append(box((0.16, 0.16, 0.22), (0.62, 0, 1.82), mat("lamp_glass", color=(1.0, 0.7, 0.36), rough=0.2, emit=1.6), bevel=0.02))
     for cx in (-1, 1):
         for cy in (-1, 1):
             parts.append(box((0.02, 0.02, 0.27), (0.62 + cx * 0.085, cy * 0.085, 1.82), mat("soot")))
@@ -594,23 +608,76 @@ def liftstop():
     return o
 
 
+def loft(sections, m, name="loft", cap=True):
+    """A closed solid through cross-sections: each [(x, y, z), ...] with the
+    same number of points, in order round the section."""
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    rings = [[bm.verts.new(p) for p in sec] for sec in sections]
+    n = len(rings[0])
+    for a, b in zip(rings[:-1], rings[1:]):
+        for i in range(n):
+            j = (i + 1) % n
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    if cap:
+        bm.faces.new(list(reversed(rings[0])))
+        bm.faces.new(rings[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    if m:
+        o.data.materials.append(m)
+    return o
+
+
 def timber_post():
-    """A weathered fence post: squared, chamfered top, an iron staple for the rope."""
-    old = mat("wood_grey", rough=0.92)
+    """A weathered fence post: a split log hewn roughly square, thicker at
+    the foot and leaning a touch, the top cut on a slant with the corners
+    knocked off, a deep check (crack) down one face, grey silvered wood with
+    its grain showing, dark and damp where it goes into the ground, and an
+    iron staple holding the rope."""
+    old = mat("post_paint", color=(1.0, 1.0, 1.0), rough=0.92)
     iron = mat("iron", metal=0.5, rough=0.6)
-    parts = [box((0.13, 0.13, 1.15), (0, 0, 0.575), old, bevel=0.02)]
-    cap = cyl(0.095, 0.08, (0, 0, 1.18), old, verts=4, r2=0.02)
-    cap.rotation_euler = (0, 0, math.radians(45))
-    parts.append(cap)
-    parts.append(place(torus(0.035, 0.007, (0, 0, 0), iron, (0, 0, 0), 8, 4), (0, 0.07, 0.92), (0, R90, 0)))
-    parts.append(box((0.135, 0.135, 0.06), (0, 0, 0.06), mat("wood_dark", rough=0.95), bevel=0.01))
-    o = join(parts, "TimberPost")
+    secs = []
+    for i in range(9):
+        z = -0.05 + 1.25 * i / 8
+        w = 0.075 - 0.012 * (i / 8)
+        sec = []
+        for k in range(8):
+            a = k / 8 * math.tau + math.pi / 8
+            r = w * (1.0 if k % 2 else 0.86) / math.cos(math.pi / 8)
+            sec.append((math.cos(a) * r, math.sin(a) * r, z))
+        secs.append(sec)
+    # slanted, knocked-off top
+    top = [(x, y, z + 0.06 * x / 0.075 - 0.02 * abs(y) / 0.075) for (x, y, z) in secs[-1]]
+    secs.append([(x * 0.82, y * 0.82, z + 0.02) for (x, y, z) in top])
+    post = loft(secs, old, "post")
+    subdivide(post, 2)
+    rnd = random.Random(61)
+    for v in post.data.vertices:
+        v.co.x += 0.01 * math.sin(v.co.z * 2.6) + 0.004 * noise.noise(v.co * 12.0)
+        v.co.y += 0.004 * noise.noise(v.co * 12.0 + Vector((3, 3, 3)))
+        # the check: a groove down the +Y face
+        if v.co.y > 0.05 and abs(v.co.x - 0.01) < 0.012 and 0.25 < v.co.z < 1.05:
+            v.co.y -= 0.02
+    fill_col(post, (0.54, 0.5, 0.44))
+    def f(p, n):
+        g = 0.5 + 0.5 * math.sin(math.atan2(p.y, p.x) * 3.0 + p.z * 0.4 + noise.noise(Vector((p.x * 30, p.y * 30, p.z * 3))) * 2.5)
+        k = 0.8 + 0.3 * g ** 2
+        if p.y > 0.045 and abs(p.x - 0.01) < 0.016 and 0.25 < p.z < 1.05:
+            k *= 0.35
+        foot = max(0.0, 1.0 - (p.z + 0.05) / 0.3)
+        k *= 1.0 - 0.45 * foot
+        lich = noise.noise(p * 9.0 + Vector((7, 1, 2))) > 0.55 and p.z > 0.4
+        return (k * (1.0 if not lich else 0.95), k * (1.0 if not lich else 1.08), k * (1.0 if not lich else 0.82))
+    paint_rgb(post, f)
+    edge_wear(post, 1.25, 0.75)
+    staple = place(torus(0.035, 0.007, (0, 0, 0), iron, (0, 0, 0), 8, 4), (0, 0.07, 0.92), (0, R90, 0))
+    o = join([post, staple], "TimberPost")
     bake(o)
-    for v in o.data.vertices:
-        # Split and weathered: a little crooked, a crack down one face.
-        v.co.x += 0.012 * math.sin(v.co.z * 3.1)
-    wobble(o, 0.004, 61)
-    ao(o, 0.15, rays=8)
+    ao(o, 0.15, rays=8, strength=0.6)
     return o
 
 
@@ -811,73 +878,225 @@ def oak():
     return o
 
 
+def grow(rnd, start, direction, length, radius, depth, bark, parts, tips, spread=0.75, up=0.25, kids=(2, 3), sides=7):
+    """One branch and, recursively, the branches off it: a tapering tube that
+    bends a little as it goes; children leave it from its upper half, turned
+    away round it, shorter and thinner. tips: where the twigs end."""
+    d = Vector(direction).normalized()
+    pts = [Vector(start)]
+    rads = [radius]
+    seg = 4
+    for i in range(1, seg + 1):
+        d = (d + Vector((rnd.uniform(-0.25, 0.25), rnd.uniform(-0.25, 0.25), up * 0.6))).normalized()
+        pts.append(pts[-1] + d * (length / seg))
+        rads.append(radius * (1.0 - 0.62 * i / seg))
+    parts.append(tube(pts, rads, bark, sides=sides, name="branch"))
+    if depth == 0:
+        tips.append((pts[-1], d))
+        tips.append((pts[-2], d))
+        return
+    n = rnd.randint(kids[0], kids[1])
+    az0 = rnd.uniform(0, math.tau)
+    for k in range(n):
+        t = rnd.uniform(0.45, 0.95)
+        i = min(seg - 1, int(t * seg))
+        base = pts[i].lerp(pts[i + 1], t * seg - i)
+        # a direction turned away from the parent by `spread`, round it by an even share
+        side = d.orthogonal().normalized()
+        side.rotate(Matrix.Rotation(az0 + k / n * math.tau + rnd.uniform(-0.4, 0.4), 3, d))
+        cd = (d * math.cos(spread) + side * math.sin(spread) + Vector((0, 0, up))).normalized()
+        grow(rnd, base, cd, length * rnd.uniform(0.55, 0.72), rads[i] * 0.72, depth - 1, bark, parts, tips, spread, up, kids, max(4, sides - 1))
+
+
+def leaf_clusters(rnd, tips, leaf, r, scale, colours, every=1, drop=0.0, warm_side=None, seed=0):
+    """A leafy spray at the twig tips: low faceted clusters, each its own
+    green, lit on top and dark underneath (a canopy, with gaps between
+    sprays where the branches show)."""
+    out = []
+    for i, (p, d) in enumerate(tips):
+        if i % every:
+            continue
+        rr = r * rnd.uniform(0.75, 1.2)
+        c = lump(rr, Vector((0, 0, 0)), leaf, seed + i, scale=scale, sub=1, rough=0.32)
+        col = colours[rnd.randrange(len(colours))]
+        if warm_side is not None and Vector((p.x, p.y, 0)).normalized().dot(Vector(warm_side)) > 0.5 and rnd.random() < 0.4:
+            col = (0.72, 0.54, 0.22) if rnd.random() < 0.6 else (0.64, 0.44, 0.18)
+        fill_col(c, col)
+        paint_faces(c, lambda cc, nn, k: (lambda v: (v, v, v * 0.95))((0.62 + 0.5 * max(0.0, nn.z)) * rnd.uniform(0.9, 1.08)))
+        place(c, tuple(p + d * rr * 0.3 - Vector((0, 0, drop * rr))), (rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3), rnd.uniform(0, math.tau)))
+        out.append(c)
+    return out
+
+
+def bark_paint(o, base, furrows=0.0, lenticels=False, foot=0.0):
+    """Bark: the base colour, darker in vertical furrows (maple) or with
+    black lenticel dashes and scars (birch), darker and earthier at the foot."""
+    fill_col(o, base)
+    def f(p, n):
+        k = 1.0
+        if furrows:
+            a = math.atan2(p.y, p.x)
+            k *= 1.0 - furrows * max(0.0, math.sin(a * 9.0 + p.z * 1.3 + noise.noise(p * 2.0) * 2.0)) ** 3
+        if lenticels:
+            band = math.sin(p.z * 23.0 + noise.noise(p * 3.0) * 3.0)
+            dash = noise.noise(Vector((p.x * 9.0, p.y * 9.0, p.z * 2.0)))
+            if band > 0.82 and dash > 0.05:
+                k *= 0.22
+            if noise.noise(p * 1.6 + Vector((4, 4, 4))) > 0.45:
+                k *= 0.4
+        if foot:
+            k *= 1.0 - foot * max(0.0, 1.0 - p.z / 0.9)
+        return (k, k, k)
+    paint_rgb(o, f)
+
+
 def maple():
-    """A sugar maple: a straight trunk carrying a dense, round-shouldered crown
-    taller than it's wide, lobed but full, and one side already turning amber
-    at the end of the summer."""
+    """A sugar maple: a straight, tapering trunk with a flared foot and
+    furrowed grey-brown bark, splitting into four upswept limbs that branch
+    twice more; a broad, full canopy of many leafy sprays at the twig tips,
+    lit on top, dark under, with the limbs showing in the gaps, and one side
+    already turning amber at the end of summer."""
     rnd = random.Random(18)
-    bark = mat("bark", rough=0.9)
-    leaf = mat("leaf_maple", rough=0.9)
-    parts = [tube([Vector((0, 0, -0.2)), Vector((0.03, 0.02, 1.2)), Vector((-0.02, 0.03, 2.3)), Vector((0.0, 0.0, 3.0))],
-                  [0.3, 0.22, 0.18, 0.12], bark, sides=9, name="trunk")]
-    lp, ends = limbs(rnd, (0, 0, 2.1), 4, 1.3, 1.6, 0.11, bark, 1.0)
-    parts += lp
-    blobs = [(Vector((0, 0, 4.3)), 1.45, (1.05, 1.05, 1.15)), (Vector((0, 0, 3.4)), 1.3, (1.2, 1.2, 0.8))]
-    for e in ends:
-        blobs.append((e + Vector((0, 0, 0.5)), rnd.uniform(0.85, 1.05), (1.05, 1.05, 1.0)))
-    for k in range(6):
-        a = k / 6 * math.tau + 0.5
-        z = 3.6 + (k % 3) * 0.8
-        rr = 1.35 - (z - 3.6) * 0.25
-        blobs.append((Vector((math.cos(a) * rr, math.sin(a) * rr, z)), rnd.uniform(0.55, 0.75), (1.0, 1.0, 0.95)))
-    blobs.append((Vector((0.2, -0.1, 5.5)), 0.8, (1.0, 1.0, 1.0)))
-    c = crown(blobs, leaf, 7, res=0.24, ratio=0.32, rough=0.15)
-    canopy_shade(c, 0.45, 1.0, warm_side=(0.7, -0.7, 0), warm=0.9)
-    parts.append(c)
-    o = join(parts, "Maple")
+    bark = mat("bark_paint", color=(1.0, 1.0, 1.0), rough=0.9)
+    leaf = mat("leaf_paint", color=(1.0, 1.0, 1.0), rough=0.9)
+    parts = [tube([Vector((0, 0, -0.2)), Vector((0.03, 0.02, 0.9)), Vector((-0.02, 0.03, 1.9)), Vector((0.0, 0.0, 2.5))],
+                  [0.34, 0.24, 0.2, 0.17], bark, sides=10, name="trunk")]
+    for k in range(5):
+        a = k / 5 * math.tau + 0.3
+        parts.append(tube([Vector((math.cos(a) * 0.1, math.sin(a) * 0.1, 0.45)), Vector((math.cos(a) * 0.32, math.sin(a) * 0.32, 0.02)),
+                           Vector((math.cos(a) * 0.5, math.sin(a) * 0.5, -0.12))], [0.13, 0.08, 0.04], bark, sides=6, name="flare"))
+    tips = []
+    # a leader carrying on up the middle, and five limbs round it at two heights
+    grow(rnd, Vector((0, 0, 2.4)), Vector((0.05, 0.0, 1.0)), 2.6, 0.13, 2, bark, parts, tips, spread=0.55, up=0.3, kids=(2, 2), sides=6)
+    for k in range(5):
+        a = k / 5 * math.tau + rnd.uniform(-0.3, 0.3)
+        z = 2.2 + (k % 2) * 0.7
+        d = Vector((math.cos(a) * 0.62, math.sin(a) * 0.62, 1.0))
+        grow(rnd, Vector((0, 0, z)), d, 2.1, 0.11, 2, bark, parts, tips, spread=0.55, up=0.3, kids=(2, 2), sides=6)
+    trunk = join(parts, "wood")
+    bake(trunk)
+    bark_paint(trunk, (0.42, 0.36, 0.3), furrows=0.45, foot=0.3)
+    greens = [(0.4, 0.49, 0.21), (0.35, 0.44, 0.19), (0.46, 0.53, 0.24), (0.31, 0.4, 0.17)]
+    ambers = [(0.74, 0.5, 0.18), (0.66, 0.4, 0.15), (0.78, 0.58, 0.22)]
+    leaf.use_backface_culling = False          # exported double-sided: the sprays are single sheets
+    # Each twig tip carries a clump of leaf sprays (flat cupped plates in a
+    # squashed bunch, ragged at the edge), the middle of the crown filled a
+    # little so it reads full; one side turning amber.
+    centres = list(tips) + [(Vector((rnd.uniform(-1.0, 1.0), rnd.uniform(-1.0, 1.0), rnd.uniform(3.8, 5.4))), Vector((0, 0, 1)))
+                            for _ in range(16)]
+    green_spots, amber_spots = [], []
+    for (p, d) in centres:
+        warm = Vector((p.x, p.y, 0)).normalized().dot(Vector((0.7, -0.7, 0))) > 0.45 and rnd.random() < 0.5
+        for _ in range(rnd.randint(15, 19)):
+            off = Vector((rnd.gauss(0, 0.45), rnd.gauss(0, 0.45), rnd.gauss(0, 0.24)))
+            q = p + d * 0.15 + off
+            out = Vector((q.x, q.y, 0.0))
+            out = out.normalized() if out.length > 0.01 else Vector((0, 0, 0))
+            face = (Vector((0, 0, 1.0)) + out * 0.6 + off * 0.8).normalized()
+            (amber_spots if warm and rnd.random() < 0.7 else green_spots).append((q, face))
+    leaves = [leaf_plates(rnd, green_spots, leaf, greens, size=(0.24, 0.36), name="leaves"),
+              leaf_plates(rnd, amber_spots, leaf, ambers, size=(0.24, 0.36), name="turning")] if amber_spots else \
+             [leaf_plates(rnd, green_spots, leaf, greens, size=(0.2, 0.32), name="leaves")]
+    o = join([trunk] + leaves, "Maple")
     bake(o)
-    ao(o, 1.3, rays=12, strength=0.7, top=0.2)
+    ao(o, 1.2, rays=12, strength=0.65, top=0.15)
+    return o
+
+
+def leaf_plates(rnd, spots, leaf, colours, size=(0.13, 0.21), cup=0.14, name="leaves"):
+    """Foliage as many small cupped plates, each one a spray of leaves seen as
+    a single irregular shape with one pointed tip, double-sided, each its own
+    green and lit on top: an airy crown with sky between the sprays, never
+    balls. spots: [(centre, facing)]."""
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    face_cols = []
+    for (c, n) in spots:
+        n = Vector(n).normalized()
+        u = n.orthogonal().normalized()
+        u.rotate(Matrix.Rotation(rnd.uniform(0, math.tau), 3, n))
+        v = n.cross(u)
+        sz = rnd.uniform(*size)
+        k = rnd.randint(5, 7)
+        ring = []
+        for i in range(k):
+            a = i / k * math.tau + rnd.uniform(-0.22, 0.22)
+            rr = sz * (1.35 if i == 0 else rnd.uniform(0.55, 1.0))
+            ring.append(bm.verts.new(c + u * (math.cos(a) * rr) + v * (math.sin(a) * rr * 0.72) - n * (cup * rr)))
+        cv = bm.verts.new(c + n * (0.04 * sz))
+        col = colours[rnd.randrange(len(colours))]
+        shade = (0.56 + 0.4 * max(0.0, n.z)) * rnd.uniform(0.88, 1.08)
+        for i in range(k):
+            bm.faces.new((cv, ring[i], ring[(i + 1) % k]))
+            face_cols.append(tuple(min(1.0, x * shade) for x in col))
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    o.data.materials.append(leaf)
+    fill_col(o, (1.0, 1.0, 1.0))
+    col = o.data.color_attributes["Col"]
+    for poly, fc in zip(o.data.polygons, face_cols):
+        lc = (fc[0] ** 2.2, fc[1] ** 2.2, fc[2] ** 2.2, 1.0)
+        for li in poly.loop_indices:
+            col.data[li].color = lc
     return o
 
 
 def birch():
-    """A paper birch: a slender white trunk that leans and kinks a little,
-    black lenticel marks and scars on the bark, thin upswept branches and a
-    small, light, open crown in three loose lobes with sky through it."""
+    """A paper birch: a slender white trunk that leans and kinks, black
+    lenticel dashes and scars on the bark, dark and rough at the foot; thin
+    upswept branches whose twigs arch over and hang; small leaf sprays strung
+    along the hanging twigs (flat cupped plates, not balls), a narrow, open
+    crown with plenty of sky through it."""
     rnd = random.Random(28)
-    bark = mat("birch_bark", rough=0.8)
-    twig = mat("bark", rough=0.9)
-    leaf = mat("leaf_birch", rough=0.9)
-    pts = [Vector((0, 0, -0.2)), Vector((0.05, 0.0, 1.0)), Vector((0.15, 0.04, 2.0)), Vector((0.12, 0.1, 3.0)), Vector((0.22, 0.08, 4.2)), Vector((0.28, 0.1, 5.0))]
-    trunk = tube(pts, [0.15, 0.12, 0.1, 0.085, 0.06, 0.035], bark, sides=10, name="trunk")
+    bark = mat("birch_paint", color=(1.0, 1.0, 1.0), rough=0.8)
+    twig = mat("twig_paint", color=(1.0, 1.0, 1.0), rough=0.9)
+    leaf = mat("leaf_paint", color=(1.0, 1.0, 1.0), rough=0.9)
+    leaf.use_backface_culling = False          # exported double-sided: the sprays are single sheets
+    pts = [Vector((0, 0, -0.2)), Vector((0.05, 0.0, 1.0)), Vector((0.15, 0.04, 2.0)), Vector((0.12, 0.1, 3.0)),
+           Vector((0.22, 0.08, 4.2)), Vector((0.28, 0.1, 5.2)), Vector((0.31, 0.12, 5.9))]
+    trunk = tube(pts, [0.16, 0.13, 0.11, 0.09, 0.065, 0.04, 0.02], bark, sides=10, name="trunk")
     subdivide(trunk, 2)
-
-    def marks(p):
-        n = noise.noise(Vector((p.x * 3, p.y * 3, p.z * 9)))
-        band = max(0.0, math.sin(p.z * 14.0 + noise.noise(p * 2) * 4) - 0.75) * 4.0
-        dark = min(1.0, max(0.0, n * 2.5 - 0.6)) + band * (0.5 + 0.5 * (n > 0)) * 0.6
-        base = 1.0 - 0.75 * min(1.0, dark)
-        return base * (0.55 if p.z < 0.5 else 1.0)
-    paint_by(trunk, marks)
-    parts = [trunk]
-    ends = []
-    for i, (z, a) in enumerate(((2.4, 0.4), (3.0, 2.6), (3.6, 4.6), (4.2, 1.5), (4.6, 3.6))):
-        p0 = Vector((0.15, 0.06, z))
-        d = Vector((math.cos(a), math.sin(a), 0))
-        p2 = p0 + d * rnd.uniform(0.8, 1.2) + Vector((0, 0, 0.9))
-        parts.append(tube([p0, p0 + d * 0.4 + Vector((0, 0, 0.3)), p2], [0.04, 0.025, 0.012], twig, sides=5, name="branch"))
-        ends.append(p2)
-    blobs = []
-    for i, e in enumerate(ends):
-        blobs.append((e + Vector((0, 0, 0.2)), rnd.uniform(0.42, 0.55), (1.0, 1.0, 1.35)))
-        blobs.append((e * 0.75 + Vector((0.05, 0.02, 1.0)), rnd.uniform(0.3, 0.4), (1.0, 1.0, 1.3)))
-    blobs.append((Vector((0.3, 0.1, 5.3)), 0.5, (0.9, 0.9, 1.3)))
-    c = crown(blobs, leaf, 11, res=0.16, ratio=0.4, rough=0.11)
-    canopy_shade(c, 0.5, 1.0)
-    parts.append(c)
-    o = join(parts, "Birch")
+    bark_paint(trunk, (0.9, 0.88, 0.82), lenticels=True, foot=0.75)
+    parts = []
+    tips = []
+    for i, (z, a) in enumerate(((2.3, 0.4), (2.7, 2.6), (3.1, 4.6), (3.5, 1.5), (3.9, 3.6), (4.3, 5.6), (4.7, 0.9), (5.1, 2.9), (5.5, 4.9))):
+        base = Vector((0.15 + 0.03 * z / 4, 0.06, z))
+        d = Vector((math.cos(a), math.sin(a), 0.75 + 0.1 * i))
+        grow(rnd, base, d, rnd.uniform(1.3, 1.7) * (1.0 - 0.07 * i), 0.045, 1, twig, parts, tips, spread=0.65, up=0.3, kids=(2, 3), sides=5)
+    # Each twig tip arches over and hangs, carrying a string of leaf sprays.
+    spots = []
+    for (p, d) in tips:
+        h = Vector((d.x, d.y, 0.0))
+        h = h.normalized() if h.length > 0.01 else Vector((1, 0, 0))
+        L = rnd.uniform(0.6, 1.05)
+        tw = [p, p + h * 0.22 * L + Vector((0, 0, 0.05)), p + h * 0.4 * L - Vector((0, 0, 0.25 * L)),
+              p + h * 0.48 * L - Vector((0, 0, 0.62 * L)), p + h * 0.5 * L - Vector((0, 0, 0.95 * L))]
+        parts.append(tube(tw, [0.014, 0.01, 0.007, 0.005, 0.003], twig, sides=3, name="twig"))
+        for j in range(rnd.randint(5, 7)):
+            t = 0.15 + 0.85 * j / 6.0
+            i0 = min(3, int(t * 4))
+            q = tw[i0].lerp(tw[i0 + 1], t * 4 - i0)
+            side = h.cross(Vector((0, 0, 1))).normalized() * rnd.uniform(-0.1, 0.1)
+            out = h * rnd.uniform(0.0, 0.08)
+            face = (Vector((0, 0, 1.0)) + h * rnd.uniform(0.2, 0.7) + Vector((rnd.uniform(-0.4, 0.4), rnd.uniform(-0.4, 0.4), 0))).normalized()
+            spots.append((q + side + out, face))
+    # a few sprays close round the upper trunk, so the crown reads as one loose oval
+    for k in range(26):
+        z = rnd.uniform(3.2, 5.8)
+        a = rnd.uniform(0, math.tau)
+        rr = rnd.uniform(0.15, 0.55) * (1.0 - 0.4 * (z - 3.2) / 2.6)
+        c = Vector((0.22 + math.cos(a) * rr, 0.08 + math.sin(a) * rr, z))
+        spots.append((c, (Vector((math.cos(a), math.sin(a), 1.6)) + Vector((rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3), 0))).normalized()))
+    br = join(parts, "branches")
+    bake(br)
+    bark_paint(br, (0.34, 0.28, 0.24))
+    greens = [(0.5, 0.58, 0.26), (0.44, 0.53, 0.23), (0.56, 0.62, 0.28), (0.4, 0.49, 0.21), (0.6, 0.63, 0.3)]
+    leaves = leaf_plates(rnd, spots, leaf, greens)
+    o = join([trunk, br, leaves], "Birch")
     bake(o)
-    ao(o, 1.0, rays=12, strength=0.6, top=0.2)
+    ao(o, 0.9, rays=10, strength=0.45, top=0.15)
     return o
 
 
@@ -987,21 +1206,115 @@ def crate():
     return o
 
 
-def spoil_heap():
-    """The pile of dirt by the dig site: a lumpy mound with stones in it."""
-    dirt = mat("umber", rough=0.95)
-    parts = [lump(1.0, Vector((0, 0, -0.1)), dirt, 9, scale=(2.0, 1.6, 1.25), sub=3, rough=0.22, flat_bottom=-0.05)]
-    parts.append(lump(0.7, Vector((1.5, 0.7, -0.1)), mat("wood_dark", rough=0.95), 10, scale=(1.4, 1.2, 0.9), sub=2, rough=0.25, flat_bottom=-0.05))
-    rnd = random.Random(9)
-    for i in range(14):
+def clod():
+    """A chunk of turf thrown out of the hole: a lump of umber soil broken
+    off with its layers showing on the sides, a thick mat of turf on top (dark
+    roots, then green) with a fringe of grass round its edge, the blades
+    short, many and leaning out, and a root hanging out underneath."""
+    m = mat("clod_paint", color=(1.0, 1.0, 1.0), rough=0.95)
+    blade_m = mat("blade_paint", color=(1.0, 1.0, 1.0), rough=0.9)
+    c = lump(0.06, Vector((0, 0, 0.02)), m, 71, scale=(1.3, 1.05, 0.7), sub=2, rough=0.3)
+    top_z = 0.036
+    for v in c.data.vertices:
+        if v.co.z > top_z:
+            v.co.z = top_z + (v.co.z - top_z) * 0.25      # the turf's flat top
+    bake(c)
+    fill_col(c, (0.46, 0.33, 0.21))
+
+    def soil(p, n):
+        if n.z > 0.6 and p.z > top_z - 0.004:
+            return (0.42 / 0.46, 0.5 / 0.33, 0.2 / 0.21)                  # the grass mat
+        if p.z > top_z - 0.016:
+            return (0.24 / 0.46, 0.22 / 0.33, 0.1 / 0.21)                 # matted roots under it
+        band = 0.86 if int((p.z + 1.0) * 90 + 3 * noise.noise(p * 40)) % 2 else 1.0
+        return (band, band, band)
+    paint_rgb(c, soil)
+    parts = [c]
+    rnd = random.Random(72)
+    for i in range(18):
         a = rnd.uniform(0, math.tau)
-        r = rnd.uniform(0.4, 2.4)
-        x, y = math.cos(a) * r, math.sin(a) * r * 0.75
-        z = max(0.0, 1.1 * (1 - (r / 2.2) ** 2)) - 0.05
-        parts.append(lump(rnd.uniform(0.08, 0.2), Vector((x, y, z)), mat("stone", rough=0.9), i + 30, sub=1, rough=0.3))
+        r = rnd.uniform(0.02, 0.07) if i < 12 else rnd.uniform(0.0, 0.03)
+        base = Vector((math.cos(a) * r, math.sin(a) * r * 0.8, top_z - 0.002))
+        h = rnd.uniform(0.022, 0.045)
+        out = Vector((math.cos(a), math.sin(a), 0.0)) * rnd.uniform(0.008, 0.022)
+        tip = base + out + Vector((0, 0, h))
+        bl = tube([base, base + out * 0.3 + Vector((0, 0, h * 0.6)), tip], [0.0028, 0.002, 0.0004], blade_m, sides=3, name="blade")
+        g = rnd.choice([(0.42, 0.52, 0.2), (0.5, 0.58, 0.24), (0.36, 0.46, 0.18), (0.56, 0.56, 0.28)])
+        fill_col(bl, g)
+        parts.append(bl)
+    for (x, y) in ((0.02, 0.0), (-0.03, 0.015)):
+        rt = tube([Vector((x, y, -0.005)), Vector((x + 0.01, y + 0.01, -0.03)), Vector((x + 0.005, y + 0.02, -0.05))],
+                  [0.003, 0.002, 0.0008], blade_m, sides=4, name="root")
+        fill_col(rt, (0.36, 0.27, 0.18))
+        parts.append(rt)
+    o = join(parts, "Clod")
+    bake(o)
+    edge_wear(o, 1.15, 0.8)
+    ao(o, 0.05, rays=8, strength=0.5)
+    return o
+
+
+def spoil_heap():
+    """The heap of dirt from the first hole: shovelled up from one side, so
+    it's a long ridge with a steep tipped face and a shallow back, slumped in
+    two terraces where it slid; damp and dark at the foot, a dry pale crust
+    on top, clods and stones rolled down the tipped face and out on the
+    grass, a few tufts of turf that came up with it still green, and a plank
+    laid up its back for the barrow."""
+    dirt = mat("spoil_paint", color=(1.0, 1.0, 1.0), rough=0.95)
+    rnd = random.Random(9)
+    lumps = []
+    for i, (x, y, r, sx, sy, sz) in enumerate(((0.0, 0.0, 1.0, 2.1, 1.25, 0.95), (0.9, 0.2, 0.7, 1.4, 1.1, 0.75),
+                                               (-0.9, -0.15, 0.65, 1.3, 1.0, 0.6), (0.3, 0.55, 0.55, 1.5, 1.0, 0.5),
+                                               (-0.3, -0.6, 0.5, 1.5, 0.8, 0.4))):
+        lumps.append(lump(r, Vector((x, y, -0.15)), dirt, 9 + i, scale=(sx, sy, sz), sub=3, rough=0.18, flat_bottom=-0.05))
+    heap = join(lumps, "heap")
+    bake(heap)
+    # the tipped face (-y) steep, the back shallow; two slump terraces
+    for v in heap.data.vertices:
+        if v.co.y > 0:
+            v.co.z *= 1.0 - 0.25 * min(1.0, v.co.y / 1.2)
+        t = v.co.z
+        if 0.25 < t < 0.45:
+            v.co.z = 0.25 + (t - 0.25) * 0.45
+        if 0.62 < t < 0.78:
+            v.co.z = 0.62 + (t - 0.62) * 0.5
+    fill_col(heap, (0.52, 0.38, 0.25))
+    def soil(p, n):
+        h = max(0.0, p.z)
+        damp = max(0.0, 1.0 - h / 0.35)
+        crust = max(0.0, min(1.0, (h - 0.6) / 0.3)) * max(0.0, n.z)
+        k = (0.86 + 0.14 * (0.5 + 0.5 * noise.noise(p * 3.0))) * (1.0 - 0.18 * damp) * (1.0 + 0.28 * crust)
+        return (k * (1.0 + 0.05 * crust), k * (1.0 + 0.04 * crust), k * (1.0 - 0.04 * damp))
+    paint_rgb(heap, soil)
+    edge_wear(heap, 1.15, 0.85)
+    parts = [heap]
+    # clods and stones down the tipped face and out on the grass
+    for i in range(26):
+        x = rnd.uniform(-1.8, 1.8)
+        y = rnd.uniform(-1.9, -0.3)
+        z = max(-0.02, 0.9 * (1.0 - (abs(x) / 2.0) ** 2) * (1.0 - (abs(y) / 1.4) ** 2) - 0.05)
+        if rnd.random() < 0.6:
+            st = lump(rnd.uniform(0.05, 0.12), Vector((x, y, z)), dirt, 40 + i, scale=(1.3, 1.0, 0.7), sub=1, rough=0.35)
+            fill_col(st, (0.38, 0.27, 0.18) if rnd.random() < 0.7 else (0.42, 0.48, 0.22))
+        else:
+            st = lump(rnd.uniform(0.04, 0.1), Vector((x, y, z)), dirt, 80 + i, scale=(1.2, 1.0, 0.8), sub=1, rough=0.25)
+            fill_col(st, (0.52, 0.5, 0.46))
+        parts.append(st)
+    # turf tufts that came up with the dirt, still green
+    for i in range(6):
+        a = rnd.uniform(0, math.tau)
+        x, y = math.cos(a) * rnd.uniform(0.3, 1.2), math.sin(a) * rnd.uniform(0.2, 0.7)
+        z = 0.85 * (1.0 - (abs(x) / 2.0) ** 2) * (1.0 - (abs(y) / 1.3) ** 2) - 0.08
+        tf = lump(0.14, Vector((x, y, z)), dirt, 120 + i, scale=(1.4, 1.1, 0.4), sub=1, rough=0.3)
+        fill_col(tf, (0.4, 0.47, 0.2))
+        parts.append(tf)
+    # a plank up the back for the barrow
+    pl = box((0.24, 1.9, 0.035), (0.25, 0.95, 0.35), mat("wood_grey", rough=0.9), rot=(math.radians(-17), 0, 0.08), bevel=0.006)
+    parts.append(pl)
     o = join(parts, "SpoilHeap")
     bake(o)
-    ao(o, 0.6, rays=10, top=0.2)
+    ao(o, 0.4, rays=10, strength=0.38, top=0.12)
     return o
 
 
@@ -1097,7 +1410,7 @@ def timber_set():
 
 MODELS_LIST = [("mole", mole), ("robomole", robomole), ("shack", shack), ("headframe", headframe), ("cage", cage),
                ("liftstop", liftstop), ("pine", pine), ("oak", oak), ("maple", maple), ("birch", birch), ("timber_post", timber_post), ("shaft_sign", shaft_sign),
-               ("crate", crate), ("barrel", barrel), ("spoil_heap", spoil_heap), ("grass_tuft", grass_tuft), ("timber_set", timber_set)]
+               ("crate", crate), ("barrel", barrel), ("spoil_heap", spoil_heap), ("clod", clod), ("grass_tuft", grass_tuft), ("timber_set", timber_set)]
 
 if __name__ == "__main__":
     only = sys.argv[1:]

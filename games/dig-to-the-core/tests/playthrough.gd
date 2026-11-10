@@ -679,8 +679,11 @@ func _handle_popups() -> void:
 			(buttons[buttons.size() - 1] as Button).pressed.emit()
 		note("starter pack offered")
 	elif title.begins_with("You reached"):
-		var body: String = (labels[1] as Label).text if labels.size() > 1 else ""
+		var body := ""
+		for l in labels:
+			body += (l as Label).text + "\n"
 		_expect(body.contains("Time") and body.contains("Finds"), "the ending shows the run's stats")
+		_expect(hud.ending and not hud.gauge.visible and not player.vm_layer.visible, "the ending hides the HUD and the tool")
 		(buttons[0] as Button).pressed.emit()
 
 
@@ -734,7 +737,11 @@ func _walk_to(target: Vector3, tol: float) -> bool:
 		if t - _walk_check_t > 25.0:
 			fail("stuck walking to %s from %s (state %s)" % [target, player.position, state])
 			_walk_check_t = t
-			player.teleport(target + Vector3(0, 0.3, 0), yaw)
+			# Only hop to the target if it's open: teleporting into rock (a
+			# buried find) made unstick() climb the player 24 m up into a side
+			# pocket of the shaft, and the run never recovered.
+			if not field.solid_at(target + Vector3(0, 0.9, 0)):
+				player.teleport(target + Vector3(0, 0.3, 0), yaw)
 	return false
 
 

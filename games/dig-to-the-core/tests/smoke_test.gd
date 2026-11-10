@@ -387,10 +387,109 @@ func _regressions(world) -> void:
 	# Underground the headlamp is the main light and the dark closes in by its reach.
 	await _frames(3)
 	var env: Environment = world._env
-	check(env.fog_mode == Environment.FOG_MODE_DEPTH and env.fog_depth_end < 12.0 and env.fog_depth_begin < 3.0,
-		"underground: zone-tinted depth fog from %.1f to %.1f m" % [env.fog_depth_begin, env.fog_depth_end])
-	check(player.lamp.light_energy > 3.0 * world._lift_stop_light.light_energy and player.lamp.light_energy > 10.0 * player.fill.light_energy,
-		"the headlamp outshines the lantern and the fill (%.1f vs %.1f, %.2f)" % [player.lamp.light_energy, world._lift_stop_light.light_energy, player.fill.light_energy])
+	check(env.fog_mode == Environment.FOG_MODE_DEPTH and env.fog_depth_end < 12.0 and env.fog_depth_begin < env.fog_depth_end * 0.6,
+		"underground: the layer's dark closes in by the lamp's reach (fog %.1f to %.1f m)" % [env.fog_depth_begin, env.fog_depth_end])
+	# Polish pass: the headlamp's pool is worked out in the rock shader (it lit
+	# the tunnels evenly edge to edge before): the rock and what lies on it sit
+	# on their own render layer, the spot and the fill skip it, the lamp is on
+	# down here, and almost nothing else lights the rock.
+	var on_layer := true
+	var chunks := 0
+	for zone in world.field.zones:
+		if zone == null:
+			continue
+		for ch in zone.chunks.values():
+			chunks += 1
+			on_layer = on_layer and ((ch.mesh as MeshInstance3D).layers == player.ROCK_VIS_LAYER)
+	var lamp_on: float = world.field.material.get_shader_parameter("lamp_on")
+	check(chunks > 0 and on_layer and (player.lamp.light_cull_mask & player.ROCK_VIS_LAYER) == 0 and (player.fill.light_cull_mask & player.ROCK_VIS_LAYER) == 0
+		and lamp_on > 0.9 and env.ambient_light_energy < 0.12,
+		"the headlamp pool is the rock shader's: rock on its own layer, the spot and fill skip it, lamp on, ambient %.2f" % env.ambient_light_energy)
+	# One hand-painted texture per layer: 10 wall slices and 10 floor slices.
+	var wt = load("res://textures/rock_walls.png")
+	check(wt is TextureLayered and (wt as TextureLayered).get_layers() == 20, "each layer has its own painted wall and floor (rock_walls.png, 20 slices)")
+	# Polish pass 2: walls half a metre away showed blurry stair-steps at 256 px.
+	check(wt is TextureLayered and (wt as TextureLayered).get_width() >= 512, "the painted rock is 512 px a tile (%d)" % (wt as TextureLayered).get_width())
+	# The ore glints are pin-points (they lit whole 9 cm cells: pale confetti on every wall).
+	var rock_code: String = (world.field.material.shader as Shader).code
+	check(rock_code.contains("dot_r") and not rock_code.contains("floor(wpos * 11.0)"), "ore glints are pin-points, not whole lit cells")
+	# Landmark lanterns are small pools (at range 5 they lit the cave edge to edge).
+	var lantern_ok := true
+	for zi in [1, 2]:
+		var zn = world.field.zones[zi] if zi < world.field.zones.size() else null
+		if zn != null and zn.landmark != null:
+			for l in (zn.landmark as Node).find_children("*", "OmniLight3D", true, false):
+				lantern_ok = lantern_ok and (l as OmniLight3D).omni_range <= 3.5
+	check(lantern_ok, "the clay timbers' and the ore cart's lanterns light only their corner")
+	# Props sit in the same pool as the rock: the spot falls off like the shader.
+	check(player.lamp.spot_attenuation <= 1.0, "the headlamp's spot falls off gently like the rock's pool (attenuation %.1f)" % player.lamp.spot_attenuation)
+	# Nothing on the shack glows by day (its door lantern was a white-hot box at noon),
+	# and the tools aren't so metallic they render black without reflections.
+	var shack_glow := 0
+	for mi in Models.instance("shack").find_children("*", "MeshInstance3D", true, false):
+		var mesh: Mesh = (mi as MeshInstance3D).mesh
+		for si in mesh.get_surface_count():
+			var sm = mesh.surface_get_material(si)
+			if sm is StandardMaterial3D and (sm as StandardMaterial3D).emission_enabled:
+				shack_glow += 1
+	check(shack_glow == 0, "nothing on the shack glows by day")
+	var metal_max := 0.0
+	for tn in ["tool_shovel", "tool_pickaxe", "tool_jackhammer", "tool_drill", "tool_laser", "tool_borer"]:
+		for mi in Models.instance(tn).find_children("*", "MeshInstance3D", true, false):
+			var mesh: Mesh = (mi as MeshInstance3D).mesh
+			for si in mesh.get_surface_count():
+				var sm = mesh.surface_get_material(si)
+				if sm is StandardMaterial3D:
+					metal_max = maxf(metal_max, (sm as StandardMaterial3D).metallic)
+	check(metal_max <= 0.4, "held tools keep their worn paint visible (metallic at most %.2f)" % metal_max)
+	# The scattered pieces carry their own painted colour (they were white
+	# blobs) and get each copy's tint as linear custom data.
+	var peb: Mesh = world.field.decor_mesh("pebble")
+	var cols: PackedColorArray = peb.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	var lo := 9.0
+	var hi := 0.0
+	for c in cols:
+		lo = minf(lo, c.r)
+		hi = maxf(hi, c.r)
+	check(cols.size() > 0 and hi - lo > 0.15, "the pebble model is painted (vertex colour %.2f to %.2f), not one flat colour" % [lo, hi])
+	var decor_n := 0
+	var decor_custom := 0
+	for n in world.find_children("*", "MultiMeshInstance3D", true, false):
+		var om = (n as MultiMeshInstance3D).material_override
+		if om is ShaderMaterial and str((om as ShaderMaterial).shader.resource_path).ends_with("decor.gdshader"):
+			decor_n += 1
+			var mm0: MultiMesh = (n as MultiMeshInstance3D).multimesh
+			if mm0.use_colors and mm0.instance_count > 0 and mm0.get_instance_color(0).r <= 1.0:
+				decor_custom += 1
+	check(decor_n > 0 and decor_custom == decor_n, "decor copies are tinted by a linear instance colour over the model's own paint (%d of %d)" % [decor_custom, decor_n])
+	# The HUD keeps clear of the tool and the view: the three right-thumb
+	# buttons have room between them, Jump is small, and there's no floating
+	# 2D icon by the crosshair any more.
+	var tc = hud.touch
+	var gaps := [tc.dig_center().distance_to(tc.jump_center()) - tc.DIG_RADIUS - tc.JUMP_RADIUS,
+		tc.dig_center().distance_to(tc.action_center()) - tc.DIG_RADIUS - tc.ACTION_RADIUS,
+		tc.jump_center().distance_to(tc.action_center()) - tc.JUMP_RADIUS - tc.ACTION_RADIUS]
+	check(gaps.min() >= 40.0 and tc.JUMP_RADIUS < 50.0, "the right-thumb buttons are uncramped (rim gaps %d px) and Jump is small" % int(gaps.min()))
+	check(not ("_target_icon" in hud), "no floating rock icon beside the crosshair")
+	# The layer title is a stamp that's gone in about two seconds.
+	hud.big_toast("Clay", "A test line.", Color(0.7, 0.4, 0.2))
+	var stamp = hud._stamp
+	var vs: Vector2 = hud.root.get_viewport_rect().size
+	check(stamp != null and stamp.position.y > vs.y * 0.45, "the layer title is stamped low on the screen")
+	await create_timer(3.4).timeout
+	check(not is_instance_valid(stamp), "...and fades after about two seconds")
+	# The headlamp is the main light underground. On the rock its pool is the
+	# shader's (headlamp.gdshaderinc: energy over 1 + 0.07 d²), so compare what
+	# actually lands on the rock: the pool 2 m out in the beam against the
+	# lift-stop lantern 1.5 m from its post (Godot's omni falloff), and the
+	# lantern stays a small pool. The cool fill is a whisper next to the spot.
+	var le = world.field.material.get_shader_parameter("lamp_energy")
+	var pool: float = (float(le) if le != null else 1.25) / (1.0 + 0.07 * 4.0)
+	var lsl: OmniLight3D = world._lift_stop_light
+	var nd := pow(1.5 / lsl.omni_range, 4.0)
+	var lantern: float = lsl.light_energy * pow(maxf(1.0 - nd, 0.0), 2.0) * pow(1.5, -lsl.omni_attenuation)
+	check(pool > 2.5 * lantern and lsl.omni_range <= 3.5 and player.fill.light_energy < 0.1 * player.lamp.light_energy,
+		"the headlamp's pool outshines the lantern's (%.2f vs %.2f) and the fill is a whisper (%.2f of %.1f)" % [pool, lantern, player.fill.light_energy, player.lamp.light_energy])
 	# The floating "Lift" tag hides when you're right next to the lamp post
 	# (it filled the phone screen as smeared yellow text).
 	var keep_at: Vector3 = world.player.position
@@ -523,8 +622,12 @@ func _regressions(world) -> void:
 			guard += 1
 			await process_frame
 		check(world._ride_props.get_child_count() >= 4, "the lift shaft is dressed for the ride (%d pieces)" % world._ride_props.get_child_count())
+		await _frames(10)
+		check(hud._ride_dial.visible and hud.ride_depth > 0.0, "the hoist's depth dial shows during the ride (%.0f m)" % hud.ride_depth)
+		check(not player.rig.visible, "the tool is put away for the ride (it filled the middle of the view)")
 		await _ride(world)
 		await _frames(3)
+		check(player.rig.visible, "...and back in your hands when you step out")
 		check(world._vm_sun.visible and world._vm_sun.light_energy > 0.5, "back on top, the sun lights the tool in your hands")
 
 

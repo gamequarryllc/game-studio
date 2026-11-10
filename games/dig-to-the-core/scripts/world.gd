@@ -156,6 +156,8 @@ func skip_to_zone(z: int) -> void:
 	## Dev: a chamber at the top of layer z, with you, the lift stop and your
 	## deepest point there.
 	z = clampi(z, 0, Balance.zone_count() - 1)
+	if hud != null:
+		hud.dismiss_find()
 	var y := field.zone_top(z) - 2.0
 	var want := field.window_for(y)
 	field.want_zones(want)
@@ -238,7 +240,6 @@ const SURFACE_FOG_BEGIN := 22.0
 const SURFACE_FOG_END := 190.0
 const SUN_COLOR := Color(1.0, 0.83, 0.6)           # warm key (#FFD39A)
 const SUN_ENERGY := 1.25
-const LAMP_FALLOFF := 8.0                          # metres to near-black with the stock headlamp
 
 
 func _update_env(blend: float) -> void:
@@ -255,15 +256,16 @@ func _update_env(blend: float) -> void:
 	var fill: Color = st.fill
 	var amb := SURFACE_AMBIENT.lerp(fill, under)
 	_env.ambient_light_color = _env.ambient_light_color.lerp(amb, blend)
-	_env.ambient_light_energy = lerpf(0.55, 0.32, under)
+	# Underground almost nothing but the lamp: what it doesn't reach is near-black.
+	_env.ambient_light_energy = lerpf(0.55, 0.07, under)
 	_env.fog_light_color = _env.fog_light_color.lerp(SURFACE_HAZE.lerp(fog, under), blend)
-	# Depth fog: clear for the first couple of metres, the layer's own dark by
-	# the lamp's reach.
-	var reach := LAMP_FALLOFF * sqrt(GameState.upgrade_mult("lamp"))
-	_env.fog_density = lerpf(SURFACE_FOG, 0.96, under)
-	_env.fog_depth_begin = lerpf(SURFACE_FOG_BEGIN, 1.8, under)
-	_env.fog_depth_end = lerpf(SURFACE_FOG_END, reach * 1.15, under)
-	_env.fog_depth_curve = lerpf(1.0, 0.75, under)
+	# Depth fog: clear inside the pool, the layer's own near-black by the
+	# lamp's reach (the lamp has fallen off by then anyway).
+	var reach := GameState.lamp_range() * 0.8
+	_env.fog_density = lerpf(SURFACE_FOG, 0.97, under)
+	_env.fog_depth_begin = lerpf(SURFACE_FOG_BEGIN, reach * 0.45, under)
+	_env.fog_depth_end = lerpf(SURFACE_FOG_END, reach * 1.05, under)
+	_env.fog_depth_curve = lerpf(1.0, 1.0, under)
 	_sun.light_energy = lerpf(SUN_ENERGY, 0.0, smoothstep(0.0, 7.0, d))
 	_sun.visible = _sun.light_energy > 0.01
 	_vm_sun.light_energy = _sun.light_energy * 0.85
@@ -293,6 +295,9 @@ func _process(delta: float) -> void:
 		_stream_t = 0.0
 		_stream(player.position)
 	_update_env(minf(1.0, delta * 3.0))
+	if _end_cam != null and is_instance_valid(_end_cam):
+		_end_t += delta
+		_place_end_cam()
 	_update_depth()
 	_update_floats(delta)
 	_update_pops(delta)
@@ -492,10 +497,15 @@ func _update_ride(delta: float) -> void:
 		_ride_cage.visible = true
 		_ride_tube.visible = true
 		_ride_props.visible = true
+		# The tool goes on your back for the ride: the view is the shaft
+		# sliding past the cage's open side and the depth dial.
+		player.rig.visible = false
 		_dress_ride(r.from, r.to)
-		# Face the open side of the cage, looking a little along the way
-		# you're going, so the walls, sets and signs slide through view.
-		player.set_view(PI * 0.25, -0.42 if bool(r.down) else 0.5)
+		# Face out of the cage's open side (-Z), a little to the left where the
+		# layer's set piece sits in its niche, looking along the way you're
+		# going, so the walls, sets, lamps and signs slide through view.
+		player.set_view(PI * 0.12, -0.38 if bool(r.down) else 0.42)
+		r.last_y = (r.from as Vector3).y
 		hud.fade_to(0.0, 0.2)
 		Sound.loop("lift", "lift_loop", true, -5.0)
 	if int(r.stage) == 1:
@@ -504,9 +514,16 @@ func _update_ride(delta: float) -> void:
 		var from: Vector3 = r.from
 		var to: Vector3 = r.to
 		var p := from.lerp(to, e)
+		var speed := absf(p.y - float(r.get("last_y", p.y))) / maxf(delta, 0.001)
+		r.last_y = p.y
 		player.position = p
-		_ride_cage.global_position = p
+		# The cage rides on its guides with a sway and a judder that grow with speed.
+		var sway := clampf(speed / 14.0, 0.0, 1.0)
+		_ride_cage.global_position = p + Vector3(sin(t * 7.3) * 0.012, 0.0, cos(t * 5.1) * 0.01) * sway
+		_ride_cage.rotation = Vector3(sin(t * 3.7) * 0.012 * sway, 0.0, sin(t * 2.9 + 1.0) * 0.016 * sway)
 		_ride_tube.global_position = p + Vector3(0, 1.0, 0)
+		(_ride_tube.material_override as ShaderMaterial).set_shader_parameter("ride_speed", speed)
+		hud.ride_depth = maxf(0.0, -p.y)
 		# The nearest set lamp flashes by.
 		var best := 99.0
 		for lp in _ride_lamps:
@@ -515,7 +532,7 @@ func _update_ride(delta: float) -> void:
 				best = dd
 				_ride_flash.global_position = lp
 		_ride_flash.light_energy = clampf(1.0 - best / 2.0, 0.0, 1.0) * 1.6
-		player.shake(0.06)
+		player.shake(0.05 + 0.07 * sway)
 		var swing: Node3D = _ride_cage.get_node("Lamp")
 		swing.rotation.z = sin(t * 5.0) * 0.25
 		surface.sheave.rotate_x(delta * (8.0 if r.down else -8.0))
@@ -534,6 +551,7 @@ func _update_ride(delta: float) -> void:
 				if c != _ride_flash:
 					c.queue_free()
 			player.set_physics_process(true)
+			player.rig.visible = true
 			player.teleport(r.to, r.yaw, -0.25)
 			Sound.loop("lift", "lift_loop", false)
 			Sound.play("lift_stop", -4.0)
@@ -593,6 +611,42 @@ func _build_ride_cage() -> void:
 	cable.material_override = Models.flat(Color(0.2, 0.18, 0.16), 0.5, 0.5)
 	cable.position = Vector3(0, 3.0 + 15.0, 0)
 	_ride_cage.add_child(cable)
+	# The two guide ropes the cage runs on, just outside its open side: in
+	# view the whole way, with a brass shoe on the cage gripping each.
+	var rope_m := Models.flat(Color(0.26, 0.23, 0.2), 0.45, 0.4)
+	for gx in [-0.72, 0.72]:
+		var gr := MeshInstance3D.new()
+		var gm := CylinderMesh.new()
+		gm.top_radius = 0.018
+		gm.bottom_radius = 0.018
+		gm.height = 60.0
+		gm.radial_segments = 6
+		gr.mesh = gm
+		gr.material_override = rope_m
+		gr.position = Vector3(gx, 1.0, -1.08)
+		_ride_cage.add_child(gr)
+		# The guide shoe: an iron sleeve round the rope with a brass collar,
+		# on a short arm from the cage's corner (it was a yellow box).
+		var iron_m := Models.flat(Color(0.2, 0.17, 0.15), 0.6, 0.3)
+		var sleeve := CylinderMesh.new()
+		sleeve.top_radius = 0.034
+		sleeve.bottom_radius = 0.034
+		sleeve.height = 0.17
+		sleeve.radial_segments = 8
+		var collar := CylinderMesh.new()
+		collar.top_radius = 0.04
+		collar.bottom_radius = 0.04
+		collar.height = 0.022
+		collar.radial_segments = 8
+		var arm := BoxMesh.new()
+		arm.size = Vector3(0.035, 0.03, 0.09)
+		for part in [[sleeve, iron_m, Vector3(gx, 2.35, -1.08)], [collar, Models.flat(Color(0.62, 0.45, 0.22), 0.5, 0.3), Vector3(gx, 2.43, -1.08)],
+				[collar, iron_m, Vector3(gx, 2.27, -1.08)], [arm, iron_m, Vector3(gx, 2.35, -1.0)]]:
+			var shoe := MeshInstance3D.new()
+			shoe.mesh = part[0]
+			shoe.material_override = part[1]
+			shoe.position = part[2]
+			_ride_cage.add_child(shoe)
 	_ride_tube = MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 3.1
@@ -606,17 +660,13 @@ func _build_ride_cage() -> void:
 	_ride_tube.mesh = cyl
 	var tm := ShaderMaterial.new()
 	tm.shader = load("res://shaders/ride_shaft.gdshader")
-	tm.set_shader_parameter("paint_tex", load("res://textures/rock_paint.png"))
-	tm.set_shader_parameter("strata_tex", DigField.strata_texture())
-	var zimg := Image.create(Balance.zone_count(), 1, false, Image.FORMAT_RGB8)
-	for z in Balance.zone_count():
-		zimg.set_pixel(z, 0, Balance.MATERIALS[int(Balance.ZONES[z].mats[0])].color)
-	tm.set_shader_parameter("zone_tex", ImageTexture.create_from_image(zimg))
-	var gimg := Image.create(Balance.zone_count(), 1, false, Image.FORMAT_RGB8)
-	for z in Balance.zone_count():
-		var g := float(Balance.MATERIALS[int(Balance.ZONES[z].mats[0])].get("glow", 0.0))
-		gimg.set_pixel(z, 0, Color(g, g, g))
-	tm.set_shader_parameter("glow_tex", ImageTexture.create_from_image(gimg))
+	tm.set_shader_parameter("wall_tex", load("res://textures/rock_walls.png"))
+	var glows := PackedVector4Array()
+	for z in 10:
+		var st: Dictionary = DigField.STYLE[mini(z, DigField.STYLE.size() - 1)]
+		var hc: Color = st.hot
+		glows.append(Vector4(hc.r, hc.g, hc.b, float(st.glow)))
+	tm.set_shader_parameter("glow_color", glows)
 	tm.set_shader_parameter("zones", float(Balance.zone_count()))
 	tm.set_shader_parameter("zone_depth", Balance.ZONE_DEPTH)
 	_ride_tube.material_override = tm
@@ -666,16 +716,30 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 		var mi := MultiMeshInstance3D.new()
 		mi.multimesh = mm
 		_ride_props.add_child(mi)
-	# Lamps on the sets: little glowing boxes (one moving light does the flashes).
+	# Lamps on the sets: a glowing glass in a sooty frame with a cap and a
+	# hook (one moving light does the flashes).
 	var lm := Models.flat(Color(1.0, 0.82, 0.5), 0.3, 0.0, 3.0)
+	var frame_m := Models.flat(Color(0.14, 0.11, 0.09), 0.7, 0.2)
+	var glass := BoxMesh.new()
+	glass.size = Vector3(0.08, 0.12, 0.08)
+	var cap := CylinderMesh.new()
+	cap.top_radius = 0.012
+	cap.bottom_radius = 0.075
+	cap.height = 0.06
+	cap.radial_segments = 4
+	var foot := BoxMesh.new()
+	foot.size = Vector3(0.11, 0.025, 0.11)
+	var hook := BoxMesh.new()
+	hook.size = Vector3(0.012, 0.09, 0.012)
 	for lp in _ride_lamps:
-		var b := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.12, 0.18, 0.12)
-		b.mesh = bm
-		b.material_override = lm
-		b.position = lp
-		_ride_props.add_child(b)
+		for part in [[glass, lm, Vector3.ZERO], [cap, frame_m, Vector3(0, 0.09, 0)], [foot, frame_m, Vector3(0, -0.07, 0)],
+				[hook, frame_m, Vector3(0, 0.16, 0)]]:
+			var b := MeshInstance3D.new()
+			b.mesh = part[0]
+			b.material_override = part[1]
+			b.position = lp + (part[2] as Vector3)
+			b.rotation.y = PI / 4.0 if part[0] == cap else 0.0
+			_ride_props.add_child(b)
 	# Each layer's own things on the walls as they slide past (roots up top,
 	# shells, bones, crystals, magma vents), and its landmark set back in a
 	# niche with its own light: something to look at on the way down.
@@ -708,7 +772,7 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 				var at := Vector3(c.x + cos(ang) * 3.05, yy, c.z + sin(ang) * 3.05)
 				var s := rng.randf_range(2.0, 3.6)
 				mm.set_instance_transform(k, DigField._decor_xf(at, nr, rng.randf() * TAU, s, 0.02))
-				mm.set_instance_color(k, cols[k % cols.size()])
+				mm.set_instance_color(k, (cols[k % cols.size()] as Color).srgb_to_linear())   # the decor shader works in linear
 			var mi := MultiMeshInstance3D.new()
 			mi.multimesh = mm
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -744,8 +808,9 @@ func _dress_ride(from: Vector3, to: Vector3) -> void:
 		var t := clampf((from.y - zy) / maxf(from.y - to.y, 0.001), 0.0, 1.0)
 		var p := from.lerp(to, t)
 		var plate := Models.sign("res://textures/signs/layers.png", Vector2(1.3, 0.375), 0.3, z, Balance.zone_count())
-		plate.position = Vector3(p.x - 2.57, zy + 1.6, p.z - 0.6)
-		plate.rotation = Vector3(0, PI * 0.5, 0)
+		# On the wall facing the cage's open side, where you're looking.
+		plate.position = Vector3(p.x - 0.5, zy + 1.6, p.z - 2.57)
+		plate.rotation = Vector3.ZERO
 		_ride_props.add_child(plate)
 
 
@@ -758,8 +823,9 @@ func _build_lift_stop() -> void:
 	_lift_stop.add_child(Models.instance("liftstop"))
 	_lift_stop_light = OmniLight3D.new()
 	_lift_stop_light.light_color = Color(1.0, 0.72, 0.4)
-	_lift_stop_light.light_energy = 0.7
-	_lift_stop_light.omni_range = 4.5
+	_lift_stop_light.light_energy = 0.6
+	_lift_stop_light.omni_range = 3.0
+	_lift_stop_light.omni_attenuation = 1.8   # a small warm pool round the post, not a floodlight
 	_lift_stop_light.position = Vector3(0.6, 1.8, 0)
 	_lift_stop_light.layers = 1 | Player.VIEWMODEL_LAYER
 	_lift_stop.add_child(_lift_stop_light)
@@ -912,8 +978,8 @@ func _build_clods() -> void:
 	## round the hole, and the first hole's dirt goes on a spoil heap beside it.
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.mesh = DigField.decor_mesh("pebble")
+	mm.use_colors = true   # each clod's shade, linear (the decor shader)
+	mm.mesh = DigField.decor_mesh("clod")
 	mm.instance_count = CLODS_MAX
 	mm.visible_instance_count = 0
 	_clods = MultiMeshInstance3D.new()
@@ -939,13 +1005,14 @@ func _throw_clods(at: Vector3) -> void:
 		if not field.solid_at(p + Vector3(0, -0.2, 0)) or field.solid_at(p + Vector3(0, 0.15, 0)):
 			continue
 		var fl := field.floor_below(p + Vector3(0, 0.5, 0), 1.5)
-		var sc := randf_range(1.6, 3.0)
-		var xf := Transform3D(Basis(Vector3.UP, randf() * TAU).scaled(Vector3(sc, sc * 0.8, sc)), Vector3(p.x, fl, p.z))
-		var c := Color(0.52, 0.37, 0.23) * randf_range(0.8, 1.1)
-		if randf() < 0.3:
-			c = Color(0.42, 0.46, 0.22)   # a bit of turf
+		var sc := randf_range(1.4, 2.6)
+		# Turf side up mostly; now and then one lands on its side.
+		var tip := randf_range(-0.35, 0.35) if randf() < 0.75 else randf_range(1.2, 1.7)
+		var b := Basis(Vector3.UP, randf() * TAU) * Basis(Vector3.RIGHT, tip)
+		var xf := Transform3D(b.scaled(Vector3(sc, sc, sc)), Vector3(p.x, fl - 0.01, p.z))
+		var shade := randf_range(0.85, 1.1)
 		_clods.multimesh.set_instance_transform(_clod_n, xf)
-		_clods.multimesh.set_instance_color(_clod_n, Color(c.r, c.g, c.b, 1.0))
+		_clods.multimesh.set_instance_color(_clod_n, Color(shade, shade, shade, 1.0))
 		_clod_n += 1
 		_clods.multimesh.visible_instance_count = _clod_n
 		if _clod_n >= CLODS_MAX:
@@ -1146,19 +1213,85 @@ func _update_pops(delta: float) -> void:
 
 
 func _on_won() -> void:
+	## The ending gets its own moment: a fade, then a camera circling the
+	## heart of the planet with the HUD and your tool put away, and the assay
+	## certificate (Ending) laid over it with the run's figures stamped on.
 	if _ended_shown:
 		return
 	_ended_shown = true
-	await get_tree().create_timer(1.6).timeout
-	hud.popup("You reached the core",
-		"%s straight down, through ten layers of planet.\n\nTime %s   ·   dug %s m³   ·   ore %s bits\nFinds %d of %d   ·   earned %s\n\nThe Earth is very slightly hollow now." % [
-			"%d m" % int(field.depth_of_core()), Fmt.duration(GameState.won_time), Fmt.num(GameState.dug_volume),
-			Fmt.num(float(GameState.ore_points)), GameState.finds_count(), Balance.FINDS.size(), Fmt.num(GameState.lifetime_money)],
-		[["Keep digging", UiTheme.BRASS, Callable()],
-		["Start a new hole", UiTheme.IRON_LIGHT, func():
-			GameState.wipe_save()
-			get_tree().reload_current_scene()]])
+	await get_tree().create_timer(1.4).timeout
+	if not is_inside_tree():
+		return
+	await hud.fade_to(1.0, 0.5).finished
+	hud.set_ending(true)
+	player.vm_layer.visible = false
+	player.lamp_scale = 0.0
+	var centre := Vector3(0.0, field.bottom_y + 1.0, 0.0)
+	var heart: Node3D = field.zones[Balance.zone_count() - 1].landmark if field.zones[Balance.zone_count() - 1] != null else null
+	if heart != null and is_instance_valid(heart):
+		centre = heart.global_position
+	# The run's figures, taken before anything else changes them.
+	var figures := {"depth": int(field.depth_of_core()), "time": Fmt.duration(GameState.won_time), "dug": Fmt.num(GameState.dug_volume),
+		"ore": Fmt.num(float(GameState.ore_points)), "finds": GameState.finds_count(), "finds_total": Balance.FINDS.size(),
+		"earned": Fmt.num(GameState.lifetime_money)}
+	_end_centre = centre + Vector3(0, 0.9, 0)
+	# Room to circle in: a ring of open rock round the heart at the camera's
+	# height, clear of the floor it stands on (the run is over).
+	for k in 16:
+		var ka := TAU * float(k) / 16.0
+		field.dig(centre + Vector3(cos(ka) * 3.1, 2.0, sin(ka) * 3.1), 1.3, 1e15)
+		field.dig(centre + Vector3(cos(ka) * 1.9, 1.7, sin(ka) * 1.9), 1.0, 1e15)
+	field.flush()
+	_end_cam = Camera3D.new()
+	_end_cam.fov = 62.0
+	_end_cam.cull_mask = 0xFFFFF & ~Player.VIEWMODEL_LAYER
+	add_child(_end_cam)
+	_end_t = 0.0
+	_place_end_cam()
+	_end_cam.current = true
+	var ending := Ending.new()
+	ending.stats = figures
+	ending.closed.connect(_end_closed)
+	hud.popups.add_child(ending)
+	hud.touch.release_all()
+	hud.set_ending(true)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	Sound.play("victory", 0.0)
+	hud.fade_to(0.0, 0.9)
+
+
+var _end_cam: Camera3D
+var _end_centre := Vector3.ZERO
+var _end_t := 0.0
+
+
+func _place_end_cam() -> void:
+	## Low and close, circling slowly, looking up at the heart's crystals.
+	var a := 0.8 + _end_t * 0.12
+	var r := 3.1
+	var eye := _end_centre + Vector3(cos(a) * r, 1.1 + 0.12 * sin(_end_t * 0.3), sin(a) * r)
+	_end_cam.global_position = eye
+	# Look a little to the right of the heart, so it sits in the left of the
+	# frame, clear of the certificate.
+	var to_heart := (_end_centre - eye).normalized()
+	var right := to_heart.cross(Vector3.UP).normalized()
+	_end_cam.look_at(_end_centre + right * 1.1 + Vector3(0, -0.15, 0), Vector3.UP)
+
+
+func _end_closed(new_hole: bool) -> void:
+	if new_hole:
+		GameState.wipe_save()
+		get_tree().reload_current_scene()
+		return
+	await hud.fade_to(1.0, 0.35).finished
+	if _end_cam != null:
+		_end_cam.queue_free()
+		_end_cam = null
+	player.camera.current = true
+	player.vm_layer.visible = true
+	player.lamp_scale = 1.0
+	hud.set_ending(false)
+	hud.fade_to(0.0, 0.5)
 
 
 # =====================================================================================

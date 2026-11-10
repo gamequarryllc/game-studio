@@ -15,8 +15,8 @@ extends Control
 const STICK_RADIUS := 86.0
 const STICK_DEAD := 0.12
 const STICK_ZONE := 0.42
-const DIG_RADIUS := 100.0
-const JUMP_RADIUS := 56.0
+const DIG_RADIUS := 92.0
+const JUMP_RADIUS := 42.0
 const ACTION_RADIUS := 62.0
 const LOOK_DEAD_PX := 8.0
 const DIG_LOOK_DEAD_PX := 24.0
@@ -59,17 +59,20 @@ func _notification(what: int) -> void:
 		release_all()
 
 
+# The right thumb's three buttons sit in an arc round its resting place:
+# DIG big in the corner, JUMP small up the right edge, the context button
+# (lift, shop) up and to the left. Rims at least 40 px apart, and the held
+# tool is framed to their left (ToolRig.FRAME).
 func dig_center() -> Vector2:
-	return Vector2(size.x - 150.0, size.y - 150.0)
+	return Vector2(size.x - 140.0, size.y - 136.0)
 
 
 func jump_center() -> Vector2:
-	# Clear of DIG (rims at least 12 px apart) and of the bottom edge.
-	return Vector2(size.x - 335.0, size.y - 74.0)
+	return Vector2(size.x - 64.0, size.y - 318.0)
 
 
 func action_center() -> Vector2:
-	return Vector2(size.x - 330.0, size.y - 252.0)
+	return Vector2(size.x - 318.0, size.y - 262.0)
 
 
 func stick_home() -> Vector2:
@@ -328,15 +331,15 @@ func _draw() -> void:
 	draw_circle(knob, 34.0, Color(UiTheme.BRASS.darkened(0.1), a))
 	draw_circle(knob + Vector2(-6, -7), 13.0, Color(UiTheme.BRASS_LIGHT, a * 0.6))
 	if _stick_finger == NONE:
-		UiTheme.draw_text_centered(self, bold, "walk", base + Vector2(0, STICK_RADIUS + 26), 21, Color(UiTheme.CREAM, 0.8), 5)
+		UiTheme.draw_text_centered(self, bold, "walk", base + Vector2(0, STICK_RADIUS + 26), 23, Color(UiTheme.CREAM, 0.92), 5)
 	# DIG
 	var dc := dig_center()
 	var face := Color(0.82, 0.2, 0.12, 1.0 if digging else 0.9)
 	_gauge_button(dc, DIG_RADIUS, face, digging)
 	var off := Vector2(0, 4) if digging else Vector2.ZERO
-	_icon(str(GameState.tool_def().icon), dc + off + Vector2(-2, -24), 64.0)
-	UiTheme.draw_text_centered(self, font, "Dig", dc + off + Vector2(0, 26), 34, UiTheme.CREAM, 6)
-	UiTheme.draw_text_centered(self, bold, "hold", dc + off + Vector2(0, 58), 20, Color(UiTheme.CREAM, 0.85), 4)
+	_icon(str(GameState.tool_def().icon), dc + off + Vector2(-2, -24), 58.0)
+	UiTheme.draw_text_centered(self, font, "Dig", dc + off + Vector2(0, 22), 34, UiTheme.CREAM, 6)
+	UiTheme.draw_text_centered(self, bold, "hold", dc + off + Vector2(0, 52), 23, UiTheme.CREAM, 5)
 	# JUMP: soot iron, so it doesn't compete with DIG.
 	var jc := jump_center()
 	_gauge_button(jc, JUMP_RADIUS, Color(0.24, 0.21, 0.18, 0.95), _jump_finger != NONE)
@@ -347,7 +350,7 @@ func _draw() -> void:
 		_gauge_button(ac, ACTION_RADIUS, action_color.darkened(0.15), _action_finger != NONE)
 		if action_icon != "":
 			var nod := maxf(0.0, sin(_pulse * 3.0)) ** 6 * 5.0
-			_icon(action_icon, ac + Vector2(0, -20 - nod), 40.0)
-		UiTheme.draw_text_centered(self, font, action_text, ac + Vector2(0, 12), 22, UiTheme.CREAM, 5)
+			_icon(action_icon, ac + Vector2(0, -20 - nod), 36.0)
+		UiTheme.draw_text_centered(self, font, action_text, ac + Vector2(0, 10), 24, UiTheme.CREAM, 5)
 		if action_sub != "":
-			UiTheme.draw_text_centered(self, bold, action_sub, ac + Vector2(0, 37), 20, UiTheme.CREAM, 4)
+			UiTheme.draw_text_centered(self, bold, action_sub, ac + Vector2(0, 34), 22, UiTheme.CREAM, 5)

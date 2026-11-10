@@ -507,15 +507,15 @@ func _finish_zone(zone: Zone) -> void:
 # Landmarks: one set piece per layer, in a cave of its own near the middle
 # =====================================================================================
 const LANDMARKS := {
-	1: {"model": "old_timbers", "scale": 1.0, "light": Color(1.0, 0.7, 0.36), "energy": 0.9, "at": Vector3(0.25, 1.6, 0.0)},
-	2: {"model": "mine_cart", "scale": 1.0, "light": Color(1.0, 0.74, 0.4), "energy": 0.7, "at": Vector3(0.5, 1.0, 0.35), "lift": 0.1},
-	3: {"model": "fossil_slab", "scale": 1.1},
-	4: {"model": "ribcage", "scale": 1.0},
+	1: {"model": "old_timbers", "scale": 1.0, "light": Color(1.0, 0.8, 0.55), "energy": 0.6, "at": Vector3(0.25, 1.6, 0.0)},
+	2: {"model": "mine_cart", "scale": 1.0, "light": Color(1.0, 0.86, 0.68), "energy": 0.4, "at": Vector3(0.5, 1.0, 0.35), "lift": 0.1},
+	3: {"model": "fossil_slab", "scale": 1.0, "face": true},
+	4: {"model": "ribcage", "scale": 1.0, "face": true, "turn": -1.75},   # side-on, the skull at your left
 	5: {"model": "crystal_big", "scale": 1.0, "light": Color(0.45, 0.88, 0.78), "energy": 1.5, "at": Vector3(0.0, 1.2, 0.0)},
-	6: {"model": "lava_pool", "scale": 1.1, "light": Color(1.0, 0.42, 0.12), "energy": 2.6, "at": Vector3(0.0, 0.45, 0.0), "melt": "lava"},
-	7: {"model": "mantle_rocks", "scale": 1.0, "light": Color(1.0, 0.45, 0.16), "energy": 1.5, "at": Vector3(0.0, 0.8, 0.6), "melt": "lava"},
-	8: {"model": "lava_pool", "scale": 1.0, "light": Color(1.0, 0.62, 0.22), "energy": 2.4, "at": Vector3(0.0, 0.45, 0.0), "melt": "iron"},
-	9: {"model": "core_heart", "scale": 1.0, "light": Color(1.0, 0.78, 0.4), "energy": 3.2, "at": Vector3(0.0, 1.2, 0.0), "melt": "core"},
+	6: {"model": "lava_pool", "scale": 1.1, "light": Color(1.0, 0.42, 0.12), "energy": 2.8, "at": Vector3(0.0, 0.3, 0.0), "melt": "lava", "range": 8.5, "embers": Color(1.0, 0.55, 0.15)},
+	7: {"model": "mantle_rocks", "scale": 1.0, "light": Color(1.0, 0.5, 0.2), "energy": 1.2, "at": Vector3(0.0, 0.9, 1.4), "melt": "lava", "face": true},
+	8: {"model": "lava_pool", "scale": 1.0, "light": Color(1.0, 0.62, 0.22), "energy": 2.6, "at": Vector3(0.0, 0.3, 0.0), "melt": "iron", "range": 8.5, "embers": Color(1.0, 0.75, 0.3)},
+	9: {"model": "core_heart", "scale": 1.0, "light": Color(1.0, 0.78, 0.4), "energy": 1.1, "at": Vector3(0.0, 1.2, 0.0), "melt": "core", "range": 6.5},
 }
 # The melt's colours: [cool edge, hot streaks, which painted layer it flows like].
 const MELTS := {
@@ -600,19 +600,66 @@ func _place_landmark(zone: Zone) -> void:
 	n.name = "Landmark"
 	n.scale = Vector3.ONE * float(d.get("scale", 1.0))
 	n.rotation.y = float(z) * 1.3
+	if d.get("face", false):
+		# Turned to face the shaft, where you break in from (its face is +Z).
+		n.rotation.y = atan2(-c.x, -c.z) + float(d.get("turn", 0.0))
 	zone.node.add_child(n)
 	n.position = Vector3(c.x, floor_below(c, 6.0) - 0.05 + float(d.get("lift", 0.0)), c.z)
 	dress_landmark(n, str(d.get("melt", "lava")))
+	if d.has("embers"):
+		n.add_child(_embers(d.embers))
 	if d.has("light"):
-		var l := OmniLight3D.new()
+		var l: OmniLight3D = FlickerLight.new() if d.has("embers") else OmniLight3D.new()
 		l.light_color = d.light
 		l.light_energy = float(d.energy)
-		l.omni_range = 8.0
-		l.omni_attenuation = 1.4
+		# Lava and the core throw their light up the walls; a lantern or a
+		# crystal lights its own corner.
+		l.omni_range = float(d.get("range", 3.2))
+		# A lantern's pool is small and falls off fast (at range 5 it lit the
+		# whole cave evenly and swallowed the headlamp's pool).
+		l.omni_attenuation = 1.6 if d.has("range") else 2.2
 		l.position = (d.get("at", Vector3(0, 1.1, 0)) as Vector3) / n.scale
 		l.layers = 1 | Player.VIEWMODEL_LAYER
 		n.add_child(l)
 	zone.landmark = n
+
+
+static func _embers(col: Color) -> CPUParticles3D:
+	## Sparks lifting off a lava lake's cracks: small, hot, drifting up and
+	## sideways, cooling from yellow to red to nothing.
+	var p := CPUParticles3D.new()
+	p.amount = 26
+	p.lifetime = 2.6
+	p.preprocess = 2.6
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(1.2, 0.05, 1.0)
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 25.0
+	p.initial_velocity_min = 0.35
+	p.initial_velocity_max = 0.9
+	p.gravity = Vector3(0.08, 0.15, 0.0)
+	p.damping_min = 0.1
+	p.damping_max = 0.3
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.2
+	p.position = Vector3(0, 0.12, 0)
+	var q := QuadMesh.new()
+	q.size = Vector2(0.035, 0.035)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.vertex_color_use_as_albedo = true
+	m.albedo_texture = UiTheme.soft_dot()
+	q.material = m
+	p.mesh = q
+	var g := Gradient.new()
+	g.set_color(0, Color(1.0, 0.9, 0.5, 1.0))
+	g.add_point(0.4, Color(col.r, col.g, col.b, 0.9))
+	g.set_color(g.get_point_count() - 1, Color(0.7, 0.12, 0.04, 0.0))
+	p.color_ramp = g
+	return p
 
 
 func settle_landmarks() -> void:
@@ -929,11 +976,14 @@ const PEBBLE_EVERY := 3            # inside a pebble bed, about one cluster per 
 const PEBBLE_BEDS := 38            # percent of 0.8 m beds that carry pebbles (the rest are clean rock)
 const NUGGET_CHANCE := 55          # percent of ore vertices that show a nugget
 # zone -> [model, one per this many vertices, where ("ceiling", "wall", "any"), colours, material]
+# The models carry their own painted colour (art/blender/props.py); these
+# colours tint each copy (white keeps the model's own; the stones and
+# crystals are painted neutral so each layer can colour them).
 const ZONE_DECOR := {
-	0: ["root", 9, "ceiling", [Color(0.36, 0.25, 0.16), Color(0.3, 0.21, 0.14)], "matte"],
+	0: ["root", 9, "ceiling", [Color(1, 1, 1), Color(0.9, 0.88, 0.86)], "matte"],
 	2: ["rubble", 16, "any", [Color(0.36, 0.36, 0.38), Color(0.44, 0.41, 0.4)], "matte"],
-	3: ["shell", 22, "wall", [Color(0.7, 0.62, 0.5), Color(0.62, 0.54, 0.42)], "matte"],
-	4: ["bone", 15, "any", [Color(0.76, 0.68, 0.52), Color(0.68, 0.58, 0.42)], "matte"],
+	3: ["shell", 22, "wall", [Color(1, 1, 1), Color(0.92, 0.9, 0.86)], "matte"],
+	4: ["bone", 15, "any", [Color(1, 1, 1), Color(0.9, 0.86, 0.8)], "matte"],
 	5: ["crystal_small", 9, "any", [Color(0.42, 0.8, 0.72), Color(0.6, 0.5, 0.86)], "crystal"],
 	6: ["magma_vent", 16, "any", [Color(1, 1, 1)], ""],
 	7: ["magma_vent", 22, "any", [Color(1, 1, 1)], ""],
@@ -1055,6 +1105,10 @@ static func _decor_xf(p: Vector3, nr: Vector3, ang: float, s: float, sink: float
 
 
 func _multimesh(zone: Zone, model: String, xfs: Array, cols: Array, m: Material) -> MultiMeshInstance3D:
+	## One kind of piece over a chunk. Each copy's tint is its instance colour,
+	## linear for the decor shader (the engine multiplies it into the model's
+	## own vertex colour, which is linear too); models without the decor
+	## shader take it as picked.
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
@@ -1062,12 +1116,14 @@ func _multimesh(zone: Zone, model: String, xfs: Array, cols: Array, m: Material)
 	mm.instance_count = xfs.size()
 	for i in xfs.size():
 		mm.set_instance_transform(i, xfs[i])
-		mm.set_instance_color(i, cols[i])
+		var c: Color = cols[i]
+		mm.set_instance_color(i, c.srgb_to_linear() if m != null else c)
 	var mi := MultiMeshInstance3D.new()
 	mi.multimesh = mm
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if m != null:
 		mi.material_override = m
+		mi.layers = Player.ROCK_VIS_LAYER   # decor shader: lit by the headlamp like the rock it lies on
 	zone.node.add_child(mi)
 	return mi
 
@@ -1111,6 +1167,7 @@ func _remesh(key: Vector3i) -> void:
 	if ch.is_empty():
 		var mi := MeshInstance3D.new()
 		mi.material_override = material
+		mi.layers = Player.ROCK_VIS_LAYER   # the headlamp is worked out in the rock shader, not by the spot light
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		zone.node.add_child(mi)
 		var cs := CollisionShape3D.new()
@@ -1462,82 +1519,68 @@ static var _strata: ImageTexture
 
 
 # Each layer's look (the rock shader's per-layer uniforms, and World's light
-# and fog down there). band: the second rock in the beds, as a multiplier on
-# the first; fleck: the second rock where the layer's texture paints it;
-# strata: how strong the beds are; beds: how thick (more = thinner); tex: the
-# texture's scale; contrast: of the painted value; dark: how dark its lines
-# are; glow: how hot its cracks glow (rock that glows by itself only); show:
-# how much of the painted second rock shows; glint: veins that catch the lamp;
-# hot: the glow's colour; molten: a glow over the whole face; fog: the dark
-# the lamp falls off into; fill: the cool bounce and ambient.
+# and fog down there). The colour is painted into the layer's texture
+# (art/textures/make_rock.py); here: tex, how many tiles per metre; slide,
+# whether each row of tiles slides sideways (not the folded Mantle); hue, how
+# much of the vertex colour's hue shows (ore veins, the second rock); glint,
+# whether the texture's lines catch the lamp (quartz veins); glow, how hot
+# they glow by themselves (cracks and seams from the Lava Lakes down); hot,
+# that glow's colour; molten, a glow over the whole face; fog, the dark the
+# lamp falls off into; fill, the cool light on edges.
 const STYLE := [
-	{"band": Color(0.6, 0.56, 0.52), "fleck": Color(0.76, 0.72, 0.68), "strata": 0.8, "beds": 2.0, "tex": 0.5, "contrast": 1.25,
-		"dark": 0.5, "glow": 0.0, "show": 0.7, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
-		"fog": Color(0.07, 0.05, 0.035), "fill": Color(0.3, 0.33, 0.4)},
-	{"band": Color(0.76, 0.56, 0.56), "fleck": Color(0.86, 0.64, 0.66), "strata": 1.0, "beds": 3.0, "tex": 0.4, "contrast": 1.05,
-		"dark": 0.55, "glow": 0.0, "show": 0.8, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
-		"fog": Color(0.075, 0.042, 0.032), "fill": Color(0.32, 0.34, 0.42)},
-	{"band": Color(0.76, 0.79, 0.86), "fleck": Color(1.3, 1.12, 1.05), "strata": 0.75, "beds": 0.9, "tex": 0.45, "contrast": 1.35,
-		"dark": 0.45, "glow": 0.0, "show": 0.85, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
-		"fog": Color(0.04, 0.045, 0.055), "fill": Color(0.32, 0.37, 0.46)},
-	{"band": Color(0.7, 0.62, 0.54), "fleck": Color(1.18, 1.15, 1.1), "strata": 1.0, "beds": 2.4, "tex": 0.5, "contrast": 1.5,
-		"dark": 0.5, "glow": 0.0, "show": 0.6, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
-		"fog": Color(0.075, 0.06, 0.042), "fill": Color(0.33, 0.36, 0.42)},
-	{"band": Color(0.72, 0.62, 0.52), "fleck": Color(1.2, 1.2, 1.18), "strata": 0.9, "beds": 1.6, "tex": 0.42, "contrast": 0.9,
-		"dark": 0.35, "glow": 0.0, "show": 0.7, "glint": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
-		"fog": Color(0.07, 0.05, 0.03), "fill": Color(0.32, 0.34, 0.4)},
-	{"band": Color(0.72, 0.74, 1.0), "fleck": Color(1.35, 1.12, 1.5), "strata": 0.6, "beds": 1.0, "tex": 0.45, "contrast": 1.3,
-		"dark": 0.0, "glow": 0.0, "show": 0.55, "glint": 0.55, "hot": Color(0.55, 0.9, 0.85), "molten": 0.0,
-		"fog": Color(0.035, 0.03, 0.07), "fill": Color(0.32, 0.36, 0.55)},
-	{"band": Color(0.72, 0.7, 0.72), "fleck": Color(1.5, 0.9, 0.72), "strata": 0.5, "beds": 1.4, "tex": 0.5, "contrast": 1.25,
-		"dark": 0.75, "glow": 1.0, "show": 0.55, "glint": 0.0, "hot": Color(1.0, 0.42, 0.1), "molten": 0.0,
-		"fog": Color(0.06, 0.03, 0.022), "fill": Color(0.3, 0.3, 0.38)},
-	{"band": Color(0.8, 0.74, 0.7), "fleck": Color(0.8, 1.22, 1.05), "strata": 0.7, "beds": 1.6, "tex": 0.45, "contrast": 1.2,
-		"dark": 0.5, "glow": 0.85, "show": 0.4, "glint": 0.0, "hot": Color(1.0, 0.5, 0.15), "molten": 0.0,
-		"fog": Color(0.075, 0.035, 0.02), "fill": Color(0.32, 0.31, 0.38)},
-	{"band": Color(0.8, 0.7, 0.6), "fleck": Color(1.08, 1.12, 1.25), "strata": 0.45, "beds": 1.0, "tex": 0.35, "contrast": 1.0,
-		"dark": 0.35, "glow": 1.1, "show": 0.6, "glint": 0.0, "hot": Color(1.0, 0.64, 0.22), "molten": 0.12,
-		"fog": Color(0.1, 0.05, 0.02), "fill": Color(0.34, 0.32, 0.36)},
-	{"band": Color(0.8, 0.66, 0.5), "fleck": Color(1.15, 1.08, 1.0), "strata": 0.4, "beds": 0.8, "tex": 0.42, "contrast": 1.35,
-		"dark": 0.45, "glow": 1.7, "show": 0.6, "glint": 0.0, "hot": Color(1.0, 0.74, 0.3), "molten": 0.12,
-		"fog": Color(0.13, 0.065, 0.02), "fill": Color(0.42, 0.32, 0.22)},
+	{"tex": 0.5, "slide": 1.0, "hue": 0.2, "glint": 0.0, "glow": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.02, 0.015, 0.012), "fill": Color(0.3, 0.36, 0.46)},
+	{"tex": 0.45, "slide": 1.0, "hue": 0.2, "glint": 0.0, "glow": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.022, 0.013, 0.01), "fill": Color(0.3, 0.36, 0.46)},
+	{"tex": 0.42, "slide": 1.0, "hue": 0.15, "glint": 0.0, "glow": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.014, 0.015, 0.018), "fill": Color(0.32, 0.38, 0.5)},
+	{"tex": 0.45, "slide": 1.0, "hue": 0.2, "glint": 0.0, "glow": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.024, 0.019, 0.013), "fill": Color(0.32, 0.37, 0.46)},
+	{"tex": 0.42, "slide": 1.0, "hue": 0.2, "glint": 0.0, "glow": 0.0, "hot": Color(0, 0, 0), "molten": 0.0,
+		"fog": Color(0.022, 0.016, 0.01), "fill": Color(0.32, 0.36, 0.45)},
+	{"tex": 0.4, "slide": 1.0, "hue": 0.2, "glint": 1.0, "glow": 0.0, "hot": Color(0.55, 0.92, 0.88), "molten": 0.0,
+		"fog": Color(0.012, 0.01, 0.022), "fill": Color(0.34, 0.38, 0.6)},
+	{"tex": 0.4, "slide": 1.0, "hue": 0.15, "glint": 0.0, "glow": 0.55, "hot": Color(1.0, 0.42, 0.1), "molten": 0.0,
+		"fog": Color(0.02, 0.01, 0.008), "fill": Color(0.32, 0.32, 0.42)},
+	{"tex": 0.42, "slide": 0.0, "hue": 0.1, "glint": 0.0, "glow": 0.5, "hot": Color(1.0, 0.48, 0.14), "molten": 0.0,
+		"fog": Color(0.022, 0.012, 0.007), "fill": Color(0.32, 0.34, 0.42)},
+	{"tex": 0.4, "slide": 0.0, "hue": 0.1, "glint": 0.0, "glow": 0.5, "hot": Color(1.0, 0.62, 0.22), "molten": 0.03,
+		"fog": Color(0.03, 0.016, 0.006), "fill": Color(0.36, 0.33, 0.36)},
+	{"tex": 0.55, "slide": 0.0, "hue": 0.1, "glint": 0.0, "glow": 0.7, "hot": Color(1.0, 0.66, 0.26), "molten": 0.015,
+		"fog": Color(0.04, 0.022, 0.008), "fill": Color(0.42, 0.34, 0.26)},
 ]
 
 
 static func make_rock_material() -> ShaderMaterial:
-	## The rock shader with each layer's painted texture and strata bands (also
-	## used by the field's grass; the lift shaft's walls share the textures).
+	## The rock shader with each layer's painted texture (also used by the
+	## field's grass).
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/rock.gdshader")
 	m.set_shader_parameter("paint_tex", load("res://textures/rock_paint.png"))
-	m.set_shader_parameter("layer_tex", load("res://textures/rock_layers.png"))
-	m.set_shader_parameter("strata_tex", strata_texture())
+	m.set_shader_parameter("wall_tex", load("res://textures/rock_walls.png"))
 	m.set_shader_parameter("zone_depth", Balance.ZONE_DEPTH)
 	set_style_uniforms(m)
 	return m
 
 
 static func set_style_uniforms(m: ShaderMaterial) -> void:
-	var band := PackedVector3Array()
-	var fleck := PackedVector3Array()
+	var ref := PackedVector3Array()
 	var look := PackedVector4Array()
-	var lns := PackedVector4Array()
 	var glow := PackedVector4Array()
+	var amt := PackedFloat32Array()
 	for i in 10:
 		var s: Dictionary = STYLE[mini(i, STYLE.size() - 1)]
-		var bc: Color = s.band
-		var fc: Color = s.fleck
+		var main: int = Balance.ZONES[mini(i, Balance.ZONES.size() - 1)].mats[0]
+		var rc: Color = Balance.MATERIALS[main].color
 		var hc: Color = s.hot
-		band.append(Vector3(bc.r, bc.g, bc.b))
-		fleck.append(Vector3(fc.r, fc.g, fc.b))
-		look.append(Vector4(s.strata, s.beds, s.tex, s.contrast))
-		lns.append(Vector4(s.dark, s.glow, s.show, s.glint))
+		ref.append(Vector3(rc.r, rc.g, rc.b))
+		look.append(Vector4(s.tex, s.slide, s.hue, s.glint))
 		glow.append(Vector4(hc.r, hc.g, hc.b, s.molten))
-	m.set_shader_parameter("band_tint", band)
-	m.set_shader_parameter("fleck_tint", fleck)
+		amt.append(float(s.glow))
+	m.set_shader_parameter("base_ref", ref)
 	m.set_shader_parameter("look", look)
-	m.set_shader_parameter("lines", lns)
 	m.set_shader_parameter("glow_color", glow)
+	m.set_shader_parameter("glow_amt", amt)
 
 
 static func strata_texture() -> Texture2D:

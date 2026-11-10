@@ -15,10 +15,65 @@ from kit import MODELS, reset  # noqa: E402
 TILE = int(os.environ.get("TILE", "320"))
 
 
+# Pieces the game tints per copy (DigField: each layer's stone, the ore's
+# colour, the crystal's): shown here with a typical tint, as in the game.
+TINT = {"pebble": (0.5, 0.42, 0.34), "rubble": (0.44, 0.43, 0.44), "nugget": (1.0, 0.78, 0.2),
+        "crystal_small": (0.42, 0.8, 0.72)}
+
+
+def show_vertex_colour(objs, tint=None):
+    """Godot multiplies a model's material by its vertex colour (COLOR_0:
+    the painted colour, baked AO and edge wear); Blender's glTF import
+    doesn't, so wire it in here or the sheet shows bare materials."""
+    done = set()
+    for o in objs:
+        attrs = o.data.color_attributes
+        if len(attrs) == 0:
+            continue
+        name = attrs[0].name
+        for slot in o.material_slots:
+            m = slot.material
+            if m is None or m.name in done or not m.use_nodes:
+                continue
+            done.add(m.name)
+            nt = m.node_tree
+            bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
+            if bsdf is None:
+                continue
+            base = bsdf.inputs["Base Color"]
+            if any(n.type == "VERTEX_COLOR" for n in nt.nodes):
+                # Already wired by the importer: only add the game's tint.
+                if tint is not None and base.is_linked:
+                    tm = nt.nodes.new("ShaderNodeMix")
+                    tm.data_type = "RGBA"
+                    tm.blend_type = "MULTIPLY"
+                    tm.inputs["Factor"].default_value = 1.0
+                    nt.links.new(base.links[0].from_socket, tm.inputs[6])
+                    tm.inputs[7].default_value = [tint[i] ** 2.2 for i in range(3)] + [1.0]
+                    nt.links.new(tm.outputs[2], base)
+                continue
+            vc = nt.nodes.new("ShaderNodeVertexColor")
+            vc.layer_name = name
+            mul = nt.nodes.new("ShaderNodeMix")
+            mul.data_type = "RGBA"
+            mul.blend_type = "MULTIPLY"
+            mul.inputs["Factor"].default_value = 1.0
+            if base.is_linked:
+                nt.links.new(base.links[0].from_socket, mul.inputs[6])
+            else:
+                c = list(base.default_value)
+                if tint is not None:
+                    c = [c[i] * (tint[i] ** 2.2) for i in range(3)] + [1.0]
+                mul.inputs[6].default_value = c
+            nt.links.new(vc.outputs["Color"], mul.inputs[7])
+            nt.links.new(mul.outputs[2], base)
+
+
 def render_one(path, out):
     reset()
     bpy.ops.import_scene.gltf(filepath=path)
     objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+    show_vertex_colour(objs, TINT.get(os.path.basename(path)[:-4]))
     lo = Vector((1e9, 1e9, 1e9))
     hi = Vector((-1e9, -1e9, -1e9))
     for o in objs:
@@ -55,9 +110,14 @@ def render_one(path, out):
     world = bpy.data.worlds.new("w")
     world.use_nodes = True
     world.node_tree.nodes["Background"].inputs[0].default_value = (0.16, 0.13, 0.11, 1)
-    world.node_tree.nodes["Background"].inputs[1].default_value = 0.6
+    world.node_tree.nodes["Background"].inputs[1].default_value = 0.45
     scene.world = world
     scene.render.engine = "CYCLES"
+    # Standard, not Blender's default AgX: AgX lifts and desaturates the
+    # painted vertex colours into pastels, which is not how the game shows them.
+    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.look = "None"
+    scene.view_settings.exposure = -1.2
     scene.cycles.device = "CPU"
     scene.cycles.samples = int(os.environ.get("SAMPLES", "16"))
     scene.cycles.use_denoising = True
