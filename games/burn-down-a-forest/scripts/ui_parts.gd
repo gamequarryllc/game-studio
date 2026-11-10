@@ -302,10 +302,11 @@ class Parcel:
 		side.append_array(_bulge(fbr, ftr, 5.0))
 		# a hard ink shadow on the ground, then the paper
 		var shadow := PackedVector2Array([fbl + Vector2(-6, 2), fbr + Vector2(4, 6), bbr + Vector2(10, 4), bbr + Vector2(14, -6), fbl + Vector2(4, -4)])
-		draw_colored_polygon(shadow, Color(ink, 0.55))
-		draw_colored_polygon(front, Color("#C79B63"))
-		draw_colored_polygon(top, Color("#DDB883"))
-		draw_colored_polygon(side, Color("#B48550"))
+		# (at a small size, or mid-breath, a bowed face can fold over itself: skip
+		# a face the engine can't fill rather than log an error every frame)
+		for face in [[shadow, Color(ink, 0.55)], [front, Color("#C79B63")], [top, Color("#DDB883")], [side, Color("#B48550")]]:
+			if not Geometry2D.triangulate_polygon(face[0]).is_empty():
+				draw_colored_polygon(face[0], face[1])
 		draw_texture_rect(UiTheme.grain(), Rect2(Vector2.ZERO, size), true, Color(0.45, 0.3, 0.15, 0.1))
 		# hatching for the shade: the side face, and the underside of the front
 		var hatch := PackedVector2Array()

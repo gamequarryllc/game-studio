@@ -5,16 +5,22 @@
 #   tools/ios_build.sh <slug> testflight   signs with the App Store Connect API key and uploads to TestFlight
 #
 # Environment:
-#   GODOT          path to the Godot 4.4.1 binary (required)
+#   GODOT          path to the Godot binary for this game (required): the version in
+#                  games/<slug>/godot_version.txt, or 4.4.1 when there is none
 #   FLAVOR         release (default for check) or playtest (default for testflight).
 #                  playtest = developer tools and pretend ads and purchases, for trying a
 #                  game on a real phone. release = what goes to the App Store; an upload
 #                  is refused until store/<slug>/ios.json says "real_monetization": true,
 #                  so a build with pretend ads can never be the one sent to review.
+#                  An upload of the release flavor also needs tests/release_check.gd to pass
+#                  (every store id filled in) when the game has one.
 #   VERSION        version shown on the App Store (default 1.0.0)
 #   BUILD_NUMBER   must go up with every upload (default 1)
 #   WORK           scratch folder (default: a new temp folder)
 #   testflight only: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (the .p8 text, or base64 of it), APPLE_TEAM_ID
+#
+# Games with native plugins (addons/admob, addons/godotx_revenue_cat) get their iOS
+# halves from tools/fetch_plugins.sh (versions pinned in tools/plugin_versions.env).
 #
 # Nothing here submits an app for review. An upload lands in TestFlight; sending
 # a build to App Review stays a manual step in App Store Connect.
@@ -28,7 +34,16 @@ game="$root/games/$slug"
 case "$slug" in *[!a-z0-9-]*|"") echo "Bad game name: $slug" >&2; exit 2;; esac
 case "$mode" in check|testflight) ;; *) echo "Mode must be check or testflight" >&2; exit 2;; esac
 [ -f "$game/project.godot" ] || { echo "No game at games/$slug" >&2; exit 2; }
-: "${GODOT:?set GODOT to the Godot 4.4.1 binary}"
+: "${GODOT:?set GODOT to the Godot binary for this game}"
+want_godot="4.4.1"
+if [ -f "$game/godot_version.txt" ]; then want_godot="$(tr -d '[:space:]' < "$game/godot_version.txt")"; fi
+have_godot="$("$GODOT" --version 2>/dev/null | head -1)"
+case "$have_godot" in
+  "$want_godot".stable*) ;;
+  *) echo "$slug needs Godot $want_godot, but GODOT is $have_godot" >&2; exit 2;;
+esac
+has_plugins=false
+if [ -f "$game/addons/admob/plugin.cfg" ] || [ -f "$game/addons/godotx_revenue_cat/plugin.cfg" ]; then has_plugins=true; fi
 
 if [ "$mode" = "testflight" ]; then FLAVOR="${FLAVOR:-playtest}"; else FLAVOR="${FLAVOR:-release}"; fi
 case "$FLAVOR" in release|playtest) ;; *) echo "FLAVOR must be release or playtest" >&2; exit 2;; esac
@@ -72,13 +87,24 @@ fi
 say "Xcode"
 xcodebuild -version
 
-say "Import $slug"
+if $has_plugins; then
+  say "Native plugins (iOS)"
+  bash "$root/tools/fetch_plugins.sh" "$slug" ios
+fi
+
+say "Import $slug (Godot $want_godot)"
 "$GODOT" --headless --path "$game" --import > "$logs/import.log" 2>&1 || { tail -30 "$logs/import.log"; exit 1; }
 
 if [ -f "$game/tests/smoke_test.gd" ]; then
   say "Smoke test"
   "$GODOT" --headless --path "$game" -s res://tests/smoke_test.gd > "$logs/smoke.log" 2>&1 || { tail -40 "$logs/smoke.log"; echo "Smoke test failed: not building." >&2; exit 1; }
   tail -2 "$logs/smoke.log" | cut -c1-200
+fi
+
+if [ -f "$game/tests/monetization_test.gd" ]; then
+  say "Ads and purchases test"
+  "$GODOT" --headless --path "$game" -s res://tests/monetization_test.gd > "$logs/monetization.log" 2>&1 || { tail -40 "$logs/monetization.log"; echo "Ads and purchases test failed: not building." >&2; exit 1; }
+  grep -E 'MONETIZATION TEST' "$logs/monetization.log" | tail -1
 fi
 
 say "Xcode project"
@@ -89,6 +115,19 @@ if [ "$mode" = "testflight" ] && [ "$FLAVOR" = "release" ] && ! grep -q '^real_m
   echo "set \"real_monetization\": true in store/$slug/ios.json (see STUDIO.md, App Store pipeline)." >&2
   exit 4
 fi
+if [ -f "$game/tests/release_check.gd" ] && [ "$FLAVOR" = "release" ]; then
+  say "Release check (store ids)"
+  if "$GODOT" --headless --path "$game" -s res://tests/release_check.gd -- iOS > "$logs/release_check.log" 2>&1; then
+    grep -E '^Release check' "$logs/release_check.log" || true
+  else
+    grep -E '^Release check|^  - ' "$logs/release_check.log" || tail -20 "$logs/release_check.log"
+    if [ "$mode" = "testflight" ]; then
+      echo "Refusing to upload a release build of $slug while store ids are placeholders (store/README.md says where each comes from)." >&2
+      exit 4
+    fi
+    echo "(Unsigned check build: carrying on. A TestFlight upload of the release flavor would stop here.)"
+  fi
+fi
 name="$(grep '^name=' "$WORK/vars.txt" | cut -d= -f2-)"
 bundle_id="$(grep '^bundle_id=' "$WORK/vars.txt" | cut -d= -f2-)"
 export_path="$(grep '^export_path=' "$WORK/vars.txt" | cut -d= -f2-)"
@@ -96,6 +135,19 @@ export_path="$(grep '^export_path=' "$WORK/vars.txt" | cut -d= -f2-)"
 project="$WORK/xcode/$name.xcodeproj"
 [ -d "$project" ] || { echo "Godot did not write $name.xcodeproj" >&2; tail -30 "$logs/export.log" >&2; exit 1; }
 echo "$name.xcodeproj  ($bundle_id, version $VERSION build $BUILD_NUMBER, $FLAVOR)"
+if [ -f "$game/addons/admob/plugin.cfg" ]; then
+  grep -rqs GADApplicationIdentifier "$WORK/xcode/$name/$name-Info.plist" || { echo "AdMob's app id is missing from the Info.plist (is the AdMob editor plugin enabled in project.godot?)" >&2; exit 1; }
+  grep -qs SKAdNetworkItems "$WORK/xcode/$name/$name-Info.plist" || echo "note: no SKAdNetworkItems in the Info.plist"
+  [ -f "$WORK/xcode/admob_spm/Package.swift" ] || { echo "AdMob's Swift package (Google Mobile Ads) was not written" >&2; exit 1; }
+  # The AdMob plugin links its Swift package into the project while Godot exports
+  # (only on a Mac: Godot calls that hook on macOS alone).
+  grep -q 'XCLocalSwiftPackageReference "admob_spm"' "$project/project.pbxproj" || { echo "AdMob's Swift package is not linked in the Xcode project" >&2; exit 1; }
+  echo "AdMob: app id, Swift package and libraries in the Xcode project"
+fi
+if grep -q '^plugins=.*GodotxRevenueCat' "$WORK/vars.txt"; then
+  grep -qs GodotxRevenueCat "$project/project.pbxproj" || { echo "RevenueCat is not linked in the Xcode project (did tools/fetch_plugins.sh run?)" >&2; exit 1; }
+  echo "RevenueCat: linked in the Xcode project"
+fi
 
 # Reads one Info.plist value from a built .app.
 plist() { /usr/libexec/PlistBuddy -c "Print :$2" "$1/Info.plist" 2>/dev/null || true; }
@@ -121,7 +173,8 @@ check_app() {
   [ -f "$app/Assets.car" ] || { echo "No compiled asset catalog (icons) in the app" >&2; exit 1; }
 }
 
-common=(-project "$project" -scheme "$name" -configuration Release -sdk iphoneos -destination "generic/platform=iOS")
+common=(-project "$project" -scheme "$name" -configuration Release -sdk iphoneos -destination "generic/platform=iOS"
+  -skipPackagePluginValidation -skipMacroValidation)
 unsigned=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=)
 
 if [ "$mode" = "check" ]; then

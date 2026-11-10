@@ -920,7 +920,7 @@ func _build_shop() -> void:
 	var restore := _card("restore", "Restore purchases", "Bought something on another device? Get it back here.")
 	restore.button.pressed.connect(func():
 		Monetization.restore()
-		hud.toast("Asked the store for your purchases"))
+		hud.toast("Asking the store for your purchases"))
 	_set_btn(restore, "Restore", true)
 
 
@@ -951,8 +951,26 @@ func _build_settings() -> void:
 		Sound.set_muted(not Sound.muted)
 		refresh())
 	_refreshers.append(func(): _set_btn(mute, "Unmute" if Sound.muted else "Mute", true))
-	if OS.is_debug_build() or OS.has_feature("playtest"):
+	if Monetization.privacy_options_required():
+		# EEA/UK players must be able to change what they told Google about ads.
+		var choices := _card("padlock", "Ad privacy choices", "Change what you agreed to about ads.", "stamp")
+		choices.button.ink = UiTheme.INK
+		choices.button.pressed.connect(Monetization.show_privacy_options)
+		_set_btn(choices, "Change", true)
+	if StoreConfig.PRIVACY_POLICY_URL != "":
+		var policy := _card("notebook", "Privacy policy", "What the game and its ads keep about you.", "stamp")
+		policy.button.ink = UiTheme.INK
+		policy.button.pressed.connect(func(): OS.shell_open(StoreConfig.PRIVACY_POLICY_URL))
+		_set_btn(policy, "Read", true)
+	if dev_tools_enabled():
 		_build_dev_tools()
+
+
+static func dev_tools_enabled() -> bool:
+	## Developer tools only exist in playtest builds (the `playtest` export feature:
+	## the web play links and the iOS playtest flavor). Never in a release build,
+	## nor in a plain editor run, so screenshots show what players see.
+	return OS.has_feature("playtest")
 
 
 func _build_dev_tools() -> void:

@@ -23,6 +23,11 @@ What it sets (see STUDIO.md, "App Store pipeline"):
   - store/<slug>/icon_1024.png as the app icon when it exists (otherwise the project icon)
   - iOS plugins listed in ios.json ("plugins": ["name", ...]) switched on, plus any extra Info.plist lines
 
+  - the game's own export filter (its "Web" preset's exclude_filter, which keeps
+    tests and the plugins' editor-only parts out), with tests/* always excluded
+  - minimum iOS 15.0 for games on Godot 4.7 or later (games/<slug>/godot_version.txt;
+    the 4.7 iOS template and the AdMob SDK need it), 14.0 for older ones
+
 Per-game App Store settings live outside the game folders, in store/<slug>/ at
 the top of the repo. Optional store/<slug>/ios.json keys: bundle_id, min_ios,
 plugins, plist_extra, iphone_only (true to drop iPad), tracking_enabled,
@@ -39,6 +44,32 @@ import sys
 
 PRESET_NAME = "iOS"
 PLACEHOLDER_TEAM = "0000000000"  # for unsigned check builds only
+DEFAULT_GODOT_VERSION = "4.4.1"  # a game without games/<slug>/godot_version.txt
+
+
+def read_godot_version(game_dir):
+    path = os.path.join(game_dir, "godot_version.txt")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            v = f.read().strip()
+        if not re.fullmatch(r"\d+\.\d+(\.\d+)?", v):
+            sys.exit(f"Bad godot_version.txt: {v!r}")
+        return v
+    return DEFAULT_GODOT_VERSION
+
+
+def version_tuple(v):
+    return tuple(int(x) for x in v.split("."))
+
+
+def web_exclude_filter(cfg_text):
+    """The exclude_filter of the game's Web preset (what it already keeps out of a build)."""
+    for block in split_presets(cfg_text).values():
+        if re.search(r'^platform="Web"\s*$', block, re.M):
+            m = re.search(r'^exclude_filter="(.*)"\s*$', block, re.M)
+            if m:
+                return m.group(1)
+    return ""
 
 
 def read_project_name(game_dir):
@@ -89,6 +120,8 @@ def main():
     slug = os.path.basename(game_dir.rstrip("/"))
     title = read_project_name(game_dir)
     name = xcode_name(title)
+    godot_version = read_godot_version(game_dir)
+    default_min_ios = "15.0" if version_tuple(godot_version) >= (4, 7) else "14.0"
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     store_dir = os.path.join(repo_root, "store", slug)
@@ -108,6 +141,18 @@ def main():
     if not re.fullmatch(r"[A-Z0-9]{10}", args.team):
         sys.exit("Bad team id (want 10 letters and digits)")
 
+    cfg_path = os.path.join(game_dir, "export_presets.cfg")
+    text = ""
+    if os.path.exists(cfg_path):
+        with open(cfg_path, encoding="utf-8") as f:
+            text = f.read()
+    excludes = [e.strip() for e in web_exclude_filter(text).split(",") if e.strip()]
+    if "tests/*" not in excludes:
+        excludes.insert(0, "tests/*")
+    exclude_filter = ", ".join(excludes)
+    if '"' in exclude_filter or "\n" in exclude_filter:
+        sys.exit("Bad exclude_filter in the Web preset")
+
     out_dir = os.path.abspath(args.out) if args.out else os.path.join(game_dir, "build", "ios")
     export_path = os.path.join(out_dir, name + ".xcodeproj")
 
@@ -125,7 +170,7 @@ def main():
         ("application/bundle_identifier", cfg_str(bundle_id)),
         ("application/short_version", cfg_str(args.version)),
         ("application/version", cfg_str(str(args.build))),
-        ("application/min_ios_version", cfg_str(store.get("min_ios", "14.0"))),
+        ("application/min_ios_version", cfg_str(store.get("min_ios", default_min_ios))),
         ("application/additional_plist_content", cfg_str(plist)),
         ("application/export_project_only", "true"),
         # A development identity keeps Xcode's signing style on Automatic; the
@@ -162,11 +207,6 @@ def main():
             sys.exit(f"Bad plugin name: {plugin}")
         options.append((f"plugins/{plugin}", "true"))
 
-    cfg_path = os.path.join(game_dir, "export_presets.cfg")
-    text = ""
-    if os.path.exists(cfg_path):
-        with open(cfg_path, encoding="utf-8") as f:
-            text = f.read()
     blocks = split_presets(text)
 
     # Drop an existing iOS preset, keep the others, renumber from 0.
@@ -187,7 +227,7 @@ def main():
         f'custom_features="{"playtest" if args.flavor == "playtest" else ""}"\n'
         'export_filter="all_resources"\n'
         'include_filter=""\n'
-        'exclude_filter="tests/*"\n'
+        f'exclude_filter="{exclude_filter}"\n'
         f"export_path={cfg_str(export_path)}\n"
         'encryption_include_filters=""\n'
         'encryption_exclude_filters=""\n'
@@ -216,6 +256,8 @@ def main():
     print(f"export_path={export_path}")
     print(f"out_dir={out_dir}")
     print(f"flavor={args.flavor}")
+    print(f"godot_version={godot_version}")
+    print(f"plugins={','.join(store.get('plugins', []))}")
     print(f"real_monetization={'true' if store.get('real_monetization') else 'false'}")
 
 

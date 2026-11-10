@@ -17,6 +17,10 @@ const MOON_ENERGY := 3.0
 const STRAYS := 150                  # fewer cells than this (~3% of the forest) left to light counts as nothing left (the safety net)
 const AMBIENT_WARM := Color("#A3967E")    # the valley healing as the meadow spreads
 const FLOAT_POOL := 20
+const FLOAT_LIFE := 1.6               # seconds a floating number rises
+const FLOAT_RISE := 1.6               # metres a second
+const MERGE_SHARE := 0.18             # paydays closer than this share of the screen's height make one number
+const MERGE_M := 13.0                 # ...and so do paydays less than about a patch of forest apart
 
 var forest: ForestGrid
 var view: ForestView
@@ -429,71 +433,154 @@ func _build_float_pool() -> void:
 		l.outline_modulate = UiTheme.INK
 		l.visible = false
 		add_child(l)
-		_floats.append({"node": l, "t": 9.0, "k": 0.0007})
+		_floats.append({"node": l, "t": 9.0, "k": 0.0007, "v": 0.0, "pop": 0.0})
 
 
 func _show_pay_spots() -> void:
+	## Floating "+embers" over the fires that just paid: whole numbers, one per
+	## burst (patches burning near one another on screen are added into one
+	## number, and a number still rising there takes the next payday too), at
+	## most two new ones at a time, and never over or under a piece of the HUD.
 	var spots := forest.take_pay_spots()
 	if spots.is_empty():
 		return
-	var cam := keeper.camera.global_position
-	spots.sort_custom(func(a, b): return float(a[1]) > float(b[1]))
-	var shown := 0
+	var cam := keeper.camera
+	var vh := cam.get_viewport().get_visible_rect().size.y
+	var merge_px := vh * MERGE_SHARE
 	var mult := GameState.ember_mult()
+	var bursts: Array = []      # [{at, sp, v, best}]
 	for s in spots:
 		var v := float(s[1]) * mult
 		var at: Vector3 = s[0]
-		if v < 1.0 or at.distance_to(cam) > 45.0 or at.distance_to(cam) < 9.0:
+		var dist := at.distance_to(cam.global_position)
+		if dist > 45.0 or dist < 9.0:
 			continue
 		var top := at + Vector3(0, 3.0 + minf(4.0, log(v + 1.0)), 0)
-		if keeper.camera.is_position_behind(top) or keeper.camera.unproject_position(top).y < 130.0:
+		if cam.is_position_behind(top):
 			continue
-		# never on top of another number still rising
-		var sp := keeper.camera.unproject_position(top)
-		var crowded := false
+		var sp := cam.unproject_position(top)
+		var joined := false
+		for b in bursts:
+			# one burst: about a patch of forest apart, or close together on screen
+			if (b.ground as Vector3).distance_to(at) < MERGE_M or (b.sp as Vector2).distance_to(sp) < merge_px:
+				b.v = float(b.v) + v
+				if v > float(b.best):       # the number sits over the biggest fire of the burst
+					b.best = v
+					b.at = top
+					b.sp = sp
+					b.ground = at
+				joined = true
+				break
+		if not joined:
+			bursts.append({"at": top, "sp": sp, "v": v, "best": v, "ground": at})
+	bursts.sort_custom(func(a, b): return float(a.v) > float(b.v))
+	var shown := 0
+	for b in bursts:
+		if Fmt.whole(float(b.v)) == "0":
+			continue
+		# A number still rising over this burst takes the payday instead.
+		var into: Dictionary = {}
 		for f in _floats:
-			if float(f.t) < 1.0 and (f.node as Label3D).visible and keeper.camera.unproject_position((f.node as Label3D).position).distance_to(sp) < 70.0:
-				crowded = true
-		if crowded:
+			if float(f.t) < 0.9 and (f.node as Label3D).visible \
+					and cam.unproject_position((f.node as Label3D).position).distance_to(b.sp) < merge_px:
+				into = f
+				break
+		if not into.is_empty():
+			into.v = float(into.v) + float(b.v)
+			(into.node as Label3D).text = "+" + Fmt.whole(float(into.v))
+			into.pop = 1.0
 			continue
-		_float_text(at + Vector3(0, 3.0 + minf(4.0, log(v + 1.0)), 0), "+" + Fmt.num(v), v)
-		shown += 1
-		if shown >= 3:
-			break
+		if shown >= 2:
+			continue
+		if _float_text(b.at, float(b.v)):
+			shown += 1
 
 
-func _float_text(at: Vector3, text: String, v: float) -> void:
+func _float_text(at: Vector3, v: float) -> bool:
+	## A rising "+embers" at `at`, moved on screen so its whole rise stays clear
+	## of the HUD (false if there's no clear spot nearby).
+	var cam := keeper.camera
+	var k := clampf(0.00066 + log(v + 1.0) * 0.00003, 0.00068, 0.00098)
+	var text := "+" + Fmt.whole(v)
+	var pos := _clear_of_hud(at, text, k)
+	if pos == Vector3.INF:
+		return false
 	var f: Dictionary = _floats[_float_i]
 	_float_i = (_float_i + 1) % _floats.size()
 	var l: Label3D = f.node
 	l.text = text
-	l.position = at
+	l.position = pos
 	l.visible = true
 	# the bigger the payday, the bigger the number (3.5-5% of the screen's height)
-	f.k = clampf(0.00066 + log(v + 1.0) * 0.00003, 0.00068, 0.00098)
+	f.k = k
+	f.v = v
 	f.t = 0.0
+	f.pop = 0.0
+	return true
+
+
+func _clear_of_hud(at: Vector3, text: String, k: float) -> Vector3:
+	## Where to start a floating number so that from its first frame to the top of
+	## its rise it never touches a piece of the HUD or leaves the screen. Slides
+	## it down or up (in screen space, at the same depth) out of anything in the
+	## way; Vector3.INF when it can't be placed.
+	var cam := keeper.camera
+	if cam.is_position_behind(at):
+		return Vector3.INF
+	var vr := cam.get_viewport().get_visible_rect()
+	var depth := -(cam.global_transform.affine_inverse() * at).z
+	# Label3D at pixel_size k * distance: a constant height on screen.
+	var h := 64.0 * k * vr.size.y / (2.0 * tan(deg_to_rad(cam.fov) * 0.5))
+	var w := h * 0.62 * float(text.length()) + h * 0.5
+	var rise := FLOAT_RISE * FLOAT_LIFE
+	var blocked: Array = hud.blocked_rects(10.0)
+	var safe := vr.grow(-8.0)
+	var sp := cam.unproject_position(at)
+	for _i in 4:
+		var top := cam.unproject_position(cam.project_position(sp, depth) + Vector3(0, rise, 0))
+		# the whole rise, from the first frame to the last (looking steeply down, "up"
+		# can run down the screen)
+		var r := Rect2(sp, Vector2.ZERO).expand(top).grow_individual(w * 0.5, h * 0.5, w * 0.5, h * 0.5)
+		var hit := Rect2()
+		for br in blocked:
+			if (br as Rect2).intersects(r):
+				hit = br
+				break
+		if hit.has_area():
+			# out of the way: below a piece in the top half, above one in the bottom half
+			if hit.get_center().y < vr.size.y * 0.5:
+				sp.y += hit.end.y - r.position.y + 2.0
+			else:
+				sp.y -= r.end.y - hit.position.y + 2.0
+			continue
+		if not safe.encloses(r):
+			return Vector3.INF
+		return cam.project_position(sp, depth)
+	return Vector3.INF
 
 
 func _update_floats(d: float) -> void:
 	for f in _floats:
-		if float(f.t) >= 1.6:
+		if float(f.t) >= FLOAT_LIFE:
 			continue
 		f.t = float(f.t) + d
+		f.pop = maxf(0.0, float(f.get("pop", 0.0)) - d * 4.0)
 		var l: Label3D = f.node
-		l.position.y += d * 1.6
-		# the same size on screen near or far: readable on a phone, never a wall of digits
-		l.pixel_size = float(f.k) * maxf(4.0, l.position.distance_to(keeper.camera.global_position))
-		var t := float(f.t) / 1.6
+		l.position.y += d * FLOAT_RISE
+		# the same size on screen near or far: readable on a phone, never a wall of
+		# digits; a little swell when a merged payday lands on it
+		l.pixel_size = float(f.k) * (1.0 + 0.18 * float(f.pop)) * maxf(4.0, l.position.distance_to(keeper.camera.global_position))
+		var t := float(f.t) / FLOAT_LIFE
 		l.modulate.a = 1.0 - t * t
 		l.outline_modulate.a = l.modulate.a
-		if float(f.t) >= 1.6:
+		if float(f.t) >= FLOAT_LIFE:
 			l.visible = false
 
 
 func _on_golden(amount: float, at: Vector3) -> void:
 	GameState.grant_embers(amount, true)
 	Sound.play("golden", -3.0)
-	_float_text(at + Vector3(0, 2.0, 0), "+" + Fmt.num(amount), amount)
+	_float_text(at + Vector3(0, 2.0, 0), amount)
 	hud.show_golden(amount)
 
 

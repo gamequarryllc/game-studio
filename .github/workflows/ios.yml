@@ -8,6 +8,10 @@ name: iOS build
 #   testflight  Signs with the owner's App Store Connect API key and uploads the build
 #               to TestFlight. Only ever started by hand (Actions > iOS build > Run workflow).
 #
+# Each game builds with the Godot version in games/<slug>/godot_version.txt (4.4.1
+# when there is none). Games with native ad and store plugins get their iOS halves
+# from tools/fetch_plugins.sh (pinned in tools/plugin_versions.env).
+#
 # Nothing here submits an app for review; that stays a manual step in App Store Connect.
 # Secrets (the owner adds them; see STUDIO.md, "App Store pipeline"):
 #   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, APPLE_TEAM_ID
@@ -42,7 +46,10 @@ on:
       - ".github/workflows/ios.yml"
       - "tools/ios_build.sh"
       - "tools/ios_preset.py"
+      - "tools/fetch_plugins.sh"
+      - "tools/plugin_versions.env"
       - "store/*/ios.json"
+      - "games/*/godot_version.txt"
 
 permissions:
   contents: read
@@ -52,7 +59,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GODOT_VERSION: "4.4.1"
+  DEFAULT_GODOT_VERSION: "4.4.1"   # for a game without games/<slug>/godot_version.txt
 
 jobs:
   pick:
@@ -108,6 +115,19 @@ jobs:
       - name: Check out
         uses: actions/checkout@v4
 
+      - name: Godot version for ${{ matrix.game }}
+        id: ver
+        env:
+          GAME: ${{ matrix.game }}
+        run: |
+          set -euo pipefail
+          v=""
+          if [ -f "games/$GAME/godot_version.txt" ]; then v="$(tr -d '[:space:]' < "games/$GAME/godot_version.txt")"; fi
+          v="${v:-$DEFAULT_GODOT_VERSION}"
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$' || { echo "::error::games/$GAME/godot_version.txt: bad version '$v'"; exit 1; }
+          echo "Godot $v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
       - name: Restore Godot from cache
         id: godot-cache
         uses: actions/cache@v4
@@ -115,10 +135,19 @@ jobs:
           path: |
             ~/godot
             ~/Library/Application Support/Godot/export_templates
-          key: godot-${{ env.GODOT_VERSION }}-ios-v1
+          key: godot-${{ steps.ver.outputs.version }}-ios-v1
+
+      - name: Restore the native plugins from cache
+        if: hashFiles(format('games/{0}/addons/godotx_revenue_cat/plugin.cfg', matrix.game), format('games/{0}/addons/admob/plugin.cfg', matrix.game)) != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/game-studio-plugins
+          key: plugins-${{ steps.ver.outputs.version }}-${{ hashFiles('tools/plugin_versions.env') }}-v1
 
       - name: Download Godot and the iOS export template
         if: steps.godot-cache.outputs.cache-hit != 'true'
+        env:
+          GODOT_VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
           base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
@@ -160,7 +189,7 @@ jobs:
           {
             echo "### $GAME ($MODE)"
             echo '```'
-            grep -E '^(name on|bundle id|orientations|architectures|size|== OK)' "$RUNNER_TEMP/ios_build.txt" || true
+            grep -E '^(name on|bundle id|orientations|architectures|size|AdMob:|RevenueCat:|Release check|  - |== OK)' "$RUNNER_TEMP/ios_build.txt" || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

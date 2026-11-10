@@ -7,6 +7,7 @@ extends SceneTree
 var out_dir := "/tmp/forest-shots"
 var world
 var gs
+var phone := false     # size= under 600 px tall: shoot what a phone shows (touch controls and wording)
 
 
 func _initialize() -> void:
@@ -19,6 +20,7 @@ func _initialize() -> void:
 			var wh: PackedStringArray = a.substr(5).split("x")
 			DisplayServer.window_set_size(Vector2i(int(wh[0]), int(wh[1])))
 			root.size = Vector2i(int(wh[0]), int(wh[1]))
+			phone = int(wh[1]) < 600
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	_run.call_deferred()
 
@@ -73,7 +75,7 @@ func _run() -> void:
 	root.add_child(world)
 	var hud = world.hud
 	var keeper = world.keeper
-	hud.set_touch_mode(false)
+	hud.set_touch_mode(phone)
 	hud.show_desktop_hint = false
 	await _frames(6)
 	await _shot("00_intro")          # a fresh game opens on the Elder Tree's crown over the woods
@@ -85,12 +87,13 @@ func _run() -> void:
 	hud.set_touch_mode(true)
 	await _frames(8)
 	await _shot("01b_spawn_phone")
-	hud.set_touch_mode(false)
-	# On a computer before the first click: a taped note says how to play.
-	hud.show_desktop_hint = true
-	await _frames(4)
-	await _shot("01c_click_to_play")
-	hud.show_desktop_hint = false
+	hud.set_touch_mode(phone)
+	if not phone:
+		# On a computer before the first click: a taped note says how to play.
+		hud.show_desktop_hint = true
+		await _frames(4)
+		await _shot("01c_click_to_play")
+		hud.show_desktop_hint = false
 
 	# Light the grass in front of the village and watch it spread.
 	world.force_fire = true
@@ -108,7 +111,7 @@ func _run() -> void:
 	hud.set_touch_mode(true)
 	await _frames(4)
 	await _shot("04_touch_overlay")
-	hud.set_touch_mode(false)
+	hud.set_touch_mode(phone)
 
 	# A pine fire in the Pinewood with the Lighter, from up close.
 	gs.grant_embers(1e6)

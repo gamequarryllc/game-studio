@@ -20,7 +20,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GODOT_VERSION: "4.4.1"
+  # A game builds with the Godot version in games/<slug>/godot_version.txt, or
+  # this one when it has no such file.
+  DEFAULT_GODOT_VERSION: "4.4.1"
 
 jobs:
   build:
@@ -32,6 +34,25 @@ jobs:
       - name: Privacy check (no personal information in a public repo)
         run: python3 tools/privacy_check.py
 
+      - name: Which Godot versions the games need
+        id: versions
+        run: |
+          set -euo pipefail
+          vers=""
+          for proj in games/*/project.godot; do
+            [ -e "$proj" ] || continue
+            dir="$(dirname "$proj")"
+            v=""
+            if [ -f "$dir/godot_version.txt" ]; then v="$(tr -d '[:space:]' < "$dir/godot_version.txt")"; fi
+            v="${v:-$DEFAULT_GODOT_VERSION}"
+            echo "$v" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$' || { echo "::error::$dir/godot_version.txt: bad version '$v'"; exit 1; }
+            vers="$vers $v"
+          done
+          list="$(echo $vers | tr ' ' '\n' | sort -u | paste -sd' ' -)"
+          echo "Godot versions: $list"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "key=$(echo "$list" | tr ' ' '+')" >> "$GITHUB_OUTPUT"
+
       - name: Restore Godot from cache
         id: godot-cache
         uses: actions/cache@v4
@@ -39,22 +60,35 @@ jobs:
           path: |
             ~/godot
             ~/.local/share/godot/export_templates
-          key: godot-${{ env.GODOT_VERSION }}-web-v1
+          # One cache holds every version in use; when a game moves to a new one,
+          # the older cache is restored and only the new version is downloaded.
+          key: godot-web-${{ steps.versions.outputs.key }}-v2
+          restore-keys: |
+            godot-web-
 
-      - name: Download Godot and the web export templates
-        if: steps.godot-cache.outputs.cache-hit != 'true'
+      - name: Download any missing Godot version and its web export templates
+        env:
+          VERSIONS: ${{ steps.versions.outputs.list }}
         run: |
           set -euo pipefail
-          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
-          templates="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-          mkdir -p ~/godot "$templates"
-          curl -fsSL --retry 3 -o /tmp/godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
-          unzip -q /tmp/godot.zip -d /tmp/godot-unzip
-          mv "/tmp/godot-unzip/Godot_v${GODOT_VERSION}-stable_linux.x86_64" ~/godot/godot
-          # The full template pack is 1.2 GB; keep only the web templates.
-          curl -fsSL --retry 3 -o /tmp/templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
-          unzip -q -j /tmp/templates.tpz 'templates/web_nothreads_*' 'templates/version.txt' -d "$templates"
-          rm -rf /tmp/godot.zip /tmp/godot-unzip /tmp/templates.tpz
+          for v in $VERSIONS; do
+            bin="$HOME/godot/$v/godot"
+            templates="$HOME/.local/share/godot/export_templates/${v}.stable"
+            if [ -x "$bin" ] && [ -s "$templates/web_nothreads_release.zip" ]; then
+              echo "Godot $v: cached"; continue
+            fi
+            echo "Godot $v: downloading"
+            base="https://github.com/godotengine/godot/releases/download/${v}-stable"
+            mkdir -p "$HOME/godot/$v" "$templates"
+            curl -fsSL --retry 3 -o /tmp/godot.zip "$base/Godot_v${v}-stable_linux.x86_64.zip"
+            rm -rf /tmp/godot-unzip
+            unzip -q /tmp/godot.zip -d /tmp/godot-unzip
+            mv "/tmp/godot-unzip/Godot_v${v}-stable_linux.x86_64" "$bin"
+            # The full template pack is over 1 GB; keep only the web templates.
+            curl -fsSL --retry 3 -o /tmp/templates.tpz "$base/Godot_v${v}-stable_export_templates.tpz"
+            unzip -q -o -j /tmp/templates.tpz 'templates/web_nothreads_*' 'templates/version.txt' -d "$templates"
+            rm -rf /tmp/godot.zip /tmp/godot-unzip /tmp/templates.tpz
+          done
 
       - name: Build every game
         run: |
@@ -65,19 +99,26 @@ jobs:
           for proj in games/*/project.godot; do
             [ -e "$proj" ] || continue
             dir="$(dirname "$proj")"; slug="$(basename "$dir")"
-            echo "::group::$slug"
+            ver=""
+            if [ -f "$dir/godot_version.txt" ]; then ver="$(tr -d '[:space:]' < "$dir/godot_version.txt")"; fi
+            ver="${ver:-$DEFAULT_GODOT_VERSION}"
+            godot="$HOME/godot/$ver/godot"
+            echo "::group::$slug (Godot $ver)"
             if (
               set -e
               cd "$dir"
-              timeout 300 ~/godot/godot --headless --import
+              timeout 300 "$godot" --headless --import
               if [ -f tests/smoke_test.gd ]; then
-                timeout 300 ~/godot/godot --headless -s res://tests/smoke_test.gd
+                timeout 300 "$godot" --headless -s res://tests/smoke_test.gd
+              fi
+              if [ -f tests/monetization_test.gd ]; then
+                timeout 120 "$godot" --headless -s res://tests/monetization_test.gd
               fi
               if [ -f tests/playthrough.gd ]; then
-                timeout 900 ~/godot/godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- boosted
+                timeout 900 "$godot" --headless --fixed-fps 20 -s res://tests/playthrough.gd -- boosted
               fi
               mkdir -p "$site/$slug"
-              timeout 600 ~/godot/godot --headless --export-release "Web" "$site/$slug/index.html"
+              timeout 600 "$godot" --headless --export-release "Web" "$site/$slug/index.html"
               test -s "$site/$slug/index.wasm"
             ); then
               echo "$slug ok" >> "$GITHUB_WORKSPACE/build/results.txt"

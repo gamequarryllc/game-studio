@@ -371,7 +371,85 @@ func _run() -> void:
 	hud._update_find(0.016)
 	check(hud._find_label.text.contains("Tap") and not hud._find_label.text.contains("Click"), "phones say tap, not click")
 	hud.find_tag.visible = false
+	# ...and no hint, tag or note on screen says click or mouse (the critic saw them on phone shots).
+	var desktop_words: Array = []
+	var step0: int = gs.tutorial_step
+	for step in 7:
+		gs.tutorial_step = step
+		world._update_coach()
+		await _frames(1)
+		for n in hud.root.find_children("*", "Label", true, false) + hud.root.find_children("*", "RichTextLabel", true, false):
+			if (n as Control).is_visible_in_tree():
+				var tx: String = (n.get_parsed_text() if n is RichTextLabel else n.text).to_lower()
+				if tx.contains("click") or tx.contains("mouse"):
+					desktop_words.append(tx)
+	gs.tutorial_step = step0
+	world._update_coach()
+	check(desktop_words.is_empty(), "on a phone no hint says click or mouse %s" % str(desktop_words))
 	hud.set_touch_mode(false)
+
+	# --- Ship prep: nothing that reads as debug output in a store build (ART_REVIEW 4, item 8).
+	check(mon.PRODUCT_REMOVE_ADS_2X == "com.gamequarry.burndownaforest.remove_ads_2x", "product ids are <bundle id>.<key> (%s)" % mon.PRODUCT_REMOVE_ADS_2X)
+	var test_prices := []
+	for id in mon.PRODUCTS:
+		if str(mon.price(id)).contains("(test)"):
+			test_prices.append(mon.price(id))
+	check(test_prices.is_empty(), "no '(test)' on any price outside playtest builds (%s)" % mon.price(mon.PRODUCT_REMOVE_ADS_2X))
+	check(not load("res://scripts/notebook.gd").dev_tools_enabled(), "developer tools are off without the playtest feature")
+	hud.open_notebook("settings")
+	await _frames(2)
+	var dev_cards := []
+	for c in hud.notebook._cards:
+		if (c.title as Label).text in ["Time", "Income", "Free embers", "Unlock everything", "Skip to a ring"]:
+			dev_cards.append((c.title as Label).text)
+	check(dev_cards.is_empty(), "Settings shows no developer tools in this build %s" % str(dev_cards))
+	hud.close_notebook()
+	await _frames(1)
+	keeper.input_enabled = true
+	check(Fmt.whole(8.7) == "9" and Fmt.whole(640.4) == "640" and Fmt.whole(2700.0) == "2.7K"
+		and Fmt.whole(3000.0) == "3K" and Fmt.whole(27400.0) == "27K", "floating numbers are whole: 9, 640, 2.7K, 3K, 27K")
+	check(Fmt.spoken_duration(10.0) == "under a minute" and Fmt.spoken_duration(43.0) == "a minute"
+		and Fmt.spoken_duration(43.0 * 60.0) == "43 minutes" and Fmt.spoken_duration(65.0 * 60.0) == "an hour and 5 minutes",
+		"the letter's time reads in minutes and hours, never '43s'")
+	# One number per burst: patches paying near one another on screen make one whole number.
+	world.hud.offer_tag.visible = false
+	keeper.position = Vector3(0.0, f.height_at(0.0, 52.4), 52.4)
+	keeper.set_view(0.0, -0.45)
+	await _frames(2)
+	for fl in world._floats:
+		fl.t = 9.0
+		(fl.node as Label3D).visible = false
+	var fcam = keeper.camera
+	var aim_at: Vector3 = keeper.position + Vector3(0, 0, -16.0)
+	var ac: int = f.cell_at(aim_at.x, aim_at.z)
+	var ax: int = ac % f.n
+	var ay: int = ac / f.n
+	f.take_pay_spots()
+	for dx in range(-3, 4):
+		for dy in range(-2, 3):
+			f._pay(ac, ax + dx, ay + dy, 1.37)
+	world._show_pay_spots()
+	var shown_nums: Array = []
+	for fl in world._floats:
+		if (fl.node as Label3D).visible:
+			shown_nums.append((fl.node as Label3D).text)
+	check(shown_nums.size() == 1, "a burst of nearby patches shows one number, not one per patch %s" % str(shown_nums))
+	check(shown_nums.size() > 0 and RegEx.create_from_string("^\\+\\d+$").search(str(shown_nums[0])) != null,
+		"and it's a whole number (%s)" % str(shown_nums))
+	# A number that would start under (or rise into) a piece of the HUD slides clear of it, or isn't shown.
+	var plank: Rect2 = hud.ember_plank.get_global_rect()
+	var under: Vector3 = fcam.project_position(plank.get_center() + Vector2(0, plank.size.y * 0.5 + 6.0), 20.0)
+	var placed: Vector3 = world._clear_of_hud(under, "+120", 0.0008)
+	var clear := placed == Vector3.INF
+	if not clear:
+		var sp: Vector2 = fcam.unproject_position(placed)
+		var top: Vector2 = fcam.unproject_position(placed + Vector3(0, world.FLOAT_RISE * world.FLOAT_LIFE, 0))
+		clear = sp.y > plank.end.y and top.y - 20.0 > plank.end.y
+	check(clear, "floating numbers keep clear of the HUD for their whole rise")
+	for fl in world._floats:
+		fl.t = 9.0
+		(fl.node as Label3D).visible = false
+
 	# The notebook doesn't change width between chapters (Free magic used to widen and clip the tabs).
 	hud.open_notebook("tools")
 	await _frames(2)
@@ -428,7 +506,10 @@ func _run() -> void:
 	var letter_text := ""
 	for l in hud._letter.find_children("*", "Label", true, false):
 		letter_text += (l as Label).text
-	check(letter_text.contains("acres") and not letter_text.contains("cells"), "the letter counts acres of meadow, not cells")
+	check(letter_text.contains("meadow now") and not letter_text.contains("acres") and not letter_text.contains("cells")
+		and RegEx.create_from_string("\\d+s\\b").search(letter_text) == null
+		and (letter_text.contains("minute") or letter_text.contains("hour")),
+		"the letter says how much of the forest is meadow, and the time in minutes, never '43s' or '0.22 acres' (%s)" % letter_text.replace("\n", " / "))
 	check(world._dawn > 0.99, "it's dawn over the valley")
 	check(world.env.fog_density < world.FOG_DENSITY * 0.6, "the dawn air clears (the hill woods keep their shapes)")
 	var trail := -1

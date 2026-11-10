@@ -1,5 +1,5 @@
 {
-  "_status": "draft 2026-11-09. Check the name is free when creating the listing. Screenshots and icon come after the polish pass.",
+  "_status": "draft 2026-11-09; product ids and entitlements final 2026-11-10 (the game uses them). Check the name is free when creating the listing. Screenshots and icon come after the polish pass.",
   "bundle_id": "com.gamequarry.burndownaforest",
   "name": "Burn Down a Forest",
   "subtitle": "Idle incremental fire game",
@@ -24,40 +24,49 @@
       "key": "remove_ads_2x",
       "type": "non-consumable",
       "price_usd": 4.99,
-      "display_name": "No ads, and 2x for good"
+      "display_name": "No ads, and 2x for good",
+      "product_id": "com.gamequarry.burndownaforest.remove_ads_2x",
+      "revenuecat_entitlement": "remove_ads"
     },
     {
       "key": "starter_pack",
       "type": "non-consumable",
       "price_usd": 1.99,
-      "display_name": "A parcel for new keepers"
+      "display_name": "A parcel for new keepers",
+      "product_id": "com.gamequarry.burndownaforest.starter_pack",
+      "revenuecat_entitlement": "starter_pack"
     },
     {
       "key": "phoenix_flame",
       "type": "non-consumable",
       "price_usd": 2.99,
-      "display_name": "Phoenix flame"
+      "display_name": "Phoenix flame",
+      "product_id": "com.gamequarry.burndownaforest.phoenix_flame",
+      "revenuecat_entitlement": "phoenix_flame"
     },
     {
       "key": "embers_small",
       "type": "consumable",
       "price_usd": 0.99,
-      "display_name": "Pouch of embers"
+      "display_name": "Pouch of embers",
+      "product_id": "com.gamequarry.burndownaforest.embers_small"
     },
     {
       "key": "embers_medium",
       "type": "consumable",
       "price_usd": 2.99,
-      "display_name": "Jar of embers"
+      "display_name": "Jar of embers",
+      "product_id": "com.gamequarry.burndownaforest.embers_medium"
     },
     {
       "key": "embers_large",
       "type": "consumable",
       "price_usd": 9.99,
-      "display_name": "Cauldron of embers"
+      "display_name": "Cauldron of embers",
+      "product_id": "com.gamequarry.burndownaforest.embers_large"
     }
   ],
-  "product_id_note": "Store product id = bundle id + '.' + key. The game code still uses the bare keys; it must switch to the full ids before products are created (product ids can't repeat across apps on one account).",
+  "product_id_note": "Store product id = bundle id + '.' + key (the product_id field). The game uses exactly these ids (scripts/monetization/monetization.gd). In RevenueCat, attach each non-consumable to the entitlement named in revenuecat_entitlement (scripts/monetization/store_config.gd ENTITLEMENT_TO_KEY); the ember packs are consumables and need no entitlement.",
   "ad_placements": {
     "rewarded": [
       "boost_2x_fire",
@@ -68,5 +77,6 @@
     "interstitial": [
       "notebook_close"
     ]
-  }
+  },
+  "ad_placements_note": "All rewarded placements share one AdMob rewarded ad unit and the interstitial uses one interstitial unit (store_config.gd); the placement names are only for the game's own bookkeeping."
 }

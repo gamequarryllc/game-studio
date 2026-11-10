@@ -133,16 +133,19 @@ burns, ash turns into a meadow of flowers. At the heart stands the Elder Tree;
 burning it lifts the curse and frees the village. Cartoonish and magical: violet
 and teal cursed trees, warm hand-drawn fire, critters that always scamper out unharmed.
 
-Godot 4.4, Compatibility renderer, landscape 1280x720 (stretch: canvas_items / expand).
-Bundle ID (when it ships): `com.gamequarry.burndownaforest`.
+**Godot 4.7.2** (`godot_version.txt`; CI, the iOS pipeline and the tools read it.
+The AdMob and RevenueCat plugins need 4.7.2; the other studio games are still on
+4.4.1), Compatibility renderer, landscape 1280x720 (stretch: canvas_items / expand).
+Bundle ID: `com.gamequarry.burndownaforest`.
 
-## Status: first playable; review-3 polish pass done (phone readability, fire at scale, sculpted keeper, meadow, ending, village, notebook, offers); QA rerun (see "QA")
+## Status: first playable; review-4 critic "almost"; ship prep done (Godot 4.7.2, real AdMob + RevenueCat with placeholder ids, debug leftovers out; see "Ship prep")
 
 Loads, phone and desktop controls work, the fire spreads by itself in chain
 reactions, embers come in, 6 tools (4 reachable in a normal run so far), 5
 upgrades, 2 helpers, a working shop (the notebook), the 2x rewarded boost and
 the other rewarded ads, Remove Ads + permanent 2x, the timed offer tag, the
-starter pack, the Phoenix Flame cosmetic, ember packs and restore (all stubbed),
+starter pack, the Phoenix Flame cosmetic, ember packs and restore (real AdMob +
+RevenueCat in iOS release builds once the owner's ids are in; pretend elsewhere),
 autosave + save on backgrounding, first-run hints, generated sound effects, and
 an ending when the Elder Tree burns.
 
@@ -286,17 +289,78 @@ bodies; 0 everything else). Triangle counts:
 `art/blender/contact_sheet.py OUT.png [files...]` renders them all in Cycles on
 the CPU (one cell each, labelled with triangle counts) for review.
 
+## Ship prep (2026-11-10): Godot 4.7.2, real ads and purchases, debug leftovers out
+
+STUDIO.md shipping-list item 1 on this game. **Engine:** moved from 4.4.1 to
+4.7.2 (`godot_version.txt`); nothing in the scripts, shaders, MultiMesh, fonts or
+input needed changing, and the 3D renders the same (the same spawn, pine and oak
+views measure the same mean luminance under both). **Money:** the AdMob +
+RevenueCat stack from Melt a Glacier's publish branch behind the provider
+interface (see "Money"), product ids `<bundle id>.<key>`, `store_config.gd`
+placeholders, `tests/release_check.gd`, `tests/monetization_test.gd`. **Debug
+leftovers (ART_REVIEW 4, item 8):** no "(test)" on prices outside playtest
+builds; developer tools only with the `playtest` feature; floating numbers whole,
+one per burst (paydays within about a patch, or close on screen, add up into one
+number, and a number still rising takes the next payday), at most two new at a
+time, and placed so their whole rise stays clear of every HUD piece; the letter
+says "43 minutes by the fire" and "92% of the cursed forest is meadow now";
+phone-size screenshots are taken in touch mode, and a smoke check reads every
+visible HUD text in touch mode for "click" or "mouse".
+
+**Results (Godot 4.7.2):** smoke test 104 checks pass (10 new); the ads and
+purchases test passes (36 checks: consent first, a failed load retried, reward
+timing, closing early, Remove Ads stops interstitials, purchase / cancel / error /
+restore, local prices, restores don't flip settings, every request answered once
+without plugins); the release check fails as it should, listing the five
+placeholders; boosted passes (2:02 of play); keen passes and ends at 27:51 (28:04
+of play: lighter 0:33, tiki torch 13:12, flamethrower 21:34, dragon breath 25:24,
+meteor shower 27:13; inside the 24-30 minute band); chaos passes (4 game-minutes,
+seeds 4242 and 77); screenshots render clean at 1280x720 (33) and 844x390 (32).
+**Browser run:** the 4.7.2 web export (3.9 MB of game data) loads and starts at
+844x390, 932x430 and 1024x768 with the touch controls, a tap reaches the game,
+pretend ads are on, no console or page errors. (On this busy machine the tool's
+3-minute screenshot timeout ran out again, so the same export was loaded with a
+longer one.)
+**iOS:** a local Linux export of the Xcode project succeeds: AdMob's app id, 50
+SKAdNetwork ids, the tracking prompt's text and iOS 15.0 in the Info.plist,
+RevenueCat and AdMob's libraries linked, game data 3.9 MB. Godot links AdMob's
+Swift package (Google Mobile Ads, UMP) only when it exports on a Mac; its patch
+was checked against the 4.7.2 project template here, and `tools/ios_build.sh`
+fails early if it's missing. The iOS check build on GitHub's Mac runner is the
+proof that it compiles and links.
+
+**Bugs found and fixed in this block** (smoke or monetization checks where they can):
+
+24. "(test)" on every price in screenshots and any non-playtest build.
+25. Developer tools showed in editor runs and screenshots (any debug build).
+26. Floating numbers: decimals ("+8.7"), one per patch piling up, sliding under the HUD.
+27. The letter said "43s by the fire" and "0.22 acres".
+28. Phone-size screenshots were taken in desktop mode ("Move the mouse", no touch controls).
+29. Under 4.7.2 the parcel drawing logged "Invalid polygon data, triangulation
+    failed" whenever a bowed face folded over (found by the chaos run): a face the
+    engine can't fill is skipped.
+30. RevenueCat's iOS frameworks (200 MB) were imported as resources and packed
+    into the game data: `ios/` is ignored by Godot (`ios/.gdignore`, written by
+    `tools/fetch_plugins.sh`) and excluded from every export.
+31. A restore would have switched the phoenix flame back on after the player
+    turned it off: non-consumables are granted once.
+
 ## QA (2026-11-09, after the review-3 polish pass; the art-pass-2 notes follow)
 
 Run per STUDIO.md "Playtesting". Commands (headless unless noted; runs side by
 side each need `-- save=<name> log=<path>` plus `--log-file <path>` before `-s`):
 
-    godot --headless -s res://tests/smoke_test.gd                                   # 94 checks
+    godot --headless -s res://tests/smoke_test.gd                                   # 104 checks
+    godot --headless -s res://tests/monetization_test.gd                            # real ad/store wiring, fake plugins
+    godot --headless -s res://tests/release_check.gd -- iOS                         # fails while any store id is a placeholder
     godot --headless --fixed-fps 20 -s res://tests/playthrough.gd -- keen|casual|boosted [ads]
     godot --headless --fixed-fps 20 -s res://tests/chaos.gd -- 6 4242               # minutes, seed
     xvfb-run ... godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- DIR [size=844x390]
     xvfb-run ... godot --rendering-driver opengl3 -s res://tests/look.gd -- DIR [size=844x390] [hud] [close|ending|...]
-    python3 tools/browser_check.py games/burn-down-a-forest
+    GODOT=<the 4.7.2 binary> python3 tools/browser_check.py games/burn-down-a-forest
+
+`godot` here is Godot **4.7.2** (since 2026-11-10). Screenshots at a phone size
+(`size=` under 600 px tall) are taken in touch mode, as a phone shows them.
 
 **Polish pass results:** smoke test passes (94 checks, 17 new for this pass);
 boosted passes (2:01 of play, 17 s real); keen passes and reaches the ending at
@@ -448,12 +512,62 @@ the same export; frame rate has to be checked on a real phone.)
 ## Money
 
 Architecture as in the studio's reference game: the game only talks to the
-`Monetization` autoload, which forwards to one `MonetizationProvider`; right now
-the `StubMonetizationProvider` (fake 3-second ads, purchases succeed, everything
-counted in the developer menu). To go live, write an AdMob + RevenueCat (or store
-plugin) provider and return it from `Monetization._create_provider()`.
+`Monetization` autoload, which forwards to one `MonetizationProvider`
+(`Monetization._create_provider()`):
 
-**Rewarded ad placements** (create these as AdMob rewarded units):
+| Build | Provider | Ads | Purchases |
+|---|---|---|---|
+| iOS release (what ships) | `MobileMonetizationProvider` | AdMob (`admob_ads.gd`): rewarded + interstitial, Google's consent form (UMP) first, the iPhone tracking prompt (when the IDFA message is on in AdMob), retry with back-off (4 s to 2 min) | RevenueCat (`revenuecat_store.gd`): purchase, restore, local prices from the store |
+| playtest (web play links, iOS playtest flavor) | `StubMonetizationProvider` | pretend 3-second ads | pretend purchases, counted in the developer tools; prices say "(test)" |
+| editor and tests (debug, no `playtest` feature) | `StubMonetizationProvider` | pretend | pretend, plain prices |
+| a release desktop build | base `MonetizationProvider` | none | none |
+
+Each half of the real provider switches itself off when its plugin or ids are
+missing (ads report "not ready", so no offer tag shows; purchases fail politely).
+Debug builds and builds with the `test_ads` feature only ever load Google's test
+ad units. The stack (Poing Studios AdMob v5.1.0, GodotX RevenueCat 2.6.0) is
+copied from Melt a Glacier's publish branch: the GDScript halves are in
+`addons/`, the native iOS halves are fetched at build time by
+`tools/fetch_plugins.sh` (pinned in `tools/plugin_versions.env`, never committed).
+Both editor plugins are on in `project.godot`; on a headless import the AdMob
+plugin downloads its small native libraries into `addons/admob/*/bin` by itself
+(ignored by git) and re-saves `project.godot` (same content).
+
+**Ids that ship in the app** (`scripts/monetization/store_config.gd`, every one a
+clearly marked PLACEHOLDER until the owner provides it):
+- `REVENUECAT_KEY_IOS`: RevenueCat's public App Store key (`appl_...`).
+- `ADMOB_REWARDED["iOS"]`, `ADMOB_INTERSTITIAL["iOS"]`: one rewarded and one
+  interstitial ad unit (`ca-app-pub-.../...`); every rewarded placement shares the
+  one unit (`ADMOB_REWARDED_BY_PLACEMENT` can split them later, for reports only).
+- The AdMob **app** id (`ca-app-pub-...~...`) goes in `project.godot` as
+  `[admob]` `general/ios/app_id="..."`: the plugin writes it into the iOS
+  Info.plist. Until then it is Google's sample app id (the plugin's default, so
+  Godot doesn't write the line).
+- `PRIVACY_POLICY_URL`: the privacy policy page (shown in Settings once set).
+
+`tests/release_check.gd -- iOS` lists every placeholder still left (and checks the
+product ids, the store listing and that the iOS preset has no `playtest`
+feature). `tools/ios_build.sh` runs it on every iOS build: an unsigned check build
+only prints the list; a TestFlight upload of the release flavor stops until it
+passes. `tests/monetization_test.gd` drives the real AdMob and RevenueCat code
+against fake plugin singletons (consent, loading, retry, reward timing, Remove
+Ads, purchases, cancel, errors, restore, local prices, grant rules).
+
+**How the owner switches real ads and purchases on** (the account steps are in
+`store/README.md`, "Burn Down a Forest"):
+1. Put the four ids above into `store_config.gd` and `project.godot` (or send
+   them to Claude; none of them is secret).
+2. Run the release check (`godot --headless -s res://tests/release_check.gd -- iOS`):
+   it must say every store id is filled in.
+3. GitHub > Actions > "iOS build" > Run workflow: `burn-down-a-forest`, mode
+   `testflight`, flavor `release`. The playtest flavor keeps the pretend ads and
+   the developer tools, for trying the game on a phone.
+
+Settings shows "Ad privacy choices" when Google says the player must be able to
+reopen the consent form (EEA/UK), and "Privacy policy" once its URL is set.
+Restore Purchases (Shop chapter) reports what it found in a toast.
+
+**Rewarded ad placements** (all share the one AdMob rewarded unit; the names are the game's own bookkeeping):
 
 | Placement ID | Reward | Where |
 |---|---|---|
@@ -466,15 +580,20 @@ plugin) provider and return it from `Monetization._create_provider()`.
 natural break). Never in the first 5 min of play, at most every 4 min, never right
 after a rewarded ad, never with Remove Ads.
 
-**In-app purchase product IDs:**
+**In-app purchase product ids** (each is `com.gamequarry.burndownaforest.` + the key;
+ids can't repeat across the account's apps; `store/burn-down-a-forest/listing.json`
+has the same list):
 
-| Product ID | Type | Price | What |
-|---|---|---|---|
-| `remove_ads_2x` | non-consumable | $4.99 | Remove Ads + permanent 2x (the anchor offer) |
-| `starter_pack` | non-consumable (one time) | $1.99 | 2,500 embers + the rainbow sparkler (exclusive cosmetic matchstick). Offered once after 10 min of play as a parcel tied with twine, and in the shop |
-| `phoenix_flame` | non-consumable | $2.99 | Premium cosmetic: golden phoenix fire on every tool, 10% hotter (toggle in the shop) |
-| `embers_small` / `embers_medium` / `embers_large` | consumable | $0.99 / $2.99 / $9.99 | 35% / 100% / 400% of the next tool's cost (at least 500 / 2K / 10K). Shown in the Tools chapter when you're short for the next tool, and always in the Shop |
-| Restore Purchases | | | In the Shop chapter |
+| Key (product id = bundle id + "." + key) | Type | Price | RevenueCat entitlement | What |
+|---|---|---|---|---|
+| `remove_ads_2x` | non-consumable | $4.99 | `remove_ads` | Remove Ads + permanent 2x (the anchor offer) |
+| `starter_pack` | non-consumable (one time) | $1.99 | `starter_pack` | 2,500 embers + the rainbow sparkler (exclusive cosmetic matchstick). Offered once after 10 min of play as a parcel tied with twine, and in the shop |
+| `phoenix_flame` | non-consumable | $2.99 | `phoenix_flame` | Premium cosmetic: golden phoenix fire on every tool, 10% hotter (toggle in the shop) |
+| `embers_small` / `embers_medium` / `embers_large` | consumable | $0.99 / $2.99 / $9.99 | none | 35% / 100% / 400% of the next tool's cost (at least 500 / 2K / 10K). Shown in the Tools chapter when you're short for the next tool, and always in the Shop |
+| Restore Purchases | | | | In the Shop chapter |
+
+A restore (or RevenueCat's startup report) grants a non-consumable once and never
+flips the player's own settings back (the phoenix toggle stays where they left it).
 
 **Timed offer tag** (`scripts/ad_offers.gd`): a paper tag hanging on a string
 under the notebook, swaying, naming exactly what the reward buys ("Free: [coal]
@@ -513,7 +632,8 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
   over the biggest fires, first-run hints (7 steps, about six words each, beside
   their control, with a drawn finger on phones), rotate-to-landscape overlay, the
   ending as a ruled letter with stats.
-- Money: all of the above, stubbed.
+- Money: all of the above; real AdMob + RevenueCat in iOS release builds (ids
+  still placeholders, see "Money"), pretend in playtest builds.
 - Save: `user://forest_save.json` (every cell's state in one string), autosave every
   10 s, on app pause / focus out / close, and when the browser tab is hidden.
 - Sound: 28 effects and loops synthesised by `tools/make_audio.py` (fire crackle
@@ -538,9 +658,11 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
   every notebook chapter, the keeper close up and the dawn ending),
   `tests/look.gd` (a few 3D views fast, for art tuning), `tests/fire_bench.gd`,
   `tests/perf_bench.gd`, `tests/draw_calls.gd`.
-- Developer tools (Settings, playtest builds only): time 1x/5x/10x/50x, income
-  x1/x10/x100, free embers, unlock everything, skip to a ring, fire speed, fake
-  ad/purchase counts, start over, reset the save.
+- Developer tools (Settings, only with the `playtest` export feature: the web play
+  links and the iOS playtest flavor; not in editor runs or screenshots, never in a
+  release build): time 1x/5x/10x/50x, income x1/x10/x100, free embers, unlock
+  everything, skip to a ring, fire speed, fake ad/purchase counts, start over,
+  reset the save.
 
 ## Next steps toward the polish bar (STUDIO.md)
 
@@ -574,9 +696,13 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
 - Moon shadows: the plant shader's see-through window also runs in the shadow
   pass, so trees cut away round the keeper cast no shadow on them (it reads as
   moonlight on the hero; left as is).
-- The headless editor import prints `Parameter "t" is null` once per .glb (Godot
-  4.4.1 does it for a one-cube .glb in an empty project too); harmless, and not
-  seen at runtime.
+- On a headless import the AdMob editor plugin downloads its native libraries
+  into `addons/admob/*/bin` (about 3.5 MB, ignored by git) and re-saves
+  `project.godot` with the same content; settings equal to Godot's defaults
+  (and the AdMob app id while it's Google's sample id) are not written there.
+- Godot only links AdMob's Swift package into the Xcode project when it exports
+  on a Mac (its end-of-export hook runs on macOS alone); a Linux export writes the
+  package but leaves it unlinked. `tools/ios_build.sh` checks it's linked.
 - The headless (dummy) renderer can't read MultiMesh buffers back, so
   `ForestView._grow` skips copying there; real renderers keep every flower.
 - MultiMesh custom data is stored as half floats by the Compatibility renderer,
@@ -610,6 +736,9 @@ Guardrails: the game is finishable without paying; Remove Ads and boosts speed i
 
 ```
 project.godot / export_presets.cfg (preset "Web", playtest)   default_bus_layout.tres (SFX, Fire)
+godot_version.txt           the engine version (4.7.2); CI and the iOS pipeline read it
+addons/admob/               Poing Studios AdMob plugin v5.1.0, GDScript half (MIT); native halves fetched at build time
+addons/godotx_revenue_cat/  GodotX RevenueCat plugin 2.6.0, GDScript half (MIT); iOS frameworks fetched at build time
 scenes/main.tscn            the only scene; everything is built in code
 scripts/balance.gd          every number
 scripts/forest_grid.gd      the forest as data, the fire simulation, the ground's heights, saving
@@ -627,7 +756,9 @@ scripts/ui_theme.gd         palette, type, icons, drawn StyleBoxes (planks, pape
 scripts/ui_parts.gd         drawn controls: ink stamp, index tab, ribbon, fuse, wind disc, parcel, hint finger
 scripts/game_state.gd       autoload: economy, purchases' effects, save/load
 scripts/ad_offers.gd        when the timed offer tag shows and what it offers
-scripts/monetization/       provider interface, stub, autoload facade (product and placement IDs)
+scripts/monetization/       monetization.gd (autoload facade, product and placement ids), monetization_provider.gd
+                            (interface), stub_provider.gd (pretend), mobile_provider.gd (real: admob_ads.gd +
+                            revenuecat_store.gd), store_config.gd (the ids that ship, placeholders for now)
 scripts/audio/sound.gd      autoload: effects, fire loops, ambience, volume
 shaders/                    plant (baked colours, ink edge, creeping char and cracks, moon rim, fire and lantern
                             light, see-through window), flame (flipbook), smoke (puffs), ground (meadow mask,
@@ -643,8 +774,8 @@ ui/icons/                   the icon set (SVG)
 audio/                      generated by tools/make_audio.py
 fonts/                      Keeper Fell (IM Fell English SC + Libre Caslon figures), Alegreya Sans, Caveat Brush (all OFL, licences beside them)
 tools/make_audio.py         rebuilds audio/ (numpy, scipy, ffmpeg)
-tests/                      smoke_test, playthrough (the bot, and the visual run), chaos, screenshots, look,
-                            fire_bench, perf_bench, draw_calls
+tests/                      smoke_test, monetization_test, release_check, playthrough (the bot, and the visual
+                            run), chaos, screenshots, look, fire_bench, perf_bench, draw_calls
 fx/                         the fire flipbook and smoke puffs (drawn by art/fx/make_fx.py)
 ```
 

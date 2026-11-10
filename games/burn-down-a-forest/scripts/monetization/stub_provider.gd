@@ -5,6 +5,8 @@ extends MonetizationProvider
 ## succeed after a short delay and are remembered in GameState's save.
 ## Every fake ad and purchase is counted (`counts`) for the developer menu, so
 ## pacing with and without ads can be compared.
+## Used in playtest builds (the web play links, the iOS playtest flavor), in the
+## editor and in tests; never in an iOS release build (Monetization._create_provider).
 
 const FAKE_AD_SECONDS := 3
 
@@ -41,11 +43,14 @@ func purchase(product_id: String) -> void:
 func restore_purchases() -> void:
 	# A real store returns what the account owns. The stub owns nothing extra;
 	# GameState already remembers stub purchases in the save file.
-	pass
+	await get_tree().create_timer(0.4).timeout
+	restore_finished.emit(0, "")
 
 
 func price_string(_product_id: String, fallback: String) -> String:
-	return fallback + " (test)"
+	# The "(test)" label marks pretend prices on the play links and other
+	# playtest builds only; everywhere else the stub shows the plain price.
+	return fallback + " (test)" if OS.has_feature("playtest") else fallback
 
 
 func _show_fake_ad(title: String, placement: String, rewarded: bool) -> void:

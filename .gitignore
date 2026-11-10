@@ -6,3 +6,8 @@
 export_credentials.cfg
 __pycache__/
 /tmp/
+# Native ad and store plugin halves, fetched by tools/fetch_plugins.sh (or by the
+# AdMob editor plugin on a headless import): big, versioned, never committed.
+games/*/ios/
+games/*/addons/admob/ios/bin/
+games/*/addons/admob/downloads/

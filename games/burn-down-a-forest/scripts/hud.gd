@@ -122,7 +122,17 @@ func _ready() -> void:
 	_build_rotate_overlay()
 	set_touch_mode(DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
 		or OS.has_feature("web_ios") or OS.has_feature("web_android"))
-	Monetization.purchase_error.connect(func(_id, reason): toast("The purchase didn't go through: %s" % reason))
+	Monetization.purchase_error.connect(func(_id, reason):
+		toast("No purchase made" if reason == "cancelled" else "The purchase didn't go through: %s" % reason))
+	Monetization.restore_done.connect(func(found: int, error: String):
+		if error != "":
+			toast("Couldn't restore: %s" % error)
+		elif found == 0:
+			toast("Nothing to restore on this account")
+		else:
+			toast("Restored %d %s" % [found, "purchase" if found == 1 else "purchases"])
+		if notebook != null:
+			notebook.rebuild())
 	Monetization.purchase_granted.connect(func(_id, text):
 		Sound.play("reward", -3.0)
 		toast(text)
@@ -452,6 +462,28 @@ func set_touch_mode(on: bool) -> void:
 
 func is_blocking() -> bool:
 	return notebook != null or popups.get_child_count() > 0 or ending_active
+
+
+func blocked_rects(margin: float = 10.0) -> Array:
+	## Where the HUD is on screen right now (viewport coordinates, grown by
+	## `margin`): the floating "+embers" numbers keep out of these.
+	var out: Array = []
+	if root == null or not root.visible:
+		return out
+	var pieces: Array = [ember_plank, zone_plank, wind_chip, boost_box, notebook_button, offer_tag,
+		find_tag, tool_plank, coach_panel, hint_panel, toast_box, crosshair]
+	if target_label != null and target_label.get_parsed_text().strip_edges() != "":
+		pieces.append(target_label)
+	for c in pieces:
+		var ctl := c as Control
+		if ctl != null and ctl.is_visible_in_tree() and ctl.size.x > 1.0 and ctl.size.y > 1.0:
+			out.append(ctl.get_global_rect().grow(margin))
+	if touch != null and touch.is_visible_in_tree():
+		for b in touch.buttons:
+			var bc := b.control as Control
+			if bc != null and bc.is_visible_in_tree():
+				out.append(bc.get_global_rect().grow(margin))
+	return out
 
 
 # =====================================================================================
@@ -1036,11 +1068,7 @@ func show_ending() -> void:
 	b.text = "The Elder Tree has burned down and the village is free. Where the cursed forest stood, there's a valley of flowers."
 	v.add_child(b)
 	var stats := UiTheme.label(27, UiTheme.HAND_INK, UiTheme.hand())
-	# a cell is 1.5 m square: the whole valley is about three and a half acres
-	var acres := float(GameState.cells_burned) * Balance.CELL * Balance.CELL / 4046.86
-	stats.text = "%s by the fire\n%s embers earned\n%s acres of cursed forest turned to meadow\n%d critters ran off safe and sound" % [
-		Fmt.duration(GameState.play_time), Fmt.num(GameState.lifetime_embers), ("%.1f" % acres) if acres >= 0.95 else ("%.2f" % acres),
-		GameState.critters_saved]
+	stats.text = ending_stats()
 	v.add_child(stats)
 	var walk := UiParts.Stamp.new(9)
 	walk.ink = UiTheme.INK
@@ -1055,6 +1083,28 @@ func show_ending() -> void:
 	tw.set_parallel(true)
 	tw.tween_property(page, "modulate:a", 1.0, 0.6)
 	tw.tween_property(page, "position:y", page.position.y - 30, 0.8).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func ending_stats() -> String:
+	## The letter's tally, in the keeper's words: time in minutes and hours, how
+	## much of the forest is meadow now, never raw seconds or units.
+	var share := forest.progress() if forest != null else 0.0
+	var meadow := "all of the cursed forest is meadow now" if share >= 0.995 \
+		else "%d%% of the cursed forest is meadow now" % clampi(int(round(share * 100.0)), 1, 99)
+	var n := GameState.critters_saved
+	var critters := "not one critter was hurt" if n == 0 \
+		else ("one critter ran off safe and sound" if n == 1 else "%d critters ran off safe and sound" % n)
+	var lines := [
+		"%s by the fire" % Fmt.spoken_duration(GameState.play_time),
+		"%s embers earned" % Fmt.num(GameState.lifetime_embers),
+		meadow,
+		critters,
+	]
+	return "\n".join(PackedStringArray(lines.map(_sentence)))
+
+
+static func _sentence(t: String) -> String:
+	return t.substr(0, 1).to_upper() + t.substr(1) if t != "" else t
 
 
 func close_ending() -> void:
