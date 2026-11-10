@@ -17,7 +17,8 @@ import bpy  # noqa: E402
 import bmesh  # noqa: E402
 from mathutils import Matrix, Vector, noise  # noqa: E402
 from kit import (box, cyl, sphere, torus, join, wobble, export, reset, mat, bar, lathe, place, strut, ao, smooth,  # noqa: E402
-                 from_profile, subdivide, white_col, apply_mods, paint_rgb, paint_faces, fill_col, edge_wear)
+                 from_profile, subdivide, white_col, apply_mods, paint_rgb, paint_faces, fill_col, edge_wear,
+                 srgb_to_linear)
 from kit import tube as ktube  # noqa: E402
 from world_models import bake, lump  # noqa: E402
 
@@ -259,72 +260,131 @@ def snapped(o, near, axis, r, seed):
             v.co -= ax * rnd.uniform(0.0, r * 0.9)
 
 
+def metaball_mesh(elements, res, name, m):
+    """A smooth organic solid from metaball elements [(kind, co, radius,
+    size_x, rotation quaternion or None)], converted to a mesh."""
+    mb = bpy.data.metaballs.new(name)
+    mb.resolution = res
+    mb.render_resolution = res
+    mb.threshold = 0.6
+    ob = bpy.data.objects.new(name, mb)
+    bpy.context.collection.objects.link(ob)
+    for (kind, co, rad, sx, q) in elements:
+        e = mb.elements.new(type=kind)
+        e.co = co
+        e.radius = rad
+        e.stiffness = 2.0
+        if kind == "CAPSULE":
+            e.size_x = sx
+        if q is not None:
+            e.rotation = q
+    bpy.context.view_layer.update()
+    bpy.ops.object.select_all(action="DESELECT")
+    ob.select_set(True)
+    bpy.context.view_layer.objects.active = ob
+    bpy.ops.object.convert(target="MESH")
+    o = bpy.context.active_object
+    o.name = name
+    o.data.materials.clear()
+    o.data.materials.append(m)
+    return o
+
+
 def bone():
-    """Fossil bone weathering out of the wall (Fossil Bed and Graveyard
-    decor): a snapped length of rib, flat in section, and a worn vertebra
-    beside it, both sunk in. Ivory going to tan, stained brown where it lay
-    in the ground, the broken end darker and porous."""
+    """A fossil limb bone weathering out of the wall (Fossil Bed and
+    Graveyard decor): a long, slightly bowed shaft flaring to two knuckles
+    at one end and a ball on a short neck at the other, with a knob beside
+    it, lying half sunk in the rock. Ivory on top going tan, stained brown
+    where it lay in the ground, the knuckles rubbed pale."""
+    from mathutils import Quaternion
     m = mat("cream", color=(1.0, 1.0, 1.0), rough=0.75)
-    pts = []
-    radii = []
-    n = 9
-    for i in range(n + 1):
-        t = i / n
-        a = t * 1.25
-        pts.append(Vector((0.26 * (1 - math.cos(a)) - 0.05, 0.0, 0.22 * math.sin(a) - 0.04)))
-        radii.append(0.021 * (1.0 - 0.45 * t) + 0.008 * math.exp(-t * 8))
-    rib = ktube(pts, radii, m, sides=7, flat=0.62, name="rib")
-    snapped(rib, pts[-1], (pts[-1] - pts[-2]), radii[-1], 5)
-    tip = pts[-1]
-    parts = [rib]
-    v = lathe([(0.0, -0.035), (0.024, -0.035), (0.03, -0.028), (0.022, 0.0), (0.03, 0.028), (0.024, 0.035), (0.0, 0.035)], 9, "vert", m)
-    place(v, (0.06, 0.07, 0.0), (R90, 0.3, 0.4))
-    parts.append(v)
-    spine = strut((0.06, 0.07, 0.02), (0.05, 0.1, 0.07), 0.009, m, sides=5)
-    parts.append(spine)
-    o = join(parts, "Bone")
+    q1 = Quaternion((0, 0, 1), 0.06)
+    q2 = Quaternion((0, 0, 1), -0.08)
+    els = [("CAPSULE", (0.045, 0.0, 0.0), 0.017, 0.055, q1),
+           ("CAPSULE", (-0.05, 0.004, 0.0), 0.018, 0.05, q2),
+           ("BALL", (0.118, 0.016, 0.0), 0.027, 0, None),        # the two knuckles
+           ("BALL", (0.118, -0.017, 0.0), 0.025, 0, None),
+           ("BALL", (0.1, 0.0, 0.004), 0.022, 0, None),
+           ("BALL", (-0.135, 0.028, 0.004), 0.026, 0, None),     # the ball on its neck
+           ("CAPSULE", (-0.112, 0.014, 0.0), 0.014, 0.018, Quaternion((0, 0, 1), 0.9)),
+           ("BALL", (-0.112, -0.02, 0.0), 0.02, 0, None)]        # the knob beside it
+    o = metaball_mesh(els, 0.007, "Bone", m)
     bake(o)
-    wobble(o, 0.002, 9)
+    dec = o.modifiers.new("dec", "DECIMATE")
+    dec.ratio = 0.35
+    apply_mods(o)
+    o.data.transform(Matrix.Translation((0, 0, -0.006)) @ Matrix.Rotation(0.35, 4, "Z"))
     smooth(o, 60)
     fill_col(o, (0.86, 0.79, 0.64))
     def stain(p, nrm):
-        s = noise.noise(p * 40.0 + Vector((3, 1, 7)))
-        low = max(0.0, min(1.0, (0.06 - p.z) / 0.1))           # where it lay in the ground
-        brk = max(0.0, 1.0 - (p - tip).length / 0.04)           # the snapped end
-        k = 1.0 - 0.18 * max(0.0, s) - 0.25 * low - 0.35 * brk
-        return (k, k * (0.97 - 0.05 * low), k * (0.9 - 0.12 * low))
+        s_ = noise.noise(p * 40.0 + Vector((3, 1, 7)))
+        low = max(0.0, min(1.0, (0.012 - p.z) / 0.02))           # where it lay in the ground
+        top = max(0.0, nrm.z)
+        k = (0.86 + 0.18 * top) * (1.0 - 0.14 * max(0.0, s_)) * (1.0 - 0.3 * low)
+        return (k, k * (0.97 - 0.06 * low), k * (0.9 - 0.14 * low))
     paint_rgb(o, stain)
-    edge_wear(o, 1.18, 0.8)
+    edge_wear(o, 1.15, 0.8)
     ao(o, 0.05, rays=8, strength=0.5, edge=0.4)
-    sink_shade(o, 0.05)
+    sink_shade(o, 0.02)
     return o
 
 
 def shell():
-    """A small ammonite in the wall (Fossil Bed decor): a coiled tube with
-    raised ribs, cream on the outer whorl, browner and darker into the coil,
-    the ribs' crests rubbed pale."""
+    """A scallop weathering out of the wall (Fossil Bed decor): a fan of
+    sixteen radial ribs rising from the hinge, the two little ears either
+    side of it, growth lines in rings, the margin sunk into the rock. Ivory
+    on the rib crests, tan in the furrows, browner towards the hinge."""
     m = mat("cream", color=(1.0, 1.0, 1.0), rough=0.7)
-    turns = 2.7
-    steps = 70
-    pts = []
-    radii = []
-    for i in range(steps + 1):
-        t = i / steps
-        a = t * turns * math.tau
-        r = 0.006 + 0.062 * t
-        pts.append((math.cos(a) * r, 0.0, math.sin(a) * r))
-        rib = 1.0 + 0.16 * max(0.0, math.sin(i * 2.2)) ** 2
-        radii.append((0.003 + 0.015 * t) * rib)
-    o = tube(pts, radii, m, res=8, name="Shell")
-    bake(o)
-    o.data.transform(Matrix.Rotation(R90, 4, "X"))
-    fill_col(o, (0.84, 0.76, 0.6))
-    paint_rgb(o, lambda p, n: (lambda t: (0.62 + 0.38 * t, 0.58 + 0.42 * t, 0.5 + 0.5 * t))(
-        max(0.0, min(1.0, (Vector((p.x, p.y, 0)).length - 0.01) / 0.06))))
-    edge_wear(o, 1.25, 0.72, 1.4)
-    ao(o, 0.04, rays=6, strength=0.45)
-    sink_shade(o, 0.06, 0.5)
+    L = 0.075
+    A = math.radians(58)
+    me = bpy.data.meshes.new("shell")
+    bm = bmesh.new()
+    na, nt = 34, 8
+    cols = []
+    grid = []
+    for i in range(na + 1):
+        a = -A - 0.42 + (2 * A + 0.84) * i / na
+        ear = abs(a) > A
+        lim = (0.24 if ear else 1.0 - 0.05 * (a / A) ** 4) * L
+        row = []
+        for j in range(1, nt + 1):
+            t = j / nt
+            rr = lim * t
+            if ear:
+                z = 0.006 * (1.0 - t) + 0.002
+                v = 0.8
+            else:
+                dome = 0.024 * (t ** 0.55) * (1.0 - t ** 5) * math.cos(a / A * math.pi / 2) ** 0.4
+                rib = (0.5 + 0.5 * math.cos(a / A * 8.0 * math.pi)) ** 2
+                z = dome + 0.006 * t ** 0.8 * rib - 0.005 * t ** 8
+                band = 0.9 if int(t * 7.0 + 0.3 * math.sin(a * 5)) % 2 else 1.0
+                v = (0.74 + 0.36 * rib) * band * (0.82 + 0.18 * t)
+            row.append(bm.verts.new((math.sin(a) * rr, math.cos(a) * rr - 0.03, z)))
+            cols.append((0.86 * v, 0.79 * v, 0.64 * v))
+        grid.append(row)
+    hinge = bm.verts.new((0.0, -0.03, 0.006))
+    cols.append((0.6, 0.53, 0.42))
+    for i in range(na):
+        a, b2 = grid[i], grid[i + 1]
+        bm.faces.new((hinge, a[0], b2[0]))
+        for j in range(nt - 1):
+            bm.faces.new((a[j], a[j + 1], b2[j + 1], b2[j]))
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new("Shell", me)
+    bpy.context.collection.objects.link(o)
+    o.data.materials.append(m)
+    if sum(pp.normal.z for pp in o.data.polygons) < 0:
+        o.data.flip_normals()
+    fill_col(o, (1.0, 1.0, 1.0))
+    col = o.data.color_attributes["Col"]
+    lin = [srgb_to_linear(c) for c in cols]
+    for li, lp in enumerate(o.data.loops):
+        c = lin[lp.vertex_index]
+        col.data[li].color = (c[0], c[1], c[2], 1.0)
+    smooth(o, 60)
+    edge_wear(o, 1.15, 0.8)
+    sink_shade(o, 0.03, 0.55)
     return o
 
 
@@ -869,24 +929,109 @@ def ribcage():
     return o
 
 
-def ammonite(r, m, seed, turns=3.2):
-    """An ammonite in relief: a coiled, ribbed tube flat on the XY plane."""
-    pts = []
-    radii = []
-    steps = 60
-    for i in range(steps + 1):
-        t = i / steps
-        a = t * turns * math.tau
-        rr = r * (0.08 + 0.92 * t ** 1.2)
-        pts.append((math.cos(a) * rr, math.sin(a) * rr, 0.0))
-        radii.append(r * (0.04 + 0.2 * t ** 1.3) * (1.0 + 0.16 * max(0.0, math.sin(i * 2.3 + seed))))
-    o = tube(pts, radii, m, res=8, name="ammonite")
-    for v in o.data.vertices:
-        v.co.z *= 0.55
-    # the shell under the coil (the whorls overlap; no hole in the middle)
-    disc = cyl(r * 0.92, r * 0.16, (0, 0, -r * 0.05), m, verts=24)
-    bake(disc)
-    return join([o, disc], "ammonite")
+def relief(name, m, rings, segs, height_col, center=True):
+    """A displaced disc on a polar grid: rings = [radius, ...] from the rim
+    inwards, segs points round each. height_col(rho, phi) -> (z, (r, g, b))
+    gives each point's height out of the face (+Z) and its colour (sRGB).
+    Writes the colour straight into "Col" (one per vertex)."""
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    grid = []
+    cols = []
+    for rho in rings:
+        row = []
+        for k in range(segs):
+            phi = k / segs * math.tau
+            z, c = height_col(rho, phi)
+            row.append(bm.verts.new((math.cos(phi) * rho, math.sin(phi) * rho, z)))
+            cols.append(c)
+        grid.append(row)
+    for j in range(len(grid) - 1):
+        a, b = grid[j], grid[j + 1]
+        for k in range(segs):
+            k2 = (k + 1) % segs
+            bm.faces.new((a[k], a[k2], b[k2], b[k]))
+    if center:
+        z, c = height_col(0.0, 0.0)
+        cv = bm.verts.new((0.0, 0.0, z))
+        cols.append(c)
+        last = grid[-1]
+        for k in range(segs):
+            bm.faces.new((last[k], last[(k + 1) % segs], cv))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    o.data.materials.append(m)
+    # face normals must point out of the face (+Z)
+    if sum(pp.normal.z for pp in o.data.polygons) < 0:
+        o.data.flip_normals()
+    fill_col(o, (1.0, 1.0, 1.0))
+    col = o.data.color_attributes["Col"]
+    lin = [srgb_to_linear(c) for c in cols]
+    for li, lp in enumerate(o.data.loops):
+        c = lin[lp.vertex_index]
+        col.data[li].color = (c[0], c[1], c[2], 1.0)
+    smooth(o, 70)
+    return o
+
+
+def ammonite(r, m, seed, turns=4.0, ribs=24, segs=144, per_whorl=8, shell=(0.82, 0.75, 0.6),
+             matrix=(0.5, 0.42, 0.3)):
+    """An ammonite weathering out of the rock face, as a relief on the XY
+    plane (+Z out of the face), radius r. The shell is a logarithmic coil
+    (each whorl 1.75 times the one inside it), every whorl a rounded tube
+    with a groove between it and the next, crossed by ribs that sweep
+    forward as they reach the outer edge; the coil ends at the opening, so
+    the outline is a spiral, not a circle. Round it, a shallow chipped
+    hollow in the matrix sinks into the rock. Ivory on the rib crests,
+    browner down in the grooves and into the coil."""
+    rnd = random.Random(seed)
+    W = 1.75
+    b = math.log(W) / math.tau
+    tmax = turns * math.tau
+    rim = 1.16
+    lift = 0.07
+    rot = rnd.uniform(0, math.tau)
+
+    def hc(rho, phi):
+        rho = rho / r
+        if rho < 1e-4:
+            return (lift + 0.02) * r, tuple(c * 0.62 for c in shell)
+        ph = (phi + rot) % math.tau
+        k = math.ceil((tmax + math.log(rho) / b - ph) / math.tau)
+        th = ph + math.tau * k
+        if th > tmax:
+            # the matrix round the shell: a chipped hollow sinking into the rock at the rim
+            out = max(0.0, (rho - 0.94) / (rim - 0.94))
+            z = -0.012 - 0.07 * out * out
+            v = 0.72 + 0.12 * out
+            return z * r, tuple(c * v for c in matrix)
+        ro = math.exp(b * (th - tmax))
+        ri = ro / W
+        sx = (rho - ri) / (ro - ri)
+        w = ro - ri
+        prof = math.sin(math.pi * sx) ** 0.55
+        phase = ribs * th + 1.6 * sx * sx
+        rib = (0.5 + 0.5 * math.cos(phase)) ** 2.5
+        z = lift * (1.0 - 0.5 * (1.0 - ro)) + w * (0.42 * prof + 0.16 * rib * (0.25 + 0.75 * prof))
+        # the opening: a flared lip on the last few degrees of the coil
+        if tmax - th < 0.25:
+            z += w * 0.12 * (1.0 - (tmax - th) / 0.25)
+        groove = 1.0 - prof
+        inner = 1.0 - 0.18 * (1.0 - ro)
+        v = (0.72 + 0.4 * rib * prof) * (1.0 - 0.45 * groove ** 3) * inner
+        c = (shell[0] * v, shell[1] * v * (0.98 - 0.04 * groove), shell[2] * v * (0.94 - 0.1 * groove))
+        return z * r, c
+
+    rings = [rim * r, 1.08 * r, 1.0 * r]
+    rho = 1.0
+    step = math.exp(-math.log(W) / per_whorl)
+    while rho > math.exp(-turns * math.log(W)) * 0.8:
+        rho *= step
+        rings.append(rho * r)
+    return relief("ammonite", m, rings, segs, hc)
 
 
 def fossil_slab():
@@ -953,11 +1098,13 @@ def fossil_slab():
                 fy = front
         if fy is None:
             fy = -0.3
-        am = ammonite(r, fossil_m, int(r * 100), turns=3.3)
+        am = ammonite(r, fossil_m, int(r * 100), turns=4.0 if r > 0.2 else 3.4,
+                      ribs=24 if r > 0.2 else 18, segs=160 if r > 0.3 else (112 if r > 0.2 else 64),
+                      per_whorl=9 if r > 0.2 else 6)
         bake(am)
         am.data.transform(Matrix.Rotation(R90, 4, "X"))
         am.data.transform(Matrix.Rotation(rnd.uniform(0, math.tau), 4, "Y"))
-        am.data.transform(Matrix.Translation((x, fy + r * 0.06, zc)))
+        am.data.transform(Matrix.Translation((x, fy - r * 0.02, zc)))
         ams.append(am)
         hollows.append((Vector((x, fy, zc)), r))
     def hollow(p, nn):
@@ -972,27 +1119,18 @@ def fossil_slab():
     edge_wear(rock, 1.18, 0.8)
     a_all = join(ams, "ammonites")
     bake(a_all)
-    fill_col(a_all, (0.8, 0.76, 0.66))
-    cents = [(c, r) for (c, r) in hollows]
-    def amb(p, nn):
-        best = 1.0
-        for (c, r) in cents:
-            d = (Vector((p.x, 0, p.z)) - Vector((c.x, 0, c.z))).length
-            if d < r * 1.1:
-                t = d / r
-                best = 0.84 + 0.16 * t
-        return (best, best * 0.97, best * 0.9)
-    paint_rgb(a_all, amb)
-    edge_wear(a_all, 1.3, 0.7, 1.4)
-    # At its foot: a fallen ammonite on its side and broken slabs.
+    # At its foot: a fallen block with an ammonite on its broken face, and broken slabs.
     foot = []
-    big = ammonite(0.24, fossil_m, 3, turns=3.4)
+    fb = lump(0.2, Vector((0, 0, 0)), sand_m, 77, scale=(1.5, 1.1, 0.75), sub=2, rough=0.22, flat_bottom=-0.08)
+    fill_col(fb, tones[1])
+    paint_rgb(fb, lambda p, nn: (lambda kk: (kk, kk, kk))(0.85 + 0.25 * max(0.0, nn.z)))
+    big = ammonite(0.17, fossil_m, 3, turns=3.6, ribs=20, segs=96, per_whorl=7)
     bake(big)
-    big.data.transform(Matrix.Rotation(R90 * 0.85, 4, "X"))
-    big.data.transform(Matrix.Translation((1.15, -0.75, 0.16)))
-    fill_col(big, (0.8, 0.72, 0.55))
-    edge_wear(big, 1.3, 0.7, 1.4)
-    foot.append(big)
+    big.data.transform(Matrix.Translation((0.0, 0.0, 0.12)))
+    fbj = join([fb, big], "fallen")
+    bake(fbj)
+    fbj.data.transform(Matrix.Translation((1.12, -0.72, 0.1)) @ Matrix.Rotation(-0.5, 4, "Z") @ Matrix.Rotation(0.35, 4, "X"))
+    foot.append(fbj)
     for kk in range(7):
         a = rnd.uniform(math.pi * 1.1, math.pi * 1.9)
         sl = lump(rnd.uniform(0.1, 0.22), Vector((math.cos(a) * 1.25, -0.2 + math.sin(a) * 0.65, 0.02)), sand_m, 850 + kk,
@@ -1177,81 +1315,104 @@ def lava_pool():
     return o
 
 
+def _bed_slab(z0, z1, sx, sy, n=48):
+    """A closed slab between two surfaces z0(x) < z1(x), running right
+    through in Y, wider than the block it will be cut from."""
+    me = bpy.data.meshes.new("slab")
+    bm = bmesh.new()
+    cols = []
+    for i in range(n + 1):
+        x = -sx + 2 * sx * i / n
+        cols.append([bm.verts.new((x, y, z)) for (y, z) in ((-sy, z0(x)), (sy, z0(x)), (sy, z1(x)), (-sy, z1(x)))])
+    for i in range(n):
+        a, b2 = cols[i], cols[i + 1]
+        for k in range(4):
+            k2 = (k + 1) % 4
+            bm.faces.new((a[k], b2[k], b2[k2], a[k2]))
+    bm.faces.new(cols[0])
+    bm.faces.new(list(reversed(cols[-1])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new("slab", me)
+    bpy.context.collection.objects.link(o)
+    return o
+
+
+def _intersect(block, slab):
+    """A copy of `block` cut down to where it overlaps `slab` (exact boolean)."""
+    piece = block.copy()
+    piece.data = block.data.copy()
+    bpy.context.collection.objects.link(piece)
+    mod = piece.modifiers.new("cut", "BOOLEAN")
+    mod.operation = "INTERSECT"
+    mod.solver = "EXACT"
+    mod.object = slab
+    apply_mods(piece)
+    return piece
+
+
 def fold_block(size, seed, rock, melt, tones, shear=0.25, curve=0.95, cuts=30):
     """A rough block of mantle rock cut through a fold, like a road cutting:
     the beds sag into a trough (and lean over to one side) and run right
-    through the block, so every face shows them, each bed its own shade;
-    molten rock glows in some of the seams, drawn as thin ribbons following
-    the beds across the two cut faces. Returns [block, seams]."""
-    from mathutils.bvhtree import BVHTree
+    through the block, so every face shows them. Each bed is its own solid
+    (the block cut by a slab between two fold surfaces), so the bedding
+    lines are crisp curves and each bed one flat shade, lit on top; molten
+    rock fills a thin seam between some of the beds and glows on every face
+    it reaches. Returns [beds, seams]."""
     rnd = random.Random(seed)
-    o = box(size, (0, 0, size[2] / 2), rock, bevel=0.0)
-    subdivide(o, cuts)
     sx, sy, sz = size
+    block = box(size, (0, 0, sz / 2), rock, bevel=0.0)
+    subdivide(block, 6)
     off = Vector((seed * 1.3, 2.0, 0.7))
-    for v in o.data.vertices:
-        cut_face = abs(abs(v.co.y) - sy / 2) < 1e-3 and abs(v.co.x) < sx / 2 - 1e-3 and 1e-3 < v.co.z < sz - 1e-3
+    for v in block.data.vertices:
         top = max(0.0, (v.co.z - sz * 0.6) / (sz * 0.4))
         ends = max(0.0, (abs(v.co.x) - sx * 0.3) / (sx * 0.2))
         n = noise.noise(v.co * (2.4 / max(sz, 0.5)) + off)
         v.co.z -= (0.25 * sz) * top * max(0.0, n + 0.3)
         v.co.x -= math.copysign(0.18 * sx * ends * max(0.0, n + 0.2), v.co.x)
-        if not cut_face:
-            v.co += v.normal * 0.025 * noise.noise(v.co * 7.0 + off)
+        v.co += v.normal * 0.02 * noise.noise(v.co * 5.0 + off)
         if v.co.z < 0.02:
             v.co.z = min(v.co.z, 0.0)
     bounds = [0.0]
     while bounds[-1] < 3.0 * sz:
         bounds.append(bounds[-1] + rnd.uniform(0.08, 0.17) * sz)
-    hot = [i for i in range(1, len(bounds) - 1) if rnd.random() < 0.6]
+    hot = set(i for i in range(1, len(bounds) - 1) if rnd.random() < 0.3)
+    w = 0.022 * sz / 1.6
 
     def base_z(x):
         u = x / (sx * 0.5)
         return -curve * sz * 0.6 * (1.0 - u * u) + shear * x - 0.6 * sz
 
-    def bed_of(p):
-        v = p.z - base_z(p.x)
-        for i in range(1, len(bounds)):
-            if v < bounds[i]:
-                return i - 1
-        return len(bounds) - 1
-    fill_col(o, (1.0, 1.0, 1.0))
-    def tone(p, nn):
-        t = tones[bed_of(p) % len(tones)]
-        lit = (0.85 + 0.3 * max(0.0, nn.z)) * 1.15
-        return (t[0] * lit, t[1] * lit, t[2] * lit)
-    paint_rgb(o, tone)
-    edge_wear(o, 1.3, 0.75)
-    # Glowing seams on the two cut faces.
-    bm = bmesh.new()
-    bm.from_mesh(o.data)
-    tree = BVHTree.FromBMesh(bm)
-    bm.free()
-    me = bpy.data.meshes.new("seams")
-    sb = bmesh.new()
-    w = 0.028 * sz / 1.6
-    for face_y in (-sy / 2 - 0.004, sy / 2 + 0.004):
-        for i in hot:
-            prev = None
-            for k in range(41):
-                x = -sx / 2 * 0.97 + sx * 0.97 * k / 40
-                z = bounds[i] + base_z(x)
-                hit = tree.ray_cast(Vector((x, face_y * 0.9, sz + 1.0)), Vector((0, 0, -1)), sz + 2.0)
-                topz = hit[0].z if hit[0] is not None else -1.0
-                if 0.03 < z < topz - 0.02:
-                    a_ = sb.verts.new((x, face_y, z - w / 2))
-                    b_ = sb.verts.new((x, face_y, z + w / 2))
-                    if prev is not None:
-                        sb.faces.new((prev[0], a_, b_, prev[1]) if face_y < 0 else (prev[1], b_, a_, prev[0]))
-                    prev = (a_, b_)
-                else:
-                    prev = None
-    sb.to_mesh(me)
-    sb.free()
-    seams = bpy.data.objects.new("seams", me)
-    bpy.context.collection.objects.link(seams)
-    seams.data.materials.append(melt)
-    return [o, seams]
+    beds, seams = [], []
+    for i in range(len(bounds) - 1):
+        lo = bounds[i] + (w / 2 if i in hot else 0.0)
+        hi = bounds[i + 1] - (w / 2 if (i + 1) in hot else 0.0)
+        slab = _bed_slab(lambda x, lo=lo: base_z(x) + lo, lambda x, hi=hi: base_z(x) + hi, sx, sy)
+        piece = _intersect(block, slab)
+        bpy.data.objects.remove(slab)
+        if len(piece.data.polygons) == 0:
+            bpy.data.objects.remove(piece)
+            continue
+        t = tones[i % len(tones)]
+        fill_col(piece, t)
+        paint_rgb(piece, lambda p, nn: (lambda k: (k, k, k))((0.82 + 0.3 * max(0.0, nn.z) - 0.08 * max(0.0, -nn.z)) * 1.1))
+        beds.append(piece)
+        if (i + 1) in hot:
+            sl = _bed_slab(lambda x, hi=hi: base_z(x) + hi, lambda x, hi=hi: base_z(x) + hi + w, sx, sy)
+            sp = _intersect(block, sl)
+            bpy.data.objects.remove(sl)
+            if len(sp.data.polygons) == 0:
+                bpy.data.objects.remove(sp)
+            else:
+                sp.data.materials.clear()
+                sp.data.materials.append(melt)
+                fill_col(sp, (1.0, 1.0, 1.0))
+                seams.append(sp)
+    bpy.data.objects.remove(block)
+    bj = join(beds, "beds")
+    edge_wear(bj, 1.3, 0.72)
+    return [bj] + ([join(seams, "seams")] if seams else [])
 
 
 def mantle_rocks():

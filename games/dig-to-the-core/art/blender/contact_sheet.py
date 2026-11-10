@@ -110,9 +110,14 @@ def render_one(path, out):
     world = bpy.data.worlds.new("w")
     world.use_nodes = True
     world.node_tree.nodes["Background"].inputs[0].default_value = (0.16, 0.13, 0.11, 1)
-    world.node_tree.nodes["Background"].inputs[1].default_value = 0.6
+    world.node_tree.nodes["Background"].inputs[1].default_value = 0.45
     scene.world = world
     scene.render.engine = "CYCLES"
+    # Standard, not Blender's default AgX: AgX lifts and desaturates the
+    # painted vertex colours into pastels, which is not how the game shows them.
+    scene.view_settings.view_transform = "Standard"
+    scene.view_settings.look = "None"
+    scene.view_settings.exposure = -1.2
     scene.cycles.device = "CPU"
     scene.cycles.samples = int(os.environ.get("SAMPLES", "16"))
     scene.cycles.use_denoising = True

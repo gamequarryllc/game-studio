@@ -84,8 +84,10 @@ static func sign(path: String, size: Vector2, glow: float = 0.25, row: int = -1,
 	var m := StandardMaterial3D.new()
 	var tex: Texture2D = load(path)
 	m.albedo_texture = tex
-	m.roughness = 0.35
-	m.metallic_specular = 0.6
+	# Satin, not gloss: a glossy face mirrors the bright sky and washes the
+	# dark lettering out from any distance.
+	m.roughness = 0.62
+	m.metallic_specular = 0.3
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	if glow > 0.0:
 		m.emission_enabled = true

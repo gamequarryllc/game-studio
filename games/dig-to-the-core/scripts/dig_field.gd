@@ -513,7 +513,7 @@ const LANDMARKS := {
 	4: {"model": "ribcage", "scale": 1.0},
 	5: {"model": "crystal_big", "scale": 1.0, "light": Color(0.45, 0.88, 0.78), "energy": 1.5, "at": Vector3(0.0, 1.2, 0.0)},
 	6: {"model": "lava_pool", "scale": 1.1, "light": Color(1.0, 0.42, 0.12), "energy": 2.8, "at": Vector3(0.0, 0.3, 0.0), "melt": "lava", "range": 8.5, "embers": Color(1.0, 0.55, 0.15)},
-	7: {"model": "mantle_rocks", "scale": 1.0, "light": Color(1.0, 0.55, 0.25), "energy": 2.2, "at": Vector3(0.0, 0.9, 1.4), "melt": "lava", "face": true},
+	7: {"model": "mantle_rocks", "scale": 1.0, "light": Color(1.0, 0.5, 0.2), "energy": 1.2, "at": Vector3(0.0, 0.9, 1.4), "melt": "lava", "face": true},
 	8: {"model": "lava_pool", "scale": 1.0, "light": Color(1.0, 0.62, 0.22), "energy": 2.6, "at": Vector3(0.0, 0.3, 0.0), "melt": "iron", "range": 8.5, "embers": Color(1.0, 0.75, 0.3)},
 	9: {"model": "core_heart", "scale": 1.0, "light": Color(1.0, 0.78, 0.4), "energy": 1.4, "at": Vector3(0.0, 1.2, 0.0), "melt": "core", "range": 8.0},
 }

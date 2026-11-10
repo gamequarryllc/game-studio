@@ -704,21 +704,19 @@ def lava_lakes(rng):
     st = Stones()
     scatter_in_beds(rng, st, beds, 20, (6, 16), [C(0.28, 0.25, 0.24), C(0.12, 0.11, 0.1)], verts=(4, 6), jag=0.2)
     img, _ = st.paint(img, lit=1.35, under=0.65)
-    fl, _ = patches(rng, base, 4, [1.0, 0.95, 1.06, 1.1])
-    # a cooled, ropy crust on the floor: nested arcs where the skin wrinkled
-    def ropes(d):
-        for _ in range(9):
-            cx, cy = rng.uniform(0, P), rng.uniform(0, P)
-            a0 = rng.uniform(0, 360)
-            for k in range(int(rng.integers(4, 8))):
-                r = 14 + k * rng.uniform(7, 10)
-                for ox in (-P, 0, P):
-                    for oy in (-P, 0, P):
-                        d.arc([cx - r + ox, cy - r * 0.7 + oy, cx + r + ox, cy + r * 0.7 + oy], a0, a0 + rng.uniform(70, 120),
-                              fill=255, width=3)
-    rm = draw_mask(ropes) > 0.5
-    fl[rm] *= 0.5
-    fl[np.roll(rm, -2, 0) & ~rm] *= 1.3
+    # On a floor or a roof: the tops of the columns, a pavement of five- and
+    # six-sided slabs, each its own flat value, the joints between them dark
+    # with a lit lip on the side away from the light, a few slabs cracked.
+    fl, cid = patches(rng, base, 5, [0.88, 0.96, 1.0, 1.08, 1.16])
+    joint = np.zeros((P, P), bool)
+    joint[:, 1:] |= cid[:, 1:] != cid[:, :-1]
+    joint[1:, :] |= cid[1:, :] != cid[:-1, :]
+    jm = joint.copy()
+    for _ in range(2):
+        jm = jm | np.roll(jm, 1, 0) | np.roll(jm, 1, 1)
+    fl[jm] *= 0.42
+    lip = (np.roll(jm, -2, 0) | np.roll(jm, -2, 1)) & ~jm
+    fl[lip] *= 1.22
     cf = cracks(rng, 3, 8, (2.5, 4), 0.3)
     fl[cf] = hot * 0.55
     return img, cm.astype(float), fl, cf.astype(float)
@@ -734,12 +732,20 @@ def mantle(rng):
     cols = [C(0.5, 0.52, 0.24), C(0.2, 0.2, 0.12), C(0.44, 0.46, 0.28), C(0.58, 0.55, 0.3)]
     scatter_in_beds(rng, st, beds, 120, (3, 8), cols, flat=(0.6, 0.9), pebbly=0.6, verts=(4, 6), jag=0.2, rot=0.6)
     img, _ = st.paint(img, lit=1.25, under=0.7, shadow_len=3)
-    # hot seams: some bedding lines open up and glow
+    # hot seams: two bedding lines per tile open up and glow, thin and broken
+    # into lenses (not every fold line, or the wall reads as a contour map)
     seam = np.zeros((P, P), bool)
-    for b in range(beds.count):
-        if rng.random() < 0.35:
-            seam |= (beds.index == b) & (beds.d_top < 4)
+    picks = rng.choice(np.arange(1, beds.count), size=min(2, beds.count - 1), replace=False)
+    gaps = np.zeros(P, bool)
+    x = 0
+    while x < P:
+        run = int(rng.uniform(50, 150))
+        gaps[x:x + run] = True
+        x += run + int(rng.uniform(25, 70))
+    for b in picks:
+        seam |= (beds.index == b) & (beds.d_top < 3) & gaps[XX]
     hot = C(0.95, 0.45, 0.12)
+    img[np.roll(seam, 2, 0) & ~seam] *= 0.6      # scorched just under the seam
     img[seam] = hot * 0.5
     fl, _ = patches(rng, base, 4, [1.0, 0.95, 1.04, 0.92])
     st = Stones()

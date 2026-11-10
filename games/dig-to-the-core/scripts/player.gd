@@ -373,7 +373,7 @@ func _update_tool(delta: float) -> void:
 	lamp.light_energy = lerpf(0.3, 1.4, under)   # matched to the rock shader's pool
 	fill.light_energy = lerpf(0.0, 0.08, under)
 	if field != null and field.material != null:
-		for m in [field.material] + field.decor_mats.values():
+		for m in [field.material, ToolRig.chip_material()] + field.decor_mats.values():
 			(m as ShaderMaterial).set_shader_parameter("lamp_on", under * lamp_scale)
 			(m as ShaderMaterial).set_shader_parameter("lamp_range", lamp_reach)
 			(m as ShaderMaterial).set_shader_parameter("lamp_color", Vector3(LAMP_COLOR.r, LAMP_COLOR.g, LAMP_COLOR.b))

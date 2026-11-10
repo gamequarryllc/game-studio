@@ -649,10 +649,10 @@ def timber_post():
         # the check: a groove down the +Y face
         if v.co.y > 0.05 and abs(v.co.x - 0.01) < 0.012 and 0.25 < v.co.z < 1.05:
             v.co.y -= 0.02
-    fill_col(post, (0.62, 0.58, 0.52))
+    fill_col(post, (0.54, 0.5, 0.44))
     def f(p, n):
         g = 0.5 + 0.5 * math.sin(math.atan2(p.y, p.x) * 3.0 + p.z * 0.4 + noise.noise(Vector((p.x * 30, p.y * 30, p.z * 3))) * 2.5)
-        k = 0.88 + 0.16 * g
+        k = 0.8 + 0.3 * g ** 2
         if p.y > 0.045 and abs(p.x - 0.01) < 0.016 and 0.25 < p.z < 1.05:
             k *= 0.35
         foot = max(0.0, 1.0 - (p.z + 0.05) / 0.3)
@@ -998,7 +998,16 @@ def birch():
     bake(br)
     bark_paint(br, (0.36, 0.3, 0.26))
     greens = [(0.55, 0.6, 0.28), (0.5, 0.56, 0.26), (0.6, 0.62, 0.3), (0.46, 0.52, 0.24)]
-    leaves = leaf_clusters(rnd, tips, leaf, 0.32, (1.25, 1.25, 0.8), greens, every=1, drop=0.45, seed=280)
+    leaves = leaf_clusters(rnd, tips, leaf, 0.42, (1.25, 1.25, 0.8), greens, every=1, drop=0.45, seed=280)
+    # a few sprays hung close round the upper trunk, so the crown reads as a
+    # loose oval with sky through it, not twigs with tufts on the ends
+    inner = []
+    for k in range(10):
+        z = rnd.uniform(3.0, 5.4)
+        a = rnd.uniform(0, math.tau)
+        rr = rnd.uniform(0.35, 0.9) * (1.0 - 0.35 * (z - 3.0) / 2.4)
+        inner.append((Vector((0.2 + math.cos(a) * rr, 0.08 + math.sin(a) * rr, z)), Vector((math.cos(a), math.sin(a), 0.6)).normalized()))
+    leaves += leaf_clusters(rnd, inner, leaf, 0.4, (1.25, 1.25, 0.8), greens, drop=0.3, seed=330)
     o = join([trunk, br] + leaves, "Birch")
     bake(o)
     ao(o, 0.9, rays=12, strength=0.55, top=0.15)
@@ -1112,35 +1121,49 @@ def crate():
 
 
 def clod():
-    """A chunk of turf thrown out of the hole: an angular block of dark soil
-    with its layers showing on the broken sides, a mat of grass on top with
-    a few blades standing up, and a root hanging out underneath."""
+    """A chunk of turf thrown out of the hole: a lump of umber soil broken
+    off with its layers showing on the sides, a thick mat of turf on top (dark
+    roots, then green) with a fringe of grass round its edge, the blades
+    short, many and leaning out, and a root hanging out underneath."""
     m = mat("clod_paint", color=(1.0, 1.0, 1.0), rough=0.95)
     blade_m = mat("blade_paint", color=(1.0, 1.0, 1.0), rough=0.9)
-    c = lump(0.06, Vector((0, 0, 0.025)), m, 71, scale=(1.25, 1.0, 0.62), sub=1, rough=0.32)
+    c = lump(0.06, Vector((0, 0, 0.02)), m, 71, scale=(1.3, 1.05, 0.7), sub=2, rough=0.3)
+    top_z = 0.036
     for v in c.data.vertices:
-        if v.co.z > 0.035:
-            v.co.z = 0.035 + (v.co.z - 0.035) * 0.3      # flat-ish turf top
-    fill_col(c, (0.4, 0.29, 0.19))
-    paint_faces(c, lambda cc, n, i: (0.42 / 0.4, 0.5 / 0.29, 0.22 / 0.19) if n.z > 0.55 else
-                ((0.82, 0.82, 0.82) if int((cc.z + 1.0) * 70) % 2 else (1.0, 1.0, 1.0)))
+        if v.co.z > top_z:
+            v.co.z = top_z + (v.co.z - top_z) * 0.25      # the turf's flat top
+    bake(c)
+    fill_col(c, (0.46, 0.33, 0.21))
+
+    def soil(p, n):
+        if n.z > 0.6 and p.z > top_z - 0.004:
+            return (0.42 / 0.46, 0.5 / 0.33, 0.2 / 0.21)                  # the grass mat
+        if p.z > top_z - 0.016:
+            return (0.24 / 0.46, 0.22 / 0.33, 0.1 / 0.21)                 # matted roots under it
+        band = 0.86 if int((p.z + 1.0) * 90 + 3 * noise.noise(p * 40)) % 2 else 1.0
+        return (band, band, band)
+    paint_rgb(c, soil)
     parts = [c]
     rnd = random.Random(72)
-    for i in range(7):
+    for i in range(18):
         a = rnd.uniform(0, math.tau)
-        r = rnd.uniform(0.0, 0.045)
-        base = Vector((math.cos(a) * r, math.sin(a) * r * 0.8, 0.035))
-        h = rnd.uniform(0.035, 0.07)
-        lean = Vector((rnd.uniform(-0.02, 0.02), rnd.uniform(-0.02, 0.02), h))
-        bl = tube([base, base + lean * 0.6, base + lean], [0.004, 0.003, 0.0005], blade_m, sides=3, name="blade")
-        fill_col(bl, (0.4, 0.5, 0.2) if i % 2 else (0.5, 0.56, 0.24))
+        r = rnd.uniform(0.02, 0.07) if i < 12 else rnd.uniform(0.0, 0.03)
+        base = Vector((math.cos(a) * r, math.sin(a) * r * 0.8, top_z - 0.002))
+        h = rnd.uniform(0.022, 0.045)
+        out = Vector((math.cos(a), math.sin(a), 0.0)) * rnd.uniform(0.008, 0.022)
+        tip = base + out + Vector((0, 0, h))
+        bl = tube([base, base + out * 0.3 + Vector((0, 0, h * 0.6)), tip], [0.0028, 0.002, 0.0004], blade_m, sides=3, name="blade")
+        g = rnd.choice([(0.42, 0.52, 0.2), (0.5, 0.58, 0.24), (0.36, 0.46, 0.18), (0.56, 0.56, 0.28)])
+        fill_col(bl, g)
         parts.append(bl)
-    rt = tube([Vector((0.02, 0.0, 0.0)), Vector((0.03, 0.01, -0.03)), Vector((0.025, 0.02, -0.055))], [0.004, 0.003, 0.001], blade_m, sides=4, name="root")
-    fill_col(rt, (0.3, 0.22, 0.15))
-    parts.append(rt)
+    for (x, y) in ((0.02, 0.0), (-0.03, 0.015)):
+        rt = tube([Vector((x, y, -0.005)), Vector((x + 0.01, y + 0.01, -0.03)), Vector((x + 0.005, y + 0.02, -0.05))],
+                  [0.003, 0.002, 0.0008], blade_m, sides=4, name="root")
+        fill_col(rt, (0.36, 0.27, 0.18))
+        parts.append(rt)
     o = join(parts, "Clod")
     bake(o)
-    edge_wear(o, 1.2, 0.8)
+    edge_wear(o, 1.15, 0.8)
     ao(o, 0.05, rays=8, strength=0.5)
     return o
 

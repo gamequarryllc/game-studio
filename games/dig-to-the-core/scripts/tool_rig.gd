@@ -155,12 +155,14 @@ func _particles(shaded: bool, size: float, amount: int) -> CPUParticles3D:
 	mat.distance_fade_min_distance = 0.45
 	mat.distance_fade_max_distance = 1.3
 	if shaded:
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		# Chips and clods: lit by the rock's own headlamp (chips.gdshader) on
+		# the rock's render layer, so the player's spot (strong right at the
+		# lens) can't flare them into pale confetti.
 		var box := BoxMesh.new()
 		box.size = Vector3(size, size * 0.8, size * 0.9)
-		mat.roughness = 0.9
-		box.material = mat
+		box.material = chip_material()
 		p.mesh = box
+		p.layers = Player.ROCK_VIS_LAYER
 	else:
 		var quad := QuadMesh.new()
 		quad.size = Vector2(size, size)
@@ -175,6 +177,18 @@ func _particles(shaded: bool, size: float, amount: int) -> CPUParticles3D:
 	p.emission_sphere_radius = 0.12
 	add_child(p)
 	return p
+
+
+static var _chip_mat: ShaderMaterial
+
+
+static func chip_material() -> ShaderMaterial:
+	## Shared by every rig's chips and clods; Player keeps its headlamp
+	## uniforms in step with the rock's.
+	if _chip_mat == null:
+		_chip_mat = ShaderMaterial.new()
+		_chip_mat.shader = load("res://shaders/chips.gdshader")
+	return _chip_mat
 
 
 static func _ramp(a: Color, b: Color) -> Gradient:

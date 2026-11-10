@@ -444,8 +444,18 @@ func _regressions(world) -> void:
 	check(stamp != null and stamp.position.y > vs.y * 0.45, "the layer title is stamped low on the screen")
 	await create_timer(3.4).timeout
 	check(not is_instance_valid(stamp), "...and fades after about two seconds")
-	check(player.lamp.light_energy > 3.0 * world._lift_stop_light.light_energy and player.lamp.light_energy > 10.0 * player.fill.light_energy,
-		"the headlamp outshines the lantern and the fill (%.1f vs %.1f, %.2f)" % [player.lamp.light_energy, world._lift_stop_light.light_energy, player.fill.light_energy])
+	# The headlamp is the main light underground. On the rock its pool is the
+	# shader's (headlamp.gdshaderinc: energy over 1 + 0.07 d²), so compare what
+	# actually lands on the rock: the pool 2 m out in the beam against the
+	# lift-stop lantern 1.5 m from its post (Godot's omni falloff), and the
+	# lantern stays a small pool. The cool fill is a whisper next to the spot.
+	var le = world.field.material.get_shader_parameter("lamp_energy")
+	var pool: float = (float(le) if le != null else 1.25) / (1.0 + 0.07 * 4.0)
+	var lsl: OmniLight3D = world._lift_stop_light
+	var nd := pow(1.5 / lsl.omni_range, 4.0)
+	var lantern: float = lsl.light_energy * pow(maxf(1.0 - nd, 0.0), 2.0) * pow(1.5, -lsl.omni_attenuation)
+	check(pool > 2.5 * lantern and lsl.omni_range <= 3.5 and player.fill.light_energy < 0.1 * player.lamp.light_energy,
+		"the headlamp's pool outshines the lantern's (%.2f vs %.2f) and the fill is a whisper (%.2f of %.1f)" % [pool, lantern, player.fill.light_energy, player.lamp.light_energy])
 	# The floating "Lift" tag hides when you're right next to the lamp post
 	# (it filled the phone screen as smeared yellow text).
 	var keep_at: Vector3 = world.player.position
