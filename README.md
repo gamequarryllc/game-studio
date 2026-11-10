@@ -11,6 +11,8 @@ Mobile games Claude builds, playtests and polishes for Game Quarry, one loop at 
 | `games/<slug>/` | One Godot 4.4 project per game, with its own `NOTES.md` |
 | `.github/workflows/web.yml` | Builds every game for the web on each push to `main` and publishes them to GitHub Pages |
 | `tools/build_site.py` | Makes the play-links page and `status.json` |
+| `site/`, `tools/site_pages.py` | The privacy policy and support pages every App Store listing links to |
+| `store/<slug>/` | Each game's App Store listing and build settings (`store/README.md` has the owner's steps) |
 
 ## Run a game on a computer
 

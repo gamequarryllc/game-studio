@@ -11,6 +11,8 @@
     "Simulation",
     "Casual"
   ],
+  "support_url": "https://gamequarryllc.github.io/game-studio/support/",
+  "privacy_url": "https://gamequarryllc.github.io/game-studio/privacy/",
   "age_rating": {
     "note": "Draft answers for the age-rating questions; the owner confirms them in App Store Connect.",
     "cartoon_or_fantasy_violence": "infrequent or mild",

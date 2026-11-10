@@ -5,12 +5,16 @@ Usage: python3 tools/build_site.py <site_dir> <results.txt>
 
 Reads queue.json for the games and their status, and results.txt
 ("<slug> ok" / "<slug> failed", one per line) for which builds made it.
+Also writes the privacy policy and support pages (tools/site_pages.py).
 """
 import datetime
 import html
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import site_pages  # noqa: E402  (the privacy policy and support pages)
 
 STATUS_LABEL = {
     "queued": "Queued",
@@ -40,9 +44,22 @@ def main():
     now = datetime.datetime.now(datetime.timezone.utc)
     sha = os.environ.get("GITHUB_SHA", "local")[:7]
 
+    for g in games:
+        if g["slug"] in site_pages.RESERVED_SLUGS:
+            sys.exit(f"A game can't be called '{g['slug']}': the site uses that folder.")
+    os.makedirs(site_dir, exist_ok=True)
+    try:
+        pages = site_pages.render(site_dir, root)
+    except SystemExit as e:
+        # A broken page must not take the play links down with it: publish the
+        # games, say what broke, and let tools/store_check.py fail the run.
+        print(f"::error title=Site pages::{e}")
+        pages = {"error": str(e)}
+
     status = {
         "built_at": now.isoformat(timespec="seconds"),
         "commit": sha,
+        "site": pages,
         "games": {
             g["slug"]: {
                 "status": g["status"],
@@ -52,7 +69,6 @@ def main():
             for g in games
         },
     }
-    os.makedirs(site_dir, exist_ok=True)
     with open(os.path.join(site_dir, "status.json"), "w", encoding="utf-8") as f:
         json.dump(status, f, indent=2)
 
@@ -113,6 +129,8 @@ def main():
   .soon {{ font-size: 13px; color: #8f8474; }}
   .broke {{ color: #f08a6a; }}
   footer {{ margin-top: 26px; font-size: 13px; color: #8f8474; }}
+  footer a {{ color: #b8ab98; }}
+  footer p {{ margin: 0 0 8px; }}
 </style>
 </head>
 <body>
@@ -124,7 +142,10 @@ def main():
   <p class="meta">{playable} of {len(games)} playable · updated {now.strftime('%b %d, %H:%M UTC')} · build {html.escape(sha)}</p>
   <ul>{''.join(cards)}
   </ul>
-  <footer>For a full-screen version on iPhone: open a game in Safari, tap Share, then Add to Home Screen. Progress saves in the browser. These are playtest builds, so ads and purchases are fake.</footer>
+  <footer>
+    <p>For a full-screen version on iPhone: open a game in Safari, tap Share, then Add to Home Screen. Progress saves in the browser. These are playtest builds, so ads and purchases are fake.</p>
+    <p><a href="support/">Support</a> · <a href="privacy/">Privacy policy</a></p>
+  </footer>
 </main>
 </body>
 </html>

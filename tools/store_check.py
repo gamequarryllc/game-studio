@@ -8,14 +8,99 @@ keywords 100 (comma-separated, no spaces after commas, no word that is already
 in the name or subtitle), promotional text 170, description 4000.
 Studio rules (STUDIO.md): no emoji, the word "arson" nowhere, no exclamation
 marks, product ids unique across games, prices ending in .99.
+
+It also checks the links every listing needs (support and privacy policy, both
+on the studio site), each game's section of the support page, and that the two
+pages build with and without a contact address (tools/site_pages.py).
 """
 import glob
 import json
 import os
 import re
 import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import site_pages  # noqa: E402
 
 LIMITS = {"name": 30, "subtitle": 30, "keywords": 100, "promotional_text": 170, "description": 4000}
+EMOJI_RX = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]")
+SUPPORT_KEYS = ("restore", "ad_choices", "sound")
+
+
+def check_support(slug, d, root, bad):
+    """The links and the game's section of the support page."""
+    if d.get("support_url") != site_pages.SUPPORT_URL:
+        bad(f"support_url must be {site_pages.SUPPORT_URL}")
+    if d.get("privacy_url") != site_pages.PRIVACY_URL:
+        bad(f"privacy_url must be {site_pages.PRIVACY_URL}")
+    support = d.get("support")
+    real = False
+    ios_path = os.path.join(root, "store", slug, "ios.json")
+    if os.path.exists(ios_path):
+        with open(ios_path, encoding="utf-8") as f:
+            real = bool(json.load(f).get("real_monetization"))
+    if support is None:
+        if real:
+            bad('has real ads and purchases, so it needs a "support" block (where Restore purchases and the ad privacy choices are)')
+        return
+    answers = [support.get(k, "") for k in SUPPORT_KEYS]
+    for extra in support.get("more", []):
+        if not extra.get("q") or not extra.get("a"):
+            bad('support.more entries need "q" and "a"')
+        answers += [extra.get("q", ""), extra.get("a", "")]
+    if not support.get("restore"):
+        bad("support.restore is missing (Apple requires Restore purchases; say where it is)")
+    if real and not support.get("ad_choices"):
+        bad("support.ad_choices is missing (players in Europe must be able to find their ad choices)")
+    text = " ".join(answers)
+    if "!" in text:
+        bad("exclamation mark in the support answers")
+    if EMOJI_RX.search(text):
+        bad("emoji in the support answers")
+    if re.search(r"arson", text, re.I):
+        bad('the word "arson" must not appear')
+    unknown = sorted(k for k in support if k not in SUPPORT_KEYS + ("more", "_about"))
+    if unknown:
+        bad(f"support has unknown keys: {', '.join(unknown)}")
+
+
+def check_site_pages(root, listings, problems):
+    """Builds the privacy and support pages both ways and reads them back."""
+    def bad(msg):
+        problems.append(f"site pages: {msg}")
+
+    address = "help@example.com"
+    for label, env in (("no contact address", {}), ("with a contact address", {"SUPPORT_EMAIL": address})):
+        with tempfile.TemporaryDirectory() as out:
+            try:
+                info = site_pages.render(out, root, env, quiet=True)
+            except SystemExit as e:
+                bad(f"{label}: {e}")
+                continue
+            pages = {}
+            for key in ("privacy", "support"):
+                path = os.path.join(out, key, "index.html")
+                if not os.path.exists(path):
+                    bad(f"{label}: {key}/index.html was not written")
+                    continue
+                with open(path, encoding="utf-8") as f:
+                    pages[key] = f.read()
+                if "{{" in pages[key] or "}}" in pages[key].split("</style>", 1)[-1]:
+                    bad(f"{label}: {key} page has an unfilled placeholder")
+                want = "mailto:" + address if env else site_pages.ISSUES_URL
+                if want not in pages[key]:
+                    bad(f"{label}: {key} page has no way to contact the studio")
+                if not env and "mailto:" in pages[key]:
+                    bad(f"{label}: {key} page has an address nobody gave it")
+            for slug, d in listings.items():
+                if "privacy" in pages and d.get("name", "") not in pages["privacy"]:
+                    bad(f"{label}: the privacy policy does not name {d.get('name')}")
+                if d.get("support") and "support" in pages and f'id="{slug}"' not in pages["support"]:
+                    bad(f"{label}: the support page has no section for {slug}")
+            if info["contact"] != ("email" if env else "issue page"):
+                bad(f"{label}: contact reported as {info['contact']}")
+    print("Site pages: privacy and support build with and without a contact address")
 
 
 def words(text):
@@ -27,6 +112,7 @@ def main():
     problems = []
     seen_ids = {}
     seen_names = {}
+    listings = {}
     paths = sorted(glob.glob(os.path.join(root, "store", "*", "listing.json")))
     for path in paths:
         slug = os.path.basename(os.path.dirname(path))
@@ -51,8 +137,10 @@ def main():
             bad('the word "arson" must not appear')
         if "!" in text_all:
             bad("exclamation mark in store text")
-        if re.search(r"[\U0001F000-\U0001FAFF☀-➿]", text_all):
+        if EMOJI_RX.search(text_all):
             bad("emoji in store text")
+        check_support(slug, d, root, bad)
+        listings[slug] = d
         kw = d.get("keywords", "")
         if ", " in kw or kw != kw.strip():
             bad("keywords must be comma-separated with no spaces")
@@ -79,6 +167,8 @@ def main():
         print(f"{slug}: name {len(d.get('name',''))}/30, subtitle {len(d.get('subtitle',''))}/30, "
               f"keywords {len(kw)}/100, promo {len(d.get('promotional_text',''))}/170, "
               f"description {len(d.get('description',''))}/4000, {len(d.get('products', []))} products")
+
+    check_site_pages(root, listings, problems)
 
     if problems:
         print("\nStore listing problems:")

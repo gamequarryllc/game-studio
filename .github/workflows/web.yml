@@ -131,7 +131,13 @@ jobs:
           done
           cat "$GITHUB_WORKSPACE/build/results.txt"
 
-      - name: Make the index page
+      - name: Make the index, privacy policy and support pages
+        env:
+          # The studio's public contact address for the privacy and support pages.
+          # It is kept out of the repo: a repository variable (Settings > Secrets
+          # and variables > Actions > Variables). Without it the pages point at
+          # the issue page (tools/site_pages.py).
+          SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
         run: python3 tools/build_site.py build/site build/results.txt
 
       - name: Upload the site for Pages
@@ -141,6 +147,11 @@ jobs:
 
       - name: Fail the run if any game broke
         run: "! grep -q ' failed$' build/results.txt"
+
+      # After the upload, so a slip in a store listing never takes the play links down.
+      - name: Store listings and site pages check
+        if: ${{ !cancelled() }}
+        run: python3 tools/store_check.py
 
   deploy:
     needs: build

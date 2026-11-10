@@ -11,6 +11,14 @@
     "Simulation",
     "Casual"
   ],
+  "support_url": "https://gamequarryllc.github.io/game-studio/support/",
+  "privacy_url": "https://gamequarryllc.github.io/game-studio/privacy/",
+  "support": {
+    "_about": "This game's section on the support page (tools/site_pages.py). Every answer must match what the game shows.",
+    "restore": "Tap Notebook at the top right, turn to the Shop chapter and tap Restore at the bottom of the page.",
+    "ad_choices": "Tap Notebook, turn to Settings and tap Change beside Ad privacy choices. The entry is only there in countries where the law asks for it.",
+    "sound": "Tap Notebook and turn to Settings: Softer, Louder and Mute are at the top."
+  },
   "age_rating": {
     "note": "Draft answers for the age-rating questions; the owner confirms them in App Store Connect.",
     "cartoon_or_fantasy_violence": "infrequent or mild",

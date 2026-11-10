@@ -1,0 +1,15 @@
+# app-ads.txt for Game Quarry's games (who is allowed to sell their ad space).
+#
+# One line goes here once the studio's AdMob account exists. AdMob shows the
+# exact line under Apps > View all apps > app-ads.txt > "How to set up
+# app-ads.txt"; it looks like this, with the account's own publisher id:
+#
+#   google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0
+#
+# A publisher id is not a secret (it is public by design), so it may be committed.
+# Until a real line is here, tools/site_pages.py does not publish this file.
+#
+# Where it must be reachable: ad networks only look at the ROOT of the website
+# named in the App Store listing's Marketing URL (https://<host>/app-ads.txt),
+# never in a sub-folder. See store/README.md, "app-ads.txt", for the two ways
+# to get it there.
