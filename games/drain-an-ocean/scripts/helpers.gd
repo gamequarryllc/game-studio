@@ -28,6 +28,7 @@ func sync() -> void:
 				have += 1
 		while have < GameState.helper_count(key):
 			var n := Models.instance("pelican" if key == "pelican" else "crab_helper")
+			n.scale = Vector3.ONE * Models.SCALE_HELPER
 			add_child(n)
 			var start := home if key == "pelican" else crab_home
 			n.position = start + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2))

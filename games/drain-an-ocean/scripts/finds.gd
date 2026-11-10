@@ -16,13 +16,24 @@ var _wreck_cool: Array = [0.0, 0.0, 0.0]
 var _lifting: Array = []
 var glint_mesh: QuadMesh
 var glint_mat: StandardMaterial3D
+var mark_mesh: QuadMesh
+var mark_mat: StandardMaterial3D
 
 
 func setup(b: Bay, wreck_list: Array) -> void:
 	bay = b
 	wrecks = wreck_list
 	glint_mesh = QuadMesh.new()
-	glint_mesh.size = Vector2(1.1, 1.1)
+	glint_mesh.size = Vector2(1.0, 1.0)
+	var mq := QuadMesh.new()
+	mq.size = Vector2(2.4, 2.4)
+	mq.orientation = PlaneMesh.FACE_Y
+	mark_mesh = mq
+	mark_mat = StandardMaterial3D.new()
+	mark_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mark_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mark_mat.albedo_texture = ChartMarks.find_cross()
+	mark_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	glint_mat = StandardMaterial3D.new()
 	glint_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	glint_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -33,7 +44,8 @@ func setup(b: Bay, wreck_list: Array) -> void:
 	for f in spots.size():
 		var def: Dictionary = Balance.FINDS[f]
 		var n := Models.instance(str(def.model))
-		n.position = spots[f].pos + Vector3(0, -0.12, 0)
+		n.position = spots[f].pos + Vector3(0, -0.15, 0)
+		n.scale = Vector3.ONE * Models.SCALE_FIND
 		n.rotation = Vector3(deg_to_rad(randf_range(-14, 14)), randf() * TAU, deg_to_rad(randf_range(-10, 10)))
 		n.name = "Find_" + str(def.key)
 		add_child(n)
@@ -162,6 +174,12 @@ func update(delta: float, now: float) -> void:
 			g.material_override = glint_mat
 			g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			add_child(g)
+			var mk := MeshInstance3D.new()
+			mk.mesh = mark_mesh
+			mk.material_override = mark_mat
+			mk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mk.name = "Mark"
+			g.add_child(mk)
 			_glints[f] = g
 		elif not exposed and _glints.has(f):
 			_glints[f].queue_free()
@@ -183,7 +201,7 @@ func update(delta: float, now: float) -> void:
 			p.y += sin(u * PI) * 3.0
 			n.global_position = p
 			n.rotation.y += delta * 4.0
-			n.scale = Vector3.ONE * lerpf(1.0, 0.4, u)
+			n.scale = Vector3.ONE * lerpf(1.0, 0.4, u) * (Models.SCALE_FIND if not l.free else 1.0)
 		if u >= 1.0:
 			if is_instance_valid(n):
 				if l.free:

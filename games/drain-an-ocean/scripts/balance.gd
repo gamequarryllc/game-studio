@@ -19,13 +19,13 @@ const START_MONEY := 20.0
 const PUMPS = [
 	{"key": "bucket", "name": "Bucket brigade", "flow": 40.0, "cost": 18.0,
 		"desc": "A chain of buckets, a lot of goodwill."},
-	{"key": "hand", "name": "Hand pump", "flow": 150.0, "cost": 260.0,
+	{"key": "hand", "name": "Hand pump", "flow": 150.0, "cost": 320.0,
 		"desc": "A cast-iron lever pump. Someone has to work it."},
-	{"key": "diesel", "name": "Diesel pump", "flow": 580.0, "cost": 4200.0,
+	{"key": "diesel", "name": "Diesel pump", "flow": 580.0, "cost": 7500.0,
 		"desc": "Loud, smoky and honest. Runs all night."},
-	{"key": "siphon", "name": "Giant siphon", "flow": 2300.0, "cost": 100000.0,
+	{"key": "siphon", "name": "Giant siphon", "flow": 2300.0, "cost": 170000.0,
 		"desc": "A pipe as wide as a lane, arched over the sea wall."},
-	{"key": "whirlpool", "name": "Whirlpool engine", "flow": 9000.0, "cost": 2.2e6,
+	{"key": "whirlpool", "name": "Whirlpool engine", "flow": 9000.0, "cost": 1.4e6,
 		"desc": "Nobody is quite sure how it works. It hums."},
 ]
 const PAD_COST_GROWTH := 1.55
@@ -43,7 +43,17 @@ const HEAD_LOSS := 0.11
 # a stop.
 const SEEP_K := 7.0
 const SEEP_EXP := 2.45
-const DEEP_SCALE := 3.0         # Bay.volume_mult: deep water counts 1 + (depth/3)² times
+# Under the lost town's rooftops the sea pushes in harder still: below
+# SEEP_DEEP_FROM metres the seepage grows by SEEP_DEEP_PER per metre, so the
+# last few metres take the whirlpool engine.
+const SEEP_DEEP_FROM := 20.0
+const SEEP_DEEP_PER := 0.08
+const DEEP_SCALE := 2.4         # Bay.volume_mult: deep water counts 1 + (depth / DEEP_SCALE)² times
+# The lost town's streets and cellars hold more than the bare floor shows:
+# below TOWN_FROM metres every metre of water counts TOWN_MULT times more, so
+# the last of it drains over a minute or so, not in a blink.
+const TOWN_FROM := 20.5
+const TOWN_MULT := 45.0
 
 # Barge pumps float on whichever pool you send them to (or the main body) and
 # pump that water out. One bought barge works anywhere; more cost more.
@@ -53,13 +63,13 @@ const BARGE_FLOW_PER_TIER := 0.6     # barges get +60% per pump tier you've reac
 
 # --- Upgrades (bought in the chandlery) ---------------------------------------------------
 const UPGRADES = [
-	{"key": "power", "name": "Pump power", "per_level": 0.15, "max": 15, "cost": 150.0, "growth": 2.35,
+	{"key": "power", "name": "Pump power", "per_level": 0.15, "max": 15, "cost": 150.0, "growth": 3.0,
 		"desc": "Every pump moves 15% more water."},
-	{"key": "pipe", "name": "Pipe width", "per_level": 0.3, "max": 12, "cost": 900.0, "growth": 2.6,
+	{"key": "pipe", "name": "Pipe width", "per_level": 0.3, "max": 12, "cost": 900.0, "growth": 3.1,
 		"desc": "Wider pipes lose less to the lift as the water drops."},
-	{"key": "salvage", "name": "Salvage value", "per_level": 0.15, "max": 20, "cost": 300.0, "growth": 2.2,
+	{"key": "salvage", "name": "Salvage value", "per_level": 0.15, "max": 20, "cost": 300.0, "growth": 2.8,
 		"desc": "Finds, chests and wreck loads pay 15% more."},
-	{"key": "rescue", "name": "Rescue nets", "per_level": 0.15, "max": 15, "cost": 500.0, "growth": 2.3,
+	{"key": "rescue", "name": "Rescue nets", "per_level": 0.15, "max": 15, "cost": 500.0, "growth": 2.9,
 		"desc": "Rescues pay more and the pelicans fly faster."},
 ]
 
@@ -77,10 +87,10 @@ const HELPERS = [
 # Depth bands (y of the water level); also in data/bay.json for the view.
 const RINGS = [
 	{"name": "Sandbars", "top": 0.0, "bottom": -3.0, "bonus": 60.0},
-	{"name": "Kelp forest", "top": -3.0, "bottom": -7.0, "bonus": 1000.0},
-	{"name": "Reef", "top": -7.0, "bottom": -11.0, "bonus": 8000.0},
-	{"name": "Shipwrecks", "top": -11.0, "bottom": -15.0, "bonus": 50000.0},
-	{"name": "The trench", "top": -15.0, "bottom": -20.0, "bonus": 300000.0},
+	{"name": "Kelp forest", "top": -3.0, "bottom": -7.0, "bonus": 700.0},
+	{"name": "Reef", "top": -7.0, "bottom": -11.0, "bonus": 4000.0},
+	{"name": "Shipwrecks", "top": -11.0, "bottom": -15.0, "bonus": 20000.0},
+	{"name": "The trench", "top": -15.0, "bottom": -20.0, "bonus": 90000.0},
 	{"name": "The lost town", "top": -20.0, "bottom": -24.5, "bonus": 0.0},
 ]
 
@@ -92,18 +102,18 @@ const SPECIES = [
 	{"key": "hermit_crab", "name": "Hermit crab", "latin": "Pagurus vagans", "ring": 0, "bounty": 6.0, "appeal": 0.8, "model": "crab"},
 	{"key": "starfish", "name": "Sugar starfish", "latin": "Asterias dulcis", "ring": 0, "bounty": 8.0, "appeal": 1.0, "model": "starfish"},
 	{"key": "flounder", "name": "Flounder", "latin": "Platichthys planus", "ring": 0, "bounty": 11.0, "appeal": 1.2, "model": "flounder"},
-	{"key": "seahorse", "name": "Seahorse", "latin": "Hippocampus erectus", "ring": 1, "bounty": 45.0, "appeal": 18.0, "model": "seahorse"},
-	{"key": "kelp_bass", "name": "Kelp bass", "latin": "Paralabrax clathratus", "ring": 1, "bounty": 35.0, "appeal": 15.0, "model": "bass"},
-	{"key": "urchin", "name": "Purple urchin", "latin": "Strongylocentrotus", "ring": 1, "bounty": 30.0, "appeal": 12.0, "model": "urchin"},
-	{"key": "clownfish", "name": "Clownfish", "latin": "Amphiprion ocellaris", "ring": 2, "bounty": 250.0, "appeal": 50.0, "model": "clownfish"},
-	{"key": "pufferfish", "name": "Pufferfish", "latin": "Tetraodon globus", "ring": 2, "bounty": 300.0, "appeal": 60.0, "model": "puffer"},
-	{"key": "octopus", "name": "Octopus", "latin": "Octopus vulgaris", "ring": 2, "bounty": 350.0, "appeal": 70.0, "model": "octopus"},
-	{"key": "turtle", "name": "Sea turtle", "latin": "Chelonia mydas", "ring": 3, "bounty": 1500.0, "appeal": 160.0, "model": "turtle"},
-	{"key": "moray", "name": "Moray eel", "latin": "Gymnothorax", "ring": 3, "bounty": 1300.0, "appeal": 140.0, "model": "moray"},
-	{"key": "lobster", "name": "Blue lobster", "latin": "Homarus caeruleus", "ring": 3, "bounty": 1400.0, "appeal": 150.0, "model": "lobster"},
-	{"key": "anglerfish", "name": "Anglerfish", "latin": "Melanocetus", "ring": 4, "bounty": 9000.0, "appeal": 450.0, "model": "angler"},
-	{"key": "lanternfish", "name": "Lanternfish", "latin": "Myctophum", "ring": 4, "bounty": 7000.0, "appeal": 380.0, "model": "lantern"},
-	{"key": "coelacanth", "name": "Coelacanth", "latin": "Latimeria", "ring": 4, "bounty": 12000.0, "appeal": 550.0, "model": "coelacanth"},
+	{"key": "seahorse", "name": "Seahorse", "latin": "Hippocampus erectus", "ring": 1, "bounty": 67.5, "appeal": 18.0, "model": "seahorse"},
+	{"key": "kelp_bass", "name": "Kelp bass", "latin": "Paralabrax clathratus", "ring": 1, "bounty": 52.5, "appeal": 15.0, "model": "bass"},
+	{"key": "urchin", "name": "Purple urchin", "latin": "Strongylocentrotus", "ring": 1, "bounty": 45.0, "appeal": 12.0, "model": "urchin"},
+	{"key": "clownfish", "name": "Clownfish", "latin": "Amphiprion ocellaris", "ring": 2, "bounty": 375.0, "appeal": 50.0, "model": "clownfish"},
+	{"key": "pufferfish", "name": "Pufferfish", "latin": "Tetraodon globus", "ring": 2, "bounty": 450.0, "appeal": 60.0, "model": "puffer"},
+	{"key": "octopus", "name": "Octopus", "latin": "Octopus vulgaris", "ring": 2, "bounty": 525.0, "appeal": 70.0, "model": "octopus"},
+	{"key": "turtle", "name": "Sea turtle", "latin": "Chelonia mydas", "ring": 3, "bounty": 2250.0, "appeal": 160.0, "model": "turtle"},
+	{"key": "moray", "name": "Moray eel", "latin": "Gymnothorax", "ring": 3, "bounty": 1950.0, "appeal": 140.0, "model": "moray"},
+	{"key": "lobster", "name": "Blue lobster", "latin": "Homarus caeruleus", "ring": 3, "bounty": 2100.0, "appeal": 150.0, "model": "lobster"},
+	{"key": "anglerfish", "name": "Anglerfish", "latin": "Melanocetus", "ring": 4, "bounty": 13500.0, "appeal": 450.0, "model": "angler"},
+	{"key": "lanternfish", "name": "Lanternfish", "latin": "Myctophum", "ring": 4, "bounty": 10500.0, "appeal": 380.0, "model": "lantern"},
+	{"key": "coelacanth", "name": "Coelacanth", "latin": "Latimeria", "ring": 4, "bounty": 18000.0, "appeal": 550.0, "model": "coelacanth"},
 	{"key": "whale", "name": "Grey whale calf", "latin": "Eschrichtius", "ring": 5, "bounty": 400000.0, "appeal": 0.0, "model": "whale", "release": true},
 ]
 const STRAND_DEPTH := 0.45          # a creature is stranded when the water over it is shallower than this
@@ -126,26 +136,26 @@ const FINDS = [
 		"note": "Still rings true after a hundred years."},
 	{"key": "compass", "name": "Binnacle compass", "ring": 2, "value": 7000.0, "model": "find_compass",
 		"note": "Points north, mostly."},
-	{"key": "lens", "name": "Lighthouse lens", "ring": 3, "value": 25000.0, "model": "find_lens",
+	{"key": "lens", "name": "Lighthouse lens", "ring": 3, "value": 14000.0, "model": "find_lens",
 		"note": "The one the old light lost in the storm."},
-	{"key": "chest", "name": "Captain's chest", "ring": 3, "value": 35000.0, "model": "find_chest",
+	{"key": "chest", "name": "Captain's chest", "ring": 3, "value": 20000.0, "model": "find_chest",
 		"note": "Doubloons, a pipe and a very damp diary."},
-	{"key": "wheel", "name": "Ship's wheel", "ring": 3, "value": 18000.0, "model": "find_wheel",
+	{"key": "wheel", "name": "Ship's wheel", "ring": 3, "value": 11000.0, "model": "find_wheel",
 		"note": "Eight spokes, one replaced with a broom handle."},
-	{"key": "cannon", "name": "Bronze cannon", "ring": 4, "value": 150000.0, "model": "find_cannon",
+	{"key": "cannon", "name": "Bronze cannon", "ring": 4, "value": 80000.0, "model": "find_cannon",
 		"note": "Never fired, by the look of it."},
-	{"key": "statue", "name": "Mermaid statue", "ring": 4, "value": 220000.0, "model": "find_statue",
+	{"key": "statue", "name": "Mermaid statue", "ring": 4, "value": 120000.0, "model": "find_statue",
 		"note": "The town square's old fountain."},
 	{"key": "weathervane", "name": "Town weathervane", "ring": 5, "value": 2.0e6, "model": "find_weathervane",
 		"note": "The cockerel from the clock tower. Still turning."},
 ]
 const FIND_SHOW_DEPTH := 0.12        # finds can be picked up once the water over them is this shallow
 const WRECK_LOADS := 6               # salvage loads per wreck
-const WRECK_LOAD_VALUE = [0.0, 0.0, 0.0, 2500.0, 0.0, 0.0]   # by ring (wrecks sit in ring 3)
+const WRECK_LOAD_VALUE = [0.0, 0.0, 0.0, 4500.0, 0.0, 0.0]   # by ring (wrecks sit in ring 3)
 const WRECK_TAP_COOLDOWN := 1.2
 
 # --- Aquarium ------------------------------------------------------------------------------------
-const TICKET_MULT := 1.0             # aquarium income per second = total appeal x this
+const TICKET_MULT := 0.8             # aquarium income per second = total appeal x this
 const AQUARIUM_TANK_MAX := 24        # creatures shown swimming in the tank
 
 # --- Monetization ------------------------------------------------------------------------------

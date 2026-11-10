@@ -23,7 +23,7 @@ const NO_BODY := -1
 # Deep water counts for more volume per metre: area x (1 + (depth / DEEP_SCALE)²).
 # The deep rings are small, so without this they'd empty in seconds once a
 # pump tier beat the seepage; with it every ring drains over minutes.
-var deep_scale := 3.0
+var deep_scale := Balance.DEEP_SCALE
 
 var n := 128
 var w := 129
@@ -49,6 +49,7 @@ var rings: Array = []
 var pools: Array = []            # designed pools: name, x, z, v, node, spill, floor
 var landmarks := {}
 var props := {}
+var far := {}
 
 # Water: id -> {"node": int, "level": float, "slot": int}
 var bodies := {}
@@ -115,6 +116,7 @@ func _load() -> void:
 	pools = d.pools
 	landmarks = d.landmarks
 	props = d.props
+	far = d.get("far", {})
 	drained_at = PackedFloat32Array()
 	drained_at.resize(w * w)
 	drained_at.fill(-1e6)
@@ -213,8 +215,10 @@ func area(node: int, level: float) -> float:
 
 
 func volume_mult(level: float) -> float:
-	var d := maxf(0.0, -level) / deep_scale if deep_scale > 0.0 else 0.0
-	return 1.0 + d * d
+	var depth := maxf(0.0, -level)
+	var d := depth / deep_scale if deep_scale > 0.0 else 0.0
+	var town := 1.0 + (Balance.TOWN_MULT - 1.0) * clampf((depth - Balance.TOWN_FROM) / 0.8, 0.0, 1.0)
+	return (1.0 + d * d) * town
 
 
 func body_area(id: int) -> float:
@@ -244,7 +248,7 @@ func max_depth(id: int) -> float:
 
 
 func deepest_vertex(id: int) -> int:
-	return minv[int(bodies[id].node)]
+	return minv[int(bodies[id].node)] if bodies.has(id) else sink
 
 
 func is_drained() -> bool:
@@ -359,7 +363,8 @@ var _pending_drain: Array = []
 
 
 func _rebuild() -> void:
-	## Which body every vertex belongs to, and what the shaders draw.
+	## Which body every vertex belongs to, and what the shaders draw. Runs
+	## on every split, so it touches each vertex as few times as it can.
 	topo_version += 1
 	var nn := parent.size()
 	_node_body = PackedInt32Array()
@@ -370,11 +375,14 @@ func _rebuild() -> void:
 	# Parents come after their children, so walk down from the top.
 	var act := PackedInt32Array()
 	act.resize(nn)
+	var act_slot := PackedInt32Array()
+	act_slot.resize(nn)
 	for k in range(nn - 1, -1, -1):
 		var b := _node_body[k]
 		if b == NO_BODY and parent[k] >= 0:
 			b = act[parent[k]]
 		act[k] = b
+		act_slot[k] = int(bodies[b].slot) if b != NO_BODY else 255
 	var any_drained := not _pending_drain.is_empty()
 	var d_lvl := 0.0
 	var d_t := 0.0
@@ -383,39 +391,26 @@ func _rebuild() -> void:
 		d_t = float(pd[2])
 	var total := w * w
 	var old := vertex_body
+	var had_old := not old.is_empty()
 	vertex_body = PackedInt32Array()
 	vertex_body.resize(total)
 	draw_slot = PackedByteArray()
 	draw_slot.resize(total)
-	draw_slot.fill(255)
 	for v in total:
 		var k := vert_node[v]
-		var id := act[k] if k >= 0 else NO_BODY
+		if k < 0:
+			vertex_body[v] = NO_BODY
+			draw_slot[v] = 255
+			continue
+		var id := act[k]
 		vertex_body[v] = id
-		if id != NO_BODY:
-			draw_slot[v] = int(bodies[id].slot)
-		elif any_drained and not old.is_empty() and old[v] != NO_BODY:
+		draw_slot[v] = act_slot[k]
+		if id == NO_BODY and any_drained and had_old and old[v] != NO_BODY:
 			# Left dry by an emptied body: it dries over time from here.
 			drained_at[v] = d_t - maxf(0.0, h[v] - d_lvl) * 14.0
 	_pending_drain.clear()
-	# Dry cells beside a body draw that body's level (always below them), so
-	# the water's edge meets the seabed exactly at the shoreline.
-	for v in total:
-		if draw_slot[v] != 255 or outer[v] == 1:
-			continue
-		var i := v % w
-		var best := -1e9
-		var bslot := 255
-		for nb in [v - 1, v + 1, v - w, v + w]:
-			if nb < 0 or nb >= total:
-				continue
-			if (nb == v - 1 and i == 0) or (nb == v + 1 and i == w - 1):
-				continue
-			var id := vertex_body[nb]
-			if id != NO_BODY and float(bodies[id].level) > best:
-				best = float(bodies[id].level)
-				bslot = int(bodies[id].slot)
-		draw_slot[v] = bslot
+	# Dry cells beside a body (the shaders' shoreline halo) are drawn by the
+	# shaders themselves: they look at the four neighbours' slots.
 
 
 func slot_levels() -> PackedFloat32Array:
@@ -475,7 +470,7 @@ func body_name(id: int) -> String:
 func descend(v: int) -> int:
 	## Steepest descent from a vertex to a local low point (where water gathers).
 	var guard := 0
-	while guard < 400:
+	while guard < 1600:
 		guard += 1
 		var i := v % w
 		var best := v
@@ -497,10 +492,12 @@ func float_spot(x: float, z: float) -> Dictionary:
 	## the seabed to the first water below. {"body", "v", "pos"} or {} if none.
 	var v := vertex_of(x, z)
 	var guard := 0
-	while guard < 400:
+	while guard < 1600:
 		guard += 1
 		var id := vertex_body[v]
-		if id != NO_BODY and h[v] < float(bodies[id].level) - 0.15:
+		# 15 cm of water floats a barge; a pool already pumped shallower than
+		# that still takes one at its deepest point, so no pool is left for good.
+		if id != NO_BODY and h[v] < float(bodies[id].level) - minf(0.15, max_depth(id) * 0.5):
 			return {"body": id, "v": v, "pos": Vector3(vertex_xz(v).x, float(bodies[id].level), vertex_xz(v).y)}
 		var nxt := v
 		var i := v % w
@@ -515,6 +512,63 @@ func float_spot(x: float, z: float) -> Dictionary:
 			return {}
 		v = nxt
 	return {}
+
+
+func intake_toward(from: Vector3, to: Vector3, id: int) -> Vector3:
+	## Where a hose laid from `from` straight towards `to` first reaches the
+	## water of body `id` (a little way in from the edge), or INF.
+	if not bodies.has(id):
+		return Vector3.INF
+	var lvl := float(bodies[id].level)
+	var d := Vector2(to.x - from.x, to.z - from.z)
+	var L := d.length()
+	if L < 0.01:
+		return Vector3.INF
+	var dir := d / L
+	var t := 0.0
+	var wet_run := 0.0
+	while t < L:
+		var x := from.x + dir.x * t
+		var z := from.z + dir.y * t
+		if in_bounds(x, z) and vertex_body[vertex_of(x, z)] == id and height_at(x, z) < lvl - 0.05:
+			wet_run += s
+			if wet_run >= 1.2:
+				return Vector3(x, lvl, z)
+		else:
+			wet_run = 0.0
+		t += s
+	return Vector3.INF
+
+
+func nearest_water(from: Vector3, id: int, reach: float = 110.0) -> Vector3:
+	## The nearest water of body `id` to `from`, searched along 32 rays (fast
+	## enough to re-lay every hose as the water drops). A little way in from
+	## the edge, so a hose end sits in the water. INF if none.
+	if not bodies.has(id):
+		return Vector3.INF
+	var lvl := float(bodies[id].level)
+	var best := Vector3.INF
+	var bd := 1e9
+	for k in 32:
+		var a := TAU * float(k) / 32.0
+		var dir := Vector2(cos(a), sin(a))
+		var t := 1.0
+		var run := 0.0
+		while t < reach and t < bd:
+			var x := from.x + dir.x * t
+			var z := from.z + dir.y * t
+			if not in_bounds(x, z):
+				break
+			if vertex_body[vertex_of(x, z)] == id and height_at(x, z) < lvl - 0.05:
+				run += 1.0
+				if run >= 1.5:
+					bd = t
+					best = Vector3(x, lvl, z)
+					break
+			else:
+				run = 0.0
+			t += 1.0
+	return best
 
 
 func nearest_wet(from: Vector3, id: int, max_r: int = 70) -> Vector3:

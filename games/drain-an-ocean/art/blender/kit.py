@@ -91,11 +91,13 @@ PAL.update({
 })
 
 _mats = {}
+_named = {}
 
 
 def reset():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     _mats.clear()
+    _named.clear()
 
 
 def srgb_to_linear(c):
@@ -108,6 +110,10 @@ def mat(name, color=None, metal=0.0, rough=0.7, emit=0.0):
     key = (name, metal, rough, emit)
     if key in _mats:
         return _mats[key]
+    if color is None and name in _named:
+        color = _named[name]
+    if color is not None:
+        _named[name] = color
     c = srgb_to_linear(PAL.get(name, (0.8, 0.8, 0.8)) if color is None else color)
     m = bpy.data.materials.new(name)
     m.use_nodes = True
@@ -600,3 +606,315 @@ def paint(o, fn):
 
 def white():
     return mat("white", (1.0, 1.0, 1.0), rough=0.6)
+
+
+# --- Second-generation helpers (art review 1) ------------------------------------------------
+# Lofted bodies from cross-sections, fins with real thickness and rays,
+# ribbons for weed, barnacle clusters and painting helpers. Everything a
+# creature or a hull needs to have a silhouette and thickness instead of
+# being spheres and flat boards.
+
+def spline(points, t):
+    """Catmull-Rom through (t, value) pairs (t ascending); value may be a tuple."""
+    ts = [p[0] for p in points]
+    if t <= ts[0]:
+        return points[0][1]
+    if t >= ts[-1]:
+        return points[-1][1]
+    k = 0
+    while ts[k + 1] < t:
+        k += 1
+    p0 = points[max(k - 1, 0)][1]
+    p1 = points[k][1]
+    p2 = points[k + 1][1]
+    p3 = points[min(k + 2, len(points) - 1)][1]
+    u = (t - ts[k]) / (ts[k + 1] - ts[k])
+    def cr(a, b, c, d):
+        return 0.5 * ((2 * b) + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (-a + 3 * b - 3 * c + d) * u * u * u)
+    if isinstance(p1, (tuple, list)):
+        return tuple(cr(p0[i], p1[i], p2[i], p3[i]) for i in range(len(p1)))
+    return cr(p0, p1, p2, p3)
+
+
+def loft(rings, name="loft", m=None, cap0=True, cap1=True):
+    """A mesh through a list of rings (each a list of Vectors, same count),
+    with fan caps at the ends."""
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    vr = [[bm.verts.new(p) for p in ring] for ring in rings]
+    n = len(rings[0])
+    for i in range(len(vr) - 1):
+        for k in range(n):
+            bm.faces.new((vr[i][k], vr[i][(k + 1) % n], vr[i + 1][(k + 1) % n], vr[i + 1][k]))
+    for (ring, on) in ((vr[0], cap0), (vr[-1], cap1)):
+        if not on:
+            continue
+        c = Vector((0, 0, 0))
+        for v in ring:
+            c += v.co
+        c /= len(ring)
+        tip = bm.verts.new(c)
+        for k in range(n):
+            bm.faces.new((ring[k], ring[(k + 1) % n], tip))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    if m:
+        o.data.materials.append(m)
+    return o
+
+
+def body(length, profile, segs=24, steps=28, name="body", m=None, axis_curve=None):
+    """A creature's body along +Y (tail at -length/2, nose at +length/2).
+    profile: list of (t 0..1 tail->nose, (half_width, half_height, z_offset,
+    squareness)) control points; squareness 2 = ellipse, higher = boxier,
+    lower = diamond. axis_curve(t) -> (dx, dz) bends the spine."""
+    rings = []
+    for i in range(steps + 1):
+        t = i / steps
+        w, hgt, zo, sq = spline(profile, t)
+        w = max(w, 0.002)
+        hgt = max(hgt, 0.002)
+        y = -length / 2 + t * length
+        dx, dz = axis_curve(t) if axis_curve else (0.0, 0.0)
+        ring = []
+        for k in range(segs):
+            a = k / segs * math.tau
+            ca, sa = math.cos(a), math.sin(a)
+            e = 2.0 / max(sq, 0.5)
+            x = math.copysign(abs(ca) ** e, ca) * w
+            z = math.copysign(abs(sa) ** e, sa) * hgt
+            ring.append(Vector((x + dx, y, z + zo + dz)))
+        rings.append(ring)
+    return loft(rings, name, m)
+
+
+def fin(root_a, root_b, outline, up, thick=0.02, rays=0, ray_depth=0.35, steps=6, name="fin", m=None, scallop=0.0):
+    """A fin with thickness: a fan from the root line (root_a..root_b) out to
+    the outline (a list of Vectors along the free edge, from the root_a end
+    to the root_b end). It is `thick` at the root and thins to an edge;
+    `rays` ridges run from root to edge; `scallop` notches the edge between
+    rays. `up` is the side the top surface faces."""
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    A = Vector(root_a)
+    B = Vector(root_b)
+    up = Vector(up).normalized()
+    n = len(outline)
+    top = []
+    bot = []
+    for i in range(n):
+        u = i / (n - 1)
+        r = A.lerp(B, u)
+        e = Vector(outline[i])
+        if scallop > 0 and rays > 0:
+            ph = (u * rays) % 1.0
+            e = r + (e - r) * (1.0 - scallop * (0.5 - 0.5 * math.cos(ph * math.tau)))
+        rowt = []
+        rowb = []
+        for s in range(steps + 1):
+            v = s / steps
+            p = r.lerp(e, v)
+            th = thick * (1.0 - v) ** 0.8 + 0.0015
+            if rays > 0:
+                th *= 1.0 + ray_depth * math.cos(u * rays * math.tau)
+            rowt.append(bm.verts.new(p + up * th * 0.5))
+            rowb.append(bm.verts.new(p - up * th * 0.5))
+        top.append(rowt)
+        bot.append(rowb)
+    for i in range(n - 1):
+        for s in range(steps):
+            bm.faces.new((top[i][s], top[i + 1][s], top[i + 1][s + 1], top[i][s + 1]))
+            bm.faces.new((bot[i][s], bot[i][s + 1], bot[i + 1][s + 1], bot[i + 1][s]))
+    for i in range(n - 1):
+        bm.faces.new((top[i][steps], top[i + 1][steps], bot[i + 1][steps], bot[i][steps]))
+        bm.faces.new((top[i][0], bot[i][0], bot[i + 1][0], top[i + 1][0]))
+    for i in (0, n - 1):
+        for s in range(steps):
+            bm.faces.new((top[i][s], top[i][s + 1], bot[i][s + 1], bot[i][s]))
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    if m:
+        o.data.materials.append(m)
+    for poly in me.polygons:
+        poly.use_smooth = True
+    return o
+
+
+def ribbon(points, widths, normal=(0, 0, 1), thick=0.01, m=None, name="ribbon"):
+    """A flat strip through points (weed fronds, straps, kelp blades) with a
+    little thickness so it shades from both sides."""
+    pts = [Vector(p) for p in points]
+    nrm = Vector(normal).normalized()
+    me = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    rows = []
+    for i, p in enumerate(pts):
+        d = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
+        side = d.cross(nrm).normalized()
+        if side.length < 0.1:
+            side = Vector((1, 0, 0))
+        w = widths[i]
+        up = side.cross(d).normalized() * thick * 0.5
+        rows.append([bm.verts.new(p - side * w + up), bm.verts.new(p + side * w + up),
+                     bm.verts.new(p + side * w - up), bm.verts.new(p - side * w - up)])
+    for i in range(len(rows) - 1):
+        a, b = rows[i], rows[i + 1]
+        for k in range(4):
+            bm.faces.new((a[k], a[(k + 1) % 4], b[(k + 1) % 4], b[k]))
+    bm.faces.new(list(reversed(rows[0])))
+    bm.faces.new(rows[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(name, me)
+    bpy.context.collection.objects.link(o)
+    if m:
+        o.data.materials.append(m)
+    for poly in me.polygons:
+        poly.use_smooth = True
+    return o
+
+
+def barnacle_cluster(surface_obj, count, near, radius, seed=1, size=0.05, m=None, up_only=False):
+    """Barnacles stuck on a mesh: little cones with a hole, clustered round
+    `near` (world point) within `radius`, sitting on the nearest surface."""
+    from mathutils.bvhtree import BVHTree
+    bm = bmesh.new()
+    bm.from_mesh(surface_obj.data)
+    bm.transform(surface_obj.matrix_world)
+    tree = BVHTree.FromBMesh(bm)
+    rnd = random.Random(seed)
+    out = []
+    near = Vector(near)
+    tries = 0
+    while len(out) < count and tries < count * 20:
+        tries += 1
+        q = near + Vector((rnd.gauss(0, radius), rnd.gauss(0, radius), rnd.gauss(0, radius * 0.6)))
+        loc, nrm, _i, _d = tree.find_nearest(q)
+        if loc is None or (up_only and nrm.z < 0.2):
+            continue
+        s = size * rnd.uniform(0.55, 1.25)
+        c = cyl(s, s * 1.1, loc + nrm * s * 0.4, m, verts=6, r2=s * 0.45)
+        c.rotation_mode = "QUATERNION"
+        c.rotation_quaternion = Vector((0, 0, 1)).rotation_difference(nrm)
+        out.append(c)
+    bm.free()
+    return out
+
+
+def weed_strands(anchors, length=0.6, seed=1, width=0.05, m=None, droop=(0, 0, -1)):
+    """Ribbons of weed hanging from anchor points (eaves, rails, hull edges),
+    each a little different, drooping and curling."""
+    rnd = random.Random(seed)
+    out = []
+    dv = Vector(droop).normalized()
+    for a in anchors:
+        a = Vector(a)
+        L = length * rnd.uniform(0.5, 1.3)
+        n = 6
+        pts = []
+        wob = rnd.uniform(0, math.tau)
+        for i in range(n + 1):
+            t = i / n
+            off = Vector((math.sin(t * 3.0 + wob) * 0.08 * t, math.cos(t * 2.3 + wob) * 0.08 * t, 0))
+            pts.append(a + dv * L * t + off)
+        ws = [width * (1.0 - 0.75 * (i / n)) for i in range(n + 1)]
+        out.append(ribbon(pts, ws, normal=(rnd.uniform(-1, 1), rnd.uniform(-1, 1), 0.2), thick=0.006, m=m))
+    return out
+
+
+def paint_fn(o, fn):
+    """Sets the vertex colour per corner from fn(co, normal) -> (r, g, b),
+    multiplied over whatever shade is already baked (alias of paint)."""
+    paint(o, fn)
+
+
+def lerp3(a, b, t):
+    a = _look(a)
+    b = _look(b)
+    t = max(0.0, min(1.0, t))
+    return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
+
+
+def hash3(x, y, z, s=1.0):
+    v = math.sin(x * 127.1 * s + y * 311.7 * s + z * 74.7 * s) * 43758.5453
+    return v - math.floor(v)
+
+
+def vnoise3(x, y, z):
+    """Smooth value noise in 3D (for mottling, rust, weathering)."""
+    ix, iy, iz = math.floor(x), math.floor(y), math.floor(z)
+    fx, fy, fz = x - ix, y - iy, z - iz
+    fx, fy, fz = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy), fz * fz * (3 - 2 * fz)
+    def h(a, b, c):
+        return hash3(a, b, c)
+    x00 = h(ix, iy, iz) * (1 - fx) + h(ix + 1, iy, iz) * fx
+    x10 = h(ix, iy + 1, iz) * (1 - fx) + h(ix + 1, iy + 1, iz) * fx
+    x01 = h(ix, iy, iz + 1) * (1 - fx) + h(ix + 1, iy, iz + 1) * fx
+    x11 = h(ix, iy + 1, iz + 1) * (1 - fx) + h(ix + 1, iy + 1, iz + 1) * fx
+    y0 = x00 * (1 - fy) + x10 * fy
+    y1 = x01 * (1 - fy) + x11 * fy
+    return y0 * (1 - fz) + y1 * fz
+
+
+def tide_mark(o, line, weed="kelp_light", strength=0.55, band=0.25):
+    """Sea marks on anything that's been under water: below `line` the
+    surface is stained green-brown (patchy), with a darker band of weed at
+    the line itself and a pale salt crust just above it."""
+    def fn(co, n):
+        z = co.z
+        stain = vnoise3(co.x * 2.2, co.y * 2.2, co.z * 2.2)
+        if z < line:
+            k = strength * (0.65 + 0.35 * stain)
+            if line - z < band:
+                k = min(1.0, k + 0.25)
+            return lerp3((1, 1, 1), lerp3(weed, "ink", 0.15), k)
+        if z < line + 0.12:
+            return lerp3((1, 1, 1), (1.08, 1.06, 1.0), 0.6)
+        return (1, 1, 1)
+    paint(o, fn)
+
+
+def paint_mat(o, fn):
+    """Like paint(), but fn(co, normal, material_name) -> (r, g, b) also
+    knows which material each face uses (fins vs body, shell vs crab)."""
+    me = o.data
+    if "Col" not in me.color_attributes:
+        me.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+        for d in me.color_attributes["Col"].data:
+            d.color = (1, 1, 1, 1)
+    col = me.color_attributes["Col"]
+    me.color_attributes.active_color = col
+    names = [m.name.split(".")[0] if m else "" for m in me.materials]
+    for poly in me.polygons:
+        mn = names[poly.material_index] if poly.material_index < len(names) else ""
+        for li in poly.loop_indices:
+            v = me.vertices[me.loops[li].vertex_index]
+            c = fn(v.co, v.normal, mn)
+            old = col.data[li].color
+            col.data[li].color = (old[0] * c[0], old[1] * c[1], old[2] * c[2], 1.0)
+
+
+def fill_col(o, names, shade=(0.85, 0.85, 0.85)):
+    """Sets (not multiplies) the vertex colour of faces using the named
+    materials: parts joined on after the occlusion bake (weed, barnacles)
+    would otherwise export black."""
+    me = o.data
+    if "Col" not in me.color_attributes:
+        me.color_attributes.new(name="Col", type="BYTE_COLOR", domain="CORNER")
+    col = me.color_attributes["Col"]
+    me.color_attributes.active_color = col
+    mats = [m.name.split(".")[0] if m else "" for m in me.materials]
+    rnd = random.Random(7)
+    for poly in me.polygons:
+        if poly.material_index < len(mats) and mats[poly.material_index] in names:
+            s = 0.85 + 0.15 * rnd.random()
+            for li in poly.loop_indices:
+                col.data[li].color = (shade[0] * s, shade[1] * s, shade[2] * s, 1.0)

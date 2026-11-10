@@ -35,9 +35,10 @@ func _fit() -> void:
 	var f := UiTheme.bold()
 	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 	if sub != "":
-		w = maxf(w, UiTheme.body().get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, int(font_size * 0.55)).x)
+		w = maxf(w, UiTheme.body().get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, UiTheme.sub_size(font_size)).x)
 	var ic := 0.0 if icon == null else font_size * 1.1
-	custom_minimum_size = Vector2(w + 34 + ic, font_size * (2.0 if sub == "" else 2.6))
+	# generous to tap: never under 84 x 64 logical px (about 46 x 35 on a phone)
+	custom_minimum_size = Vector2(maxf(w + 38 + ic, 84.0), maxf(font_size * (2.0 if sub == "" else 2.9), 64.0))
 
 
 func _process(delta: float) -> void:

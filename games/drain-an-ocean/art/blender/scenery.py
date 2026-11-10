@@ -70,17 +70,38 @@ def kelp():
 
 
 def coral_brain():
+    """A brain coral: a lumpy dome sat on a flattened foot, covered in deep
+    meandering valleys (a domain-warped ridge pattern), pale on the ridges,
+    dark in the valleys."""
     reset()
-    b = sphere(0.6, (0, 0, 0.1), white(), scale=(1.0, 0.9, 0.62), segs=36, rings=18)
+    from kit import vnoise3
+    b = sphere(0.6, (0, 0, 0.1), white(), scale=(1.0, 0.92, 0.66), segs=84, rings=42)
+
+    def ridge(co):
+        wx = co.x + 0.35 * (vnoise3(co.x * 3.1, co.y * 3.1, co.z * 3.1) - 0.5)
+        wy = co.y + 0.35 * (vnoise3(co.y * 3.3 + 7, co.z * 3.3, co.x * 3.3) - 0.5)
+        f = math.sin(wx * 19.0 + math.sin(wy * 11.0) * 2.6 + vnoise3(co.x * 2, co.y * 2, 3) * 4.0)
+        return 1.0 - abs(f)              # 1 on a ridge's crest, 0 deep in a valley
+
     for v in b.data.vertices:
-        d = v.co.normalized()
-        g = math.sin(v.co.x * 22 + math.sin(v.co.y * 14) * 2.2) * 0.5 + 0.5
-        if v.co.z > 0.05:
-            v.co += d * (g * 0.035)
+        co = v.co.copy()
+        d = co.normalized()
+        lump = 0.06 * (vnoise3(co.x * 2.2, co.y * 2.2, co.z * 2.2) - 0.5)
+        if co.z > -0.05:
+            g = ridge(co)
+            v.co += d * (lump + 0.055 * (g ** 0.6) - 0.03)
+        else:
+            v.co.z = max(v.co.z, -0.12) + lump * 0.3
     o = join([b], "CoralBrain")
-    smooth(o, 70)
-    ao(o, 0.15, rays=8, strength=0.6, seed=7)
-    paint(o, lambda co, n: lerpc("coral_orange", mix("coral_orange", "rust", 0.5), 0.5 - 0.5 * math.sin(co.x * 22 + math.sin(co.y * 14) * 2.2)))
+    smooth(o, 80)
+    ao(o, 0.12, rays=10, strength=0.85, seed=7)
+
+    def col(co, n):
+        if co.z < -0.08:
+            return mix("coral_orange", "ink", 0.45)
+        g = ridge(co)
+        return lerpc(mix("coral_orange", "rust", 0.65), mix("coral_orange", "sand", 0.35), g ** 1.5)
+    paint(o, col)
     export([o], "coral_brain")
 
 
@@ -477,11 +498,11 @@ def house_1():
     house("house_1", "paint_yellow", "slate", 82)
 
 
+# Rocks, wrecks, the lost town, the lighthouse and the cottages are built by
+# buildings.py and wrecks.py now (the first versions here are kept for
+# reference only).
 ALL = {"kelp": kelp, "coral_brain": coral_brain, "coral_branch": coral_branch, "coral_fan": coral_fan,
-       "rock_round": rock_round, "rock_flat": rock_flat, "wreck_galleon": wreck_galleon, "wreck_steamer": wreck_steamer,
-       "wreck_trawler": wreck_trawler, "town_house": town_house, "town_chapel": town_chapel,
-       "town_clocktower": town_clocktower, "town_arch": town_arch, "pier": pier, "aquarium": aquarium,
-       "lighthouse": lighthouse, "house_0": house_0, "house_1": house_1}
+       "pier": pier, "aquarium": aquarium}
 
 if __name__ == "__main__":
     names = sys.argv[1:] or list(ALL)

@@ -52,6 +52,10 @@ func setup(b: Bay) -> void:
 	water_mat.set_shader_parameter("foam_col", Color("#f3ead3"))
 	sea_mat.set_shader_parameter("near_col", Color("#11505d"))
 	sea_mat.set_shader_parameter("far_col", Color("#3a7478"))
+	var rdir: Array = bay.landmarks.get("ripple_dir", [0.86, -0.51])
+	terrain_mat.set_shader_parameter("ripple_dir", Vector2(float(rdir[0]), float(rdir[1])))
+	water_mat.set_shader_parameter("mid_col", Color("#2a7779"))
+	water_mat.set_shader_parameter("abyss_col", Color("#0a3540"))
 	kelp_mat.set_shader_parameter("grid_origin", Vector2(bay.x0, bay.z0))
 	kelp_mat.set_shader_parameter("cell", bay.s)
 	_build_terrain()
@@ -59,6 +63,12 @@ func setup(b: Bay) -> void:
 	_build_frame()
 	_build_sea()
 	refresh(0.0, true)
+
+
+func set_sun(dir_to_sun: Vector3, col: Color) -> void:
+	for m in [water_mat, sea_mat]:
+		m.set_shader_parameter("sun_dir", dir_to_sun)
+		m.set_shader_parameter("sun_col", col)
 
 
 func refresh(game_time: float, force: bool = false) -> void:
@@ -99,7 +109,7 @@ func _grid_arrays(for_water: bool) -> Array:
 			if for_water:
 				uv2[v] = Vector2(bay.h[v], 0.0)
 			else:
-				cols[v] = Color8(bay.colors[v * 3], bay.colors[v * 3 + 1], bay.colors[v * 3 + 2])
+				cols[v] = Color8(bay.colors[v * 4], bay.colors[v * 4 + 1], bay.colors[v * 4 + 2], bay.colors[v * 4 + 3])
 				var hl := bay.h[j * w + maxi(i - 1, 0)]
 				var hr := bay.h[j * w + mini(i + 1, w - 1)]
 				var hu := bay.h[maxi(j - 1, 0) * w + i]
@@ -157,84 +167,113 @@ func _build_water() -> void:
 	add_child(water)
 
 
-func _far_height(x: float, z: float) -> float:
-	## The land and sea floor beyond the bay: the coast runs east-west along
-	## the sea wall's line; hills rise behind the town.
-	var coast := -58.0 + 6.0 * sin(x * 0.021) + 4.0 * sin(x * 0.047 + 1.3)
-	if z < coast:
-		return -7.0 - (coast - z) * 0.05
-	var inland := z - coast
-	return 2.0 + minf(inland * 0.05, 7.0) + 2.2 * sin(x * 0.033) * sin(z * 0.029 + 0.7)
-
-
 func _build_frame() -> void:
-	## Rings extruded outward from the grid's edge loop, blending from the
-	## edge's own heights to the far land and sea.
-	var w := bay.w
-	var loop: Array = []          # edge vertices round the square, clockwise from above
-	for i in w:
-		loop.append(i)                         # north edge, west to east
-	for j in range(1, w):
-		loop.append(j * w + (w - 1))           # east edge, north to south
-	for i in range(w - 2, -1, -1):
-		loop.append((w - 1) * w + i)           # south edge, east to west
-	for j in range(w - 2, 0, -1):
-		loop.append(j * w)                     # west edge, south to north
-	var cx := bay.x0 + bay.n * bay.s * 0.5
-	var cz := bay.z0 + bay.n * bay.s * 0.5
-	var half := bay.n * bay.s * 0.5
-	var offsets := [0.0, 3.0, 8.0, 18.0, 36.0, 70.0, 140.0, 300.0]
+	## The land round the bay: a coarse grid from the same height function as
+	## the bay (art/bay/make_bay.py), tucked just under the bay mesh where they
+	## overlap so there's never a seam. Hills, the headland's plateau, fields
+	## and hedgerows behind the town, the river valley.
+	var fd: Dictionary = bay.far
+	if fd.is_empty():
+		return
+	var n := int(fd.n)
+	var fw := n + 1
+	var fs := float(fd.s)
+	var fx0 := float(fd.x0)
+	var fz0 := float(fd.z0)
+	var hh: PackedFloat32Array = Marshalls.base64_to_raw(fd.heights).to_float32_array()
+	var cc: PackedByteArray = Marshalls.base64_to_raw(fd.colors)
 	var verts := PackedVector3Array()
 	var cols := PackedColorArray()
-	var grass := Color("#7c8a5e")
-	var sea_floor := Color("#5e6a5a")
-	for r in offsets.size():
-		var off: float = offsets[r]
-		var t := smoothstep(0.0, 34.0, off)
-		for v in loop:
-			var p := bay.vertex_xz(v)
-			var d := Vector2(p.x - cx, p.y - cz)
-			# Outward direction: square-ish (corners go diagonally).
-			var dir := Vector2(signf(d.x) if absf(d.x) >= half - 0.01 else 0.0, signf(d.y) if absf(d.y) >= half - 0.01 else 0.0)
-			if dir == Vector2.ZERO:
-				dir = d.normalized()
-			var q := p + dir.normalized() * off * (1.41 if absf(dir.x) > 0 and absf(dir.y) > 0 else 1.0)
-			var eh := bay.h[v]
-			var y := lerpf(eh, _far_height(q.x, q.y), t)
-			if r == 0:
-				y = eh
-			verts.append(Vector3(q.x, y, q.y))
-			var ec := Color8(bay.colors[v * 3], bay.colors[v * 3 + 1], bay.colors[v * 3 + 2])
-			var fc := grass if y > 0.6 else sea_floor
-			cols.append(ec.lerp(fc, t))
-	var n := loop.size()
+	var norms := PackedVector3Array()
+	verts.resize(fw * fw)
+	cols.resize(fw * fw)
+	norms.resize(fw * fw)
+	for j in fw:
+		for i in fw:
+			var v := j * fw + i
+			verts[v] = Vector3(fx0 + i * fs, hh[v], fz0 + j * fs)
+			cols[v] = Color8(cc[v * 3], cc[v * 3 + 1], cc[v * 3 + 2])
+			var hl := hh[j * fw + maxi(i - 1, 0)]
+			var hr := hh[j * fw + mini(i + 1, fw - 1)]
+			var hu := hh[maxi(j - 1, 0) * fw + i]
+			var hd := hh[mini(j + 1, fw - 1) * fw + i]
+			norms[v] = Vector3(hl - hr, 2.0 * fs, hu - hd).normalized()
+	# Skip the cells well inside the bay grid (the bay mesh covers them).
+	var bx0 := bay.x0 + fs
+	var bz0 := bay.z0 + fs
+	var bx1 := bay.x0 + bay.n * bay.s - fs
+	var bz1 := bay.z0 + bay.n * bay.s - fs
 	var idx := PackedInt32Array()
-	for r in offsets.size() - 1:
-		for k in n:
-			var a := r * n + k
-			var b := r * n + (k + 1) % n
-			var c := (r + 1) * n + k
-			var e := (r + 1) * n + (k + 1) % n
-			idx.append_array([a, c, b, b, c, e])
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in verts.size():
-		st.set_color(cols[i])
-		st.set_uv(Vector2(-1.0, -1.0))
-		st.add_vertex(verts[i])
-	for i in idx:
-		st.add_index(i)
-	st.generate_normals()
-	var mesh := st.commit()
+	for j in fw - 1:
+		for i in fw - 1:
+			var x0 := fx0 + i * fs
+			var z0 := fz0 + j * fs
+			if x0 >= bx0 and x0 + fs <= bx1 and z0 >= bz0 and z0 + fs <= bz1:
+				continue
+			var a := j * fw + i
+			var b := a + 1
+			var c := a + fw
+			var e := c + 1
+			idx.append_array([a, b, e, a, e, c])
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_COLOR] = cols
+	arr[Mesh.ARRAY_NORMAL] = norms
+	arr[Mesh.ARRAY_INDEX] = idx
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	var mi := MeshInstance3D.new()
 	mi.name = "Land"
 	mi.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.vertex_color_is_srgb = true
-	mat.roughness = 0.95
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/land.gdshader")
 	mi.material_override = mat
+	add_child(mi)
+	_build_river()
+
+
+func _build_river() -> void:
+	## The river behind the weir: still water standing in its valley, out to
+	## the edge of the land.
+	var lm: Dictionary = bay.landmarks
+	if not lm.has("river"):
+		return
+	var pts: Array = lm.river
+	var lvl := float(lm.get("river_level", 0.75))
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var prev_l := Vector3.INF
+	var prev_r := Vector3.INF
+	var along := 0.0
+	var prev_along := 0.0
+	for k in pts.size():
+		var p := Vector2(float(pts[k][0]), float(pts[k][1]))
+		var q := Vector2(float(pts[mini(k + 1, pts.size() - 1)][0]), float(pts[mini(k + 1, pts.size() - 1)][1]))
+		var o := Vector2(float(pts[maxi(k - 1, 0)][0]), float(pts[maxi(k - 1, 0)][1]))
+		var dir := (q - o).normalized()
+		var side := Vector2(-dir.y, dir.x)
+		var half := 2.4 + 0.012 * p.distance_to(Vector2(float(pts[0][0]), float(pts[0][1])))
+		var l := Vector3(p.x + side.x * half * 1.15, lvl, p.y + side.y * half * 1.15)
+		var r := Vector3(p.x - side.x * half * 1.15, lvl, p.y - side.y * half * 1.15)
+		if k > 0:
+			along += p.distance_to(o if k == 1 else Vector2(float(pts[k - 1][0]), float(pts[k - 1][1])))
+		if prev_l != Vector3.INF:
+			var uv := {prev_l: Vector2(0, prev_along), prev_r: Vector2(1, prev_along), r: Vector2(1, along), l: Vector2(0, along)}
+			for v in [prev_l, prev_r, r, prev_l, r, l]:
+				st.set_normal(Vector3.UP)
+				st.set_uv(uv[v])
+				st.add_vertex(v)
+		prev_l = l
+		prev_r = r
+		prev_along = along
+	var mi := MeshInstance3D.new()
+	mi.name = "River"
+	mi.mesh = st.commit()
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/river.gdshader")
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 
 

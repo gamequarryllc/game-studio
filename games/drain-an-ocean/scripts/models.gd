@@ -5,6 +5,18 @@ extends RefCounted
 ## a baked vertex colour (ambient occlusion and painted wear), so vertex
 ## colours are switched on for every material here.
 
+## One scale rule for the diorama (NOTES.md, "Scale"): buildings, the pier
+## and the wrecks at 1:1; machines (pumps, pads, barges) chunky at 1.6x so the
+## game's verb reads from across the bay; creatures at 2.4x (the whale calf
+## 1.3x, it's big already); finds at 1.7x; helpers at 2x.
+const SCALE_MACHINE := 1.6
+const SCALE_PAD := 1.45
+const SCALE_BARGE := 1.35
+const SCALE_CREATURE := 2.4
+const SCALE_WHALE := 1.3
+const SCALE_FIND := 1.7
+const SCALE_HELPER := 2.0
+
 static var _scenes := {}
 static var _fixed := {}
 static var _flat := {}

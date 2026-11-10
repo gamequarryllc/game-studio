@@ -21,7 +21,17 @@ func setup(b: Bay, v: BayView) -> void:
 	var lm: Dictionary = bay.landmarks
 	_kelp()
 	_scatter("coral", ["coral_brain", "coral_branch", "coral_fan"], 5)
-	_scatter("rocks", ["rock_round", "rock_flat"], 5)
+	_scatter("rocks", ["rock_round", "rock_flat", "rock_tall"], 5)
+	var wall := Models.instance("sea_wall")
+	wall.name = "SeaWall"
+	add_child(wall)
+	if lm.has("weir"):
+		var wd: Dictionary = lm.weir
+		var weir := Models.instance("weir")
+		weir.position = Vector3(float(wd.x), float(wd.y) - 0.6, float(wd.z))
+		weir.rotation.y = deg_to_rad(float(wd.yaw))
+		weir.name = "Weir"
+		add_child(weir)
 	for wd in lm.wrecks:
 		var n := Models.instance("wreck_" + str(wd.kind))
 		var p := Vector3(float(wd.x), bay.height_at(float(wd.x), float(wd.z)) - 0.25, float(wd.z))
@@ -32,8 +42,9 @@ func setup(b: Bay, v: BayView) -> void:
 		wrecks.append({"node": n, "name": str(wd.name), "pos": p, "kind": str(wd.kind)})
 	for td in lm.town:
 		var n := Models.instance("town_" + str(td.kind))
-		n.position = Vector3(float(td.x), bay.height_at(float(td.x), float(td.z)) - 0.1, float(td.z))
-		n.rotation.y = deg_to_rad(float(td.yaw))
+		n.position = Vector3(float(td.x), bay.height_at(float(td.x), float(td.z)) - 0.15, float(td.z))
+		# Fronts (doors, clock faces) towards the camera, which looks north.
+		n.rotation.y = deg_to_rad(float(td.yaw) + 180.0)
 		add_child(n)
 		town_nodes.append(n)
 		if str(td.kind) == "clocktower":
@@ -56,7 +67,7 @@ func setup(b: Bay, v: BayView) -> void:
 	lh.position = Vector3(float(ld.x), bay.height_at(float(ld.x), float(ld.z)) - 0.2, float(ld.z))
 	add_child(lh)
 	for hd in lm.houses:
-		var hn := Models.instance("house_%d" % int(hd.kind))
+		var hn := Models.instance("house_%d" % clampi(int(hd.kind), 0, 2))
 		hn.position = Vector3(float(hd.x), bay.height_at(float(hd.x), float(hd.z)) - 0.15, float(hd.z))
 		hn.rotation.y = deg_to_rad(float(hd.yaw) + 180.0)
 		add_child(hn)

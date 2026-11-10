@@ -62,6 +62,11 @@ static func install_fonts() -> void:
 	ThemeDB.fallback_font_size = 22
 
 
+static func sub_size(size: int) -> int:
+	## A stamp's second line: never under 21 px (about 11.4 px on a phone).
+	return maxi(21, int(size * 0.8))
+
+
 static func display() -> Font:
 	install_fonts()
 	return _display
@@ -233,13 +238,13 @@ static func stamp(ci: CanvasItem, r: Rect2, text: String, col: Color, font: Font
 	ci.draw_polyline(_closed(inn), Color(col, col.a * 0.7), 1.4, true)
 	var ty := 0.0
 	if sub != "":
-		ty = -size * 0.28
+		ty = -size * 0.36
 	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	ci.draw_string(font, Vector2(-tw * 0.5, ty + size * 0.36), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 	if sub != "":
-		var ss := int(size * 0.55)
+		var ss := sub_size(size)
 		var sw := body().get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, ss).x
-		ci.draw_string(body(), Vector2(-sw * 0.5, ty + size * 0.36 + ss * 1.25), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, ss, Color(col, col.a * 0.85))
+		ci.draw_string(body(), Vector2(-sw * 0.5, ty + size * 0.36 + ss * 1.15), sub, HORIZONTAL_ALIGNMENT_LEFT, -1, ss, Color(col, col.a * 0.85))
 	# patchy ink: a few paper-coloured nicks
 	for i in 5:
 		var p := Vector2(jitter(seed, i + 10) * rr.size.x * 0.5, jitter(seed, i + 20) * rr.size.y * 0.5)
@@ -310,3 +315,191 @@ static func _flag_color(p: String, u: float, v: float) -> Color:
 				return Color(0, 0, 0, 0)
 			return FLAG_RED if fmod(u * 4.0, 1.0) < 0.5 else PAPER
 	return PAPER
+
+
+# --- One material per UI role (art review 1, item 11) -------------------------------------------
+# chart: the base chart paper (big sheets). slip: a notice to mariners,
+# a torn-off slip pinned up with a brass pin. tag: a manila tag on a thread,
+# for anything pointing at the world. cartouche: the engraved title box of a
+# chart, with scrolled ends, for the money. label: a museum specimen label,
+# for finds. folded: a chart that's been folded in four, for the ending.
+# plate: a natural-history plate border, for the aquarium's register.
+
+static func slip(ci: CanvasItem, r: Rect2, seed: int = 1) -> void:
+	## A torn-off notice: straight top, torn bottom edge, a brass pin.
+	var pts := PackedVector2Array()
+	pts.append(r.position)
+	pts.append(Vector2(r.end.x, r.position.y))
+	var n := int(r.size.x / 9.0)
+	for i in n + 1:
+		var t := 1.0 - float(i) / float(n)
+		var x := r.position.x + r.size.x * t
+		var y := r.end.y - 3.0 - absf(jitter(seed, i)) * 5.0 - (3.0 if i % 2 == 0 else 0.0)
+		pts.append(Vector2(x, y))
+	var sh := PackedVector2Array()
+	for p in pts:
+		sh.append(p + Vector2(3, 5))
+	ci.draw_colored_polygon(sh, Color(0.05, 0.12, 0.15, 0.3))
+	ci.draw_colored_polygon(pts, PAPER.darkened(0.02))
+	ci.draw_line(r.position + Vector2(10, 9), Vector2(r.end.x - 10, r.position.y + 9), Color(RUST, 0.55), 1.5)
+	var pin := Vector2(r.position.x + r.size.x * 0.5 + jitter(seed, 77) * 12.0, r.position.y + 3)
+	ci.draw_circle(pin + Vector2(1.5, 2.5), 7.5, Color(0.05, 0.12, 0.15, 0.35))
+	ci.draw_circle(pin, 7.5, BRASS_DARK)
+	ci.draw_circle(pin, 5.5, BRASS)
+	ci.draw_circle(pin + Vector2(-1.8, -1.8), 2.0, Color(1, 0.95, 0.75, 0.8))
+
+
+static func tag_shape(r: Rect2, notch: float = 18.0) -> PackedVector2Array:
+	## A manila tag: a rectangle with its left end clipped to a point.
+	return PackedVector2Array([Vector2(r.position.x + notch, r.position.y), Vector2(r.end.x, r.position.y), r.end,
+		Vector2(r.position.x + notch, r.end.y), Vector2(r.position.x, r.position.y + r.size.y * 0.5)])
+
+
+static func tag(ci: CanvasItem, r: Rect2, seed: int = 1, col: Color = Color("#ead9b0")) -> Vector2:
+	## Draws a tag and returns the eyelet's centre (where a thread ties on).
+	var poly := tag_shape(r)
+	var sh := PackedVector2Array()
+	for p in poly:
+		sh.append(p + Vector2(3, 4))
+	ci.draw_colored_polygon(sh, Color(0.05, 0.12, 0.15, 0.3))
+	ci.draw_colored_polygon(poly, col)
+	ci.draw_polyline(_closed(poly), Color(RUST, 0.35), 1.2, true)
+	var eye := Vector2(r.position.x + 15.0, r.position.y + r.size.y * 0.5)
+	ci.draw_circle(eye, 7.0, Color(col.darkened(0.25)))
+	ci.draw_circle(eye, 4.0, Color(0.06, 0.16, 0.19, 0.9))
+	for i in 3:
+		var x := r.position.x + r.size.x * (0.3 + 0.25 * i) + jitter(seed, i) * 8.0
+		ci.draw_line(Vector2(x, r.position.y + 2), Vector2(x + 2, r.position.y + 6), Color(0.45, 0.33, 0.2, 0.15), 1.0)
+	return eye
+
+
+static func cartouche_points(r: Rect2, k: float = 12.0) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var centres := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+	var starts := [0.0, PI * 0.5, PI, PI * 1.5]
+	for c in 4:
+		for s in 7:
+			var a: float = starts[c] + PI * 0.5 * (1.0 - float(s) / 6.0)
+			pts.append(centres[c] + Vector2(cos(a), sin(a)) * k)
+	return pts
+
+
+static func cartouche(ci: CanvasItem, r: Rect2, seed: int = 1) -> void:
+	## A chart's title cartouche: a plate with concave corners, a ruled
+	## double border, and scrolled ends curling off each side.
+	var k := 12.0
+	var pts := PackedVector2Array()
+	var corners := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+	var centres := [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]
+	var starts := [0.0, PI * 0.5, PI, PI * 1.5]
+	for c in 4:
+		for s in 7:
+			# clockwise round the plate: each corner's concave arc runs from
+			# the side before it to the side after it
+			var a: float = starts[c] + PI * 0.5 * (1.0 - float(s) / 6.0)
+			pts.append(centres[c] + Vector2(cos(a), sin(a)) * k)
+	var sh := PackedVector2Array()
+	for p in pts:
+		sh.append(p + Vector2(3, 5))
+	ci.draw_colored_polygon(sh, Color(0.05, 0.12, 0.15, 0.32))
+	ci.draw_colored_polygon(pts, PAPER)
+	ci.draw_polyline(_closed(pts), Color(INK, 0.85), 2.2, true)
+	var inner := PackedVector2Array()
+	var rc := (r.position + r.end) * 0.5
+	for p in pts:
+		inner.append(rc + (p - rc) * Vector2((r.size.x - 14.0) / r.size.x, (r.size.y - 14.0) / r.size.y))
+	ci.draw_polyline(_closed(inner), Color(INK, 0.5), 1.0, true)
+	# scrolled ends: a curl each side of the plate
+	for sx in [-1.0, 1.0]:
+		var base := Vector2(r.position.x - 2.0 if sx < 0 else r.end.x + 2.0, r.position.y + r.size.y * 0.5)
+		var curl := PackedVector2Array()
+		for i in 22:
+			var t := float(i) / 21.0
+			var a := t * TAU * 1.15
+			var rr := 15.0 * (1.0 - t * 0.75)
+			curl.append(base + Vector2(sx * (12.0 + rr * cos(a + PI)) , rr * sin(a + PI) * 0.9))
+		ci.draw_polyline(curl, Color(INK, 0.8), 2.0, true)
+		ci.draw_line(base + Vector2(0, -r.size.y * 0.32), base + Vector2(sx * 8.0, -r.size.y * 0.18), Color(INK, 0.6), 1.5, true)
+		ci.draw_line(base + Vector2(0, r.size.y * 0.32), base + Vector2(sx * 8.0, r.size.y * 0.18), Color(INK, 0.6), 1.5, true)
+
+
+static func label_card(ci: CanvasItem, r: Rect2, seed: int = 1) -> void:
+	## A museum specimen label: bright card, a thin black rule inset, a
+	## heavier rule outside it, a crease where it was folded to post.
+	ci.draw_colored_polygon(rough_rect(Rect2(r.position + Vector2(3, 5), r.size), seed + 3, 0.8), Color(0.05, 0.12, 0.15, 0.3))
+	ci.draw_colored_polygon(rough_rect(r, seed, 0.6), Color("#f7f2e4"))
+	ci.draw_rect(r.grow(-6), Color(INK, 0.85), false, 2.0)
+	ci.draw_rect(r.grow(-10), Color(INK, 0.5), false, 1.0)
+	var fy := r.position.y + r.size.y * 0.62
+	ci.draw_line(Vector2(r.position.x + 2, fy), Vector2(r.end.x - 2, fy + 2), Color(1, 1, 1, 0.5), 1.5)
+	ci.draw_line(Vector2(r.position.x + 2, fy + 1.5), Vector2(r.end.x - 2, fy + 3.5), Color(0.4, 0.3, 0.2, 0.12), 1.2)
+
+
+static func folded(ci: CanvasItem, r: Rect2, seed: int = 1) -> void:
+	## A chart folded in four and opened out: two creases crossing, the
+	## panels each a slightly different tone, corners softened with wear.
+	ci.draw_colored_polygon(rough_rect(Rect2(r.position + Vector2(5, 8), r.size), seed + 7, 1.6), Color(0.05, 0.12, 0.15, 0.35))
+	var cx := r.position.x + r.size.x * (0.5 + 0.03 * jitter(seed, 2))
+	var cy := r.position.y + r.size.y * (0.5 + 0.04 * jitter(seed, 3))
+	var quads := [Rect2(r.position, Vector2(cx - r.position.x, cy - r.position.y)),
+		Rect2(Vector2(cx, r.position.y), Vector2(r.end.x - cx, cy - r.position.y)),
+		Rect2(Vector2(r.position.x, cy), Vector2(cx - r.position.x, r.end.y - cy)),
+		Rect2(Vector2(cx, cy), Vector2(r.end.x - cx, r.end.y - cy))]
+	for i in 4:
+		var q: Rect2 = quads[i]
+		ci.draw_colored_polygon(rough_rect(q, seed + i, 1.0, 4), PAPER.darkened(0.012 * i + 0.01 * jitter(seed, i + 9)))
+	ci.draw_line(Vector2(cx, r.position.y + 2), Vector2(cx, r.end.y - 2), Color(0.4, 0.3, 0.2, 0.22), 2.0)
+	ci.draw_line(Vector2(cx + 2, r.position.y + 2), Vector2(cx + 2, r.end.y - 2), Color(1, 1, 1, 0.45), 1.5)
+	ci.draw_line(Vector2(r.position.x + 2, cy), Vector2(r.end.x - 2, cy), Color(0.4, 0.3, 0.2, 0.2), 2.0)
+	ci.draw_line(Vector2(r.position.x + 2, cy + 2), Vector2(r.end.x - 2, cy + 2), Color(1, 1, 1, 0.4), 1.5)
+	var b1 := r.grow(-12)
+	ci.draw_polyline(_closed(rough_rect(b1, seed + 3, 0.5, 4)), Color(INK, 0.7), 1.6)
+	# a faint compass rose in one panel, as on the real thing
+	var rc := Vector2(r.end.x - r.size.x * 0.17, r.end.y - r.size.y * 0.24)
+	var rr := minf(r.size.x, r.size.y) * 0.12
+	for k in 8:
+		var a := k * TAU / 8.0
+		var ln := rr if k % 2 == 0 else rr * 0.55
+		ci.draw_line(rc, rc + Vector2(cos(a), sin(a)) * ln, Color(INK, 0.16), 1.5, true)
+	ci.draw_arc(rc, rr * 0.7, 0.0, TAU, 32, Color(INK, 0.14), 1.2, true)
+
+
+static func plate(ci: CanvasItem, r: Rect2, seed: int = 1) -> void:
+	## A natural-history plate: cream card, an engraved double border with
+	## a hatched band between the rules, small corner ornaments.
+	ci.draw_colored_polygon(rough_rect(Rect2(r.position + Vector2(4, 6), r.size), seed + 5, 1.0), Color(0.05, 0.12, 0.15, 0.32))
+	ci.draw_colored_polygon(rough_rect(r, seed, 0.8), Color("#f4ecd6"))
+	var o := r.grow(-8)
+	var i := r.grow(-15)
+	ci.draw_rect(o, Color(INK, 0.85), false, 1.8)
+	ci.draw_rect(i, Color(INK, 0.7), false, 1.0)
+	var step := 5.0
+	var x := o.position.x
+	while x < o.end.x:
+		ci.draw_line(Vector2(x, o.position.y + 1), Vector2(x + 4, i.position.y - 1), Color(INK, 0.22), 1.0)
+		ci.draw_line(Vector2(x, i.end.y + 1), Vector2(x + 4, o.end.y - 1), Color(INK, 0.22), 1.0)
+		x += step
+	for c in [o.position, Vector2(o.end.x, o.position.y), o.end, Vector2(o.position.x, o.end.y)]:
+		ci.draw_circle(c, 4.0, Color("#f4ecd6"))
+		ci.draw_arc(c, 4.0, 0.0, TAU, 12, Color(INK, 0.8), 1.2, true)
+
+
+static func pegboard(ci: CanvasItem, r: Rect2) -> void:
+	## The chandler's pegboard: weathered painted boards with a grid of holes.
+	ci.draw_rect(r, Color("#3d5a55"))
+	var y := r.position.y
+	var k := 0
+	while y < r.end.y:
+		var h := 58.0
+		var tone := Color("#46635d").darkened(0.06 * jitter(77, k))
+		ci.draw_rect(Rect2(r.position.x, y, r.size.x, h - 2.0), tone)
+		ci.draw_line(Vector2(r.position.x, y + h - 2.0), Vector2(r.end.x, y + h - 2.0), Color(0.05, 0.12, 0.15, 0.5), 2.0)
+		k += 1
+		y += h
+	var gx := r.position.x + 24.0
+	while gx < r.end.x - 10.0:
+		var gy := r.position.y + 22.0
+		while gy < r.end.y - 10.0:
+			ci.draw_circle(Vector2(gx, gy), 3.2, Color(0.04, 0.1, 0.12, 0.75))
+			gy += 36.0
+		gx += 36.0

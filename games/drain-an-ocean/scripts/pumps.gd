@@ -4,8 +4,13 @@ extends Node3D
 ## from each pump down the beach to the water's edge (it follows the water
 ## down), a swirl where it drinks, and the barge pumps out on the pools.
 
+# Where each tier's suction hose couples on, in the pump's own frame (the
+# model's front faces the water), before the machine scale.
+const HOSE_FROM := [Vector3(0.0, 0.3, -1.0), Vector3(0.0, 0.25, -0.7), Vector3(0.15, 0.42, -1.6),
+	Vector3(0.0, 0.3, -2.02), Vector3(0.0, 0.25, -2.04)]
+
 var bay: Bay
-var pads: Array = []             # {"pos", "yaw", "base", "pump", "tier", "hose", "swirl", "intake"}
+var pads: Array = []             # {"pos", "yaw", "base", "pump", "tier", "hose", "swirl", "intake", "smoke"}
 var barges: Array = []           # {"node", "pos", "body", "aground"}
 var hose_mat: StandardMaterial3D
 var swirl_mat: StandardMaterial3D
@@ -16,7 +21,7 @@ var _t := 0.0
 func setup(b: Bay) -> void:
 	bay = b
 	hose_mat = StandardMaterial3D.new()
-	hose_mat.albedo_color = Color("#3b3a30")
+	hose_mat.albedo_color = Color("#3e3128")
 	hose_mat.roughness = 0.55
 	swirl_mat = StandardMaterial3D.new()
 	swirl_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -47,8 +52,48 @@ func setup(b: Bay) -> void:
 		sw.visible = false
 		add_child(sw)
 		pads.append({"pos": pos, "yaw": yaw, "base": base, "pump": null, "tier": -1,
-			"hose": hose, "swirl": sw, "intake": Vector3.INF, "last_level": 99.0})
+			"hose": hose, "swirl": sw, "intake": Vector3.INF, "last_level": 99.0, "smoke": null})
 	refresh()
+
+
+func _smoke(tier: int) -> CPUParticles3D:
+	## Exhaust smoke: soft grey puffs that rise, drift east on the breeze,
+	## swell and fade. Thicker for the bigger engines.
+	var ps := CPUParticles3D.new()
+	ps.name = "Smoke"
+	var q := QuadMesh.new()
+	q.size = Vector2(0.9, 0.9)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.albedo_texture = ChartMarks.puff()
+	m.vertex_color_use_as_albedo = true
+	q.material = m
+	ps.mesh = q
+	ps.amount = 10 + 3 * tier
+	ps.lifetime = 3.2
+	ps.local_coords = false
+	ps.direction = Vector3(0, 1, 0)
+	ps.spread = 12.0
+	ps.initial_velocity_min = 1.0
+	ps.initial_velocity_max = 1.6
+	ps.gravity = Vector3(0.55, 0.25, 0.1)
+	ps.damping_min = 0.3
+	ps.damping_max = 0.5
+	ps.scale_amount_min = 0.7
+	ps.scale_amount_max = 1.1
+	var sc := Curve.new()
+	sc.add_point(Vector2(0.0, 0.4))
+	sc.add_point(Vector2(1.0, 2.6 + 0.3 * tier))
+	ps.scale_amount_curve = sc
+	var g := Gradient.new()
+	g.set_color(0, Color(0.42, 0.42, 0.4, 0.75))
+	g.set_color(1, Color(0.82, 0.8, 0.74, 0.0))
+	g.add_point(0.2, Color(0.5, 0.5, 0.47, 0.6))
+	ps.color_ramp = g
+	ps.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return ps
 
 
 func _swirl_texture() -> Texture2D:
@@ -132,7 +177,7 @@ func update(delta: float, now: float, main_running: bool) -> void:
 		# Re-lay the hose when the water has dropped enough to move its end.
 		if absf(lvl - float(p.last_level)) > 0.08 or p.intake == Vector3.INF:
 			p.last_level = lvl
-			var tgt := bay.nearest_wet(p.pos, bay.main_id, 90) if main_running else Vector3.INF
+			var tgt := bay.nearest_water(p.pos, bay.main_id) if main_running else Vector3.INF
 			p.intake = tgt
 			_lay_hose(p)
 		var sw: MeshInstance3D = p.swirl
@@ -186,20 +231,32 @@ func _lay_hose(p: Dictionary) -> void:
 	im.clear_surfaces()
 	if p.intake == Vector3.INF:
 		return
-	var start: Vector3 = p.pos + Vector3(0, 0.6, 0) + Vector3(-sin(float(p.yaw)), 0, -cos(float(p.yaw))) * 1.3
+	var hf: Vector3 = HOSE_FROM[clampi(int(p.tier) - 1, 0, HOSE_FROM.size() - 1)] * Models.SCALE_MACHINE
+	var start: Vector3 = p.pos + Vector3(0, 0.36 * Models.SCALE_PAD, 0) + hf.rotated(Vector3.UP, float(p.yaw))
 	var end: Vector3 = p.intake
-	var segs := clampi(int(start.distance_to(end) / 1.2), 4, 60)
+	var segs := clampi(int(start.distance_to(end) / 1.0), 4, 90)
 	var pts: Array = []
+	# laid by hand: a lazy S-curve sideways, not a ruled line
+	var dir2 := Vector2(end.x - start.x, end.z - start.z)
+	var lateral := Vector3(-dir2.y, 0, dir2.x).normalized()
+	# the longer the run, the wider the loops it was dragged out in
+	var span := start.distance_to(end)
+	var wig := clampf(span * 0.05, 0.8, 3.0) * (0.8 + 0.25 * fmod(absf(float(p.pos.x)) * 1.7, 1.0))
+	var ph := float(p.yaw) + float(p.pos.z) * 0.37
+	var r := 0.15 + 0.035 * float(p.tier)
 	for k in segs + 1:
 		var u := float(k) / float(segs)
-		var q := start.lerp(end, u)
+		var sway := sin(u * PI * 2.0 + ph) * 0.8 + sin(u * PI * 5.0 + ph * 1.7) * 0.25
+		var q := start.lerp(end, u) + lateral * sway * wig * sin(u * PI)
 		var g := bay.height_at(q.x, q.z)
-		var y := maxf(g + 0.12, q.y) if u > 0.05 else q.y
-		if u > 0.95:
-			y = end.y - 0.25 * (u - 0.95) / 0.05
-		q.y = maxf(y, g + 0.1)
+		# lying on the sand all the way down, rising to the coupling, dipping into the water
+		var y := g + r * 0.9
+		var lift := 1.0 - smoothstep(0.0, 0.08, u)
+		y = lerpf(y, start.y, lift)
+		if g < end.y:
+			y = maxf(g + r, end.y - 0.35)
+		q.y = maxf(y, g + r * 0.8)
 		pts.append(q)
-	var r := 0.13 + 0.04 * float(p.tier)
 	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	var sides := 6
 	for k in pts.size() - 1:
@@ -236,6 +293,7 @@ func sync_barges() -> void:
 	while barges.size() < GameState.barges.size():
 		var n := Models.instance("barge")
 		n.rotation.y = randf() * TAU
+		n.scale = Vector3.ONE * Models.SCALE_BARGE
 		add_child(n)
 		barges.append({"node": n, "pos": Vector3.ZERO, "body": Bay.NO_BODY, "aground": true})
 	while barges.size() > GameState.barges.size():

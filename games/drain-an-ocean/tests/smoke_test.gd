@@ -68,6 +68,22 @@ func _run() -> void:
 	check(world.finds.spots.size() == 12, "every find has a spot")
 	check(int(gs.pads[0]) == 1, "a bucket brigade is already on pad 1")
 	check(world.hud != null and world.hud.staff != null, "the HUD builds with its tide board")
+	# Bugs found in the art pass, each pinned down:
+	check(not Geometry2D.triangulate_polygon(UiTheme.cartouche_points(Rect2(0, 0, 330, 96))).is_empty(), "the money cartouche's outline triangulates (no self-crossing)")
+	check(bay.deepest_vertex(987654) == bay.sink and bay.level_of(987654) < -1e8, "asking about a body of water that's gone is safe")
+	check(world.lettering != null and world.lettering.words.size() == Balance.RINGS.size(), "every ring has its chart lettering")
+	# Found in the visual run: the land round the bay drew far paler than the bay's own
+	# land (a StandardMaterial's sRGB vertex colours in the Compatibility renderer).
+	var land: MeshInstance3D = world.view.get_node_or_null("Land")
+	check(land != null and land.material_override is ShaderMaterial and (land.material_override as ShaderMaterial).shader.resource_path.ends_with("land.gdshader"),
+		"the land round the bay is shaded the same way as the bay's own land")
+	await _frames(2)
+	var small: Array = []
+	for l in world.hud.root.find_children("*", "Label", true, false):
+		var fs: int = (l as Label).get_theme_font_size("font_size")
+		if fs < 21 and (l as Label).text != "":
+			small.append("%s (%d px)" % [(l as Label).text.substr(0, 20), fs])
+	check(small.is_empty(), "every HUD label is at least 21 px, about 11.4 px on an 844x390 phone %s" % str(small.slice(0, 3)))
 
 	# --- Pumps lower the level ------------------------------------------------------------------
 	world.compute_flows()
@@ -135,6 +151,13 @@ func _run() -> void:
 		var ow: Vector3 = bay.vertex_pos(bay.deepest_vertex(other))
 		check(world.send_barge(ow.x, ow.z), "an aground barge can be sent to another pool")
 		check(not world.pumps.barges[0].aground and int(world.pumps.barges[0].body) == other, "it floats on the new pool")
+		# Found by the boosted playthrough: a pool pumped (or left) shallower than a
+		# barge's 15 cm draught could never be finished.
+		bay.lower_body(other, bay.floor_of(other) + 0.04)
+		world.pumps.settle_barges()
+		check(bay.bodies.has(other) and not world.pumps.barges[0].aground and int(world.pumps.barges[0].body) == other, "a barge still floats on a pool only 4 cm deep")
+		world.step_water(60.0)
+		check(not bay.bodies.has(other), "and pumps it dry")
 
 	# --- Rescues fill the aquarium and its income -------------------------------------------------
 	var stranded: Array = world.creatures.stranded_list()
@@ -186,11 +209,65 @@ func _run() -> void:
 	world.hud.open_shop("pumps")
 	await _frames(3)
 	check(world.hud.shop_open(), "the chandlery opens")
-	for t in ["barges", "upgrades", "helpers", "purchases", "dev", "pumps"]:
-		world.hud.shop.tab = t
-		world.hud.shop._rebuild()
-		await _frames(2)
-	check(world.hud.shop.list.get_child_count() > 3, "the chandlery lists its goods")
+	check(world.hud.shop.grid.get_child_count() > 3, "the chandlery's pegboard hangs its goods")
+	check(world.hud.shop.find_button("buy:pad:1") != null and world.hud.shop.find_button("buy:barge") != null and world.hud.shop.find_button("buy:up:power") != null,
+		"every kind of good has a named price stamp")
+	check(world.hud.shop.find_button("dev:x5") == null and world.hud.shop.find_button("dev") == null, "no playtest tab in the chandlery")
+	await _frames(8)
+	check(_tags_clear(world.hud.shop), "every tag on the pegboard holds its whole stamp and no tag overlaps the next (screenshots showed rows overlapping) %s" % _tag_report)
+	# Found in the screenshots: every aquarium payout rebuilt the whole board
+	# (a frame of overlapping rows, and a stamp could vanish under the finger).
+	var rb0: int = world.hud.shop.rebuilds
+	for _k in 6:
+		gs.grant_money(1.0)
+		await _frames(10)
+	check(world.hud.shop.rebuilds == rb0, "small payouts restamp the board without rebuilding it (%d rebuilds)" % (world.hud.shop.rebuilds - rb0))
+	gs.grant_money(1e7)
+	await _frames(12)
+	check(world.hud.shop.rebuilds > rb0 and world.hud.shop.find_button("buy:pad:2") != null and not world.hud.shop.find_button("buy:pad:2").disabled, "a payout that makes something affordable does rebuild it")
+	gs.money = 0.0
+	gs.changed.emit()
+	await _frames(12)
+	var small_s: Array = []
+	for l in world.hud.shop.find_children("*", "Label", true, false):
+		if (l as Label).get_theme_font_size("font_size") < 21 and (l as Label).text != "":
+			small_s.append((l as Label).text.substr(0, 20))
+	var tiny_b: Array = []
+	for b in world.hud.shop.find_children("*", "StampButton", true, false):
+		if (b as Control).custom_minimum_size.y < 64.0 or (b as Control).custom_minimum_size.x < 84.0:
+			tiny_b.append(str(b.get_meta("id", "?")))
+	check(small_s.is_empty() and tiny_b.is_empty(), "the chandlery's text is phone-sized and every stamp is a generous tap %s %s" % [str(small_s.slice(0, 3)), str(tiny_b.slice(0, 3))])
+	world.hud.shop.press("office")
+	await _frames(8)
+	check(_tags_clear(world.hud.shop), "the harbour office's tags hang clear of each other too %s" % _tag_report)
+	check(world.hud.shop.find_button("ad:boost") != null and world.hud.shop.find_button("ad:cash") != null and world.hud.shop.find_button("restore") != null,
+		"the harbour office has the ad notice and restore purchases")
+	world.hud.shop.press("board")
+	await _frames(2)
+	world.hud.close_shop()
+	world.open_aquarium()
+	await _frames(2)
+	world.hud.open_dev()
+	check(world.hud.dev == null or not world.hud.dev.visible, "the dev log never opens over the aquarium (chaos found F9 did)")
+	# Found in the screenshots: the register plate ran off both sides at 1280x720.
+	world.aquarium.open_plate(true)
+	await _frames(3)
+	var vr: Rect2 = world.aquarium.root_ui.get_viewport_rect()
+	var plate_ok := true
+	for c in world.aquarium.plate.get_children():
+		if c is Paper:
+			var pr := Rect2((c as Control).position, (c as Control).size * (c as Control).scale)
+			plate_ok = vr.encloses(pr)
+	check(plate_ok, "the specimen register fits on the screen")
+	var reg_text := ""
+	for l in world.aquarium.plate.find_children("*", "Label", true, false):
+		reg_text += (l as Label).text + "|"
+	check(not reg_text.contains("the the"), "the register's copy reads right (it said 'out in the the lost town')")
+	world.aquarium.open_plate(false)
+	world.aquarium.close()
+	await _frames(2)
+	world.hud.open_shop("pumps")
+	await _frames(2)
 	world.hud.close_shop()
 	await _frames(2)
 
@@ -257,7 +334,12 @@ func _run() -> void:
 	await _frames(2)
 	check(world.hud.callout_open(), "the pad's callout opens")
 	rig.last_input_touch = true
-	var ht: String = world._hint_text()
+	for i in world.creatures.stranded_list():
+		world.rescue_creature(i)
+	gs.hints_done.erase("rescue")
+	check(not str(world._hint()[0]).begins_with("Stranded"), "the rescue hint goes once nothing's stranded (it used to linger)")
+	gs.hints_done["rescue"] = true
+	var ht: String = str(world._hint()[0])
 	check(not ht.contains("Click") and not ht.contains("click") and not ht.contains("scroll"), "hints use phone wording first")
 
 	# --- Save / load round trip ---------------------------------------------------------------------
@@ -297,8 +379,70 @@ func _run() -> void:
 	world.step_water(900.0)
 	await _frames(2)
 	check(bay.is_drained() and gs.has_won, "pumping out the lost town ends the game")
-	check(world.hud.ending != null and not world.hud.staff.visible, "the ending gets its own screen, HUD hidden")
+	var wi: int = Balance.species_index("whale")
+	var calf_home := false
+	for i in world.creatures.spots.size():
+		if int(world.creatures.spots[i].species) == wi:
+			calf_home = gs.is_rescued(i)
+	check(calf_home and gs.whale_home, "the whale calf goes home over the wall at the end, even if nobody tapped it")
+	check(not world.hud.staff.visible and world.hud.message_count() == 0, "the HUD is hidden the moment the bay is dry (no messages, no floaters)")
+	check(world.ending_shot != null and world.ending_shot.running and world.hud.ending == null, "the ending holds a beat before any card")
+	# Found in the ending's screenshots: a crab's salvage put a find card up mid-shot.
+	world.hud.show_find(0, 100.0, world.props.clock_tower.global_position)
+	check(not world.hud.find_card_up(), "no find card over the ending's shot")
+	var waited := 0.0
+	while world.hud.ending == null and waited < 15.0:
+		await create_timer(0.25).timeout
+		waited += 0.25
+	check(world.hud.ending != null and not world.hud.staff.visible, "the card comes in after the dolly to the clock tower (%.1f s)" % waited)
+	check(world.ending_shot.cam != null and world.ending_shot.cam.current and world.ending_shot.cam.global_position.distance_to(world.props.clock_tower.global_position) < 40.0,
+		"the ending camera is on the clock tower")
+	# Found in the ending's screenshots: the camera ended up under the basin's slope.
+	check(world.ending_shot.sightline_clear(world.ending_shot._to_pos, world.props.clock_tower.global_position)
+		and world.ending_shot.cam.global_position.y > bay.height_at(world.ending_shot.cam.global_position.x, world.ending_shot.cam.global_position.z) + 1.0,
+		"the ending camera is above the seabed with a clear view of the tower's foot")
+	check(world.hud._floats.is_empty(), "no money floaters over the ending")
+	# Found in the ending's screenshots: stranded fish flopping right in front of the lens.
+	var blocking := 0
+	for i in world.creatures.spots.size():
+		var cn: Node3D = world.creatures.spots[i].node
+		if cn != null and cn.visible and not gs.is_rescued(i) and world.creatures._in_the_way(cn.global_position):
+			blocking += 1
+	for b in world.pumps.barges:
+		if (b.node as Node3D).visible and world.creatures._in_the_way((b.node as Node3D).global_position):
+			blocking += 1
+	for f in world.creatures._flying:
+		if is_instance_valid(f.node) and (f.node as Node3D).visible and world.creatures._in_the_way((f.node as Node3D).global_position):
+			blocking += 1
+	check(world.creatures.clear_view.size() == 3 and blocking == 0, "nothing stranded, aground or in flight stands between the ending camera and the tower")
 
 	print("%d checks, %s" % [checks, "all passed" if ok else "FAILURES"])
 	gs.delete_save()
 	quit(0 if ok else 1)
+
+
+var _tag_report := ""
+
+
+func _tags_clear(shop: Control) -> bool:
+	## Each pegboard tag's paper contains everything on it, and tags hung side
+	## by side or row under row never overlap.
+	_tag_report = ""
+	var tags: Array = []
+	for n in shop.find_children("*", "MarginContainer", true, false):
+		if n.get("tag") != null and n.get("tag") is Control:
+			tags.append(n)
+	for t in tags:
+		var paper: Control = t.tag
+		var pr: Rect2 = paper.get_global_rect().grow(8.0)
+		for c in paper.find_children("*", "Control", true, false):
+			if (c as Control).is_visible_in_tree() and not pr.encloses((c as Control).get_global_rect()):
+				_tag_report += "[%s spills out of its tag] " % c.name
+				break
+	for i in tags.size():
+		for j in range(i + 1, tags.size()):
+			var a: Rect2 = (tags[i].tag as Control).get_global_rect().grow(-6.0)
+			var b: Rect2 = (tags[j].tag as Control).get_global_rect().grow(-6.0)
+			if a.intersects(b):
+				_tag_report += "[tags %d and %d overlap] " % [i, j]
+	return _tag_report == ""

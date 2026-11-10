@@ -294,8 +294,9 @@ def crate():
     export([o], "crate")
 
 
-ALL = {"pump_bucket": pump_bucket, "pump_hand": pump_hand, "pump_diesel": pump_diesel, "pump_siphon": pump_siphon,
-       "pump_whirlpool": pump_whirlpool, "pad": pad, "barge": barge, "crate": crate}
+# The diesel, siphon and whirlpool engine are built by engines.py now (the
+# old versions here are kept for reference only).
+ALL = {"pump_bucket": pump_bucket, "pump_hand": pump_hand, "pad": pad, "barge": barge, "crate": crate}
 
 if __name__ == "__main__":
     names = sys.argv[1:] or list(ALL)

@@ -14,6 +14,7 @@ var bay: Bay
 var spots: Array = []            # {"species", "pos": Vector3 (seabed), "pool": name, "node", "ring", "phase"}
 var _markers := {}               # spot -> ring marker node
 var _flying: Array = []          # rescue arcs in flight
+var clear_view: Array = []       # [eye, target, radius]: the ending's camera; creatures in its way aren't drawn
 var aquarium_target := Vector3(21.0, 3.0, 55.0)
 var ring_mesh: Mesh
 var ring_mat: StandardMaterial3D
@@ -22,23 +23,24 @@ var ring_mat: StandardMaterial3D
 func setup(b: Bay) -> void:
 	bay = b
 	_layout()
-	var tm := TorusMesh.new()
-	tm.inner_radius = 0.62
-	tm.outer_radius = 0.74
-	tm.rings = 24
-	tm.ring_segments = 4
-	ring_mesh = tm
+	# The tap marker: a chart's position circle (a dashed ink ring with four
+	# ticks on a paper halo), lying flat on the sand round a stranded animal.
+	var qm := QuadMesh.new()
+	qm.size = Vector2(2.6, 2.6)
+	qm.orientation = PlaneMesh.FACE_Y
+	ring_mesh = qm
 	ring_mat = StandardMaterial3D.new()
 	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring_mat.albedo_color = Color("#f3ead3")
+	ring_mat.albedo_texture = ChartMarks.position_circle()
 	ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ring_mat.no_depth_test = false
+	ring_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	for i in spots.size():
 		var sp: Dictionary = spots[i]
 		var def: Dictionary = Balance.SPECIES[int(sp.species)]
 		var n := Models.instance(str(def.model))
 		n.name = "Creature_%d" % i
-		var sc := 1.0 if str(def.key) != "whale" else 1.0
+		var sc := Models.SCALE_CREATURE if str(def.key) != "whale" else Models.SCALE_WHALE
+		sp.scale = sc
 		n.scale = Vector3.ONE * sc
 		add_child(n)
 		sp.node = n
@@ -147,7 +149,8 @@ func fly_away(i: int, to: Vector3, release: bool = false) -> void:
 	var from := n.global_position
 	if release:
 		to = Vector3(from.x, 0.0, -75.0)
-	_flying.append({"node": n, "from": from, "to": to, "t": 0.0, "dur": 1.3 if not release else 3.0, "h": 6.0 if not release else 14.0})
+	_flying.append({"node": n, "from": from, "to": to, "t": 0.0, "dur": 1.3 if not release else 3.0, "h": 6.0 if not release else 14.0,
+		"scale": float(spots[i].get("scale", 1.0))})
 
 
 func update(delta: float, now: float) -> void:
@@ -174,7 +177,7 @@ func update(delta: float, now: float) -> void:
 				n.position.y = bay.height_at(n.position.x, n.position.z) + 0.05
 				n.rotation = Vector3(0, PI - (now * 0.2 + ph), 0)
 			else:
-				var r := 1.6 if key != "whale" else 3.0
+				var r := 2.4 if key != "whale" else 3.0
 				var a := now * 0.35 + ph
 				var c := base + Vector3(cos(a), 0, sin(a)) * r
 				var sy := maxf(bay.height_at(c.x, c.z) + 0.35, lvl - minf(0.6 + d * 0.25, 1.4))
@@ -200,10 +203,13 @@ func update(delta: float, now: float) -> void:
 			var mk: MeshInstance3D = _markers[i]
 			var pulse := fmod(now * 0.9 + ph, 1.0)
 			var big := 1.0 if key != "whale" else 3.2
-			mk.position = Vector3(base.x, maxf(g, lvl) + 0.06, base.z)
-			mk.scale = Vector3.ONE * big * (0.8 + pulse * 0.9)
-			ring_mat.albedo_color.a = 0.85
-			mk.transparency = pulse
+			mk.position = Vector3(base.x, maxf(g, lvl) + 0.08, base.z)
+			var breathe := 0.5 + 0.5 * sin(now * 3.2 + ph)
+			mk.scale = Vector3.ONE * big * (0.94 + 0.1 * breathe)
+			mk.rotation.y = now * 0.25 + ph
+			mk.visible = clear_view.is_empty()
+		if not clear_view.is_empty() and _in_the_way(n.global_position):
+			n.visible = false
 	# Rescue arcs.
 	for k in range(_flying.size() - 1, -1, -1):
 		var f: Dictionary = _flying[k]
@@ -217,8 +223,20 @@ func update(delta: float, now: float) -> void:
 			n.global_position = p
 			n.rotation.x += delta * 6.0
 			n.scale = Vector3.ONE * lerpf(1.0, 0.3, e)
+			# a pelican's catch on its way to the aquarium passes the ending's camera
+			n.visible = clear_view.is_empty() or not _in_the_way(p)
 		if u >= 1.0:
 			if is_instance_valid(n):
 				n.visible = false
 				n.scale = Vector3.ONE
 			_flying.remove_at(k)
+
+
+func _in_the_way(p: Vector3) -> bool:
+	## Near the ending camera's sightline to the tower (or right under its lens).
+	var eye: Vector3 = clear_view[0]
+	var tgt: Vector3 = clear_view[1]
+	var seg := tgt - eye
+	var u := clampf((p - eye).dot(seg) / maxf(seg.length_squared(), 0.001), 0.0, 0.85)
+	var d := p.distance_to(eye + seg * u)
+	return d < float(clear_view[2]) + 6.0 * u or p.distance_to(eye) < 14.0

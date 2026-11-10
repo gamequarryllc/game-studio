@@ -110,46 +110,57 @@ out is the ending (the calf goes home over the wall).
   and wreck loads). **Species:** 16 (three to a ring, the whale calf).
   **Finds:** 12 named ones, two or three to a ring.
 
-## Status: first playable (2026-11-09)
+## Status: polished first playable (2026-11-10)
 
-**Done**
-- The composed bay (`art/bay/make_bay.py`): sea wall and open sea, two
-  headlands with the lighthouse, the town shore with pier and aquarium,
-  six depth rings, eleven designed pools, three wrecks, the lost town.
-- Water: one level falling with the pumps, pools cutting off at their rims,
-  barges draining them, seepage at depth, the deep-water volume multiplier;
-  stylised water (depth tint, foam band, swell, glints), wet sand that dries
-  as the water leaves, caustics, chart isobaths, kelp that slumps when dry,
-  chart soundings floating over every pool.
-- Touch controls (drag pan with inertia, pinch zoom, tap), desktop mouse,
-  wheel and keys; tap picking by screen distance (forgiving on phones);
-  callouts with a leader line, one at a time.
-- 5 pump tiers on 6 pads, barges, 4 upgrades, 2 helpers (pelicans fly
-  rescues, salvage crabs walk the beach), 16 species, 12 finds, 3 wrecks with
-  salvage loads, ring banners, ring bonuses, the ending (the town square's
-  last water and the whale calf going home, its own card with the HUD
-  hidden).
-- The aquarium scene (its own camera and light), with the specimen register,
-  ticket office and the double-tickets ad; the Chandlery (index tabs, ruled
-  rows, stamped prices), purchases, restore, sound, playtest tools.
-- The whole stubbed money set (see "Money"), timed offer pennant, light
-  interstitials, starter pack offered once after 10 minutes, brass and
-  signal-flag pump liveries.
-- Save: autosave every 10 s, on backgrounding/focus loss/close, on leaving
-  the chandlery and after every purchase; the water's bodies are saved as
-  (tree node, level) pairs.
-- Phone-first notices to mariners for the first steps (look, rescue, find,
-  second pad, barge, hand pump, aquarium, chandlery) and a stall notice.
-- Generated sound: sea and gull ambience, a loop per pump tier, rescue,
-  find, salvage, ship's bell for each ring, bosun's whistle for offers, UI.
-- 56 Blender models, 21 SVG icons, the app icon.
+The first build (2026-11-09) got a "No" from the fresh-eyes critic
+(`ART_REVIEW.md`); every one of its twelve problems is now fixed and marked
+there. What changed in this block:
+
+- **The bay** is rebuilt from hand-drawn isobaths (`art/bay/make_bay.py`,
+  257x257 at 0.5 m): an asymmetric bay with the west headland and
+  lighthouse, a rocky point with strata, the river mouth behind a stone
+  weir, the sea wall as the hero landmark, the town shore with pier and
+  aquarium, eleven designed pools with smooth lips, tide lines, ripples
+  running one way, stones in clusters, painted far fields.
+- **Light and water:** a low warm key from the west-south-west with crisp
+  long shadows, a cool fill, height fog cooling the deep, the open sea
+  glittering beyond the wall; water coloured by depth with broken foam,
+  sun glitter and soft caustics in the shallows only.
+- **Models** (61, all Blender): houses and chapel with eaves, sagging
+  ridges and framed windows, the clock tower, creatures with countershading,
+  markings and thick rayed fins, wrecks broken open on their ribs, a real
+  galleon, weed and barnacle lines, baked AO. One scale rule
+  (`scripts/models.gd`): pumps 1.6x with smoke and hoses down the sand,
+  creatures 2.4x, chart-symbol tap markers.
+- **UI:** one message at a time on a tag tied to its object; ring names
+  inked into the seabed as curved chart lettering; chart soundings on all
+  the water; the tide board reads from the left with ink-on-paper names; a
+  dial with three marks; a treatment per role (pinned slips, the money
+  cartouche, string tags, painted signs, a folded chart, an engraved plate).
+- **The Chandlery** is a pegboard of paper tags with a big "Next on the
+  list" tag; the harbour office holds every ad offer on one notice and the
+  purchases; no visible dev tab.
+- **The aquarium** has rockwork, a sand slope, caustics, pier timbers, true
+  colours and habitats; its register is a natural-history plate of engraved
+  sketches (`art/blender/sketches.py`), unfound species as silhouettes.
+- **The ending** (`scripts/ending_shot.gd`): the HUD goes, a held beat
+  while the calf goes home over the wall, a dolly to the clock tower in
+  gold light with weed dripping and a wet sheen, then the card.
+- **QA:** the playthrough bot, the chaos run, a visual run and the browser
+  run (see "QA").
+
+Everything from the first playable is still there: 5 pump tiers on 6 pads,
+barges, 4 upgrades, 2 helpers, 16 species, 12 finds, 3 wrecks with salvage
+loads, ring bonuses, the stubbed money set, autosave, generated sound.
 
 ## Engine
 
 - `art/bay/make_bay.py` (numpy) builds the level offline into
-  `data/bay.json`: the heightmap (129x129, 1 m cells), painted vertex
-  colours, hand-placed landmarks and prop scatter, and the **merge tree** of
-  the seabed. Unplanned dimples are filled first (priority flood from the
+  `data/bay.json`: the heightmap (257x257, 0.5 m cells, from hand-drawn
+  isobath splines turned into a distance field), painted vertex colours,
+  a coarse far-land grid, hand-placed landmarks (the wall's line, the weir,
+  the river, ripple direction, ring label paths) and prop scatter, and the
+  **merge tree** of the seabed. Unplanned dimples are filled first (priority flood from the
   deepest point), then the designed pools are carved with explicit rims, then
   tiny leftover leaves are filled, so the only pools are the designed ones.
 - `Bay` (scripts/bay.gd) is pure logic: a body of water is (tree node,
@@ -163,9 +174,12 @@ out is the ending (the calf goes home over the wall).
   splits) and the body levels (a 32-float uniform array, every frame); dry
   vertices beside a body draw that body's level (always below them), so the
   water meets the sand exactly at the shoreline. The water shader colours by
-  depth with a foam band; the seabed shader darkens wet sand near the water
-  (and pools that just emptied dry over 45 s), adds caustics in the shallows
-  and faint chart isobaths on dry seabed. Kelp is a MultiMesh whose shader
+  depth with broken foam and sun glitter; the seabed shader draws a smooth
+  shoreline lip from each vertex's four neighbours, darkens wet sand near the
+  water (and pools that just emptied dry over 45 s), adds caustics in the
+  shallows and faint chart isobaths on dry seabed. Ring names are per-letter
+  Label3Ds laid along a curve on the seabed (`chart_lettering.gd`); tap
+  markers are chart symbols (`chart_marks.gd`). Kelp is a MultiMesh whose shader
   reads the water over each base: swaying under water, slumping when dry.
 - The aquarium is its own little scene at x = 4000 on render layer 2 with
   its own camera, environment and lights.
@@ -173,8 +187,9 @@ out is the ending (the calf goes home over the wall).
 ## Money
 
 All stubbed through `scripts/monetization/` (provider interface +
-`StubMonetizationProvider`, the reference game's architecture). Playtest
-builds fake ads and purchases and count them in the Playtest tab.
+`StubMonetizationProvider`, the reference game's architecture; untouched in
+this block so the real providers can be wired in). Playtest builds fake ads
+and purchases and count them in the dev log.
 
 Rewarded placements (AdMob ad unit keys):
 
@@ -206,14 +221,16 @@ with a paper tag naming what it buys ("Free: +1.2K coins, enough for the
 diesel pump"). None in the first 2.5 min, one at a time, gone after 40 s,
 waits longer each time one is ignored (200 s up to 8 min), only offers worth
 having, never one whose ad isn't ready. Restore Purchases is in the
-chandlery's Purchases tab. Bundle id: `com.gamequarry.drainanocean`.
+harbour office. Bundle id: `com.gamequarry.drainanocean`.
 
 ## Dev menu and bot hooks
 
-Playtest builds only (`playtest` feature tag or the editor): the chandlery's
-Playtest tab has time x1/5/10/50, income x1/10/100, give coins, unlock
-everything, skip to any ring, reset the save, and ad/purchase/interstitial
-counters.
+Playtest builds only (`playtest` feature tag or the editor): hold the money
+cartouche for about a second (or press F9) and the harbour master's logbook
+opens (`scripts/dev_panel.gd`). Nothing on screen shows it's there. Time
+x1/5/10/50, income x1/10/100, give coins, unlock everything, skip to any
+ring, reset the save, and the ad/purchase/interstitial counts. It never
+opens over the chandlery, the aquarium or the ending.
 
 Actions callable from code (World): `place_pump(pad)`, `send_barge(x, z)`,
 `move_barge(i, x, z)`, `rescue_creature(i)`, `salvage_find(f)`,
@@ -228,31 +245,49 @@ fake ad screens.
 
 ## Tests
 
-- `godot --headless -s res://tests/smoke_test.gd`: 71 checks (pumps lower the
-  level, more pumps pump more, a lagoon cuts off and keeps its water until a
-  barge drains it, aground barges can be re-sent, rescues fill the aquarium
-  and its income, ticket income arrives over time, finds and wreck loads pay,
-  the wreck cooldown, shop purchases and refusing what you can't afford,
-  every chandlery tab builds, 2x boost doubles flow and stacks to 15 min,
-  Remove Ads gives permanent 2x and stops interstitials, cash and ticket ads,
-  a cash pack, drag pans, pinch zooms, a quick touch is a tap, tapping a pad
-  picks it and opens its callout, phone-first hint wording, save/load round
-  trip of money, water, pools, rescues, pumps and purchases, seepage at
-  depth and bucket brigades stalling against it, the ending).
-- `godot --headless -s res://tests/pacing.gd [-- ads]`: the greedy-tapper
-  pacing estimate (see "Balance notes"); `PACE_TRACE=1` logs the 6:30-7:10
-  window that showed the old cascade.
-- `xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- /tmp/ocean-shots [names]`.
-- `tests/parse_all.gd` loads every script (quick parse check);
-  `tests/bay_check.gd` drains the bay headless and times it.
+All headless runs take `timeout` on this shared machine; none leaves Godot
+running.
+
+- `godot --headless -s res://tests/smoke_test.gd`: 98 checks. The first
+  build's (pumps, pools and barges, rescues and the aquarium's income,
+  salvage, the shop, ads and purchases, touch, save/load, seepage, the
+  ending) plus one for every bug found in this block (listed under "QA").
+- `godot --headless -s res://tests/playthrough.gd -- keen|casual|boosted`:
+  the playthrough bot (header of the file explains it). Plays a fresh save
+  to the end through real taps, callouts and price stamps, saves and
+  reloads at every ring, and fails on stalls, unreachable creatures, finds
+  or pools, unbuyable goods, save mismatches, broken ad or purchase flows,
+  idle takings that would buy the ending, or any logged error. Keen about
+  80 s real, casual 2.5-3 min, boosted 15-35 s (depending on the load).
+- `godot --headless -s res://tests/chaos.gd -- 5`: five game-minutes of
+  random touches, drags, pinches, keys and button presses (including the
+  fake ad screens and the dev log) and backgrounding, then checks the game
+  can always get back to the bay with one panel at most and no errors.
+- Visual run: `xvfb-run -a -s "-screen 0 1600x900x24" godot --path . -s
+  res://tests/playthrough.gd -- boosted --shots DIR --every 12 --size 844x390`
+  (also 932x430 and 1024x768): a screenshot every 12 game-seconds and
+  `DIR/contact_sheet.png`.
+- `xvfb-run -a -s "-screen 0 1600x900x24" godot --rendering-driver opengl3 -s res://tests/screenshots.gd -- /tmp/ocean-shots [names]`;
+  `-- DIR 07` shoots only the ending (beat, dolly, card) at phone size.
+- `python3 tools/browser_check.py games/drain-an-ocean`: web export in
+  headless Chromium as an iPhone in landscape, three sizes.
+- `tests/pacing.gd` (the old greedy estimate), `tests/parse_all.gd`,
+  `tests/bay_check.gd` as before.
 
 ## Rebuilding assets
 
 - Level: `python3 art/bay/make_bay.py --preview /tmp/bay.png` (prints every
   pool's spill level; the preview shows contours, pools, wrecks and props).
-- Models: `python3 art/blender/pumps.py`, `creatures.py`, `finds.py`,
-  `scenery.py` (each takes model names to build only some), then
-  `python3 art/blender/contact_sheet.py out.png [names]`.
+- Models: `python3 art/blender/buildings.py` (houses, chapel, clock tower,
+  sea wall, weir, lighthouse, stones), `wrecks.py`, `engines.py` (pumps,
+  barge, helpers), `creatures.py`, `finds.py`, `aquarium_set.py`,
+  `scenery.py`, `pumps.py` (each takes model names to build only some;
+  shared helpers in `kit.py`), then `TILE=300 SAMPLES=10 python3
+  art/blender/contact_sheet.py out.png [names]`.
+- Register sketches: `python3 art/blender/sketches.py` (Freestyle line
+  renders of each species into `ui/sketches/`, plus silhouettes).
+- After adding a script with a `class_name` or a new model, run
+  `godot --headless --import` once before the tests.
 - Icons: `python3 art/icons/make_icons.py` (also writes `icon.svg`).
 - Sounds: `python3 art/audio/make_sfx.py` (numpy, scipy, ffmpeg).
 
@@ -262,82 +297,142 @@ Made by Game Quarry. Fonts: Fraunces (Undercase Type) and Atkinson
 Hyperlegible (Braille Institute), SIL Open Font License 1.1. Everything else
 (level, models, icons, sounds) is generated by the scripts in `art/`.
 
-## QA (first playable block)
+## QA (polish block, 2026-11-10)
 
-- Smoke test: 71 checks pass.
-- Screenshots (`tests/screenshots.gd`, all checked by eye): the full bay at
-  the start, the town shore, mid-drain with three lagoons cut off, soundings,
-  hoses and stranded creatures, a pad callout with its leader line and
-  disabled price stamp, a wreck out of the water, the wreck shelf with the
-  ring banner, the aquarium, the chandlery (pumps and purchases), the phone
-  size (1266x585) with touch wording and the offer pennant, the ending card.
-- Browser run (`tools/browser_check.py`, local web export in headless
-  Chromium as an iPhone in landscape): passes at 844x390, 932x430 and
-  1024x768; the level data loads, touch works, no console or page errors.
-- Fixed from the screenshots: fog washing everything out; the sun behind the
-  camera (no glints, flat shading) moved to the west-north-west; aliased water
-  normals and grain; oversaturated sand and lava-orange coral patches;
-  banner, toast, notice and ending card placed off-screen (absolute
-  positions set after layout); a toast stacking under the ring banner (now
-  waits for it); dial labels colliding; the HUD showing through the
-  chandlery; the aquarium's unreadable back button.
-- Fixed from the pacing estimate: a dead opening (nothing for 5+ minutes),
-  then a cascade from the first diesel to the end in 11 seconds (see
-  "Balance notes").
-- Bugs found while building, each now covered by the smoke test: GDScript
-  lambdas capture locals by value, so the tap picker never picked anything
-  (now a state dictionary); unnamed containers broke the banner and find-card
-  paths; the tap test now picks a pump pad and opens its callout.
+**Results** (all on this build):
+
+- Smoke test: 98 checks pass.
+- Playthrough bot: keen PASSED (dry at 32:16 game time, 81 s real), casual
+  PASSED (63:19, 2.5 min real), boosted PASSED (2:49, 14-35 s real; run
+  five times in a row to rule out flakiness). Every run: 49 of 49 creatures,
+  12 of 12 finds, every pool pumped, all four barges, every upgrade, helper
+  and tier buyable at the end, five save/reload round trips that matched,
+  stubbed ads and purchases paying out, no errors.
+- Chaos run (5 game-minutes): PASSED.
+- VISUAL_AND_BROWSER
+
+**Pacing** (game time; keen buys whenever it can and taps everything,
+casual looks in every few minutes, buys two things at a time, wanders off to
+the aquarium and pauses; boosted is dev income x10 plus every ad):
+
+| Moment | Keen | Casual | Boosted |
+|---|---|---|---|
+| first hand pump | 2:11 | 7:06 | 0:22 |
+| Kelp forest | 3:14 | 5:55 | 0:48 |
+| first diesel pump | 7:05 | 15:16 | 1:16 |
+| Reef | 8:31 | 16:02 | 1:42 |
+| Shipwrecks | 14:35 | 28:17 | 2:17 |
+| first giant siphon | 20:30 | 28:56 | 2:14 |
+| The trench | 21:40 | 37:00 | 2:31 |
+| The lost town | 28:39 | 50:10 | 2:40 |
+| first whirlpool engine | 30:53 | 50:00 | 2:38 |
+| **the bay is dry** | **32:16** | **63:19** | **2:49** |
+| pump purchases | 24 | 26 | 29 |
+
+Aquarium takings at each ring: 9/s, 117/s, 549/s, 1.6K/s, 4.2K/s (boosted
+about 6x that). **Idle check:** at the lost town the first whirlpool engine
+costs 5.6 minutes of aquarium takings (the bot fails under 3), and the last
+metres count 45x, so leaving the game to the aquarium doesn't buy the
+ending: the top tier has to be bought and run.
+
+**Bugs found and fixed** (each has a smoke assertion):
+
+1. Playthrough (boosted): a pool pumped shallower than a barge's 15 cm
+   draught, or a barge grounded by an unrelated split, could never be
+   finished: the pool held water for good. Barges now float on any water at
+   a pool's deepest point.
+2. Screenshots: the Chandlery rebuilt itself on every aquarium payout,
+   several times a second: a frame of overlapping rows (price stamps under
+   the next row), and a stamp could be freed under a finger. It now
+   restamps prices in place, rebuilds only when something on the board
+   reads differently, and never while a stamp is held.
+3. Screenshots: the specimen register ran off both sides of a 1280x720
+   screen, and read "out in the the lost town".
+4. Screenshots: a salvage crab's find put its specimen card up in the
+   middle of the ending's shot.
+5. Screenshots: stranded fish, a pelican's catch on its way to the
+   aquarium and barges aground in the square sat right in front of the
+   ending camera; anything in its sightline is now left out of the shot.
+6. Chaos: F9 could open the dev log over the aquarium.
+7. Playthrough: a body of water that had just split away could be asked
+   for its deepest point after it was gone (an out-of-range read from the
+   soundings); now safe.
+8. Smoke (ending): messages queued while the HUD was away came back over
+   the ending card; the queue now clears when the HUD goes.
+9. Playthrough (error scan): the money cartouche's outline crossed itself
+   (polygon triangulation errors in the log).
+10. Pacing, from the bot's tables: the first tuning finished keen in 12:40
+    without ever needing the top tier; the next stalled for good at 23 m;
+    the next ran the finale in 3 seconds; and casual players who spent on
+    upgrades finished faster than ones who didn't (upgrades too cheap).
+    Retuned: tier costs, seepage that grows past 20 m, the town's 45x
+    holding, steeper upgrade prices.
+11. "1 creatures rescued" on the ending card.
+12. Screenshots: the ending camera came to rest 1.7 m inside the basin's
+    slope, looking through the back of the seabed (a dark wedge across the
+    shot). It now rises until it clears the sand and sees the tower's foot.
+13. Visual run: the land round the bay (the far grid) drew far paler than
+    the bay's own land, a straight seam and washed-out corners in every
+    wide shot: a StandardMaterial's sRGB vertex colours in the Compatibility
+    renderer. It now uses `shaders/land.gdshader`, converting exactly as
+    the terrain shader does.
+
+Bugs in the bots themselves (not the game), also fixed: stale stamp states
+after a rebuild, a money comparison racing the helpers' income, the chaos
+run not closing the fake ad screen when recovering.
+
+**Art fixed from the re-shoots:** the river weir was white boxes (rebuilt
+stone by stone in Blender with cutwaters, a plank gate, a footbridge and
+winding gear); the river was a flat cyan strip (now shaded bank to channel
+and fading into the banks); long hoses were ruled lines across the bay (now
+laid in loose loops that widen with the run); the aquarium's light shafts
+read as solid planks (fog on additive quads); the brain coral was a smooth
+orange egg (now a lumpy dome with deep meandering valleys).
 
 ## Balance notes
 
-All numbers in `scripts/balance.gd`. The bay holds about 65,000 m³ below the
-old sea level (21K sandbars, 19K kelp, 12K reef, 7K wrecks, 4K trench, 0.9K
-town), but deep water counts for more per metre (`Bay.volume_mult`, x1 at
-the surface, x17 at 12 m, x45 at 20 m) so the small deep rings still take
-minutes. Pump flow loses to lift (`HEAD_LOSS` 0.11 per metre, eased by Pipe
-width) and the sea seeps back in at 7 · depth^2.45 m³/s, which is the gate:
-each pump tier reaches about one ring deeper, and the water slows to a stop
-near your pumps' limit (the red needle on the dial catches the black one,
-and a notice says so). Tiers are ~4x apart in flow (40, 150, 580, 2.3K, 9K)
-and cost 18, 260, 4.2K, 100K, 2.2M, x1.55 for each further pad at a tier.
+All numbers in `scripts/balance.gd`. The bay holds about 65,000 m3 below the
+old sea level, but deep water counts for more per metre
+(`Bay.volume_mult`: 1 + (depth / 2.4)^2, so x26 at 12 m and x70 at 20 m,
+and the town's last water a further x45 from 20.5 m) so the small deep rings
+still take minutes. Pump flow loses to lift (`HEAD_LOSS` 0.11 per metre,
+eased by Pipe width) and the sea seeps back in at 7 x depth^2.45 m3/s,
+growing another 8% per metre past 20 m: that is the gate. Each pump tier
+reaches about one ring deeper and the water slows to a stop near your
+pumps' limit (the dial's red seep needle catches the black one and a notice
+says so); the lost town needs the whirlpool engine. Tiers are about 4x apart
+in flow (40, 150, 580, 2.3K, 9K) and cost 18, 320, 7.5K, 170K, 1.4M, x1.55
+for each further pad at a tier. Upgrades grow x2.8 to x3.1 a level, so they
+help but never replace the next tier.
 
-Money: rescues pay a small bounty at once; the aquarium's ticket takings
-(total appeal per second) are the main earner and grow about 5x per ring;
-finds, wreck loads and ring bonuses are kept to a fraction of the next
-tier's price so a new ring never pays for everything at once (an earlier
-version cascaded from diesel to the end in 11 seconds).
+Money: rescues pay a small bounty at once; the aquarium's takings (total
+appeal x 0.8 a second) are the main earner and grow 3-13x per ring; finds,
+wreck loads and ring bonuses (60, 700, 4K, 20K, 90K) are kept to a fraction
+of the next tier's price so a new ring never pays for everything at once.
 
-`tests/pacing.gd` (a greedy tapper, not the playthrough bot) reaches: kelp
-3:11, reef 9:00, shipwrecks 12:23, trench 15:51, lost town 21:24, dry
-29:02, with stalls before each new tier. A real player taps slower and won't
-buy perfectly, so a casual run will be longer; the playthrough bot (next
-block) needs to confirm keen ~30 / casual ~60.
+## Next steps
 
-## Next steps (toward the polish bar)
-
-1. **Fresh-eyes critic** on the screenshots and contact sheet, then fix.
-2. **Playthrough bot** (`tests/playthrough.gd`: keen / casual / boosted),
-   chaos run, visual run, browser run at three sizes; tune pacing with ads
-   and without (the greedy estimate is 29 min).
-3. **Art**: creature models need another pass (fins are flat boards, the
-   clownfish tail is a block, the moray is plain); the water could use a
-   breaking-wave line at the sea wall and spray from pump outflows; the far
-   land frame is flat; houses are simple boxes; a splash screen.
-4. **Music** (generated, per ring) and separate music/effects sliders.
-5. **Juice**: squash on rescues, a crate swing on wreck salvage, the lost
-   town's clock striking at the end, pelicans actually carrying the fish.
+1. **Fresh-eyes critic, round 2**, on the new shots, the model contact
+   sheet and the visual-run sheets.
+2. **Real ads and purchases** through the provider interface (STUDIO.md,
+   "North star"); the stub stays for playtest builds.
+3. **Music** (generated, per ring) and separate music/effects sliders.
+4. **Juice**: squash on rescues, a crate swing on wreck salvage, the lost
+   town's clock striking at the end, pelicans visibly carrying the fish.
+5. A second modelling pass on the weakest small props, judged from the
+   contact sheet: the statue, weathervane, figurehead and compass finds and
+   the wreck crate are still simple. Also a name plate on the aquarium tank
+   (it's blank), a splash screen, a breaking-wave line along the sea wall.
+6. Frame rate on a real phone (the browser here renders at about 1 fps).
 
 ## Known bugs / rough edges
 
-- Ring tags on the tide board can sit under the level tag when the water is
-  right at a ring's top.
-- The water's edge pulls in by up to a metre next to a ridge between two
-  bodies of water (the dry ridge vertex draws the higher body's level); fine
-  at normal zoom.
-- Slumped kelp on dry sand fans out like a dark star rather than lying
-  along the slope.
+- The water's edge pulls in by up to half a metre next to a ridge between
+  two bodies of water (the dry ridge vertex draws the higher body's level).
+- Slumped kelp on dry sand fans out rather than lying along the slope.
 - Creature markings are painted per vertex, so small patterns are soft.
+- The time offer's tag and a hint tag can both be up at once (they belong
+  to different things: the pennant and the bay).
 - The phone-size screenshot resizes the window under xvfb; if the window
-  manager ignores it the shot is 1280x720 (still shows touch wording).
+  manager ignores it the shot is 1280x720.
 - Headless runs print leaked-RID warnings at exit (dummy renderer teardown).

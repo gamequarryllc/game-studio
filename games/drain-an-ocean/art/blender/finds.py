@@ -104,15 +104,32 @@ def find_helmet():
 
 
 def find_bell():
+    """A ship's bell lying on its side: a tall waist, a flared lip with a
+    thick sound bow, a cast crown loop still bolted to a broken bit of its
+    timber yoke, the clapper hanging out, a lanyard trailing, and a band
+    round the shoulder where her name was cast."""
     reset()
     brass = mat("brass", metal=0.8, rough=0.4)
-    b = lathe([(0.0, 0.62), (0.12, 0.62), (0.18, 0.55), (0.2, 0.35), (0.28, 0.1), (0.34, 0.02), (0.33, 0.0), (0.26, 0.02), (0.17, 0.3), (0.1, 0.55), (0.0, 0.56)], 20, "bell", brass)
-    parts = [b, torus(0.06, 0.02, (0, 0, 0.68), brass, rot=(math.pi / 2, 0, 0), maj=10, mi=4)]
-    parts.append(sphere(0.06, (0, 0, 0.08), mat("iron", metal=0.5), segs=8, rings=6))
+    prof = [(0.0, 0.66), (0.1, 0.66), (0.15, 0.64), (0.19, 0.58), (0.2, 0.5), (0.21, 0.36), (0.24, 0.2), (0.3, 0.09),
+            (0.37, 0.03), (0.39, 0.0), (0.36, -0.01), (0.31, 0.0), (0.27, 0.06), (0.2, 0.25), (0.17, 0.45), (0.14, 0.58), (0.0, 0.6)]
+    b = lathe(prof, 24, "bell", brass)
+    parts = [b]
+    parts.append(torus(0.205, 0.018, (0, 0, 0.5), brass, maj=24, mi=4))
+    parts.append(torus(0.215, 0.018, (0, 0, 0.42), brass, maj=24, mi=4))
+    # the crown: a heavy cast loop and the stub of the yoke it hung from
+    parts.append(torus(0.075, 0.03, (0, 0, 0.73), brass, rot=(math.pi / 2, 0, 0), maj=12, mi=6))
+    parts.append(box((0.62, 0.14, 0.14), (0.08, 0, 0.84), mat("wood_dark", rough=0.9), rot=(0, math.radians(12), 0), bevel=0.02))
+    parts.append(strut((0.33, 0.0, 0.87), (0.4, 0.0, 0.92), 0.06, mat("wood_dark", rough=0.9)))
+    # the clapper on its rod, hanging out of the mouth
+    parts.append(strut((0, 0, 0.55), (0.0, 0.0, -0.08), 0.018, mat("iron", metal=0.5)))
+    parts.append(sphere(0.06, (0, 0, -0.1), mat("iron", metal=0.5), segs=10, rings=8))
+    parts.append(tube([Vector((0, 0, -0.15)), Vector((0.05, 0.1, -0.3)), Vector((0.2, 0.2, -0.36)), Vector((0.45, 0.18, -0.34))],
+                      [0.012] * 4, mat("rope", rough=0.95), sides=5))
     o = join(parts, "bell")
-    o.rotation_euler = (math.radians(70), 0, math.radians(40))
-    o.location = (0, 0, 0.3)
-    done([o], "find_bell", 105, 0.25, verd=0.55)
+    o.rotation_euler = (math.radians(84), math.radians(8), math.radians(35))
+    o.location = (0, 0, 0.36)
+    o.scale = (1.35, 1.35, 1.35)
+    done([o], "find_bell", 105, 0.3, verd=0.5)
 
 
 def find_compass():

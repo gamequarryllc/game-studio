@@ -13,6 +13,9 @@ from mathutils import Vector  # noqa: E402
 from kit import MODELS, reset  # noqa: E402
 
 TILE = int(os.environ.get("TILE", "300"))
+# Buildings face Blender +Y like everything else, but their fronts (doors,
+# windows) are what matters: show them from the front.
+FRONT = ("house_", "town_", "lighthouse", "aquarium", "weir")
 
 
 def render_one(path, out):
@@ -65,6 +68,8 @@ def render_one(path, out):
     scene.collection.objects.link(cam)
     # glTF import turns Blender +Y forward into -Y; look from the front-right, a little above.
     view = Vector((1.0, -1.35, 0.7))
+    if any(os.path.basename(path).startswith(f) for f in FRONT):
+        view = Vector((-1.0, 1.35, 0.8))
     d = view.normalized() * size * 1.5
     cam.location = center + d
     cam.rotation_euler = (center - cam.location).to_track_quat("-Z", "Y").to_euler()

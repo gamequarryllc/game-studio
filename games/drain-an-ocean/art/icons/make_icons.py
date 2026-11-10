@@ -174,6 +174,22 @@ def i_pump_5():
     return b
 
 
+def i_brass():
+    """The premium livery: a hand pump in polished brass, a glint on its
+    column and a star of shine on the lever."""
+    b = [shape(rect(18, 50, 28, 7), PAPER)]
+    b.append(shape([(24, 50), (25, 22), (23, 18), (32, 13), (41, 18), (39, 22), (40, 50)], BRASS))
+    b.append(hatch([(34, 50), (35, 22), (39, 22), (40, 50)], 2.8, -60))
+    b.append(shape([(24, 28), (12, 31), (10, 36), (13, 37), (24, 34)], BRASS))
+    b.append(line([(32, 14), (52, 7)], 3.2))
+    b.append(shape([(50, 5), (57, 3), (58, 7), (52, 9)], SAND))
+    b.append(line([(28, 24), (28, 46)], 1.6, PAPER))
+    for (x, y, r) in ((46, 26, 4.5), (17, 14, 3.0)):
+        b.append(line([(x - r, y), (x + r, y)], 1.6, INK))
+        b.append(line([(x, y - r), (x, y + r)], 1.6, INK))
+    return b
+
+
 def i_barge():
     b = [shape([(6, 40), (58, 40), (52, 52), (12, 52)], SHOAL), hatch([(34, 40), (58, 40), (52, 52), (34, 52)], 3.0)]
     b.append(shape(rect(10, 36, 44, 5), SAND, sw=2))

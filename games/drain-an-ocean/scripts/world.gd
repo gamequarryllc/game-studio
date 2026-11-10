@@ -23,12 +23,16 @@ var rig: CameraRig
 var hud: Hud
 var aquarium: Aquarium
 var sun: DirectionalLight3D
+var sun_dir := Vector3(-0.88, 0.29, 0.37)
 var env: WorldEnvironment
 var offers := AdOffers.new()
 var main_flow := 0.0             # m³/s the pumps move out of the main body right now
 var seep_flow := 0.0             # m³/s seeping back in at this depth
 var flows := {}                  # body id -> m³/s
-var soundings := {}              # body id -> Label3D
+var soundings := {}              # body id -> Label3D (one per pool, over its deepest point)
+var open_soundings: Array = []   # [{"label", "x", "z"}]: the scatter over the open water
+var lettering: ChartLettering
+var _sound_t := 0.0
 var game_time := 0.0
 var paused_world := false        # in the aquarium
 var _hint_t := 0.0
@@ -36,7 +40,7 @@ var _gull_t := 6.0
 var _pool_announced := {}
 var _ended := false
 var _starter_shown := false
-var _soak := 0.0
+var ending_shot: EndingShot
 
 
 func _ready() -> void:
@@ -46,6 +50,7 @@ func _ready() -> void:
 	view.name = "BayView"
 	add_child(view)
 	view.setup(bay)
+	view.set_sun(sun_dir, SUN_COLOR)
 	props = Props.new()
 	props.name = "Props"
 	add_child(props)
@@ -73,9 +78,14 @@ func _ready() -> void:
 	add_child(rig)
 	rig.set_view(float(GameState.cam.x), float(GameState.cam.z), float(GameState.cam.zoom))
 	rig.tapped.connect(_on_tap)
+	lettering = ChartLettering.new()
+	lettering.name = "Lettering"
+	add_child(lettering)
+	lettering.setup(bay)
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
+	hud.lettering = lettering
 	hud.shop_requested.connect(open_shop)
 	hud.aquarium_requested.connect(open_aquarium)
 	hud.boost_requested.connect(func(): watch_ad("boost"))
@@ -95,59 +105,70 @@ func _ready() -> void:
 
 
 func _environment() -> void:
+	## Late afternoon: one low warm sun from the west-south-west throwing long
+	## shadows across the drained shelves, a cool teal fill from the sky on
+	## the other side, and a cool haze that pools in the deep bay so the eye
+	## falls down into it.
 	env = WorldEnvironment.new()
 	var e := Environment.new()
 	var sky := Sky.new()
 	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color("#2f6f7c")
-	sm.sky_horizon_color = Color("#e8c49a")
-	sm.sky_curve = 0.12
+	sm.sky_top_color = Color("#2b6876")
+	sm.sky_horizon_color = Color("#e9c89c")
+	sm.sky_curve = 0.1
 	sm.ground_horizon_color = Color("#9fb3a2")
 	sm.ground_bottom_color = Color("#0f4c5c")
-	sm.sun_angle_max = 18.0
-	sm.sun_curve = 0.08
+	sm.sun_angle_max = 14.0
+	sm.sun_curve = 0.06
 	sky.sky_material = sm
 	e.background_mode = Environment.BG_SKY
 	e.sky = sky
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	e.ambient_light_energy = 0.55
-	e.ambient_light_sky_contribution = 0.85
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = Color("#6f9ea3")
+	e.ambient_light_energy = 0.62
 	e.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	e.tonemap_exposure = 1.0
-	e.tonemap_white = 5.0
+	e.tonemap_exposure = 1.04
+	e.tonemap_white = 4.5
 	e.fog_enabled = true
-	e.fog_light_color = Color("#e3c79f")
-	e.fog_light_energy = 0.9
-	e.fog_density = 0.00045
-	e.fog_aerial_perspective = 0.12
-	e.fog_sky_affect = 0.35
+	e.fog_light_color = Color("#3f7a80")
+	e.fog_light_energy = 0.85
+	e.fog_density = 0.0009
+	e.fog_aerial_perspective = 0.0
+	e.fog_sky_affect = 0.0
+	e.fog_height = -8.0
+	e.fog_height_density = 0.011
 	e.adjustment_enabled = true
-	e.adjustment_saturation = 1.05
-	e.adjustment_contrast = 1.06
+	e.adjustment_saturation = 1.0
+	e.adjustment_contrast = 1.08
 	env.environment = e
 	add_child(env)
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.light_color = SUN_COLOR
-	sun.light_energy = 1.55
+	sun.light_energy = 1.75
 	sun.shadow_enabled = true
-	sun.shadow_bias = 0.04
-	sun.shadow_normal_bias = 1.2
+	sun.shadow_bias = 0.12
+	sun.shadow_normal_bias = 3.2
+	sun.shadow_blur = 0.6
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 260.0
+	sun.directional_shadow_split_1 = 0.25
+	sun.directional_shadow_max_distance = 160.0
+	sun.directional_shadow_fade_start = 0.9
 	sun.light_cull_mask = 1
-	var to_sun := Vector3(-0.86, 0.0, -0.52).normalized()
-	var el := deg_to_rad(21.0)
+	var az := deg_to_rad(22.5)                 # west-south-west
+	var to_sun := Vector3(-cos(az), 0.0, sin(az))
+	var el := deg_to_rad(19.0)
 	to_sun = Vector3(to_sun.x * cos(el), sin(el), to_sun.z * cos(el))
 	sun.transform = Transform3D(Basis.looking_at(-to_sun, Vector3.UP), Vector3.ZERO)
 	add_child(sun)
-	# A cool fill from the opposite side, no shadows: the teal sky bouncing.
+	sun_dir = to_sun
+	# A cool fill from the east-north-east, higher, no shadows: the teal sky bouncing.
 	var fill := DirectionalLight3D.new()
-	fill.light_color = Color("#7fb3b8")
-	fill.light_energy = 0.28
+	fill.light_color = Color("#86b9be")
+	fill.light_energy = 0.32
 	fill.light_cull_mask = 1
-	fill.transform = Transform3D(Basis.looking_at(Vector3(-0.7, -0.55, 0.45), Vector3.UP), Vector3.ZERO)
+	fill.transform = Transform3D(Basis.looking_at(-Vector3(0.75, 0.6, -0.3).normalized(), Vector3.UP), Vector3.ZERO)
 	add_child(fill)
 
 
@@ -162,12 +183,14 @@ func _process(delta: float) -> void:
 	if not paused_world:
 		_pump(dt)
 	view.refresh(game_time)
+	sun.directional_shadow_max_distance = clampf(rig.distance() * 1.45 + 30.0, 70.0, 320.0)
 	var running := not bay.is_drained() and main_flow > 0.0
 	pumps.update(dt, game_time, running)
 	creatures.update(dt, game_time)
 	finds.update(dt, game_time)
 	helpers.update(dt, game_time)
 	_update_soundings()
+	lettering.update_visibility(paused_world)
 	_update_offer(dt)
 	_update_hints(dt)
 	_update_sound(dt)
@@ -224,17 +247,17 @@ func _on_water_event(e: Dictionary) -> void:
 	match str(e.type):
 		"split":
 			for id in e.into:
-				if id == bay.main_id or _pool_announced.has(id):
+				if id == bay.main_id or _pool_announced.has(id) or not bay.bodies.has(id):
 					continue
 				_pool_announced[id] = true
 				var nm := bay.body_name(id)
 				var n := _creatures_in_body(id)
-				var line := "%s is cut off from the bay." % nm
+				var line := "Cut off from the bay."
 				if n == 1:
 					line += " Something's in there."
 				elif n > 1:
-					line += " %d creatures in there." % n
-				hud.toast(line, 4.0)
+					line += " %s creatures in there." % ["Two", "Three", "Four", "Five", "Six"][clampi(n - 2, 0, 4)]
+				hud.say(line, bay.vertex_pos(bay.deepest_vertex(id)) + Vector3(0, 0.4, 0), 4.0, nm)
 				Sound.play("pool_cut", -4.0)
 		"emptied":
 			if e.was_main:
@@ -267,22 +290,24 @@ func _on_bay_drained() -> void:
 	_ended = true
 	GameState.win()
 	Sound.play("bell", 0.0)
-	Sound.play("victory", -2.0)
-	# Frame the town square, then the card.
-	var sq := bay.vertex_pos(bay.sink)
-	var from := Vector3(rig.target.x, rig.zoom, rig.target.y)
-	var tw := create_tween()
-	tw.tween_method(func(u: float):
-		var e := u * u * (3.0 - 2.0 * u)
-		rig.set_view(lerpf(from.x, sq.x, e), lerpf(from.z, sq.z + 6.0, e), lerpf(from.y, 0.3, e)), 0.0, 1.0, 2.5)
+	# The calf goes home over the wall in the pause before the shot.
+	var wi := Balance.species_index("whale")
+	for i in creatures.spots.size():
+		if int(creatures.spots[i].species) == wi and not GameState.is_rescued(i):
+			rescue_creature(i, true)
+	hud.set_hud_visible(false)
+	hud.close_callout()
 	var gs = GameState
 	var lines := [
 		"%d m of water pumped out, in %s." % [int(-bay.h[bay.sink]), Fmt.duration(gs.won_time)],
-		"%d creatures rescued, %d of %d species." % [gs.rescued.size(), gs.species_seen(), Balance.SPECIES.size()],
+		"%d creature%s rescued, %d of %d species." % [gs.rescued.size(), "" if gs.rescued.size() == 1 else "s", gs.species_seen(), Balance.SPECIES.size()],
 		"%d of %d finds salvaged." % [gs.finds_count(), Balance.FINDS.size()],
 		"The clock tower still keeps time.",
 	]
-	hud.show_ending(lines)
+	ending_shot = EndingShot.new()
+	ending_shot.name = "EndingShot"
+	add_child(ending_shot)
+	ending_shot.play(self, lines)
 
 
 # --- Taps ------------------------------------------------------------------------------------------
@@ -308,7 +333,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _busy() -> bool:
-	return paused_world or hud.shop_open() or Monetization.is_showing_ad() or hud.ending != null
+	return paused_world or hud.shop_open() or Monetization.is_showing_ad() or hud.ending != null or (ending_shot != null and ending_shot.running)
 
 
 func _on_tap(sp: Vector2) -> void:
@@ -532,7 +557,7 @@ func rescue_creature(i: int, by_helper: bool = false) -> float:
 		_hint_done("rescue")
 		var def: Dictionary = Balance.SPECIES[int(sp.species)]
 		if GameState.species_counts[int(sp.species)] == 1:
-			hud.toast("%s, into the aquarium. New species." % str(def.name) if not release else "The whale calf is going home, over the wall.", 3.0)
+			hud.say("Into the aquarium. A new species for the register." if not release else "Going home, over the wall.", at + Vector3(0, 1.0, 0), 3.0, str(def.name))
 	return v
 
 
@@ -542,7 +567,7 @@ func salvage_find(f: int, by_helper: bool = false) -> float:
 	var v: float = GameState.salvage_find(f)
 	finds.pick_up(f, props.aquarium_pos + Vector3(0, 4, 0))
 	hud.float_text(finds.spots[f].pos + Vector3(0, 1.4, 0), "+%s" % Fmt.num(v), UiTheme.SAND, true)
-	hud.show_find(f, v)
+	hud.show_find(f, v, finds.spots[f].pos + Vector3(0, 0.6, 0))
 	Sound.play("find", -2.0)
 	if not by_helper:
 		_hint_done("find")
@@ -561,11 +586,11 @@ func salvage_wreck(w: int, by_helper: bool = false) -> float:
 
 func watch_ad(kind: String) -> void:
 	if kind == "boost" and not GameState.boost_can_stack():
-		hud.toast("2x pumping is already stacked to 15 minutes.")
+		hud.say("2x pumping is already stacked to 15 minutes.")
 		return
 	Monetization.watch_for_reward(kind, func(ok: bool, text: String):
 		if ok and is_instance_valid(hud):
-			hud.toast(text)
+			hud.say(text)
 			Sound.play("reward", -2.0))
 
 
@@ -577,7 +602,7 @@ func _take_offer(kind: String) -> void:
 	Monetization.watch_for_reward(kind, func(ok: bool, text: String):
 		offers.taken()
 		if ok and is_instance_valid(hud):
-			hud.toast(text)
+			hud.say(text)
 			Sound.play("reward", -2.0))
 
 
@@ -589,7 +614,7 @@ func _double_find(f: int) -> void:
 			var v: float = GameState.find_value(f)
 			GameState.grant_money(v)
 			if is_instance_valid(hud):
-				hud.toast("Doubled: +%s" % Fmt.num(v))
+				hud.say("Doubled: +%s" % Fmt.num(v))
 			Sound.play("reward", -2.0))
 
 
@@ -653,43 +678,85 @@ func dev_reset() -> void:
 
 
 # --- Soundings, hints, offers, sound ---------------------------------------------------------------
+func _sounding_label() -> Label3D:
+	## A chart sounding: a small italic depth printed flat on the water, the
+	## tenths as a subscript, in ink.
+	var l := Label3D.new()
+	l.font = UiTheme.italic()
+	l.font_size = 64
+	l.pixel_size = 0.016
+	l.modulate = Color(UiTheme.INK, 0.72)
+	l.outline_size = 6
+	l.outline_modulate = Color(UiTheme.PAPER, 0.28)
+	l.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	l.rotation = Vector3(-PI * 0.5, 0.0, 0.0)
+	l.no_depth_test = false
+	l.render_priority = 3
+	add_child(l)
+	return l
+
+
 func _sync_soundings() -> void:
-	## A chart sounding (depth in italic) floats over each pool's deepest point.
+	## One sounding over each pool's deepest point, and a light scatter over
+	## the open water (set up once, shown wherever there's water under it).
 	for id in soundings.keys():
 		if not bay.bodies.has(id) or id == bay.main_id:
 			soundings[id].queue_free()
 			soundings.erase(id)
 	for id in bay.pool_ids():
-		if soundings.has(id):
-			continue
-		var l := Label3D.new()
-		l.font = UiTheme.italic()
-		l.font_size = 64
-		l.outline_size = 10
-		l.modulate = UiTheme.INK
-		l.outline_modulate = Color(UiTheme.PAPER, 0.85)
-		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		l.fixed_size = true
-		l.pixel_size = 0.00055
-		l.no_depth_test = false
-		add_child(l)
-		soundings[id] = l
+		if not soundings.has(id):
+			soundings[id] = _sounding_label()
+	if open_soundings.is_empty():
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 99
+		var zx := -50.0
+		while zx < 46.0:
+			var zz := -50.0
+			while zz < 44.0:
+				var x := zx + rng.randf_range(-3.5, 3.5)
+				var z := zz + rng.randf_range(-3.5, 3.5)
+				if bay.in_bounds(x, z) and bay.height_at(x, z) < -0.8:
+					open_soundings.append({"label": _sounding_label(), "x": x, "z": z})
+				zz += 11.0
+			zx += 11.0
+
+
+static func sounding_text(d: float) -> String:
+	var whole := int(floor(d))
+	var tenth := int(round((d - whole) * 10.0))
+	if tenth >= 10:
+		whole += 1
+		tenth = 0
+	return "%d%s" % [whole, ["₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"][tenth]]
 
 
 func _update_soundings() -> void:
-	for id in soundings:
+	for id in soundings.keys():
 		var l: Label3D = soundings[id]
+		if not bay.bodies.has(id):
+			l.queue_free()
+			soundings.erase(id)
+			continue
 		var v := bay.deepest_vertex(id)
 		var p := bay.vertex_pos(v)
 		var d := bay.max_depth(id)
-		l.position = Vector3(p.x, bay.level_of(id) + 0.6, p.z)
-		var whole := int(floor(d))
-		var tenth := int(round((d - whole) * 10.0))
-		if tenth >= 10:
-			whole += 1
-			tenth = 0
-		l.text = "%d%s" % [whole, ["₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"][tenth]]
-		l.visible = d > 0.15 and not paused_world
+		l.position = Vector3(p.x, bay.level_of(id) + 0.06, p.z + 1.2)
+		l.text = sounding_text(d)
+		l.visible = d > 0.25 and not paused_world
+	_sound_t -= get_process_delta_time()
+	if _sound_t > 0.0:
+		return
+	_sound_t = 0.4
+	for so in open_soundings:
+		var l: Label3D = so.label
+		var x: float = so.x
+		var z: float = so.z
+		var id := bay.body_at(x, z)
+		var d := bay.depth_at(x, z)
+		l.visible = id != Bay.NO_BODY and id == bay.main_id and d > 0.7 and not paused_world
+		if l.visible:
+			l.position = Vector3(x, bay.level_of(id) + 0.06, z)
+			l.text = sounding_text(d)
 
 
 func _hint_done(key: String) -> void:
@@ -697,29 +764,54 @@ func _hint_done(key: String) -> void:
 		GameState.hints_done[key] = true
 
 
-func _hint_text() -> String:
+func _hint() -> Array:
+	## The first-run notice that applies now, and what it's about: [text, anchor].
 	var gs = GameState
 	var touch := rig.last_input_touch
 	var hd: Dictionary = gs.hints_done
+	var tap := "Tap" if touch else "Click"
 	if not hd.has("look"):
-		return "Your bucket brigade is bailing out the bay. %s" % ("Drag to look round, pinch to zoom." if touch else "Drag to look round, scroll to zoom.")
-	if not hd.has("rescue") and not creatures.stranded_list().is_empty():
-		return "Something's stranded in the shallows. %s it to rescue it." % ("Tap" if touch else "Click")
-	if not hd.has("find") and not finds.exposed_list().is_empty():
-		return "Something glinting on the sand. %s it to pick it up." % ("Tap" if touch else "Click")
+		return ["Your bucket brigade is bailing out the bay. %s" % ("Drag to look round, pinch to zoom." if touch else "Drag to look round, scroll to zoom."),
+			pumps.pads[0].pos + Vector3(0, 2.5, 0)]
+	if not hd.has("rescue"):
+		var c := _nearest_on_screen(creatures.stranded_list(), func(i): return creatures.screen_pos(i))
+		if c >= 0:
+			return ["Stranded in the shallows. %s it to carry it to the aquarium." % tap, creatures.screen_pos(c) + Vector3(0, 0.8, 0)]
+	if not hd.has("find"):
+		var f := _nearest_on_screen(finds.exposed_list(), func(i): return finds.spots[i].pos)
+		if f >= 0:
+			return ["Something glinting on the sand. %s it to pick it up." % tap, finds.spots[f].pos + Vector3(0, 0.8, 0)]
 	if not hd.has("pad") and gs.money >= gs.pad_next_cost(1) and gs.pads.count(0) > 0:
-		return "%s an empty pump pad on the beach and set up another bucket brigade." % ("Tap" if touch else "Click")
+		var pi: int = gs.pads.find(0)
+		return ["An empty pump pad. %s it to set up another bucket brigade." % tap, pumps.pads[pi].pos + Vector3(0, 1.5, 0)]
 	if not hd.has("barge") and bay.pool_ids().size() > 0:
-		return "A pool's cut off and keeps its water. %s it to send a barge pump out." % ("Tap" if touch else "Click")
+		for id in bay.pool_ids():
+			if _creatures_in_body(id) > 0:
+				return ["Cut off, and it keeps its water. %s it to send a barge pump out." % tap, bay.vertex_pos(bay.deepest_vertex(id)) + Vector3(0, 0.4, 0)]
 	if not hd.has("tier") and gs.money >= gs.next_tier_cost() * 0.8 and gs.best_tier() < 2:
-		return "A hand pump moves four times the water. %s a pad with a brigade on it." % ("Tap" if touch else "Click")
+		return ["A hand pump moves four times the water. %s this pad to put one on it." % tap, pumps.pads[0].pos + Vector3(0, 2.5, 0)]
 	if not hd.has("aquarium") and gs.creatures_in_tank() >= 3:
-		return "Your rescues are in the aquarium on the pier, selling tickets. %s the Aquarium flag." % ("Tap" if touch else "Click")
+		return ["Your rescues are in the aquarium, selling tickets. %s it to look in." % tap, props.aquarium_pos + Vector3(0, 4.0, 0)]
 	if is_stalled() and not paused_world:
-		return "The sea's seeping back through the seabed as fast as you pump. It takes bigger pumps to go deeper."
+		return ["The sea's seeping back through the seabed as fast as you pump. Deeper water takes bigger pumps.", Vector3.INF]
 	if not hd.has("shop") and gs.lifetime_money > 600.0:
-		return "The Chandlery flag has upgrades, helpers and barges."
-	return ""
+		return ["The Chandlery flag has upgrades, helpers and barges.", Vector3.INF]
+	return ["", Vector3.INF]
+
+
+func _nearest_on_screen(list: Array, pos_of: Callable) -> int:
+	var best := -1
+	var bd := 1e18
+	var centre := get_viewport().get_visible_rect().size * 0.5
+	for i in list:
+		var p: Vector3 = pos_of.call(i)
+		if rig.camera.is_position_behind(p):
+			continue
+		var d := rig.camera.unproject_position(p).distance_squared_to(centre)
+		if d < bd:
+			bd = d
+			best = i
+	return best
 
 
 func _update_hints(dt: float) -> void:
@@ -728,13 +820,12 @@ func _update_hints(dt: float) -> void:
 		if _hint_t > 14.0 or rig._press_moved:
 			_hint_done("look")
 	if Engine.get_process_frames() % 10 == 0:
-		var t := _hint_text() if not paused_world and hud.ending == null else ""
-		if t != hud.notice_label.text or (t != "" and not hud.notice.visible and hud.staff.visible):
-			hud.set_hint(t)
+		var h := _hint() if not paused_world and hud.ending == null and not (ending_shot != null and ending_shot.running) else ["", Vector3.INF]
+		hud.set_hint(str(h[0]), h[1])
 
 
 func _update_offer(dt: float) -> void:
-	var playing := not _busy() and not hud.shop_open()
+	var playing := not _busy() and not hud.shop_open() and hud.message_count() == 0
 	var r := offers.update(dt, playing)
 	if r == 1:
 		hud.show_offer(offers.current)

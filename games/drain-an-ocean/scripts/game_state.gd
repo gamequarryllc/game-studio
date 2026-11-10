@@ -219,7 +219,9 @@ func shore_flow() -> float:
 
 func seepage(level: float) -> float:
 	## m³/s of sea seeping back into the main body at this level.
-	return Balance.SEEP_K * pow(maxf(0.0, -level), Balance.SEEP_EXP)
+	var d := maxf(0.0, -level)
+	var deep := 1.0 + Balance.SEEP_DEEP_PER * maxf(0.0, d - Balance.SEEP_DEEP_FROM)
+	return Balance.SEEP_K * pow(d, Balance.SEEP_EXP) * deep
 
 
 func salvage_mult() -> float:

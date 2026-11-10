@@ -12,6 +12,7 @@ uniform vec2 grid_origin = vec2(-64.0, -64.0);
 uniform float cell = 1.0;
 uniform float game_time = 0.0;
 uniform float blade_height = 3.2;
+uniform vec2 basin = vec2(-7.5, -37.5);     // where the water went: dry kelp lies combed towards it
 
 vec3 to_linear(vec3 c) {
 	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(0.04045, c));
@@ -33,13 +34,21 @@ void vertex() {
 	float sway = sin(game_time * 0.9 + phase + u * 2.0) * 0.32 * u * u * (1.0 - slump);
 	VERTEX.x += sway;
 	VERTEX.z += cos(game_time * 0.7 + phase) * 0.12 * u * u * (1.0 - slump);
-	// slump: bend over around the base, more towards the tip
-	float ang = slump * 1.42 * (0.35 + 0.65 * u);
-	VERTEX.xz *= mix(1.0, 0.45, slump);
-	float yy = VERTEX.y * mix(1.0, 0.55, slump);
-	float zz = VERTEX.z;
-	VERTEX.y = yy * cos(ang) - zz * sin(ang) + 0.04 * slump;
-	VERTEX.z = yy * sin(ang) + zz * cos(ang);
+	// slump: lie over towards where the water went (downhill to the basin),
+	// all combed one way, more towards the tip.
+	vec2 dw = normalize(basin - origin.xz + vec2(0.001));
+	mat3 inv = inverse(mat3(MODEL_MATRIX));
+	vec3 dm = inv * vec3(dw.x, 0.0, dw.y);
+	vec2 dmx = normalize(dm.xz + vec2(0.0001));
+	float ang = slump * 1.38 * (0.35 + 0.65 * u);
+	VERTEX.xz *= mix(1.0, 0.5, slump);
+	float yy = VERTEX.y * mix(1.0, 0.6, slump);
+	float along = dot(VERTEX.xz, dmx);
+	vec2 side = VERTEX.xz - dmx * along;
+	float ny = yy * cos(ang) - along * sin(ang);
+	float na = yy * sin(ang) + along * cos(ang);
+	VERTEX.y = ny + 0.04 * slump;
+	VERTEX.xz = side + dmx * na;
 	// Out of the water kelp dries to an olive brown.
 	COLOR.rgb = mix(COLOR.rgb, vec3(0.6, 0.55, 0.36), slump * 0.8);
 }
