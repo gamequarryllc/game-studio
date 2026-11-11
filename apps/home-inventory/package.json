@@ -48,7 +48,9 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "export:web": "expo export --platform web",
-    "check": "npm run lint && npm run typecheck && npm test && npm run export:web"
+    "check": "npm run lint && npm run typecheck && npm test && npm run export:web && npm run export:ios",
+    "export:ios": "expo export --platform ios --output-dir dist-ios",
+    "check:release": "node scripts/release-check.cjs"
   },
   "private": true,
   "jest": {
@@ -56,6 +58,7 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/dist/",
+      "/dist-ios/",
       "/e2e/"
     ],
     "moduleNameMapper": {

@@ -1,8 +1,9 @@
 name: Build and publish playtest builds
 
-# Every push to main builds every game in games/ for the web and publishes the
-# lot to GitHub Pages: https://gamequarryllc.github.io/game-studio/
-# One game failing doesn't block the others: it is listed as broken in
+# Every push to main builds every game in games/ and every app in apps/ for the
+# web and publishes the lot to GitHub Pages: https://gamequarryllc.github.io/game-studio/
+# (games at /<slug>/, app previews at /apps/<slug>/).
+# One game or app failing doesn't block the others: it is listed as broken in
 # status.json and on the index page, and the job is marked failed at the end.
 
 on:
@@ -131,6 +132,54 @@ jobs:
           done
           cat "$GITHUB_WORKSPACE/build/results.txt"
 
+      # The apps (Expo projects in apps/<slug>/) are checked and exported after
+      # the games, so a broken app can never stop a game from being published.
+      - name: Set up Node for the apps
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/*/package-lock.json
+
+      - name: Build every app
+        env:
+          EXPO_NO_TELEMETRY: "1"
+        run: |
+          set -uo pipefail
+          site="$GITHUB_WORKSPACE/build/site"
+          mkdir -p "$site/apps"
+          touch "$GITHUB_WORKSPACE/build/results.txt"
+          # The site lives under /<repository name>/ on GitHub Pages.
+          base="/${GITHUB_REPOSITORY#*/}"
+          for pkg in apps/*/package.json; do
+            [ -e "$pkg" ] || continue
+            dir="$(dirname "$pkg")"; slug="$(basename "$dir")"
+            echo "::group::$slug (app)"
+            if (
+              set -e
+              cd "$dir"
+              npm ci --no-audit --no-fund
+              npm run lint
+              npm run typecheck
+              npm test
+              # The iPhone bundle: nothing is published from it, but it is the only
+              # step that compiles the files the web preview never loads.
+              npx expo export --platform ios --output-dir dist-ios
+              APP_BASE_URL="$base/apps/$slug" npx expo export --platform web
+              test -s dist/index.html
+              rm -rf "$site/apps/$slug"
+              cp -r dist "$site/apps/$slug"
+            ); then
+              echo "apps/$slug ok" >> "$GITHUB_WORKSPACE/build/results.txt"
+            else
+              echo "::error title=$slug::app lint, typecheck, tests, iPhone bundle or web export failed"
+              echo "apps/$slug failed" >> "$GITHUB_WORKSPACE/build/results.txt"
+              rm -rf "$site/apps/$slug"
+            fi
+            echo "::endgroup::"
+          done
+          cat "$GITHUB_WORKSPACE/build/results.txt"
+
       - name: Make the index, privacy policy and support pages
         env:
           # The studio's public contact address for the privacy and support pages.
@@ -145,7 +194,7 @@ jobs:
         with:
           path: build/site
 
-      - name: Fail the run if any game broke
+      - name: Fail the run if any game or app broke
         run: "! grep -q ' failed$' build/results.txt"
 
       # After the upload, so a slip in a store listing never takes the play links down.

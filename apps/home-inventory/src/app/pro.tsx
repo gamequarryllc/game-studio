@@ -8,15 +8,21 @@ import { EXPECTED_PRICE } from '@/pro/config';
 import { DEV_TOOLS, pro, usePro } from '@/pro/pro';
 import { useDoc } from '@/state/store';
 import { notify } from '@/ui/dialogs';
-import { Icon, type IconName } from '@/ui/Icon';
-import { BarButton, Button, Notice } from '@/ui/kit';
-import { space, type, useTheme } from '@/ui/theme';
+import { Icon } from '@/ui/Icon';
+import { BarButton, Button } from '@/ui/kit';
+import { HAIRLINE, space, type, useTheme } from '@/ui/theme';
 
-const POINTS: { icon: IconName; text: string }[] = [
-  { icon: 'box', text: 'As many items as your home holds' },
-  { icon: 'key', text: 'Pay once. It is yours for good, with no subscription' },
-  { icon: 'lock', text: 'Still no account, and nothing leaves your iPhone' },
+const POINTS = [
+  'As many items as your home holds',
+  'Pay once. It is yours for good, with no subscription',
+  'Still no account, and nothing leaves your iPhone',
 ];
+
+/** A build with no store key (Expo Go, the web preview) says so when asked, rather than showing a dead button. */
+const NO_STORE_TITLE = 'Purchases aren’t switched on in this build';
+const NO_STORE_BODY = DEV_TOOLS
+  ? 'Nothing can be bought here. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.'
+  : 'Nothing can be bought here.';
 
 export default function ProScreen() {
   const { c } = useTheme();
@@ -29,6 +35,10 @@ export default function ProScreen() {
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   const buy = async () => {
+    if (!state.storeOpen) {
+      await notify(NO_STORE_TITLE, NO_STORE_BODY);
+      return;
+    }
     const result = await pro.buy();
     if (result === 'purchased') {
       success();
@@ -39,6 +49,10 @@ export default function ProScreen() {
   };
 
   const restore = async () => {
+    if (!state.storeOpen) {
+      await notify(NO_STORE_TITLE, 'There is nothing to restore here. In the App Store version this brings back Pro on a new iPhone.');
+      return;
+    }
     const result = await pro.restore();
     if (result === 'restored') {
       success();
@@ -52,10 +66,11 @@ export default function ProScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.paper }}>
-      <Stack.Screen options={{ title: '', headerLeft: () => <BarButton testID="pro-close" label="Close" onPress={close} /> }} />
-      <ScrollView testID="pro-screen" contentContainerStyle={{ paddingHorizontal: space.xxl, paddingTop: space.l, paddingBottom: space.xxl }}>
-        <Text style={[type.caption, { color: c.green, letterSpacing: 1.6, textTransform: 'uppercase', fontWeight: '700' }]}>Roomfile Pro</Text>
-        <Text accessibilityRole="header" style={[type.largeTitle, { color: c.ink, marginTop: space.s }]}>
+      <Stack.Screen options={{ title: 'Roomfile Pro', headerLeft: () => <BarButton testID="pro-close" label="Close" onPress={close} /> }} />
+      <ScrollView
+        testID="pro-screen"
+        contentContainerStyle={{ paddingHorizontal: space.xxl, paddingTop: space.xl, paddingBottom: insets.bottom + space.xxl }}>
+        <Text accessibilityRole="header" style={[type.largeTitle, { color: c.ink }]}>
           {state.isPro ? 'Pro is unlocked.' : 'Room for everything.'}
         </Text>
         <Text testID="pro-status" style={[type.body, { color: c.ink2, marginTop: space.m }]}>
@@ -66,38 +81,23 @@ export default function ProScreen() {
               : `The free version holds ${FREE_ITEM_LIMIT} items with every feature. You have used ${used}.`}
         </Text>
 
-        <View style={{ marginTop: space.xxl, gap: space.l }}>
-          {POINTS.map((p) => (
-            <View key={p.text} style={{ flexDirection: 'row', gap: space.m, alignItems: 'center' }}>
-              <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: c.greenSoft, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name={p.icon} size={17} color={c.green} />
-              </View>
-              <Text style={[type.callout, { color: c.ink, flex: 1 }]}>{p.text}</Text>
+        <View style={{ marginTop: space.xxl, gap: space.m, paddingTop: space.xl, borderTopWidth: HAIRLINE, borderTopColor: c.rule }}>
+          {POINTS.map((text) => (
+            <View key={text} style={{ flexDirection: 'row', gap: space.m, alignItems: 'flex-start' }}>
+              <Icon name="check" size={17} color={c.green} style={{ marginTop: 2 }} />
+              <Text style={[type.callout, { color: c.ink, flex: 1 }]}>{text}</Text>
             </View>
           ))}
         </View>
-      </ScrollView>
 
-      {state.isPro ? null : (
-        <View style={{ paddingHorizontal: space.xxl, paddingBottom: insets.bottom + space.l, gap: space.xs }}>
-          {state.storeOpen ? null : (
-            <Notice icon="info">
-              Purchases aren’t switched on in this test build, so nothing can be bought here.
-              {DEV_TOOLS ? ' To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.' : ''}
-            </Notice>
-          )}
-          <Button
-            testID="pro-buy"
-            label={`Unlock Pro · ${state.price ?? EXPECTED_PRICE}`}
-            disabled={!state.storeOpen}
-            busy={state.busy}
-            onPress={buy}
-            style={{ marginTop: space.m }}
-          />
-          <Button testID="pro-restore" label="Restore purchase" kind="plain" disabled={!state.storeOpen || state.busy} onPress={restore} />
-          <Text style={[type.footnote, { color: c.ink2, textAlign: 'center' }]}>A one-time purchase through the App Store.</Text>
-        </View>
-      )}
+        {state.isPro ? null : (
+          <View style={{ marginTop: space.xxl + space.xs, gap: space.xs }}>
+            <Button testID="pro-buy" label={`Unlock Pro · ${state.price ?? EXPECTED_PRICE}`} busy={state.busy} onPress={buy} />
+            <Button testID="pro-restore" label="Restore purchase" kind="plain" disabled={state.busy} onPress={restore} />
+            <Text style={[type.footnote, { color: c.ink2, textAlign: 'center' }]}>One payment through the App Store. Not a subscription.</Text>
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }

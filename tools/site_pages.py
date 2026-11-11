@@ -10,6 +10,13 @@ games:
                     store/<slug>/listing.json has a "support" block
   <site>/app-ads.txt  from site/app-ads.txt, only once it holds a real line
 
+The studio's apps (apps/<slug>/, listed under "apps" in queue.json) collect
+nothing and show no ads, so they get a policy and a support page of their own:
+
+  <site>/apps/privacy/   from site/apps-privacy.html
+  <site>/apps/support/   from site/apps-support.html, plus one section per app
+                         whose store/<slug>/listing.json has a "support" block
+
 tools/build_site.py calls render() on every site build. To look at the pages
 on their own:
 
@@ -31,9 +38,13 @@ import sys
 SITE_URL = "https://gamequarryllc.github.io/game-studio/"
 PRIVACY_URL = SITE_URL + "privacy/"
 SUPPORT_URL = SITE_URL + "support/"
+APPS_PRIVACY_URL = SITE_URL + "apps/privacy/"
+APPS_SUPPORT_URL = SITE_URL + "apps/support/"
 ISSUES_URL = "https://github.com/gamequarryllc/game-studio/issues"
 # Top-level folders of the site that a game's folder name must never take.
 RESERVED_SLUGS = ("privacy", "support", "apps")
+# Folders under /apps/ that an app's folder name must never take.
+RESERVED_APP_SLUGS = ("privacy", "support")
 
 EMAIL_RX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 META_RX = re.compile(r"\A<!--\s*title:\s*(?P<title>.*?)\s*\|\s*updated:\s*(?P<updated>.*?)\s*-->")
@@ -89,12 +100,22 @@ def repo_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def load_listings(root):
-    """Every store listing, in queue order (then any others, by folder name)."""
-    order = []
+def app_slugs(root):
+    """The studio's apps, in queue order: the "apps" list in queue.json."""
     try:
         with open(os.path.join(root, "queue.json"), encoding="utf-8") as f:
-            queue = json.load(f)["games"]
+            return [a["slug"] for a in json.load(f).get("apps", [])]
+    except (OSError, KeyError, ValueError):
+        return []
+
+
+def load_listings(root, kind="game"):
+    """Every store listing of one kind ("game" or "app"), in queue order (then any others, by folder name)."""
+    order = []
+    apps = set(app_slugs(root))
+    try:
+        with open(os.path.join(root, "queue.json"), encoding="utf-8") as f:
+            queue = json.load(f)["apps" if kind == "app" else "games"]
         order = [g["slug"] for g in queue]
         colors = {g["slug"]: g.get("color", "") for g in queue}
     except (OSError, KeyError, ValueError):
@@ -104,6 +125,9 @@ def load_listings(root):
         slug = os.path.basename(os.path.dirname(path))
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
+        is_app = d.get("kind") == "app" or slug in apps
+        if is_app != (kind == "app"):
+            continue
         found[slug] = {"slug": slug, "name": d.get("name", slug), "support": d.get("support"),
                        "color": colors.get(slug, "")}
     slugs = [s for s in order if s in found] + sorted(s for s in found if s not in order)
@@ -117,18 +141,18 @@ def sentence_list(items):
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
-def contact(env):
+def contact(env, what="game"):
     """The contact line: the studio's address when the build was given one, else the issue page."""
     raw = (env.get("SUPPORT_EMAIL") or "").strip()
     if raw and EMAIL_RX.fullmatch(raw):
         addr = html.escape(raw)
         link = f'<a href="mailto:{addr}">{addr}</a>'
         return {"kind": "email", "short": link + ".",
-                "long": f"Email {link}. Tell us which game it is, what device you have and what happened, "
+                "long": f"Email {link}. Tell us which {what} it is, what device you have and what happened, "
                         "and we'll get back to you."}
     link = f'<a href="{ISSUES_URL}">the studio\'s issue page</a>'
     return {"kind": "issue page", "bad_value": bool(raw), "short": f"write to us on {link}.",
-            "long": f"Write to us on {link} (it needs a free GitHub account). Tell us which game it is, "
+            "long": f"Write to us on {link} (it needs a free GitHub account). Tell us which {what} it is, "
                     "what device you have and what happened, and we'll get back to you."}
 
 
@@ -156,6 +180,29 @@ def game_sections(listings):
     return "<h2>Game by game</h2>\n" + "\n".join(out)
 
 
+def app_sections(listings):
+    """One block per app on the apps' support page, from the "support" block of its listing."""
+    out = []
+    for a in listings:
+        s = a.get("support")
+        if not s:
+            continue
+        rows = []
+        if s.get("restore"):
+            rows.append(("Where is Restore purchase?", s["restore"]))
+        if s.get("backup"):
+            rows.append(("How do I back up, or move to a new iPhone?", s["backup"]))
+        for extra in s.get("more", []):
+            rows.append((extra["q"], extra["a"]))
+        faq = "".join(f"\n    <dt>{html.escape(q)}</dt>\n    <dd>{html.escape(a)}</dd>" for q, a in rows)
+        style = f' style="--c:{html.escape(a["color"])}"' if re.fullmatch(r"#[0-9a-fA-F]{3,8}", a.get("color") or "") else ""
+        out.append(f'<section class="game" id="{html.escape(a["slug"])}"{style}>\n'
+                   f'  <h3>{html.escape(a["name"])}</h3>\n  <dl class="faq">{faq}\n  </dl>\n</section>')
+    if not out:
+        return ""
+    return "<h2>App by app</h2>\n" + "\n".join(out)
+
+
 def read_template(path):
     with open(path, encoding="utf-8") as f:
         text = f.read()
@@ -173,7 +220,14 @@ def fill(body, values, path):
     return TOKEN_RX.sub(sub, body)
 
 
-def frame(title, updated, body, here):
+FRAME_TEXT = {
+    "game": ("Game Quarry's games", "Game Quarry makes small games about taking big things apart."),
+    "app": ("Game Quarry's apps", "Game Quarry makes small apps that keep what you put in them on your own phone."),
+}
+
+
+def frame(title, updated, body, here, kind="game"):
+    whose, footer = FRAME_TEXT[kind]
     def nav(key, label):
         cur = ' aria-current="page"' if key == here else ""
         return f'<a href="../{key}/"{cur}>{label}</a>'
@@ -189,9 +243,9 @@ def frame(title, updated, body, here):
 <main>
   <div class="mast">{MARK}<b>Game Quarry</b><nav>{nav("support", "Support")}{nav("privacy", "Privacy")}</nav></div>
   <h1>{html.escape(title)}</h1>
-  <p class="meta">Game Quarry's games · last updated {html.escape(updated)}</p>
+  <p class="meta">{html.escape(whose)} · last updated {html.escape(updated)}</p>
 {body}
-  <footer>Game Quarry makes small games about taking big things apart.</footer>
+  <footer>{html.escape(footer)}</footer>
 </main>
 </body>
 </html>
@@ -240,6 +294,26 @@ def render(site_dir, root=None, env=None, quiet=False):
         with open(os.path.join(site_dir, key, "index.html"), "w", encoding="utf-8") as f:
             f.write(page)
 
+    apps = load_listings(root, "app")
+    for a in apps:
+        if a["slug"] in RESERVED_APP_SLUGS:
+            raise SystemExit(f"An app can't be called '{a['slug']}': the site uses that folder.")
+    app_who = contact(env, "app")
+    app_names = [html.escape(a["name"]) for a in apps]
+    app_values = {
+        "apps_sentence": sentence_list(app_names) if app_names else "its apps",
+        "contact": app_who["short"],
+        "contact_long": app_who["long"],
+        "app_sections": app_sections(apps),
+    }
+    for key in ("privacy", "support"):
+        path = os.path.join(src, f"apps-{key}.html")
+        title, updated, body = read_template(path)
+        page = frame(title, updated, fill(body, app_values, path), key, "app")
+        os.makedirs(os.path.join(site_dir, "apps", key), exist_ok=True)
+        with open(os.path.join(site_dir, "apps", key, "index.html"), "w", encoding="utf-8") as f:
+            f.write(page)
+
     ads_lines, ads_bad = ads_txt_lines(os.path.join(src, "app-ads.txt"))
     if ads_bad:
         raise SystemExit("site/app-ads.txt has a line that is not a valid app-ads.txt entry: " + "; ".join(ads_bad))
@@ -259,6 +333,9 @@ def render(site_dir, root=None, env=None, quiet=False):
         "contact": who["kind"],
         "support_sections": [g["slug"] for g in listings if g.get("support")],
         "app_ads_txt": bool(ads_lines),
+        "apps_privacy": "apps/privacy/",
+        "apps_support": "apps/support/",
+        "app_support_sections": [a["slug"] for a in apps if a.get("support")],
     }
 
 

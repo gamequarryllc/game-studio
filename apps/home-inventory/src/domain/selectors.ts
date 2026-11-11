@@ -23,17 +23,20 @@ export interface RoomSummary {
   count: number;
   /** Individual things, counting quantities. */
   pieces: number;
+  /** Records with a value or a price paid. */
+  valued: number;
   totalCents: number;
 }
 
 export function roomSummaries(doc: Doc): RoomSummary[] {
   const byRoom = new Map<Id, RoomSummary>();
-  for (const room of doc.rooms) byRoom.set(room.id, { room, count: 0, pieces: 0, totalCents: 0 });
+  for (const room of doc.rooms) byRoom.set(room.id, { room, count: 0, pieces: 0, valued: 0, totalCents: 0 });
   for (const item of doc.items) {
     const s = byRoom.get(item.roomId);
     if (!s) continue;
     s.count += 1;
     s.pieces += item.quantity;
+    if (hasValue(item)) s.valued += 1;
     s.totalCents += itemTotalCents(item);
   }
   return doc.rooms.map((r) => byRoom.get(r.id)!);

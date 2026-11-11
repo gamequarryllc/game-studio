@@ -66,7 +66,7 @@ export default function RoomScreen() {
       const others = doc.rooms.filter((r) => r.id !== room.id);
       const picked = await choose({
         title: `${room.name} has ${plural(items.length, 'item')}`,
-        message: 'What should happen to them?',
+        message: items.length === 1 ? 'What should happen to it?' : 'What should happen to them?',
         choices: [
           ...others.map((r) => ({ key: r.id, label: `Move to ${r.name}` })),
           { key: '__delete__', label: items.length === 1 ? 'Delete the item too' : `Delete all ${items.length} items too`, destructive: true },
@@ -77,7 +77,7 @@ export default function RoomScreen() {
     }
     const sure = await confirm({
       title: `Delete ${room.name}?`,
-      message: items.length === 0 ? undefined : moveTo ? 'Its items will be moved, not deleted.' : `${plural(items.length, 'item')} and their photos will be deleted. This can’t be undone.`,
+      message: items.length === 0 ? undefined : moveTo ? 'Its items will be moved, not deleted.' : `${plural(items.length, 'item')} and ${items.length === 1 ? 'its' : 'their'} photos will be deleted. This can’t be undone.`,
       confirmLabel: 'Delete room',
       destructive: true,
     });
@@ -95,8 +95,8 @@ export default function RoomScreen() {
       choices: [
         { key: 'rename', label: 'Rename' },
         { key: 'icon', label: 'Change symbol' },
-        ...(index > 0 ? [{ key: 'up', label: 'Move up the list' }] : []),
-        ...(index < doc.rooms.length - 1 ? [{ key: 'down', label: 'Move down the list' }] : []),
+        ...(index > 0 ? [{ key: 'up', label: 'Move up' }] : []),
+        ...(index < doc.rooms.length - 1 ? [{ key: 'down', label: 'Move down' }] : []),
         { key: 'delete', label: 'Delete room', destructive: true },
       ],
     });

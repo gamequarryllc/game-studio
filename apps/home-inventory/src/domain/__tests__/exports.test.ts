@@ -15,7 +15,7 @@ import {
 } from '../backup';
 import { buildCsv, csvCell } from '../csv';
 import { DocError, emptyDoc } from '../doc';
-import { buildReportHtml, escapeHtml, reportFileName, reportPhotoIds } from '../report';
+import { buildReportHtml, cssText, escapeHtml, moneyColumnEm, pageFootCss, reportFileName, reportPhotoIds } from '../report';
 import { sampleHome } from '../sample';
 import type { Doc } from '../types';
 
@@ -72,7 +72,8 @@ describe('the report', () => {
     expect(html).toContain('Serial no. <b>SN-123</b>');
     expect(html).toContain('Mar 4, 2021');
     expect(html).toContain('Paid $399.00');
-    expect(html).toContain('Not valued');
+    expect(html).toContain('No value');
+    expect(html).not.toContain('Not valued');
     expect(html).toContain('Second line, with a comma');
   });
 
@@ -212,5 +213,66 @@ describe('backups', () => {
     expect(() => parseManifest('{', NOW)).toThrow(DocError);
     expect(parseManifest(buildManifest(doc, NOW, '0.1.0'), NOW).items).toHaveLength(2);
     expect(MANIFEST_NAME).toBe('roomfile.json');
+  });
+});
+
+describe('the report columns', () => {
+  const tables = (page: string) => page.match(/<table class="list items">.*?<\/table>/g) ?? [];
+  const colgroup = (table: string | undefined) => table?.match(/<colgroup>.*?<\/colgroup>/)?.[0];
+
+  it('gives every room the same columns (they used to shift from room to room)', () => {
+    const page = buildReportHtml(sampleHome(NOW), { includePhotos: true, includeReceipts: false, generatedAt: NOW });
+    const found = tables(page);
+    expect(found.length).toBeGreaterThan(3);
+    const first = colgroup(found[0]);
+    expect(first).toContain('<col class="c-photo">');
+    for (const table of found) expect(colgroup(table)).toBe(first);
+  });
+
+  it('leaves the photo column out when photos are off', () => {
+    const page = buildReportHtml(sampleHome(NOW), { includePhotos: false, includeReceipts: false, generatedAt: NOW });
+    expect(colgroup(tables(page)[0])).not.toContain('c-photo');
+    expect(page).not.toContain('<th class="photo">');
+  });
+
+  it('sizes the money columns from the longest amount, so Each and Total never touch', () => {
+    expect(moneyColumnEm([])).toBe(moneyColumnEm(['$5.00']));
+    const everyday = moneyColumnEm(['$1,899.00', '$449.00']);
+    const huge = moneyColumnEm(['$999,999,999.99', '$1,999,999,999.98']);
+    expect(huge).toBeGreaterThan(everyday);
+    expect(huge).toBeGreaterThanOrEqual('$1,999,999,999.98'.length * 0.6);
+
+    let doc = addRooms(emptyDoc(NOW), [{ name: 'Vault', icon: 'box' }], NOW);
+    const draft = emptyDraft(doc.rooms[0].id);
+    draft.name = 'Bullion';
+    draft.valueCents = 99999999999;
+    draft.quantity = 2;
+    doc = addItem(doc, draft, NOW).doc;
+    const page = buildReportHtml(doc, { includePhotos: true, includeReceipts: false, generatedAt: NOW });
+    expect(page).toContain(`<col style="width:${huge}em"><col style="width:${huge}em">`);
+    expect(page).toContain('padding-left: 8pt');
+  });
+});
+
+describe('the foot of each report page', () => {
+  it('names the home, the date and the page', () => {
+    const css = pageFootCss('Fern Cottage', 'Nov 11, 2026');
+    expect(css).toContain('@bottom-left { content: "Fern Cottage · Prepared Nov 11, 2026";');
+    expect(css).toContain('content: "Page " counter(page) " of " counter(pages);');
+  });
+
+  it('cannot be broken out of by a home name', () => {
+    const nasty = 'Mill "House" </style><script>alert(1)</script> \\ } body { display: none';
+    expect(cssText(nasty)).not.toMatch(/["<>{}\\]/);
+    let doc = addRooms(emptyDoc(NOW), [{ name: 'Hall', icon: 'hall' }], NOW);
+    doc = updateProfile(doc, { homeName: nasty });
+    const page = buildReportHtml(doc, { includePhotos: false, includeReceipts: false, generatedAt: NOW });
+    expect(page.match(/<\/style>/g)).toHaveLength(1);
+    expect(page).not.toContain('<script>');
+  });
+
+  it('puts the summary’s Items column beside Value', () => {
+    const page = buildReportHtml(sampleHome(NOW), { includePhotos: true, includeReceipts: false, generatedAt: NOW });
+    expect(page).toMatch(/<table class="list summary"><colgroup><col><col class="c-count"><col style="width:[\d.]+em"><\/colgroup>/);
   });
 });

@@ -24,7 +24,7 @@ export default function AppTabs() {
       <TabSlot style={{ flex: 1 }} />
       <TabList asChild>
         {/* One flat style object: the router's slot can't merge an array of styles. */}
-        <View style={StyleSheet.flatten([styles.bar, { backgroundColor: c.bar, borderTopColor: c.rule }])}>
+        <View style={StyleSheet.flatten([styles.bar, BLUR, { backgroundColor: c.bar, borderTopColor: c.rule }])}>
           <TabTrigger name="index" href="/" asChild>
             <TabButton icon="tabRooms" label="Rooms" />
           </TabTrigger>
@@ -42,6 +42,9 @@ export default function AppTabs() {
     </Tabs>
   );
 }
+
+/** What scrolls under the bar is blurred, as it is under the iPhone's own. */
+const BLUR = { backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' } as object;
 
 const styles = StyleSheet.create({
   bar: {

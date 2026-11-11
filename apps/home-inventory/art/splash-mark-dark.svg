@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="176 234 672 570" width="672" height="570">
+  
+  <!-- The back of the folder. Its tab is a roof. -->
+  <path d="M228 752 V424 L396 286 L564 424 H796 V752 Z" fill="#B9A56B" stroke="#B9A56B" stroke-width="56" stroke-linejoin="round"/>
+  <!-- The front of the folder. -->
+  <path d="M228 752 V528 H796 V752 Z" fill="#F3E6C1" stroke="#F3E6C1" stroke-width="56" stroke-linejoin="round"/>
+  
+</svg>

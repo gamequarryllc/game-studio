@@ -1,0 +1,32 @@
+<!-- title: Support | updated: 11 November 2026 -->
+<!--
+  The support page for the studio's apps, published at /apps/support/ on the
+  studio site by tools/site_pages.py (this is the Support URL in each app's
+  App Store listing, with "#<slug>" on the end). The contact line and one
+  section per app are filled in at build time: an app gets a section when its
+  store/<slug>/listing.json has a "support" block, and every answer there must
+  match what the app really shows.
+-->
+<p class="lede">Help with Game Quarry's apps on iPhone.</p>
+
+<h2>Contact</h2>
+<p>{{contact_long}}</p>
+
+<h2>Every app</h2>
+<dl class="faq">
+  <dt>Where is my data kept?</dt>
+  <dd>On your iPhone only. There is no account and nothing is uploaded. Deleting the app deletes what is in it, so make a backup first if you want to keep it.</dd>
+  <dt>How do I move to a new iPhone?</dt>
+  <dd>Make a backup in the app and save the file somewhere the new phone can reach: iCloud Drive, a computer, or an email to yourself. Install the app on the new iPhone and restore from that file. Where to find both is listed under each app below.</dd>
+  <dt>I bought Pro and it's gone.</dt>
+  <dd>Use <em>Restore purchase</em> in the app, signed in with the Apple Account you bought it with. Pro is bought once, so it always comes back.</dd>
+  <dt>Is there a subscription?</dt>
+  <dd>No. Each app is free up to a limit, and one payment removes the limit for good.</dd>
+  <dt>How do I get a refund?</dt>
+  <dd>Purchases are handled by Apple. Ask for a refund at <a href="https://reportaproblem.apple.com">reportaproblem.apple.com</a>.</dd>
+</dl>
+
+{{app_sections}}
+
+<h2>Privacy</h2>
+<p>Read the <a href="../privacy/">privacy policy</a>.</p>

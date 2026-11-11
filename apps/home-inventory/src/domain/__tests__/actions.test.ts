@@ -210,3 +210,28 @@ describe('profile and settings', () => {
     expect(markBackup(doc, 77).meta.lastBackupAt).toBe(77);
   });
 });
+
+describe('a room whose things have no value', () => {
+  it('is told apart from a room worth nothing (it used to show "$0")', () => {
+    let doc = twoRooms();
+    const kitchen = doc.rooms[0].id;
+    const garage = doc.rooms[1].id;
+    const unvalued = emptyDraft(garage);
+    unvalued.name = 'Bicycle';
+    doc = addItem(doc, unvalued, NOW).doc;
+    const priced = emptyDraft(kitchen);
+    priced.name = 'Kettle';
+    priced.pricePaidCents = 4500;
+    doc = addItem(doc, priced, NOW).doc;
+    const another = emptyDraft(kitchen);
+    another.name = 'Whisk';
+    doc = addItem(doc, another, NOW).doc;
+
+    const rooms = roomSummaries(doc);
+    expect(rooms.map((r) => [r.room.name, r.count, r.valued, r.totalCents])).toEqual([
+      ['Kitchen', 2, 1, 4500],
+      ['Garage', 1, 0, 0],
+    ]);
+    expect(rooms.reduce((n, r) => n + r.valued, 0)).toBe(homeSummary(doc).withValue);
+  });
+});

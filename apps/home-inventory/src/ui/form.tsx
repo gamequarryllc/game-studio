@@ -33,9 +33,10 @@ export function TextRow({
   onChangeText,
   placeholder,
   error,
+  suffix,
   testID,
   ...input
-}: { label: string; value: string; onChangeText: (text: string) => void; placeholder?: string; error?: string | null; testID?: string } & Omit<
+}: { label: string; value: string; onChangeText: (text: string) => void; placeholder?: string; error?: string | null; /** Shown after what was typed: the currency of an amount. */ suffix?: string; testID?: string } & Omit<
   TextInputProps,
   'value' | 'onChangeText' | 'placeholder' | 'style'
 >) {
@@ -53,6 +54,11 @@ export function TextRow({
         style={[type.body, styles.input, NO_OUTLINE, { color: c.ink }]}
         {...input}
       />
+      {suffix && value !== '' ? (
+        <Text testID={testID ? `${testID}-suffix` : undefined} style={[type.body, { color: c.ink2 }]}>
+          {suffix}
+        </Text>
+      ) : null}
     </FormRow>
   );
 }
@@ -107,9 +113,9 @@ export function Stepper({ value, onChange, min = 1, max = 9999, testID }: { valu
         {value}
       </Text>
       <View style={[styles.stepper, { backgroundColor: c.sunk }]}>
-        {button(-1, 'down', 'One fewer')}
+        {button(-1, 'minus', 'One fewer')}
         <View style={{ width: HAIRLINE, height: 18, backgroundColor: c.ink3 }} />
-        {button(1, 'up', 'One more')}
+        {button(1, 'add', 'One more')}
       </View>
     </View>
   );

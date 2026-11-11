@@ -7,7 +7,7 @@
       "color": "#1e5b48",
       "tagline": "Photos, serial numbers and values of what you own, room by room, with a PDF report for an insurance claim.",
       "status": "building",
-      "note": "First build in progress (daily backstop, 2026-11-11)"
+      "note": "Working name Roomfile. All checks pass and the critic says almost; it becomes ready-to-test once its first preview is confirmed on the site (2026-11-11)"
     },
     {
       "slug": "receipt-vault",

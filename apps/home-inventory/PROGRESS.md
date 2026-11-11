@@ -2,30 +2,35 @@
 
 Kept current after every finished item, so a run that is cut off can be picked up from here.
 
-## Status: building (first build, 2026-11-11)
+## Status: ready to test once its preview is confirmed on the site (2026-11-11)
 
-**Checks right now:** lint clean, typecheck clean, 61 unit tests pass, the web export builds, the browser run (`node e2e/run.cjs`, 20 steps) passes with no console errors.
+**Checks right now:** lint clean, typecheck clean, 75 unit tests pass, the web export and the iPhone bundle both build, the browser run (`node e2e/run.cjs`, 20 steps, three phone sizes and dark mode) passes with no console errors, `python3 tools/store_check.py` passes. The fresh-eyes critic said **almost** (review 1 in NOTES.md); every finding that could be fixed without a phone is fixed and has a test.
 
 ## Done
 
 - Expo SDK 58 project (the SDK the current Expo Go runs), Expo Router, TypeScript.
 - Logic in `src/domain/` (pure, unit tested): the document and its repair-on-load parser, rooms and items, totals and gaps, search/filter/sort, money parsing and formatting, dates, the report HTML, the CSV, the backup zip (streamed), the free limit, a sample home.
 - Storage: one JSON document written safely to the app's documents folder, photos as files beside it (full and small copy); IndexedDB on the web preview.
-- Screens: welcome (two steps), Rooms, room, item, add/edit form, photo viewer, Items (search, filters, sort), Report (PDF report, spreadsheet, backup, restore), Settings (Pro, currency, links, developer tools), Pro.
-- Pro: free up to 25 items with every feature; RevenueCat adapter behind `src/pro/`, off until a key is set; "Pretend Pro is bought" developer switch.
+- Screens: welcome (two steps, with an example folder), Rooms, room, item, add/edit form, photo viewer, Items (search, filters, sort), Report (PDF report, spreadsheet, backup, restore), Settings (Pro, currency, links, erase everything, developer tools), Pro.
+- Pro: free up to 25 items with every feature; RevenueCat adapter behind `src/pro/`, off until a key is set; "Pretend Pro is bought" developer switch; `npm run check:release` refuses a store build without the key.
 - Browser run with screenshots at three phone sizes and in dark mode.
+- Screenshot review and critic review 1; fixes for both (list in NOTES.md, "QA").
+- App icon, splash mark (light and dark) and favicon, drawn as SVG in `art/`.
+- CI: the web workflow lints, typechecks, tests and exports every app in `apps/` and publishes the preview at `/apps/<slug>/`; the site page has an Apps section; a reloaded screen inside a preview comes back through the site's `404.html`.
+- Privacy policy and support pages for the apps on the site (`/apps/privacy/`, `/apps/support/`), a draft store listing (`store/home-inventory/listing.json`) and `tools/store_check.py` rules for apps.
+- README with the Expo Go steps; NOTES.md with design, art direction, QA, what needs a phone and the going-live steps.
 
 ## In progress
 
-- Screenshot review and the fresh-eyes critic; fix what they find.
+- Nothing. Waiting for the owner's first run on an iPhone.
 
-## Next
+## Next (after the owner's feedback, which comes first)
 
-1. CI: build every app in `apps/` in the web workflow and publish it to `/apps/<slug>/`; apps section on the site page; privacy and support pages for the apps.
-2. README (Expo Go steps), NOTES.md (design, art direction, QA), store listing draft in `store/home-inventory/`.
-3. App icon and splash.
-4. Set `ready-to-test` in `queue.json` once the critic says at least "almost", and ping the owner.
+1. Whatever the owner finds on the phone. Everything native has only run in a browser so far (list below).
+2. A second critic pass on fresh screenshots (review 1's fixes have not been seen by a critic yet).
+3. Polish left from review 1: drag to reorder rooms; page numbers in the iPhone's PDF (NOTES.md, "Known gaps").
+4. App Store screenshots from the browser run once the look is settled.
 
 ## Not yet tried on a real iPhone
 
-Everything native (camera, photo library, PDF creation, share sheet, date picker, haptics, file storage) is written against the SDK 58 type definitions but has only been exercised through the web build. The owner's first Expo Go run is the first real-device test.
+Everything native (camera, photo library, PDF creation, share sheet, date picker, haptics, file storage, the system tab bar and its icons, the splash screen) is written against the SDK 58 type definitions and compiles into the iPhone bundle, but has only been exercised through the web build. The owner's first Expo Go run is the first real-device test.

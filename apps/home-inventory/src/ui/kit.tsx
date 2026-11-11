@@ -19,7 +19,7 @@ import { tap } from '@/platform/haptics';
 import { usePhotoUri } from '@/platform/photos';
 
 import { Icon, type IconName } from './Icon';
-import { HAIRLINE, TAB_BAR_SPACE, radius, space, type, useTheme } from './theme';
+import { HAIRLINE, NO_ORPHAN, TAB_BAR_SPACE, radius, space, type, useTheme } from './theme';
 
 // The small set of pieces every screen is built from.
 
@@ -106,6 +106,7 @@ export function Divider({ inset = space.l }: { inset?: number }) {
 export function Row({
   title,
   subtitle,
+  subtitleTone,
   leading,
   value,
   valueTone,
@@ -118,6 +119,7 @@ export function Row({
 }: {
   title: string;
   subtitle?: string;
+  subtitleTone?: 'muted' | 'amber';
   leading?: ReactNode;
   value?: string;
   valueTone?: 'ink' | 'muted' | 'amber';
@@ -135,11 +137,11 @@ export function Row({
     <View style={styles.row}>
       {leading}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[type.body, { color: titleColor }]} numberOfLines={2}>
+        <Text style={[type.body, NO_ORPHAN, { color: titleColor }]} numberOfLines={2} lineBreakStrategyIOS="push-out">
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={1}>
+          <Text style={[type.footnote, { color: subtitleTone === 'amber' ? c.amber : c.ink2, marginTop: 1 }]} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
@@ -229,7 +231,7 @@ export function Button({
   );
 }
 
-/** The round button beside a large title. */
+/** The button beside a large title: a quiet toolbar button, as in the iPhone's own apps. */
 export function RoundButton({ icon, onPress, label, testID }: { icon: IconName; onPress: () => void; label: string; testID?: string }) {
   const { c } = useTheme();
   return (
@@ -242,8 +244,8 @@ export function RoundButton({ icon, onPress, label, testID }: { icon: IconName; 
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.round, { backgroundColor: c.green, opacity: pressed ? 0.75 : 1 }]}>
-      <Icon name={icon} size={20} color={c.onGreen} />
+      style={({ pressed }) => [styles.round, { backgroundColor: pressed ? c.sunk : c.card, borderColor: c.rule }]}>
+      <Icon name={icon} size={20} color={c.green} />
     </Pressable>
   );
 }
@@ -339,7 +341,7 @@ const styles = StyleSheet.create({
   card: { marginHorizontal: space.xl, borderRadius: radius.m, borderWidth: HAIRLINE, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: 11, minHeight: 48 },
   button: { minHeight: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s, paddingHorizontal: space.xl },
-  round: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  round: { width: 38, height: 38, borderRadius: 19, borderWidth: HAIRLINE, alignItems: 'center', justifyContent: 'center' },
   chip: { flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 13, height: 34, borderRadius: 17, borderWidth: HAIRLINE },
   empty: { alignItems: 'center', paddingHorizontal: space.huge, paddingTop: space.huge, paddingBottom: space.xl },
   emptyIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: space.l },

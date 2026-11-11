@@ -11,6 +11,7 @@ type Pair = Exclude<SymbolViewProps['name'], string>;
 
 const ICONS = {
   add: { ios: 'plus', web: 'add' },
+  minus: { ios: 'minus', web: 'remove' },
   addPhoto: { ios: 'camera.fill', web: 'photo_camera' },
   library: { ios: 'photo.on.rectangle', web: 'photo_library' },
   photo: { ios: 'photo', web: 'image' },

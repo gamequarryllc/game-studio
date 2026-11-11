@@ -253,6 +253,7 @@ export default function ItemForm() {
             value={valueText}
             onChangeText={setValueText}
             placeholder="Cost to replace one"
+            suffix={doc.settings.currency}
             keyboardType="decimal-pad"
             error={showErrors || valueText !== '' ? valueProblem : null}
           />
@@ -287,6 +288,7 @@ export default function ItemForm() {
             value={paidText}
             onChangeText={setPaidText}
             placeholder="Optional"
+            suffix={doc.settings.currency}
             keyboardType="decimal-pad"
             error={showErrors || paidText !== '' ? paidProblem : null}
           />

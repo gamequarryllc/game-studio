@@ -172,6 +172,16 @@ function helpers(page) {
       await h.tap('welcome-finish');
       await h.visible('rooms-screen');
     },
+    /** The folder's two meters: each label clear of its count, nothing wrapped onto a second line. */
+    async metersTidy(prefix = '') {
+      for (const key of ['meter-photo', 'meter-value']) {
+        const label = await t(`${prefix}${key}-label`).first().boundingBox();
+        const count = await t(`${prefix}${key}-count`).first().boundingBox();
+        assert.ok(label && count, `${prefix}${key} is not on screen`);
+        assert.ok(label.x + label.width + 4 <= count.x, `${prefix}${key}: the label runs into the count`);
+        assert.ok(count.height < 24 && label.height < 24, `${prefix}${key}: the text wraps`);
+      }
+    },
     async quickAdd(name, value) {
       await h.visible('item-form');
       await h.fill('field-name', name);
@@ -198,6 +208,8 @@ async function main() {
       await page.goto(url);
       await h.visible('welcome-intro');
       assert.ok(page.url().endsWith('/welcome'), page.url());
+      await h.visible('folder-sample');
+      await h.metersTidy('sample-');
       await h.shot('01-welcome');
       await h.tap('welcome-continue');
       await h.visible('welcome-rooms');
@@ -208,7 +220,9 @@ async function main() {
       await h.expectText('welcome-finish', 'Start with 5 rooms');
       await h.tap('welcome-finish');
       await h.visible('rooms-screen');
-      await h.expectText('home-total', '$0');
+      // Nothing to add up yet, so no "$0" (it used to say the same thing twice).
+      await h.expectText('home-empty', 'Nothing filed yet');
+      assert.strictEqual(await t('home-total').count(), 0, 'an empty home shows a total');
       await h.expectText('home-count', '5 rooms ready to fill');
       await h.expectText('free-note', /Free version: 0 of 25 items used/);
       await h.shot('03-rooms-empty');
@@ -275,6 +289,10 @@ async function main() {
       await h.visible('rooms-screen');
       await h.expectText('home-total', '$1,899');
       await h.expectText('home-count', '1 item in 5 rooms');
+      // The label on the folder's tab used to lose its last letter under the slanted edge.
+      const label = await t('folder-label').first().boundingBox();
+      const slant = await t('folder-slant').first().boundingBox();
+      assert.ok(label.x + label.width <= slant.x + 0.5, `the folder label runs under the tab's edge (${label.x + label.width} > ${slant.x})`);
       await h.shot('10-rooms-one-item');
     });
 
@@ -315,6 +333,9 @@ async function main() {
       await h.back();
       await h.visible('rooms-screen');
       await h.expectText('home-total', '$1,999,999,999.98');
+      // It used to end in an ellipsis; now the figure steps down in size until it fits.
+      const cut = await t('home-total').first().evaluate((el) => el.scrollWidth - el.clientWidth);
+      assert.ok(cut <= 0, `the largest total is cut off by ${cut}px`);
       await h.shot('15-rooms-huge-value');
       // Put it back, and check that Cancel asks first.
       await h.tap('room-Living room');
@@ -408,7 +429,7 @@ async function main() {
       await h.choose('Change symbol');
       await h.choose('Tree');
       await h.tap('room-menu');
-      await h.choose('Move up the list');
+      await h.choose('Move up');
       await h.tap('room-menu');
       await h.choose('Delete room');
       assert.match(await h.dialogText(), /Delete Garden shed\?/);
@@ -420,6 +441,7 @@ async function main() {
       await h.tap('room-menu');
       await h.choose('Delete room');
       assert.match(await h.dialogText(), /Garage has 1 item/);
+      assert.match(await h.dialogText(), /What should happen to it\?/); // one thing is "it", not "them"
       await h.shot('21-delete-room-choice');
       await h.choose('Move to Home office');
       assert.match(await h.dialogText(), /moved, not deleted/);
@@ -442,6 +464,8 @@ async function main() {
       await h.expectText('items-count', '1 item found'); // so is the room
       await h.fill('items-search', 'zzzz');
       await h.expectText('items-count', '0 items found');
+      const none = await t('items-screen').first().innerText();
+      assert.ok(none.includes('No results for “zzzz”') && none.includes('Try a brand, a model or a serial number.'), 'the empty search state is wrong');
       await h.shot('23-items-no-match');
       await h.fill('items-search', '');
       await h.tap('filter-no-value');
@@ -493,7 +517,7 @@ async function main() {
       watch(reportPage, 'report');
       await reportPage.waitForFunction(() => document.body && document.body.innerText.includes('Summary by room'), null, { timeout: 20000 });
       const text = await reportPage.evaluate(() => document.body.innerText);
-      for (const s of ['Fern Cottage', 'Sample household', 'Example Mutual', 'HO-0000000', '$6,648.00', '65-inch OLED television', 'NV65A2X0418K', 'Three-seat sofa', 'Not valued', 'Receipts', 'Paid $1,799.99']) {
+      for (const s of ['Fern Cottage', 'Sample household', 'Example Mutual', 'HO-0000000', '$6,648.00', '65-inch OLED television', 'NV65A2X0418K', 'Three-seat sofa', 'No value', 'Receipts', 'Paid $1,799.99']) {
         assert.ok(text.includes(s), `the report is missing "${s}"`);
       }
       const images = await reportPage.evaluate(() => Array.from(document.images).map((i) => ({ ok: i.complete && i.naturalWidth > 0, data: i.src.startsWith('data:image/jpeg') })));
@@ -562,7 +586,7 @@ async function main() {
 
     await step('erase everything, then restore the backup', async () => {
       await h.tab('Settings');
-      await h.tap('dev-erase');
+      await h.tap('erase-everything');
       assert.match(await h.dialogText(), /Erase everything\?/);
       await h.confirm();
       await h.visible('welcome-intro');
@@ -606,8 +630,15 @@ async function main() {
       await h.tap('add-item');
       await h.visible('pro-screen');
       await h.expectText('pro-status', /holds 25 items, and yours is full\. Everything you have added stays/);
-      assert.ok(await t('pro-buy').first().isDisabled(), 'the buy button should be off without a store');
       await h.shot('32-pro-locked');
+      // No store in this build: the button says so when tapped, and nothing is unlocked.
+      await h.tap('pro-buy');
+      assert.match(await h.dialogText(), /Purchases aren’t switched on in this build/);
+      await h.confirm();
+      await h.tap('pro-restore');
+      assert.match(await h.dialogText(), /There is nothing to restore here/);
+      await h.confirm();
+      await h.expectText('pro-status', /yours is full/);
       await h.tap('pro-close');
       await h.gone('pro-screen');
       // Everything else still works at the limit: editing, the report, backups.
@@ -687,6 +718,7 @@ async function main() {
       await page.waitForTimeout(600);
       await h.shot('36-items-heavy-scrolled');
       await h.tab('Rooms');
+      await h.metersTidy(); // 587 of 645 is too long to share a row: the meters stack
       await h.shot('37-rooms-heavy');
       await h.tab('Report');
       t0 = Date.now();
@@ -719,6 +751,7 @@ async function main() {
         const k = helpers(p);
         await p.goto(url);
         await k.visible('welcome-intro');
+        await k.metersTidy('sample-'); // the example's label used to run into its count on a small phone
         await k.shot(`${v.label}-01-welcome`);
         await k.onboard(['Kitchen']);
         await k.tab('Report');
@@ -727,6 +760,7 @@ async function main() {
         await k.confirm();
         await k.tab('Rooms');
         await k.expectText('home-total', '$6,648');
+        await k.metersTidy();
         await k.shot(`${v.label}-02-rooms`);
         await k.tap('room-Living room');
         await k.shot(`${v.label}-03-room`);

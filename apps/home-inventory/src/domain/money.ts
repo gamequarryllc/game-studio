@@ -121,3 +121,13 @@ export function currencyForLocale(locale: string | undefined): string {
   const region = /[-_]([A-Za-z]{2})\b/.exec(locale ?? '')?.[1]?.toUpperCase();
   return (region && REGION_CURRENCY[region]) || 'USD';
 }
+
+/**
+ * The type size for a headline amount. It stays at `full` until the text is
+ * longer than fits the narrowest iPhone at that size, then steps down so the
+ * whole number shows instead of ending in an ellipsis.
+ */
+export function figureSize(text: string, full: number, fits = 11, smallest = 20): number {
+  if (text.length <= fits) return full;
+  return Math.max(smallest, Math.floor((full * fits) / text.length));
+}

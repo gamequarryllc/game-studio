@@ -114,6 +114,12 @@ export default function SettingsTab() {
       </Card>
       <Footnote>Roomfile has no account and no servers. Your inventory never leaves this iPhone unless you export or back it up yourself.</Footnote>
 
+      <SectionLabel>Your data</SectionLabel>
+      <Card>
+        <Row testID="erase-everything" title="Erase everything" destructive onPress={erase} />
+      </Card>
+      <Footnote>Deletes every room, item and photo from this iPhone. Make a backup first if you might want them again.</Footnote>
+
       {DEV_TOOLS ? (
         <>
           <SectionLabel>Developer</SectionLabel>
@@ -132,8 +138,6 @@ export default function SettingsTab() {
             <Row testID="dev-sample" title="Load the sample home" tint onPress={() => sample('home')} />
             <Divider />
             <Row testID="dev-heavy" title="Load a very large home" subtitle="About 650 items, to see how the app copes" tint onPress={() => sample('heavy')} />
-            <Divider />
-            <Row testID="dev-erase" title="Erase everything" destructive onPress={erase} />
           </Card>
           <Text style={[type.footnote, { color: c.ink2, marginHorizontal: space.xl + space.l, marginTop: space.s }]}>
             This section is only in test builds and the web preview. It is not in the App Store version.

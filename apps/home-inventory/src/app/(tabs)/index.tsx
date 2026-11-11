@@ -64,8 +64,9 @@ export default function RoomsTab() {
               testID={`room-${r.room.name}`}
               leading={<IconTile name={roomIconName(r.room.icon)} />}
               title={r.room.name}
-              subtitle={r.count === 0 ? 'Nothing here yet' : plural(r.count, 'item')}
-              value={r.count === 0 ? undefined : formatMoney(r.totalCents, currency, { whole: true })}
+              subtitle={r.count === 0 ? 'Nothing here yet' : r.valued === 0 ? `${plural(r.count, 'item')} · no value yet` : plural(r.count, 'item')}
+              subtitleTone={r.count > 0 && r.valued === 0 ? 'amber' : 'muted'}
+              value={r.valued === 0 ? undefined : formatMoney(r.totalCents, currency, { whole: true })}
               valueTone="ink"
               chevron
               onPress={() => router.push({ pathname: '/room/[id]', params: { id: r.room.id } })}

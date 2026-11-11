@@ -142,7 +142,7 @@ export default function ItemScreen() {
         ) : (
           <Pressable accessibilityRole="button" onPress={edit}>
             <Text testID="item-value" style={[type.headline, { color: c.amber, marginTop: 4 }]}>
-              Not valued yet
+              No value yet
             </Text>
             <Text style={[type.subhead, { color: c.ink2, marginTop: 2 }]}>Add what it would cost to replace, even roughly.</Text>
           </Pressable>

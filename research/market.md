@@ -2,6 +2,8 @@
 
 **Last updated:** 2026-11-09 (refresh weekly; the daily backstop does it when this date is more than 7 days old)
 
+**App list addendum:** 2026-11-11, home inventory only (the section "The app list" at the end). On 2026-11-11 the owner put nine utility apps ahead of game work (STUDIO.md, "Apps"), which overrides bet 7 below. The next weekly refresh covers the other eight apps, the pay-once numbers and the per-app math.
+
 Every money figure below that is ours is an **estimate**. Nothing the studio has actually earned is ever written in this repo. Figures from other people are labelled with their source and age; many come from vendor blogs and are marked as such.
 
 ## Summary
@@ -115,3 +117,40 @@ Real numbers from individual developers:
 - GravityShot, a Godot mobile game with no marketing (under 50 downloads, $0.10): https://gamedo-live.pages.dev/news/gravityshot-postmortem-shipping-mobile-game-godot (May 2026; Google Play only)
 - A new iOS utility's first month (82 to 97 downloads, nothing earned, 90.6% from search): https://habitdoom-website.pages.dev/blog/what-82-ios-downloads-taught-me (Mar 2026)
 - A Game About Digging A Hole: PC sales https://www.gamesmarket.global/collaboration-rokaplay-and-headup-are-bringing-a-game-about-digging-a-hole-to-mobile-74f2648bba44de84f8617e203450bec0/ (Jul 2025) and mobile estimate https://appgoblin.info/apps/6744608603 (Oct 2026)
+
+## The app list (addendum, 2026-11-11)
+
+The owner's nine no-server utility apps come first (STUDIO.md, "Apps"). This section is filled in app by app as each one is built; the full weekly refresh adds the rest. Everything here is from one short research pass, mostly third-party pages, and is marked where it is weak.
+
+### 1. Home inventory (`home-inventory`, working name Roomfile)
+
+**Competitors and what they charge** (third-party pages, checked 2026-11-11; the App Store's own pages and search could not be reached from the workspace):
+
+| App | Model | Price | Free tier | Where the data lives |
+|---|---|---|---|---|
+| Home Contents | One-time unlock | $5.99 | 25 items, 1 property | On the device, with iCloud |
+| Nest Egg | One-time, plus add-ons | $6.99 base | not verified | On the device, with backup options |
+| Under My Roof | Subscription | $34.99 a year | 10 items | On the device, with iCloud |
+| Everspruce | Subscription | $44.99 to $49.99 a year | 50 entries | Cloud backup |
+| Itemtopia | Subscription | $79.99 a year | not verified | Cloud service |
+| Sortly | Subscription | $4.99 a month or $47.99 a year | Free plan, sync is paid | Cloud |
+| Encircle | Free | | | Has a web side; account not verified |
+
+Sources: a comparison page published by another inventory app, so read it with care (https://stuffolio-site.pages.dev/compare, September 2026), and an insurance broker's round-up (https://www.insuramatch.com/blog/best-home-inventory-apps, undated).
+
+**What people complain about** (aggregated App Store reviews, pages from September 2026):
+
+- An inventory lost when a free app turned subscription-only, with no warning and no export; several reviewers asking for a one-time price, one saying they would "100% be a paying customer" for it (https://justuseapp.com/en/app/1393940808/everspruce-home-inventory/reviews).
+- Recurring fees of about $25 to $48 a year felt wrong for a tool used mainly once, at set-up; a migration from the older app that could not read the data; slowness and crashes (https://justuseapp.com/en/app/1524335878/under-my-roof-home-inventory/reviews).
+- No complaints were found about exports being locked behind a paywall, which may only mean the search was short.
+
+**What this means for the app.**
+
+- **Price: $5.99 once. Free limit: 25 items, with every feature.** It matches the one pay-once competitor with a free tier and sits under the other, and the loudest complaint in the category is the thing this app does not do. Nothing a person has added is ever locked, and the backup is a plain file they keep: the opposite of the lost-inventory story.
+- **Store text leads with the three things reviewers ask for:** pay once, no account, your data stays yours. Draft in `store/home-inventory/listing.json`.
+- **Search terms** (no volume data was found; this is a guess to be replaced by App Store Connect's own numbers after launch): "home inventory" is the main term and the crowded one, so it is in the name; "insurance" and "belongings" are in the subtitle; the keyword field covers household, contents, claim, renters, homeowners, moving, possessions, serial, receipt, valuables.
+- **Name:** "Roomfile" returned no app in a web search, but the App Store's own search was not reachable, so the name is **not verified**.
+- **Privacy label:** RevenueCat's guide says an app that uses it must declare Purchase History ("Purchases"), not linked to the person when ids are anonymous (https://www.revenuecat.com/docs/platform-resources/apple-platform-resources/apple-app-privacy). So an app with RevenueCat is "Data not linked to you: Purchases", not "Data Not Collected". This applies to all nine apps and is the owner's call.
+
+**The math (estimate).** At $5.99 the studio keeps about $5.09 a sale under the Small Business Program (15%). The target of $208.25 a month is about 41 sales a month from this app alone, or about 5 a month from each of nine apps. No published conversion rate for pay-once utilities was found; if 2% to 5% of people who install it buy (an assumption, not a source), 41 sales need roughly 800 to 2,000 installs a month, which a new app does not get from search on its own (see "Summary"). The apps earn their keep as a catalog, and each one needs its own search terms to bring its own installs.
+

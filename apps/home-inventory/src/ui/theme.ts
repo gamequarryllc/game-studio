@@ -51,7 +51,7 @@ export const LIGHT: Colors = {
   amberSoft: '#F5E6CC',
   red: '#B3261E',
   scrim: 'rgba(28,27,24,0.40)',
-  bar: 'rgba(250,248,243,0.96)',
+  bar: 'rgba(250,248,243,0.86)',
 };
 
 export const DARK: Colors = {
@@ -65,15 +65,15 @@ export const DARK: Colors = {
   green: '#74C7A7',
   onGreen: '#0E2A21',
   greenSoft: '#1B2C25',
-  manila: '#3B3220',
-  manilaEdge: '#51462B',
+  manila: '#45381C',
+  manilaEdge: '#5E4F2A',
   manilaInk: '#F3E6C4',
   manilaInk2: '#BFAF85',
   amber: '#E3A85C',
   amberSoft: '#33281A',
   red: '#F2685E',
   scrim: 'rgba(0,0,0,0.58)',
-  bar: 'rgba(24,22,20,0.96)',
+  bar: 'rgba(24,22,20,0.86)',
 };
 
 export interface Theme {
@@ -112,6 +112,13 @@ export const type = {
 export const TAB_BAR_SPACE = Platform.select({ web: 96, default: 110 }) ?? 110;
 
 export const HAIRLINE = Platform.select({ web: 1, default: 0.5 }) ?? 0.5;
+
+/**
+ * Keeps a single short word from being left alone on the last line of a
+ * title ("Hybrid bicycle, size / L"). The iPhone does this with the
+ * lineBreakStrategyIOS="push-out" prop; the web preview with this style.
+ */
+export const NO_ORPHAN = (Platform.OS === 'web' ? { textWrap: 'pretty' } : {}) as object;
 
 /** Browsers draw a focus ring round a text field; the form's own layout already shows where you are. */
 export const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;

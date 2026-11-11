@@ -12,7 +12,7 @@ import { useDoc } from '@/state/store';
 import { choose } from '@/ui/dialogs';
 import { Icon } from '@/ui/Icon';
 import { Button, Chip, EmptyState, RoundButton, Thumb } from '@/ui/kit';
-import { HAIRLINE, NO_OUTLINE, radius, space, TAB_BAR_SPACE, type, useTheme } from '@/ui/theme';
+import { HAIRLINE, NO_ORPHAN, NO_OUTLINE, TAB_BAR_SPACE, radius, space, type, useTheme } from '@/ui/theme';
 
 const FILTERS: ItemFilter[] = ['all', 'no-photo', 'no-value', 'no-serial'];
 const SORT_LABELS: Record<ItemSort, string> = { recent: 'Newest first', value: 'Most valuable first', name: 'Name, A to Z' };
@@ -138,7 +138,7 @@ export default function ItemsTab() {
         ]}>
         <Thumb photoId={item.photos[0]?.id} size={46} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[type.body, { color: c.ink }]} numberOfLines={1}>
+          <Text style={[type.body, NO_ORPHAN, { color: c.ink }]} numberOfLines={2} lineBreakStrategyIOS="push-out">
             {item.name}
           </Text>
           <Text style={[type.footnote, { color: c.ink2 }]} numberOfLines={1}>
@@ -174,8 +174,8 @@ export default function ItemsTab() {
         ) : (
           <EmptyState
             icon="search"
-            title={filter === 'all' ? 'No matches' : 'Nothing to fix here'}
-            body={query ? `Nothing matches “${query}”${filter === 'all' ? '.' : ' with this filter.'}` : 'Every item passes this check.'}
+            title={query ? `No results for “${query}”` : 'Nothing to fix here'}
+            body={query ? (filter === 'all' ? 'Try a brand, a model or a serial number.' : 'Nothing with this filter matches. Try All.') : 'Every item passes this check.'}
           />
         )
       }

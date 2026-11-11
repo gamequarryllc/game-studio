@@ -12,6 +12,11 @@ marks, product ids unique across games, prices ending in .99.
 It also checks the links every listing needs (support and privacy policy, both
 on the studio site), each game's section of the support page, and that the two
 pages build with and without a contact address (tools/site_pages.py).
+
+A listing with "kind": "app" belongs to an app in apps/<slug>/ (STUDIO.md,
+"Apps"). Apps have their own rules: no ads, exactly one product (the lifetime
+Pro unlock, a non-consumable priced from 2.99 to 9.99), their own privacy and
+support pages, and ids that match what the app itself ships with.
 """
 import glob
 import json
@@ -26,6 +31,79 @@ import site_pages  # noqa: E402
 LIMITS = {"name": 30, "subtitle": 30, "keywords": 100, "promotional_text": 170, "description": 4000}
 EMOJI_RX = re.compile(r"[\U0001F000-\U0001FAFF\u2600-\u27BF]")
 SUPPORT_KEYS = ("restore", "ad_choices", "sound")
+APP_SUPPORT_KEYS = ("restore", "backup")
+
+
+def check_app(slug, d, root, bad):
+    """The rules for an app's listing, and that the listing and the app agree."""
+    if d.get("support_url") != site_pages.APPS_SUPPORT_URL + "#" + slug:
+        bad(f"support_url must be {site_pages.APPS_SUPPORT_URL}#{slug}")
+    if d.get("privacy_url") != site_pages.APPS_PRIVACY_URL:
+        bad(f"privacy_url must be {site_pages.APPS_PRIVACY_URL}")
+    if d.get("age_rating", {}).get("advertising") is not False:
+        bad("apps carry no ads: age_rating.advertising must be false")
+    if d.get("age_rating", {}).get("kids_category") is not False:
+        bad("apps stay out of the Kids category: age_rating.kids_category must be false")
+    if "privacy_label" not in d:
+        bad("privacy_label is missing (the draft answers for App Privacy)")
+
+    products = d.get("products", [])
+    bundle = d.get("bundle_id", "")
+    entitlement = slug.replace("-", "_") + "_pro"
+    price = None
+    if len(products) != 1:
+        bad(f"an app sells exactly one thing, the lifetime Pro unlock ({len(products)} products listed)")
+    else:
+        p = products[0]
+        price = p.get("price_usd", 0)
+        if p.get("key") != "pro" or p.get("type") != "non-consumable":
+            bad('the product must be {"key": "pro", "type": "non-consumable"}')
+        if not 2.99 <= price <= 9.99:
+            bad(f"Pro costs {price}; the studio's range is 2.99 to 9.99")
+        if p.get("product_id") != bundle + ".pro":
+            bad(f"product_id must be {bundle}.pro")
+        if p.get("revenuecat_entitlement") != entitlement:
+            bad(f"revenuecat_entitlement must be {entitlement}")
+
+    support = d.get("support") or {}
+    for key in APP_SUPPORT_KEYS:
+        if not support.get(key):
+            bad(f"support.{key} is missing (say where it is in the app)")
+    answers = [support.get(k, "") for k in APP_SUPPORT_KEYS]
+    for extra in support.get("more", []):
+        if not extra.get("q") or not extra.get("a"):
+            bad('support.more entries need "q" and "a"')
+        answers += [extra.get("q", ""), extra.get("a", "")]
+    text = " ".join(answers)
+    if "!" in text:
+        bad("exclamation mark in the support answers")
+    if EMOJI_RX.search(text):
+        bad("emoji in the support answers")
+    unknown = sorted(k for k in support if k not in APP_SUPPORT_KEYS + ("more", "_about"))
+    if unknown:
+        bad(f"support has unknown keys: {', '.join(unknown)}")
+
+    # The listing and the app must name the same bundle id, product, entitlement and price.
+    app_dir = os.path.join(root, "apps", slug)
+    try:
+        with open(os.path.join(app_dir, "app.json"), encoding="utf-8") as f:
+            ios = json.load(f)["expo"].get("ios", {})
+        if ios.get("bundleIdentifier") != bundle:
+            bad(f"app.json has bundle id {ios.get('bundleIdentifier')}, the listing has {bundle}")
+    except (OSError, KeyError, ValueError) as e:
+        bad(f"apps/{slug}/app.json could not be read ({e})")
+    config = os.path.join(app_dir, "src", "pro", "config.ts")
+    if not os.path.exists(config):
+        bad(f"apps/{slug}/src/pro/config.ts is missing (the product id and entitlement the app ships with)")
+    else:
+        with open(config, encoding="utf-8") as f:
+            code = f.read()
+        if f"'{bundle}.pro'" not in code:
+            bad(f"src/pro/config.ts does not use the product id {bundle}.pro")
+        if f"'{entitlement}'" not in code:
+            bad(f"src/pro/config.ts does not use the entitlement {entitlement}")
+        if price is not None and f"'${price:.2f}'" not in code:
+            bad(f"src/pro/config.ts does not show the listing's price ${price:.2f}")
 
 
 def check_support(slug, d, root, bad):
@@ -65,8 +143,9 @@ def check_support(slug, d, root, bad):
         bad(f"support has unknown keys: {', '.join(unknown)}")
 
 
-def check_site_pages(root, listings, problems):
+def check_site_pages(root, listings, problems, apps=None):
     """Builds the privacy and support pages both ways and reads them back."""
+    apps = apps or {}
     def bad(msg):
         problems.append(f"site pages: {msg}")
 
@@ -100,7 +179,31 @@ def check_site_pages(root, listings, problems):
                     bad(f"{label}: the support page has no section for {slug}")
             if info["contact"] != ("email" if env else "issue page"):
                 bad(f"{label}: contact reported as {info['contact']}")
-    print("Site pages: privacy and support build with and without a contact address")
+            # The apps' own two pages.
+            app_pages = {}
+            for key in ("privacy", "support"):
+                path = os.path.join(out, "apps", key, "index.html")
+                if not os.path.exists(path):
+                    bad(f"{label}: apps/{key}/index.html was not written")
+                    continue
+                with open(path, encoding="utf-8") as f:
+                    app_pages[key] = f.read()
+                if "{{" in app_pages[key] or "}}" in app_pages[key].split("</style>", 1)[-1]:
+                    bad(f"{label}: apps/{key} page has an unfilled placeholder")
+                want = "mailto:" + address if env else site_pages.ISSUES_URL
+                if want not in app_pages[key]:
+                    bad(f"{label}: apps/{key} page has no way to contact the studio")
+                if not env and "mailto:" in app_pages[key]:
+                    bad(f"{label}: apps/{key} page has an address nobody gave it")
+            for slug, d in apps.items():
+                if "privacy" in app_pages and d.get("name", "") not in app_pages["privacy"]:
+                    bad(f"{label}: the apps' privacy policy does not name {d.get('name')}")
+                if "support" in app_pages and f'id="{slug}"' not in app_pages["support"]:
+                    bad(f"{label}: the apps' support page has no section for {slug}")
+            for slug, d in listings.items():
+                if "privacy" in app_pages and d.get("name", "") in app_pages["privacy"]:
+                    bad(f"{label}: the apps' privacy policy names a game ({d.get('name')})")
+    print("Site pages: privacy and support build with and without a contact address, for the games and for the apps")
 
 
 def words(text):
@@ -113,6 +216,7 @@ def main():
     seen_ids = {}
     seen_names = {}
     listings = {}
+    app_listings = {}
     paths = sorted(glob.glob(os.path.join(root, "store", "*", "listing.json")))
     for path in paths:
         slug = os.path.basename(os.path.dirname(path))
@@ -122,7 +226,11 @@ def main():
         def bad(msg):
             problems.append(f"{slug}: {msg}")
 
-        if not os.path.exists(os.path.join(root, "games", slug, "project.godot")):
+        is_app = d.get("kind") == "app"
+        if is_app:
+            if not os.path.exists(os.path.join(root, "apps", slug, "package.json")):
+                bad("no app folder with this name")
+        elif not os.path.exists(os.path.join(root, "games", slug, "project.godot")):
             bad("no game folder with this name")
         if d.get("bundle_id") != "com.gamequarry." + slug.replace("-", ""):
             bad(f"bundle id {d.get('bundle_id')} does not follow com.gamequarry.<slug without dashes>")
@@ -139,8 +247,12 @@ def main():
             bad("exclamation mark in store text")
         if EMOJI_RX.search(text_all):
             bad("emoji in store text")
-        check_support(slug, d, root, bad)
-        listings[slug] = d
+        if is_app:
+            check_app(slug, d, root, bad)
+            app_listings[slug] = d
+        else:
+            check_support(slug, d, root, bad)
+            listings[slug] = d
         kw = d.get("keywords", "")
         if ", " in kw or kw != kw.strip():
             bad("keywords must be comma-separated with no spaces")
@@ -168,14 +280,14 @@ def main():
               f"keywords {len(kw)}/100, promo {len(d.get('promotional_text',''))}/170, "
               f"description {len(d.get('description',''))}/4000, {len(d.get('products', []))} products")
 
-    check_site_pages(root, listings, problems)
+    check_site_pages(root, listings, problems, app_listings)
 
     if problems:
         print("\nStore listing problems:")
         for p in problems:
             print("  " + p)
         sys.exit(1)
-    print(f"Store listings OK ({len(paths)} games).")
+    print(f"Store listings OK ({len(listings)} games, {len(app_listings)} apps).")
 
 
 if __name__ == "__main__":

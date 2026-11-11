@@ -1,4 +1,4 @@
-import { centsToInput, formatMoney, parseMoney } from '../money';
+import { centsToInput, figureSize, formatMoney, parseMoney } from '../money';
 
 const cents = (s: string) => {
   const r = parseMoney(s);
@@ -83,5 +83,26 @@ describe('formatMoney', () => {
   it('copes with other currencies', () => {
     expect(formatMoney(5000, 'GBP')).toBe('£50.00');
     expect(formatMoney(5000, 'EUR')).toBe('€50.00');
+  });
+});
+
+describe('the size of a headline amount', () => {
+  it('stays full size for everyday totals', () => {
+    expect(figureSize('$0', 44)).toBe(44);
+    expect(figureSize('$7,097', 44)).toBe(44);
+    expect(figureSize('$599,203.76', 44)).toBe(44);
+  });
+
+  it('steps down so a very large total shows whole (it used to end in an ellipsis)', () => {
+    const huge = formatMoney(199999999998, 'USD');
+    expect(huge).toBe('$1,999,999,999.98');
+    const size = figureSize(huge, 44);
+    expect(size).toBeLessThan(44);
+    // Seventeen characters at this size take no more room than eleven at full size.
+    expect(size * huge.length).toBeLessThanOrEqual(44 * 11);
+  });
+
+  it('never goes below a readable size', () => {
+    expect(figureSize('9'.repeat(80), 44)).toBe(20);
   });
 });

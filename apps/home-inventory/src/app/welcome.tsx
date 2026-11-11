@@ -7,15 +7,24 @@ import { SUGGESTED_ROOMS, addRooms, setOnboarded } from '@/domain/actions';
 import { FREE_ITEM_LIMIT } from '@/domain/limits';
 import { success, tap } from '@/platform/haptics';
 import { store, useDoc } from '@/state/store';
-import { Icon, type IconName } from '@/ui/Icon';
+import type { HomeSummary } from '@/domain/selectors';
+import { FolderCard } from '@/ui/FolderCard';
+import { Icon } from '@/ui/Icon';
 import { Button } from '@/ui/kit';
-import { HAIRLINE, space, type, useTheme } from '@/ui/theme';
+import { HAIRLINE, display, space, type, useTheme } from '@/ui/theme';
 
-const POINTS: { icon: IconName; title: string; body: string }[] = [
-  { icon: 'addPhoto', title: 'One thing at a time', body: 'Photograph it, note the serial number and what it would cost to replace.' },
-  { icon: 'report', title: 'A report your insurer can use', body: 'Room by room, with photos and totals, as a PDF you can send or print.' },
-  { icon: 'lock', title: 'Kept on this iPhone', body: 'No account and nothing uploaded. You decide where backups go.' },
-];
+/** The folder shown on the first screen: a picture of where this leads, clearly marked as an example. */
+const EXAMPLE: HomeSummary = {
+  count: 37,
+  pieces: 52,
+  rooms: 6,
+  totalCents: 1846000,
+  withPhoto: 31,
+  withValue: 35,
+  withSerial: 12,
+  withReceipt: 9,
+  missingSerial: 3,
+};
 
 const PRESELECTED = new Set(['Living room', 'Kitchen', 'Bedroom', 'Bathroom']);
 
@@ -50,28 +59,22 @@ export default function Welcome() {
     <View style={{ flex: 1, backgroundColor: c.paper }}>
       <ScrollView
         testID={`welcome-${step}`}
-        contentContainerStyle={{ paddingTop: insets.top + 56, paddingHorizontal: space.xxl, paddingBottom: space.xxl }}>
+        contentContainerStyle={{ paddingTop: insets.top + 44, paddingHorizontal: space.xxl, paddingBottom: space.xxl }}>
         {step === 'intro' ? (
           <>
-            <Text style={[type.caption, styles.kicker, { color: c.green }]}>Roomfile</Text>
+            <Text style={[styles.wordmark, { color: c.green }]}>Roomfile</Text>
             <Text accessibilityRole="header" style={[type.largeTitle, styles.title, { color: c.ink }]}>
               Know what you own, before you need to.
             </Text>
             <Text style={[type.body, { color: c.ink2, marginTop: space.m }]}>
-              After a fire, a flood or a break-in, an insurer asks for a list of everything. This is where you keep it.
+              After a fire, a flood or a break-in, an insurer asks for a list of everything. Photograph each thing, note its serial number and what it would cost to replace, and the report is ready when you need it.
             </Text>
-            <View style={{ marginTop: space.xxl, gap: space.xl }}>
-              {POINTS.map((p) => (
-                <View key={p.title} style={styles.point}>
-                  <View style={[styles.pointIcon, { backgroundColor: c.greenSoft }]}>
-                    <Icon name={p.icon} size={19} color={c.green} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[type.headline, { color: c.ink }]}>{p.title}</Text>
-                    <Text style={[type.subhead, { color: c.ink2, marginTop: 2 }]}>{p.body}</Text>
-                  </View>
-                </View>
-              ))}
+            <View style={styles.example}>
+              <FolderCard sample label="An example" summary={EXAMPLE} currency={doc.settings.currency} />
+            </View>
+            <View style={styles.promise}>
+              <Icon name="lock" size={15} color={c.ink2} style={{ marginTop: 2 }} />
+              <Text style={[type.subhead, { color: c.ink2, flex: 1 }]}>No account, and nothing is uploaded. You decide where reports and backups go.</Text>
             </View>
           </>
         ) : (
@@ -130,10 +133,11 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  kicker: { letterSpacing: 1.6, textTransform: 'uppercase', fontWeight: '700' },
-  title: { marginTop: space.s },
-  point: { flexDirection: 'row', gap: space.l, alignItems: 'flex-start' },
-  pointIcon: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  wordmark: { fontFamily: display.semibold, fontSize: 21, lineHeight: 26, letterSpacing: -0.1 },
+  title: { marginTop: space.m },
+  // The folder brings its own side margins; this cancels the screen's, so it is as wide here as on the Rooms tab.
+  example: { marginTop: space.xxl, marginHorizontal: -space.xxl },
+  promise: { flexDirection: 'row', gap: space.s, marginTop: space.l },
   rooms: { marginTop: space.xl, gap: space.s },
   room: { flexDirection: 'row', alignItems: 'center', gap: space.m, minHeight: 50, borderRadius: 12, borderWidth: 1, paddingHorizontal: space.l },
   footer: { paddingHorizontal: space.xxl, paddingTop: space.l, borderTopWidth: HAIRLINE },
