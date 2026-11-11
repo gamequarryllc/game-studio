@@ -4,10 +4,11 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { topUpPlan } from '@/domain/puzzle';
 import type { CountMode } from '@/domain/types';
-import { DEV_TOOLS } from '@/platform/screenTime';
+import { ALLOWED_ID, DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
 import { Battery } from '@/ui/Battery';
+import { ScreenTimeCard } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
@@ -27,12 +28,19 @@ export default function Settings() {
   const router = useRouter();
   const { settings, day, cells, accent } = useDay();
   const first = topUpPlan(0);
+  // On a real iPhone the always-allowed apps are picked in Apple's list, and only their number is known.
+  const allowedCount = SCREEN_TIME_AVAILABLE ? pickCount(ALLOWED_ID) : settings.allowed.length;
+  const allowedValue = SCREEN_TIME_AVAILABLE ? (allowedCount === 0 ? 'None' : `${allowedCount} picked`) : allowedCount === 1 ? '1 app' : `${allowedCount} apps`;
+  // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
+  const pretend = DEV_TOOLS && !isOn();
   // On a narrow phone the goal's figures give the two round buttons room.
   const narrow = Math.min(useWindowDimensions().width, 480) < 360;
 
   return (
     <Page top={24} bottom={24}>
       <Title>Settings</Title>
+
+      <ScreenTimeCard />
 
       <Card style={{ paddingTop: 16, paddingBottom: 18, gap: 10 }}>
         <Label>Daily goal</Label>
@@ -64,7 +72,7 @@ export default function Settings() {
           </View>
         </View>
         <LinkRow label="What counts" value={COUNT_NAMES[settings.countMode]} onPress={() => router.push('/what-counts')} />
-        <LinkRow label="Always allowed" value={settings.allowed.length === 1 ? '1 app' : `${settings.allowed.length} apps`} onPress={() => router.push('/allowed')} last />
+        <LinkRow label="Always allowed" value={allowedValue} onPress={() => router.push('/allowed')} last />
       </Card>
 
       <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>
@@ -74,7 +82,7 @@ export default function Settings() {
         <Choice title="Locked" line="Nothing opens until it recharges" chosen={settings.emptyLevel === 'locked'} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
       </Card>
 
-      {DEV_TOOLS ? (
+      {pretend ? (
         <View style={{ marginTop: 14, gap: 10 }}>
           <Label>Developer</Label>
           <Text style={styles.note}>

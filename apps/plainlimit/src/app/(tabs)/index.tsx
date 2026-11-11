@@ -6,7 +6,7 @@ import { wordFor } from '@/domain/battery';
 import { clockLabel, clockLabelOf, durationLabel, goalLabel, nextRecharge, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
-import { DEV_TOOLS, SCREEN_TIME_AVAILABLE } from '@/platform/screenTime';
+import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn } from '@/platform/screenTime';
 import { Battery } from '@/ui/Battery';
 import { BigButton, Label } from '@/ui/kit';
 import { useEasedColor } from '@/ui/motion';
@@ -21,6 +21,8 @@ export default function Today() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { now, settings, day, fraction, cells, tone, accent } = useDay();
+  // Real screen time arrives a cell at a time, so the figure is a floor, not a running total.
+  const counting = isOn();
   const field = useEasedColor(tone.bg);
   // The word is as large as the phone allows without breaking onto a second line.
   const width = Math.min(useWindowDimensions().width, 480);
@@ -70,7 +72,7 @@ export default function Today() {
         ) : null}
 
         <View style={{ gap: 12 }}>
-          <Label>Used so far</Label>
+          <Label>{counting ? 'At least' : 'Used so far'}</Label>
           <Text style={styles.used}>
             {durationLabel(day.usedMinutes)} <Text style={styles.usedOf}>of {durationLabel(settings.goalMinutes)}</Text>
           </Text>
@@ -78,7 +80,13 @@ export default function Today() {
         </View>
 
         <View style={{ gap: 6 }}>
-          <Text style={styles.body}>{SCREEN_TIME_AVAILABLE ? 'The time each app used shows here.' : 'On an iPhone, the time each app used shows here.'}</Text>
+          <Text style={styles.body}>
+            {counting
+              ? 'The phone tells Plainlimit when a cell is used up, not minute by minute, so this moves a cell at a time.'
+              : SCREEN_TIME_AVAILABLE
+                ? 'Turn on Screen Time in Settings to have the battery follow your real day.'
+                : 'On an iPhone, the battery follows your real screen time.'}
+          </Text>
           {DEV_TOOLS && !SCREEN_TIME_AVAILABLE ? <Text style={styles.note}>This preview has no real screen time. Drain the battery from Settings, under Developer.</Text> : null}
         </View>
       </View>

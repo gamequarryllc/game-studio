@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 
+import { onNoticeRoute } from '@/platform/notices';
 import { store, useStore } from '@/state/store';
 import { c } from '@/ui/theme';
 
@@ -44,6 +45,11 @@ export default function RootLayout() {
     if (ready) SplashScreen.hideAsync().catch(() => {});
   }, [ready]);
   useWebDeepLink(ready);
+  const router = useRouter();
+  useEffect(() => {
+    if (!ready) return;
+    return onNoticeRoute((route) => router.push(route));
+  }, [ready, router]);
 
   if (!ready) return <View style={{ flex: 1, backgroundColor: c.ground }} />;
 

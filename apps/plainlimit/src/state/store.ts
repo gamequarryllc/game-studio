@@ -1,8 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
+import { cellsLeft } from '@/domain/battery';
 import { freshDoc, grantTopUp, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
+import { topUpPlan } from '@/domain/puzzle';
 import { stepGoal, stepRecharge, withAllowed, withoutAllowed } from '@/domain/settings';
 import type { CountMode, Doc, EmptyLevel, Settings } from '@/domain/types';
+import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
 
 // The one copy of what the app knows, and the only place it changes.
@@ -21,11 +24,41 @@ function set(doc: Doc, save = true) {
   if (save) void writeSaved(doc);
 }
 
+// On a real phone, a change to the settings is handed to Screen Time a moment
+// later, so a run of taps on a stepper is one change, not ten.
+let replan: ReturnType<typeof setTimeout> | null = null;
+function planSoon() {
+  if (!screenTime.isOn()) return;
+  if (replan) clearTimeout(replan);
+  replan = setTimeout(() => {
+    replan = null;
+    void screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
+  }, 600);
+}
+
+/**
+ * On a real phone, an empty battery locks the settings until it recharges.
+ * Otherwise the way round an empty battery would be to nudge the goal up.
+ */
+export function settingsLocked(doc: Doc = snapshot.doc): boolean {
+  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0;
+}
+
+/** The day as the phone reports it, when the app is counting real screen time. */
+function withRealUse(doc: Doc, day: Doc['day']): Doc['day'] {
+  if (!screenTime.isOn()) return day;
+  const used = screenTime.usedSoFar(doc.settings.goalMinutes, new Date(day.periodStart));
+  if (used === null || used === day.usedMinutes) return day;
+  return { ...day, usedMinutes: used };
+}
+
 function withSettings(change: (s: Settings) => Settings) {
+  if (settingsLocked()) return;
   const settings = change(snapshot.doc.settings);
   // A new recharge time can move the start of the current battery.
   const day = rollOver(snapshot.doc.day, new Date(), settings.rechargeMinute);
   set({ ...snapshot.doc, settings, day });
+  planSoon();
 }
 
 export const store = {
@@ -40,13 +73,37 @@ export const store = {
   },
   async start() {
     if (snapshot.state === 'ready') return;
-    set(repairDoc(await readSaved(), new Date()), false);
+    const doc = repairDoc(await readSaved(), new Date());
+    set({ ...doc, day: withRealUse(doc, doc.day) }, false);
+    screenTime.onCheckpoint(() => store.tick(new Date()));
   },
   /** Called as time passes: starts a fresh battery once the recharge time has gone by. */
   tick(now: Date) {
     if (snapshot.state !== 'ready') return;
-    const day = rollOver(snapshot.doc.day, now, snapshot.doc.settings.rechargeMinute);
+    const day = withRealUse(snapshot.doc, rollOver(snapshot.doc.day, now, snapshot.doc.settings.rechargeMinute));
     if (day !== snapshot.doc.day) set({ ...snapshot.doc, day });
+  },
+  /**
+   * Asks for Screen Time access and, once given, registers the day with the
+   * phone. From then on the battery follows real screen time.
+   */
+  async turnOnScreenTime(): Promise<'on' | 'denied' | 'failed'> {
+    const answer = await screenTime.askPermission();
+    if (answer !== 'approved') return 'denied';
+    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
+    // Start from what the phone says, not from any pretend use.
+    const day = { ...snapshot.doc.day, usedMinutes: 0 };
+    set({ ...snapshot.doc, day: withRealUse(snapshot.doc, day) });
+    return ok ? 'on' : 'failed';
+  },
+  turnOffScreenTime() {
+    screenTime.turnOff();
+    set({ ...snapshot.doc });
+  },
+  /** The person changed their picks in Apple's list: tell the phone, and redraw. */
+  picksChanged() {
+    planSoon();
+    set({ ...snapshot.doc }, false);
   },
   stepGoal(direction: 1 | -1) {
     withSettings((s) => ({ ...s, goalMinutes: stepGoal(s.goalMinutes, direction) }));
@@ -76,7 +133,11 @@ export const store = {
   },
   /** The puzzle was solved: start (or extend) the earned time. */
   earnTopUp() {
-    set({ ...snapshot.doc, day: grantTopUp(snapshot.doc.day, new Date(), snapshot.doc.settings.rechargeMinute) });
+    const now = new Date();
+    const earned = topUpPlan(snapshot.doc.day.topUps);
+    const day = grantTopUp(snapshot.doc.day, now, snapshot.doc.settings.rechargeMinute);
+    set({ ...snapshot.doc, day });
+    void screenTime.grantExtraTime(earned.minutes, snapshot.doc.settings, day.topUps, now);
   },
 };
 

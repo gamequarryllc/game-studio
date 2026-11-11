@@ -106,7 +106,7 @@ func readState(now: Date) -> BatteryState {
     cells = 0
   } else {
     for emptied in stride(from: cellCount - 1, through: 1, by: -1)
-    where reached("c\(emptied)", afterMinutes: goal * Double(emptied) / Double(cellCount)) {
+    where reached("cell-\(emptied)", afterMinutes: goal * Double(emptied) / Double(cellCount)) {
       cells = cellCount - emptied
       break
     }

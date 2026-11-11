@@ -3,20 +3,49 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { ALLOWED_MAX } from '@/domain/settings';
 import { tap } from '@/platform/haptics';
-import { SCREEN_TIME_AVAILABLE } from '@/platform/screenTime';
+import { ALLOWED_ID, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenTime';
 import { store, useDoc } from '@/state/store';
+import { AppPicker } from '@/ui/AppPicker';
 import { BigButton, Card, Lead, Page, Title } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 
 export default function Allowed() {
   const { settings } = useDoc();
   const [name, setName] = useState('');
+  const [picking, setPicking] = useState(false);
   const full = settings.allowed.length >= ALLOWED_MAX;
 
   const add = () => {
     store.addAllowed(name);
     setName('');
   };
+
+  // On a real iPhone the apps are ticked in Apple's own list; the app only learns how many.
+  if (SCREEN_TIME_AVAILABLE) {
+    const picked = pickCount(ALLOWED_ID);
+    return (
+      <Page top={8}>
+        <Title>Always allowed</Title>
+        <Lead>These still open when the battery is empty.</Lead>
+        <Card style={{ paddingVertical: 16 }}>
+          <Text style={styles.body}>
+            {picked === 0 ? 'Nothing is allowed through yet. Tick Phone and Messages at least, for emergencies.' : picked === 1 ? '1 app is allowed through.' : `${picked} apps are allowed through.`}
+          </Text>
+        </Card>
+        <BigButton label={picked === 0 ? 'Choose apps' : 'Change the apps'} onPress={() => setPicking(true)} />
+        <Text style={styles.note}>When everything counts, these apps still drain the battery; they are only never covered.</Text>
+        <AppPicker
+          id={ALLOWED_ID}
+          open={picking}
+          header="Tick what always opens"
+          onClose={() => {
+            setPicking(false);
+            store.picksChanged();
+          }}
+        />
+      </Page>
+    );
+  }
 
   return (
     <Page top={8}>
