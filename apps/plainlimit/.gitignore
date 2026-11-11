@@ -42,3 +42,10 @@ example
 # generated native folders
 /ios
 /android
+
+# The Screen Time library's extensions are copied in from node_modules on every
+# prebuild (plugins/withTargets.js). targets/widget/ is ours and is kept.
+/targets/ActivityMonitorExtension/
+/targets/ShieldAction/
+/targets/ShieldConfiguration/
+/targets/*/generated.entitlements
