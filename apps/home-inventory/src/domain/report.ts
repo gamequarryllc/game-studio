@@ -81,6 +81,9 @@ const CSS = `
   .closing { margin-top: 22pt; padding-top: 8pt; border-top: 0.75pt solid #d8d2c4; color: #6b675e; font-size: 8.5pt; }
 `;
 
+/** An empty cell: a quiet dash reads better down a column than the same words repeated. */
+const NOTHING = '<span class="muted" title="Not recorded">—</span>';
+
 function itemCell(item: Item): string {
   const parts: string[] = [`<div class="name">${escapeHtml(item.name)}</div>`];
   const makeModel = [item.brand, item.model].filter(Boolean).map(escapeHtml).join(' ');
@@ -99,7 +102,7 @@ function purchaseCell(item: Item, currency: string): string {
   if (item.purchasedFrom) parts.push(escapeHtml(item.purchasedFrom));
   if (item.pricePaidCents !== null) parts.push(`Paid ${escapeHtml(formatMoney(item.pricePaidCents, currency))}`);
   if (item.receipts.length > 0) parts.push(item.receipts.length === 1 ? 'Receipt kept' : `${item.receipts.length} receipts kept`);
-  return parts.length ? parts.join('<br>') : '<span class="muted">Not recorded</span>';
+  return parts.length ? parts.join('<br>') : NOTHING;
 }
 
 /**
@@ -219,7 +222,7 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
       out.push(`<td class="detail">${purchaseCell(item, currency)}</td>`);
       out.push(`<td class="qty">${item.quantity}</td>`);
       out.push(`<td class="num">${each === null ? '<span class="muted">No value</span>' : money(each)}</td>`);
-      out.push(`<td class="num">${each === null ? '' : money(itemTotalCents(item))}</td>`);
+      out.push(`<td class="num">${each === null ? NOTHING : money(itemTotalCents(item))}</td>`);
       out.push('</tr>');
 
       if (opts.includeReceipts) {

@@ -126,28 +126,26 @@ export default function ItemScreen() {
         </Text>
       </View>
 
-      <Card style={{ marginTop: space.l, padding: space.l }}>
-        <Text style={[type.footnote, { color: c.ink2 }]}>{item.valueCents !== null ? 'Value' : each !== null ? 'Value (the price you paid)' : 'Value'}</Text>
+      <View style={{ paddingHorizontal: space.xl, paddingTop: space.m }}>
         {hasValue(item) ? (
           <>
-            <Text testID="item-value" style={[type.figure, type.tabular, { color: c.ink, fontSize: 36, lineHeight: 42 }]} numberOfLines={1} adjustsFontSizeToFit>
-              {formatMoney(itemTotalCents(item), currency)}
+            <Text testID="item-value" style={[type.figure, type.tabular, { color: c.ink, fontSize: 32, lineHeight: 38 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+              {formatMoney(itemTotalCents(item), currency, { whole: true })}
             </Text>
-            {item.quantity > 1 && each !== null ? (
-              <Text style={[type.subhead, type.tabular, { color: c.ink2 }]}>
-                {item.quantity} at {formatMoney(each, currency)} each
-              </Text>
-            ) : null}
+            <Text style={[type.footnote, type.tabular, { color: c.ink2, marginTop: 1 }]}>
+              {item.quantity > 1 && each !== null ? `${item.quantity} at ${formatMoney(each, currency, { whole: true })} each · ` : ''}
+              {item.valueCents !== null ? 'Cost to replace' : 'The price you paid'}
+            </Text>
           </>
         ) : (
           <Pressable accessibilityRole="button" onPress={edit}>
-            <Text testID="item-value" style={[type.headline, { color: c.amber, marginTop: 4 }]}>
+            <Text testID="item-value" style={[type.headline, { color: c.amber }]}>
               No value yet
             </Text>
             <Text style={[type.subhead, { color: c.ink2, marginTop: 2 }]}>Add what it would cost to replace, even roughly.</Text>
           </Pressable>
         )}
-      </Card>
+      </View>
 
       {needsSerial(item) ? (
         <Notice icon="warning" tone="amber">

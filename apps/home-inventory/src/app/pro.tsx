@@ -94,7 +94,7 @@ export default function ProScreen() {
           <View style={{ marginTop: space.xxl + space.xs, gap: space.xs }}>
             <Button testID="pro-buy" label={`Unlock Pro · ${state.price ?? EXPECTED_PRICE}`} busy={state.busy} onPress={buy} />
             <Button testID="pro-restore" label="Restore purchase" kind="plain" disabled={state.busy} onPress={restore} />
-            <Text style={[type.footnote, { color: c.ink2, textAlign: 'center' }]}>One payment through the App Store. Not a subscription.</Text>
+            <Text style={[type.footnote, { color: c.ink2, textAlign: 'center' }]}>One payment through the App Store.</Text>
           </View>
         )}
       </ScrollView>

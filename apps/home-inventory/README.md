@@ -33,6 +33,20 @@ Changes to the code show on the phone as soon as a file is saved. Shake the phon
 
 The app is built with Expo SDK 58. If Expo Go says the project needs a different SDK, update Expo Go from the App Store.
 
+## Install it as an app (TestFlight)
+
+Expo Go needs the computer running beside the phone. For a real icon on the home screen that works anywhere, the repo builds the app on GitHub and sends it to TestFlight. Apple's side takes about half an hour the first time; after that every build is one button.
+
+1. **The key and the four secrets** (once for the whole studio; skip if they are already there). Steps 1 to 3 of "The owner's steps for the first TestFlight build" in [`store/README.md`](../../store/README.md): an App Store Connect API key, and the repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` and `APPLE_TEAM_ID`.
+2. **The bundle id.** developer.apple.com > Account > Certificates, IDs & Profiles > Identifiers > add an App ID with the explicit bundle id `com.gamequarry.homeinventory`. No extra capabilities.
+3. **The app record.** App Store Connect > Apps > New App: platform iOS, name "Roomfile: Home Inventory" (if Apple says it is taken, the alternatives are in the store listing), language English (U.S.), the bundle id from step 2, SKU `home-inventory`.
+4. **The build.** GitHub > this repo > Actions > "iOS app build" > Run workflow: app `home-inventory`, mode `testflight`, flavor `playtest`.
+5. **On the phone.** When Apple has finished processing the upload it appears under TestFlight for the app in App Store Connect. Add yourself as an internal tester, then install it from the TestFlight app on the iPhone.
+
+The `playtest` flavor is the whole app with the Developer section left in (Settings > Developer: "Pretend Pro is bought", the sample homes), so everything can be tried before the store key exists. The `release` flavor is what goes to the App Store; the build refuses to upload it until `npm run check:release` passes.
+
+Nothing in the workflow sends an app to App Review. The unsigned half of the build (mode `check`) runs on its own whenever the app's native settings change; the signing and upload half has not run yet, because it needs the secrets, so the first run may need a fix. If it fails, the error is on the run's page: tell Claude what it says.
+
 ## Working on it
 
 ```bash

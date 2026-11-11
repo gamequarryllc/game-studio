@@ -7,7 +7,7 @@
       "color": "#1e5b48",
       "tagline": "Photos, serial numbers and values of what you own, room by room, with a PDF report for an insurance claim.",
       "status": "ready-to-test",
-      "note": "Working name Roomfile. Ready for the owner's first run on an iPhone (Expo Go steps in its README). Critic: almost. Nothing native has run on a real phone yet"
+      "note": "Working name Roomfile. Ready for the owner's first run on an iPhone: Expo Go today, or TestFlight after the one-time Apple steps (both in its README). Two critics: almost. The native build compiles on GitHub; nothing has run on a real phone yet"
     },
     {
       "slug": "receipt-vault",

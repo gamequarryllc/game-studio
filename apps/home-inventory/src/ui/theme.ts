@@ -19,8 +19,12 @@ export interface Colors {
   green: string;
   onGreen: string;
   greenSoft: string;
-  /** The manila folder. */
+  /** Filled buttons. In dark mode this is a lifted brand green with white text, not the mint used for links. */
+  button: string;
+  onButton: string;
+  /** The manila folder. Its tab is a shade lighter in dark mode, where the folder is nearly as dark as the page. */
   manila: string;
+  manilaTab: string;
   manilaEdge: string;
   manilaInk: string;
   manilaInk2: string;
@@ -43,7 +47,10 @@ export const LIGHT: Colors = {
   green: '#1E5B48',
   onGreen: '#FFFFFF',
   greenSoft: '#DFEBE5',
+  button: '#1E5B48',
+  onButton: '#FFFFFF',
   manila: '#EDDCB1',
+  manilaTab: '#EDDCB1',
   manilaEdge: '#D9C48B',
   manilaInk: '#33290F',
   manilaInk2: '#6E5F36',
@@ -65,10 +72,13 @@ export const DARK: Colors = {
   green: '#74C7A7',
   onGreen: '#0E2A21',
   greenSoft: '#1B2C25',
-  manila: '#45381C',
-  manilaEdge: '#5E4F2A',
+  button: '#2F8A62',
+  onButton: '#FFFFFF',
+  manila: '#2A2620',
+  manilaTab: '#37322A',
+  manilaEdge: '#443E33',
   manilaInk: '#F3E6C4',
-  manilaInk2: '#BFAF85',
+  manilaInk2: '#B5AA8E',
   amber: '#E3A85C',
   amberSoft: '#33281A',
   red: '#F2685E',

@@ -180,6 +180,10 @@ function helpers(page) {
         assert.ok(label && count, `${prefix}${key} is not on screen`);
         assert.ok(label.x + label.width + 4 <= count.x, `${prefix}${key}: the label runs into the count`);
         assert.ok(count.height < 24 && label.height < 24, `${prefix}${key}: the text wraps`);
+        for (const part of ['label', 'count']) {
+          const cut = await t(`${prefix}${key}-${part}`).first().evaluate((el) => el.scrollWidth - el.clientWidth);
+          assert.ok(cut <= 0, `${prefix}${key}: the ${part} is cut off by ${cut}px`);
+        }
       }
     },
     async quickAdd(name, value) {
@@ -304,7 +308,7 @@ async function main() {
       await h.tap('item-65-inch OLED television');
       await h.visible('item-screen');
       firstItemId = page.url().split('/item/')[1];
-      await h.expectText('item-value', '$1,899.00');
+      await h.expectText('item-value', '$1,899'); // whole amounts in the app, as in the lists; cents only when there are some
       await h.expectText('fact-serial', 'NV65A2X0418K');
       await h.expectText('item-notes', /Wall bracket and care plan/);
       const body = await t('item-screen').first().innerText();
@@ -344,7 +348,7 @@ async function main() {
       await h.fill('field-value', '1899');
       await h.tap('field-quantity-less');
       await h.tap('form-save');
-      await h.expectText('item-value', '$1,899.00');
+      await h.expectText('item-value', '$1,899');
       await h.tap('item-edit');
       await h.fill('field-name', 'Something else entirely');
       await h.tap('form-cancel');
@@ -463,7 +467,8 @@ async function main() {
       await h.fill('items-search', 'home office laptop');
       await h.expectText('items-count', '1 item found'); // so is the room
       await h.fill('items-search', 'zzzz');
-      await h.expectText('items-count', '0 items found');
+      // The empty state says it once; a "0 items found" line above it used to say it twice.
+      await h.gone('items-count');
       const none = await t('items-screen').first().innerText();
       assert.ok(none.includes('No results for “zzzz”') && none.includes('Try a brand, a model or a serial number.'), 'the empty search state is wrong');
       await h.shot('23-items-no-match');

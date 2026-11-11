@@ -125,12 +125,31 @@ check_app() {
   [ -d "$built" ] || { echo "No app at $built" >&2; exit 1; }
   local info="$built/Info.plist"
   [ "$(plist_value "$info" CFBundleIdentifier)" = "$bundle" ] || { echo "The built app has bundle id $(plist_value "$info" CFBundleIdentifier)" >&2; exit 1; }
-  [ "$(plist_value "$info" CFBundleShortVersionString)" = "$VERSION" ] || { echo "The built app has version $(plist_value "$info" CFBundleShortVersionString), wanted $VERSION" >&2; exit 1; }
-  [ "$(plist_value "$info" CFBundleVersion)" = "$BUILD_NUMBER" ] || { echo "The built app has build $(plist_value "$info" CFBundleVersion), wanted $BUILD_NUMBER" >&2; exit 1; }
+  # The version and build number come from the app's app.config.js (APP_VERSION,
+  # APP_BUILD_NUMBER). An upload with the wrong ones would be refused by Apple
+  # or shadow an earlier build; a check build only needs to say so.
+  local got_version got_build
+  got_version="$(plist_value "$info" CFBundleShortVersionString)"; got_build="$(plist_value "$info" CFBundleVersion)"
+  if [ "$got_version" != "$VERSION" ] || [ "$got_build" != "$BUILD_NUMBER" ]; then
+    if [ "$mode" = "testflight" ]; then
+      echo "The built app is version $got_version ($got_build), wanted $VERSION ($BUILD_NUMBER): its app.config.js must read APP_VERSION and APP_BUILD_NUMBER (see apps/home-inventory/app.config.js)" >&2; exit 1
+    fi
+    echo "::warning title=$slug::The built app is version $got_version ($got_build), not $VERSION ($BUILD_NUMBER). Its app.config.js must read APP_VERSION and APP_BUILD_NUMBER before a TestFlight upload (see apps/home-inventory/app.config.js)."
+  fi
   [ -s "$built/main.jsbundle" ] || { echo "The app's JavaScript (main.jsbundle) is missing from the app" >&2; exit 1; }
-  [ -f "$built/PrivacyInfo.xcprivacy" ] || { echo "The privacy manifest is missing from the app" >&2; exit 1; }
+  if [ ! -f "$built/PrivacyInfo.xcprivacy" ]; then
+    # Apple asks every app to say why it uses certain system calls (React Native uses several).
+    # A playtest or check build can do without; a store build cannot.
+    if [ "$mode" = "testflight" ] && [ "$FLAVOR" = "release" ]; then
+      echo "The privacy manifest is missing from the app: add ios.privacyManifests to app.json (see apps/home-inventory/app.json)" >&2; exit 1
+    fi
+    echo "::warning title=$slug::No privacy manifest in the app. Add ios.privacyManifests to app.json before a store build (see apps/home-inventory/app.json)."
+  fi
   [ -f "$built/Assets.car" ] || { echo "No compiled asset catalog (icons) in the app" >&2; exit 1; }
-  [ -n "$(plist_value "$info" NSCameraUsageDescription)" ] || { echo "No camera permission text in the app" >&2; exit 1; }
+  # An app that takes photos must say why, in its own words.
+  if grep -q '"expo-image-picker"' "$app/app.json" && [ -z "$(plist_value "$info" NSCameraUsageDescription)" ]; then
+    echo "The app uses the camera but has no camera permission text" >&2; exit 1
+  fi
   if [ -n "$(plist_value "$info" NSMicrophoneUsageDescription)" ]; then echo "The app asks for the microphone, which it never uses" >&2; exit 1; fi
   if [ -n "$(plist_value "$info" NSUserTrackingUsageDescription)" ]; then echo "The app has a tracking prompt; the apps track nothing" >&2; exit 1; fi
   local archs; archs="$(lipo -archs "$built/$(plist_value "$info" CFBundleExecutable)")"

@@ -276,3 +276,11 @@ describe('the foot of each report page', () => {
     expect(page).toMatch(/<table class="list summary"><colgroup><col><col class="c-count"><col style="width:[\d.]+em"><\/colgroup>/);
   });
 });
+
+describe('empty cells in the report', () => {
+  it('are a quiet dash, not the same words down the column', () => {
+    const page = buildReportHtml(sampleHome(NOW), { includePhotos: true, includeReceipts: false, generatedAt: NOW });
+    expect(page).not.toContain('>Not recorded<');
+    expect(page).toContain('<span class="muted" title="Not recorded">—</span>');
+  });
+});

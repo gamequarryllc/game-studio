@@ -43,17 +43,19 @@ export default function RoomsTab() {
       testID="rooms-screen"
       title="Rooms"
       action={<RoundButton testID="add-item" icon="add" label="Add an item" onPress={() => openNewItem(router)} />}>
-      <FolderCard label={doc.profile.homeName || 'Household'} summary={summary} currency={currency} />
-
-      {summary.count === 0 ? (
-        <Card style={{ marginTop: space.l, padding: space.l }}>
-          <Text style={[type.headline, { color: c.ink }]}>Start with one thing</Text>
-          <Text style={[type.subhead, { color: c.ink2, marginTop: 4, marginBottom: space.l }]}>
-            Pick whatever would hurt most to replace: the television, a laptop, a ring. It takes about a minute.
-          </Text>
-          <Button testID="add-first-item" label="Add your first item" icon="add" onPress={() => openNewItem(router)} />
-        </Card>
-      ) : null}
+      <FolderCard
+        label={doc.profile.homeName || 'Household'}
+        summary={summary}
+        currency={currency}
+        whenEmpty={
+          <>
+            <Text style={[type.subhead, { color: c.manilaInk2, marginBottom: space.l }]}>
+              Start with whatever would hurt most to replace: the television, a laptop, a ring. It takes about a minute.
+            </Text>
+            <Button testID="add-first-item" label="Add your first item" icon="add" onPress={() => openNewItem(router)} />
+          </>
+        }
+      />
 
       <SectionLabel>Rooms</SectionLabel>
       <Card>

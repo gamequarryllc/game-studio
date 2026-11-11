@@ -200,8 +200,8 @@ export function Button({
   style?: StyleProp<ViewStyle>;
 }) {
   const { c } = useTheme();
-  const fg = kind === 'primary' ? c.onGreen : kind === 'danger' ? c.red : c.green;
-  const bg = kind === 'primary' ? c.green : kind === 'soft' ? c.greenSoft : 'transparent';
+  const fg = kind === 'primary' ? c.onButton : kind === 'danger' ? c.red : c.green;
+  const bg = kind === 'primary' ? c.button : kind === 'soft' ? c.greenSoft : 'transparent';
   const off = disabled || busy;
   return (
     <Pressable

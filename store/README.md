@@ -11,6 +11,8 @@ The privacy policy and the support page are one page each for all the studio's g
 
 **Apps** (the Expo projects in `apps/<slug>/`; STUDIO.md, "Apps") keep their listings here too, marked `"kind": "app"`. An app's listing has exactly one product (the lifetime Pro unlock, `<bundle id>.pro`, entitlement `<slug with underscores>_pro`, priced from 2.99 to 9.99), no ads, a `privacy_label` draft, and a `support` block with `restore` and `backup` (where each is in the app). Its two links point at the apps' own pages, `site/apps-privacy.html` and `site/apps-support.html`, published at https://gamequarryllc.github.io/game-studio/apps/privacy/ and https://gamequarryllc.github.io/game-studio/apps/support/ (the support link ends in `#<slug>`). `tools/store_check.py` also checks that the listing and the app agree on the bundle id, the product id, the entitlement and the price. Each app's NOTES.md has the owner's going-live steps.
 
+**An app's first TestFlight build** uses the same key and the same four repository secrets as the games (steps 1 to 3 below, done once for everything), then the app's own bundle id and app record, then Actions > "iOS app build" > Run workflow (the app's folder name, mode `testflight`, flavor `playtest`). The exact steps are in each app's README, "Install it as an app (TestFlight)".
+
 Store text rules: sentence case, specific, no exclamation marks, no emoji, nothing the game doesn't do, no other app's name. The research behind the names and keywords is in `research/market.md`.
 
 ## The owner's steps for the first TestFlight build (once, about half an hour)

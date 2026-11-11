@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { PixelRatio, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { figureSize, formatMoney } from '@/domain/money';
@@ -35,10 +36,13 @@ export function FolderCard({
   summary,
   currency,
   sample,
+  whenEmpty,
 }: {
   label: string;
   summary: HomeSummary;
   currency: string;
+  /** Shown inside the folder while nothing has been added: the one prompt and its button. */
+  whenEmpty?: ReactNode;
   /** The made-up folder on the welcome screen: a picture, not the person's own figures. */
   sample?: boolean;
 }) {
@@ -68,12 +72,12 @@ export function FolderCard({
       accessible={sample}
       accessibilityLabel={sample ? 'An example of the summary the app keeps for your home' : undefined}>
       <View style={styles.tabRow}>
-        <View style={[styles.tab, { backgroundColor: c.manila }]}>
+        <View style={[styles.tab, { backgroundColor: c.manilaTab }]}>
           <Text testID={id('folder-label')} style={[type.caption, styles.tabText, { color: c.manilaInk2 }]} numberOfLines={1}>
             {label}
           </Text>
         </View>
-        <View testID={id('folder-slant')} style={[styles.tabSlant, { backgroundColor: c.manila }]} />
+        <View testID={id('folder-slant')} style={[styles.tabSlant, { backgroundColor: c.manilaTab }]} />
       </View>
       <View style={[styles.body, { backgroundColor: c.manila, borderTopColor: c.manilaEdge }]}>
         {empty ? (
@@ -98,6 +102,7 @@ export function FolderCard({
             ? `${plural(summary.rooms, 'room')} ready to fill`
             : `${plural(summary.count, 'item')} in ${plural(summary.rooms, 'room')}`}
         </Text>
+        {empty && whenEmpty ? <View style={{ marginTop: space.l }}>{whenEmpty}</View> : null}
         {empty ? null : (
           <View style={[styles.meters, sideBySide ? styles.metersRow : styles.metersStack, { borderTopColor: c.manilaEdge }]}>
             <Meter testID={id('meter-photo')} label="Photographed" done={summary.withPhoto} total={summary.count} stacked={!sideBySide} />

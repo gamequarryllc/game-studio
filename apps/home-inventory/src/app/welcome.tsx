@@ -1,6 +1,6 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SUGGESTED_ROOMS, addRooms, setOnboarded } from '@/domain/actions';
@@ -14,16 +14,17 @@ import { Button } from '@/ui/kit';
 import { HAIRLINE, display, space, type, useTheme } from '@/ui/theme';
 
 /** The folder shown on the first screen: a picture of where this leads, clearly marked as an example. */
+// The counts are kept short on purpose: "9 of 12" lets the two meters share a row even on the narrowest iPhone.
 const EXAMPLE: HomeSummary = {
-  count: 37,
-  pieces: 52,
-  rooms: 6,
-  totalCents: 1846000,
-  withPhoto: 31,
-  withValue: 35,
-  withSerial: 12,
-  withReceipt: 9,
-  missingSerial: 3,
+  count: 12,
+  pieces: 15,
+  rooms: 4,
+  totalCents: 946000,
+  withPhoto: 9,
+  withValue: 11,
+  withSerial: 5,
+  withReceipt: 4,
+  missingSerial: 2,
 };
 
 const PRESELECTED = new Set(['Living room', 'Kitchen', 'Bedroom', 'Bathroom']);
@@ -35,6 +36,8 @@ export default function Welcome() {
   const doc = useDoc();
   const [step, setStep] = useState<'intro' | 'rooms'>('intro');
   const [picked, setPicked] = useState<Set<string>>(PRESELECTED);
+  // A short screen (an iPhone SE) gets tighter spacing and a slightly smaller headline.
+  const compact = useWindowDimensions().height < 720;
 
   if (doc.meta.onboarded) return <Redirect href="/" />;
 
@@ -59,17 +62,17 @@ export default function Welcome() {
     <View style={{ flex: 1, backgroundColor: c.paper }}>
       <ScrollView
         testID={`welcome-${step}`}
-        contentContainerStyle={{ paddingTop: insets.top + 44, paddingHorizontal: space.xxl, paddingBottom: space.xxl }}>
+        contentContainerStyle={{ paddingTop: insets.top + (compact ? 16 : 44), paddingHorizontal: space.xxl, paddingBottom: compact ? space.l : space.xxl }}>
         {step === 'intro' ? (
           <>
             <Text style={[styles.wordmark, { color: c.green }]}>Roomfile</Text>
-            <Text accessibilityRole="header" style={[type.largeTitle, styles.title, { color: c.ink }]}>
+            <Text accessibilityRole="header" style={[type.largeTitle, styles.title, compact ? styles.titleCompact : null, { color: c.ink }]}>
               Know what you own, before you need to.
             </Text>
-            <Text style={[type.body, { color: c.ink2, marginTop: space.m }]}>
+            <Text style={[compact ? type.callout : type.body, { color: c.ink2, marginTop: compact ? space.s : space.m }]}>
               After a fire, a flood or a break-in, an insurer asks for a list of everything. Photograph each thing, note its serial number and what it would cost to replace, and the report is ready when you need it.
             </Text>
-            <View style={styles.example}>
+            <View style={[styles.example, compact ? { marginTop: space.l } : null]}>
               <FolderCard sample label="An example" summary={EXAMPLE} currency={doc.settings.currency} />
             </View>
             <View style={styles.promise}>
@@ -135,6 +138,7 @@ export default function Welcome() {
 const styles = StyleSheet.create({
   wordmark: { fontFamily: display.semibold, fontSize: 21, lineHeight: 26, letterSpacing: -0.1 },
   title: { marginTop: space.m },
+  titleCompact: { marginTop: space.s, fontSize: 28, lineHeight: 33 },
   // The folder brings its own side margins; this cancels the screen's, so it is as wide here as on the Rooms tab.
   example: { marginTop: space.xxl, marginHorizontal: -space.xxl },
   promise: { flexDirection: 'row', gap: space.s, marginTop: space.l },

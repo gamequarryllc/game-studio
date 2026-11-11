@@ -11,6 +11,10 @@ describe('the folder’s meters', () => {
     expect(fitSideBySide(meters('5 of 6', '5 of 6'), inside(393), 16)).toBe(true);
     expect(fitSideBySide(meters('31 of 37', '35 of 37'), inside(393), 16)).toBe(true);
     expect(fitSideBySide(meters('4 of 5', '4 of 5'), inside(375), 16)).toBe(true);
+    // The welcome screen's example is written to fit a 375-point phone ("9 of 12", "11 of 12").
+    expect(fitSideBySide(meters('9 of 12', '11 of 12'), inside(375), 16)).toBe(true);
+    // Longer counts on that phone stack: when the measure was looser they were squeezed and cut off.
+    expect(fitSideBySide(meters('31 of 37', '35 of 37'), inside(375), 16)).toBe(false);
   });
 
   it('stack when the counts get long (the label used to run into the number)', () => {

@@ -24,13 +24,14 @@ The whole design follows from one fact about the job: people do it once, in an a
 | Card | `#FFFFFF` | `#1D1B18` | Lists and forms |
 | Ink | `#1C1B18` | `#F1EDE4` | Text; `ink2` and `ink3` are its two quieter steps |
 | Ledger green | `#1E5B48` | `#74C7A7` | Actions, and the figures that add up |
-| Manila | `#EDDCB1` | `#45381C` | The folder, and nothing else |
+| Manila | `#EDDCB1` | `#2A2620` | The folder, and nothing else. In dark mode it is a warm brown-grey with a lighter tab (`#37322A`): a dark gold looked dirty |
+| Button | `#1E5B48` | `#2F8A62` | Filled buttons, always with white text. The mint above is for links and symbols only |
 | Amber | `#9A5B13` | `#E3A85C` | A gap worth filling in (no photo, no value) |
 | Red | `#B3261E` | `#F2685E` | Deleting |
 
 **Type:** Newsreader (SIL Open Font License; the licence ships in `@expo-google-fonts/newsreader`) for titles and totals only. Everything else is the system font at the iOS text-style sizes, so Dynamic Type scales it. Figures use tabular numerals.
 
-**The motif:** the folder with a slanted tab at the top of the Rooms tab, labelled with the name of the home. It appears in exactly two places: there, and as a marked example on the welcome screen. The icon is the same idea reduced to one shape: a folder whose tab is a roof.
+**The motif:** the folder with a slanted tab at the top of the Rooms tab, labelled with the name of the home. It appears in exactly two places: there, and as a marked example on the welcome screen. While a home is empty, the folder itself holds the one prompt and the "Add your first item" button, so the screen never stacks two empty states. The icon is the same idea reduced to one shape: a folder whose tab is a roof.
 
 **Where the look comes from** (none of them apps): manila file folders and their index tabs; bank passbooks and ledger paper; the object labels in a museum case, with their small serif titles and plain facts.
 
@@ -42,6 +43,8 @@ The whole design follows from one fact about the job: people do it once, in an a
 - Amber means "worth filling in" and nothing else. A room whose things have no value says so in amber instead of showing "$0".
 - The add button beside a large title is a quiet toolbar circle, not a filled floating button.
 - One wording for a missing value everywhere, including the PDF: "No value".
+- Amounts are whole in the app when there are no cents ("$1,899"), and always carry cents in the PDF, which is a document.
+- Every row in a list is the same height. A name gets the whole first line; the room and the value share the second.
 
 ## Money
 
@@ -59,20 +62,22 @@ Nothing here is done by Claude: Apple and RevenueCat only let the account holder
 2. **The purchase.** App Store Connect, the app, Monetization, In-App Purchases: one Non-Consumable, product id `com.gamequarry.homeinventory.pro`, $5.99, display name "Roomfile Pro".
 3. **RevenueCat.** A project for the app with an App Store app for the bundle id; import the product; an entitlement named exactly `home_inventory_pro` with the product attached; and a current offering whose Lifetime package is that product (the app reads the current offering to find the product and its local price).
 4. **The key.** Give Claude the public App Store SDK key (it starts with `appl_`; it ships inside the app and is not a secret). It goes in `src/pro/config.ts`. Never a secret key.
-5. **A build.** Real purchases can't run in Expo Go: they need a development build or a TestFlight build, made with EAS (`npx eas-cli@latest build --platform ios`; it asks to sign in to an Expo account and the Apple developer account the first time). The exact steps are in Expo's own guide, https://docs.expo.dev/eas/index.md, which could not be read from the workspace, so follow the guide rather than this line. `npm run check:release` must pass first.
+5. **A build.** Real purchases can't run in Expo Go: they need a TestFlight build. The repo makes one on GitHub (README.md, "Install it as an app (TestFlight)"): Actions > "iOS app build" > Run workflow, flavor `release`, which is refused until `npm run check:release` passes. No Expo account or Mac is needed.
 6. **The listing.** Paste the text, the two links and the privacy answers from `store/home-inventory/listing.json`. Read the privacy policy once before submitting: https://gamequarryllc.github.io/game-studio/apps/privacy/
 
 ## What needs a phone, and what needs more than Expo Go
 
 **Works in Expo Go (by design; none of it has run on a real phone yet):** the camera and photo library (`expo-image-picker`), resizing photos (`expo-image-manipulator`), the PDF (`expo-print`), the share sheet (`expo-sharing`), picking a backup file (`expo-document-picker`), the date picker, SF Symbols (`expo-symbols`), haptics, the system tab bar (`expo-router/native-tabs`), file storage (`expo-file-system`).
 
-**Needs a development or TestFlight build:** buying and restoring Pro (`react-native-purchases`). The module is only loaded when a store key is set, so Expo Go never touches it. Until then the Pro screen's button explains that purchases are off in this build, and "Pretend Pro is bought" in Settings shows the unlocked app.
+**Needs a TestFlight build:** buying and restoring Pro (`react-native-purchases`). The module is only loaded when a store key is set, so Expo Go never touches it. Until then the Pro screen's button explains that purchases are off in this build, and "Pretend Pro is bought" in Settings shows the unlocked app.
+
+**The iPhone build** (`tools/ios_app_build.sh` and `.github/workflows/ios-app.yml` at the top of the repo): the Xcode project is not kept in the repo; `expo prebuild` writes it from `app.json` each time. `app.json` carries the app's privacy manifest (the reasons its native libraries give for the system calls Apple asks about) and turns off the microphone permission text the photo picker would otherwise add. `app.config.js` lets a build set the version and build number. Two flavors: `playtest` sets `EXPO_PUBLIC_PLAYTEST=1`, which leaves the Developer section in a TestFlight build; `release` is the store build and never has it.
 
 **Different on the web preview:** no PDF and no share sheet (the report opens in a new tab and files download; a note under the Report buttons says so, on the web only), Material symbols stand in for SF Symbols, the browser's date field stands in for the iPhone's, and the tab bar, action sheets and alerts are drawn to match the system's. Each of these sits behind a `.web.ts` or `.web.tsx` twin.
 
 ## QA
 
-**Unit tests** (`npm test`, 75): the document parser and its repairs, rooms and items, totals, gaps, search, filters and sorting, money parsing and formatting, dates, the report's contents and escaping, the spreadsheet, the backup file round trip, the free limit, and one test for every bug below.
+**Unit tests** (`npm test`, 76): the document parser and its repairs, rooms and items, totals, gaps, search, filters and sorting, money parsing and formatting, dates, the report's contents and escaping, the spreadsheet, the backup file round trip, the free limit, and one test for every bug below.
 
 **The browser run** (`node e2e/run.cjs`, 20 steps, about 75 seconds): a fresh install through the welcome screens; the empty states; a form that refuses an empty name and bad amounts; an item with every field, a photo and a receipt; editing, the largest amount the app holds, cancel asking before it discards; a very long name; rooms added, renamed, reordered, given a new symbol and deleted with and without moving their things; search, the three filters, sorting; deleting an item; the report (every item, photo and receipt present), the spreadsheet, the backup; a reload and deep links; erase everything; a restore, including a file that is not a backup; the free limit at exactly 25 and Pro on and off; the 48-item sample home and a currency change; a 650-item home (the Items tab and the report each open in under half a second); then dark mode, a small phone and a large phone, each restoring the backup and visiting every main screen. It fails on any console error or anything wider than the screen.
 
@@ -104,12 +109,27 @@ Nothing here is done by Claude: Apple and RevenueCat only let the account holder
 
 The critic also asked for the dark folder to be less muddy: it is a little warmer now.
 
+**Critic review 2 (2026-11-11), on the fixed screens: almost.** "The design has a point of view... What remains is a handful of finishing problems, mostly in dark mode, empty states and consistency. I found no exclamation marks, no stray Title Case and no filler copy." Its ten findings:
+
+1. *(must)* *The dark folder is a muddy olive.* Now a warm brown-grey with a lighter tab and cream figures.
+2. *(must)* *The empty Rooms screen stacks two empty states.* The prompt and the button are inside the folder; the white card is gone.
+3. *(must)* *Item rows of uneven height.* Every row is the same: the name on the first line, the room and the value on the second, no chevron. (Review 1 asked for two-line names; this gives a name the full width instead.)
+4. *Money precision changes between screens; the value card on an item is heavy.* Whole amounts in the app, cents in the PDF; the item's value is a serif line under its title, with "Cost to replace" or "The price you paid" beneath it.
+5. *On a 375-point phone the example folder lost a meter and the privacy line fell off the screen.* A short screen gets tighter spacing and a smaller headline, and the example's counts are short enough for both meters to share a row. A first attempt loosened the fit measure instead and squeezed the labels until they were cut off: the browser run now checks that neither a label nor a count is truncated.
+6. *"0 items found" above "No results".* The count line is hidden when nothing is found.
+7. *"No subscription" twice on the Pro screen; a mint button in dark mode.* Said once; filled buttons are brand green with white text in both modes.
+8. *"Move up" is not how iOS reorders.* Not done: dragging needs a gesture library the app does not have yet (below).
+9. *Backup and restore belong in Settings.* Not done, on purpose for now: the Report tab is "getting things out of the app" (report, spreadsheet, backup). The owner's call after using it.
+10. *"Not recorded" down the PDF's Purchase column; a stock-looking icon.* A quiet dash in empty cells; the icon's folder is a tenth larger with a sharper roof. It stays flat (review 1 asked for no gradient, review 2 for a soft one).
+
 ## Known gaps and polish work
 
 - **Nothing has run on a real iPhone.** The first Expo Go run is the real test of the camera, the PDF, the share sheet, the date picker, the tab bar and the splash screen. Expect a few fixes.
 - **Page numbers in the iPhone's PDF.** The foot is written as page-margin text, which the web preview prints and WebKit (which makes the PDF on the phone) has not supported. If it is missing on the phone, the fix is a native header and footer, or laying the pages out by hand.
-- **Review 1's fixes have not been seen by a critic.** A second pass on fresh screenshots is the next block's job, after the owner's feedback.
-- **Reordering rooms** is "Move up" and "Move down" in the room's menu. Dragging in the Rooms list would be better.
+- **The TestFlight upload has not run.** The unsigned half of the iPhone build passed on GitHub on 2026-11-11 (the first time the native code compiled and linked); signing and uploading need the owner's four secrets, so the first real run may need a fix.
+- **Reordering rooms** is "Move up" and "Move down" in the room's menu. Both critics asked for dragging in the Rooms list; that needs a gesture library and is the first polish job after the owner's test.
+- **Where backup lives** (Report tab or Settings) is an open question for the owner (review 2, finding 9).
+- **Store screenshots** should use believable made-up names, not "Sample household / Example Mutual / HO-0000000".
 - **The web preview's note and the Developer section** show in App Store-style screenshots taken from the browser run. Store screenshots must be shot with both hidden.
 - **VoiceOver** labels are on the controls but have not been listened to on a phone.
 - **iPad** is off (`supportsTablet: false`): the layout is a phone's.

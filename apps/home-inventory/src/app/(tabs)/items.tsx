@@ -12,7 +12,7 @@ import { useDoc } from '@/state/store';
 import { choose } from '@/ui/dialogs';
 import { Icon } from '@/ui/Icon';
 import { Button, Chip, EmptyState, RoundButton, Thumb } from '@/ui/kit';
-import { HAIRLINE, NO_ORPHAN, NO_OUTLINE, TAB_BAR_SPACE, radius, space, type, useTheme } from '@/ui/theme';
+import { HAIRLINE, NO_OUTLINE, TAB_BAR_SPACE, radius, space, type, useTheme } from '@/ui/theme';
 
 const FILTERS: ItemFilter[] = ['all', 'no-photo', 'no-value', 'no-serial'];
 const SORT_LABELS: Record<ItemSort, string> = { recent: 'Newest first', value: 'Most valuable first', name: 'Name, A to Z' };
@@ -89,7 +89,7 @@ export default function ItemsTab() {
               <Chip key={f} testID={`filter-${f}`} label={labels[f]} count={f === 'all' ? undefined : counts[f]} selected={filter === f} onPress={() => setFilter(f)} />
             ))}
           </ScrollView>
-          <View style={styles.meta}>
+          <View style={[styles.meta, items.length === 0 ? { display: 'none' } : null]}>
             <Text testID="items-count" style={[type.footnote, { color: c.ink2, flex: 1 }]}>
               {query || filter !== 'all' ? `${plural(items.length, 'item')} found` : plural(items.length, 'item')}
             </Text>
@@ -138,18 +138,19 @@ export default function ItemsTab() {
         ]}>
         <Thumb photoId={item.photos[0]?.id} size={46} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[type.body, NO_ORPHAN, { color: c.ink }]} numberOfLines={2} lineBreakStrategyIOS="push-out">
+          <Text style={[type.body, { color: c.ink }]} numberOfLines={1}>
             {item.name}
           </Text>
-          <Text style={[type.footnote, { color: c.ink2 }]} numberOfLines={1}>
-            {roomNames.get(item.roomId) ?? ''}
-            {item.quantity > 1 ? ` · ${item.quantity} of them` : ''}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.s, marginTop: 1 }}>
+            <Text style={[type.footnote, { color: c.ink2, flex: 1 }]} numberOfLines={1}>
+              {roomNames.get(item.roomId) ?? ''}
+              {item.quantity > 1 ? ` · ${item.quantity} of them` : ''}
+            </Text>
+            <Text style={[type.subhead, type.tabular, { color: hasValue(item) ? c.ink : c.amber }]} numberOfLines={1}>
+              {hasValue(item) ? formatMoney(itemTotalCents(item), currency, { whole: true }) : 'No value'}
+            </Text>
+          </View>
         </View>
-        <Text style={[type.callout, type.tabular, { color: hasValue(item) ? c.ink : c.amber }]}>
-          {hasValue(item) ? formatMoney(itemTotalCents(item), currency, { whole: true }) : 'No value'}
-        </Text>
-        <Icon name="chevron" size={13} color={c.ink3} />
       </Pressable>
     );
   };
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
     gap: space.m,
     marginHorizontal: space.xl,
     paddingHorizontal: space.m,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderLeftWidth: HAIRLINE,
     borderRightWidth: HAIRLINE,
   },
