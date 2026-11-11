@@ -1,5 +1,5 @@
 {
-  "_status": "draft 2026-11-11. The name has not been checked against the App Store (its search could not be reached from the workspace): App Store Connect says whether it is free when the app record is created. Screenshots come from the app's browser run once the owner has tried it on a phone.",
+  "_status": "draft 2026-11-11. Apple accepted the name when the app record was created on 2026-11-11. Screenshots come from the app's browser run once the owner has tried it on a phone.",
   "kind": "app",
   "bundle_id": "com.gamequarry.plainproof",
   "name": "Plainproof: Home Inventory",

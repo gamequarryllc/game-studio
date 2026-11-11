@@ -2,7 +2,9 @@
 
 Kept current after every finished item, so a run that is cut off can be picked up from here.
 
-## Status: ready to test (2026-11-11)
+## Status: in TestFlight, waiting for the owner's first run on a phone (2026-11-11)
+
+**Build 1.0.0 (14), playtest flavor, was signed on GitHub and uploaded to TestFlight on 2026-11-11** ("iOS app build", run 43098533628). The app has its identifier (`com.gamequarry.plainproof`) and its App Store Connect record ("Plainproof: Home Inventory"; Apple accepted the name), and an internal testing group, "Me", with automatic distribution and the account holder as its one tester. The owner installs it from the TestFlight app on the iPhone once Apple has finished processing the build.
 
 The preview was built and published by CI for the first time on 2026-11-11 (the build and the Pages deployment both succeeded; the live page itself cannot be opened from the workspace, as with the games).
 
@@ -19,19 +21,19 @@ The preview was built and published by CI for the first time on 2026-11-11 (the 
 - Screenshot review and critic review 1; fixes for both (list in NOTES.md, "QA").
 - App icon, splash mark (light and dark) and favicon, drawn as SVG in `art/`.
 - Critic review 2 on the fixed screens, and its fixes: a warm dark folder, one empty state on Rooms, item rows of one height, whole amounts in the app, a tighter welcome screen on short phones, dashes in the report's empty cells, a larger icon with a sharper roof.
-- The iPhone build: `.github/workflows/ios-app.yml` and `tools/ios_app_build.sh` (`check` proven on GitHub; `testflight` written, not yet run), a privacy manifest and no unused microphone text in `app.json`, the version and build number set by the build, and a `playtest` flavor that keeps the Developer section in a TestFlight build.
+- The iPhone build: `.github/workflows/ios-app.yml` and `tools/ios_app_build.sh` (`check` and `testflight` both proven on GitHub: the first signed upload was build 14 on 2026-11-11), a privacy manifest and no unused microphone text in `app.json`, the version and build number set by the build, and a `playtest` flavor that keeps the Developer section in a TestFlight build.
 - CI: the web workflow lints, typechecks, tests and exports every app in `apps/` and publishes the preview at `/apps/<slug>/`; the site page has an Apps section; a reloaded screen inside a preview comes back through the site's `404.html`.
 - Privacy policy and support pages for the apps on the site (`/apps/privacy/`, `/apps/support/`), a draft store listing (`store/plainproof/listing.json`) and `tools/store_check.py` rules for apps.
 - README with the Expo Go steps; NOTES.md with design, art direction, QA, what needs a phone and the going-live steps.
 
 ## In progress
 
-- Nothing. Waiting for the owner: either a first run in Expo Go (README, "Run it on your iPhone"), or the one-time Apple steps for a TestFlight build (README, "Install it as an app (TestFlight)").
+- Waiting for the owner's first run on the iPhone from TestFlight, and his list of what is wrong. The work is in the owner's Plainproof conversation (STUDIO.md, block log): the daily backstop leaves this app alone.
 
 ## Next (after the owner's feedback, which comes first)
 
 1. Whatever the owner finds on the phone. Everything native has only run in a browser so far (list below).
-2. The first real `testflight` run of the iPhone build, once the owner's secrets, bundle id and app record exist. It has never run; expect a fix or two to the signing step in `tools/ios_app_build.sh`.
+2. Done 2026-11-11: the first real `testflight` run. The first try (under the old id) built and archived, then stopped at "Error Downloading App Information" because the app had no identifier or app record with Apple; with both in place the next run signed and uploaded with no change to `tools/ios_app_build.sh`. A new build for the phone is one run of the workflow: app `plainproof`, mode `testflight`, flavor `playtest`.
 3. Polish left from the two reviews: drag to reorder rooms (needs a gesture library); page numbers in the iPhone's PDF; whether backup lives on the Report tab or in Settings (the owner's call). NOTES.md, "Known gaps".
 4. App Store screenshots from the browser run once the look is settled, with believable made-up names and the web-only note and Developer section hidden.
 

@@ -51,14 +51,14 @@ The whole design follows from one fact about the job: people do it once, in an a
 - **Free:** the first 25 items, with every feature. Nothing already added is ever locked: at the limit, editing, the report and backups all keep working, and only adding stops.
 - **Plainproof Pro:** one payment, $5.99 (draft), removes the limit. Non-consumable `com.gamequarry.plainproof.pro`, RevenueCat entitlement `plainproof_pro`. No subscription, no ads.
 - **Why these numbers** (research/market.md, "Home inventory", 2026-11-11): the pay-once apps in this category sit at $5.99 and $6.99, one of them with the same 25-item free tier; the subscription apps charge about $35 to $80 a year, and recurring fees for a set-it-up-once tool are the complaint that comes up most in their reviews. 25 items is enough to see the whole app work on one room and not enough to finish a home.
-- **Store name:** "Plainproof: Home Inventory", subtitle "Belongings list for insurance" (`store/plainproof/listing.json`). **The name has not been checked against the App Store**: its search could not be reached from the workspace. App Store Connect says whether it is free when the app record is created; three alternatives are in the listing.
+- **Store name:** "Plainproof: Home Inventory", subtitle "Belongings list for insurance" (`store/plainproof/listing.json`). **Apple accepted the name** when the app record was created on 2026-11-11, so it is free on the App Store. A web search the same day found no app called Plainproof; that was a search, not a trademark check.
 - **Privacy label:** the app list was planned as "Data Not Collected". RevenueCat's own guide says an app that uses it must declare Purchase History, because RevenueCat keeps the purchase record. The honest draft is "Data not linked to you: Purchases", everything else not collected (`privacy_label` in the listing). The owner decides, and should give this app whatever the reference app's listing already declares.
 
 ## Going live: the owner's steps
 
 Nothing here is done by Claude: Apple and RevenueCat only let the account holder do it. The Paid Apps agreement and the `SUPPORT_EMAIL` variable are shared with the games (store/README.md).
 
-1. **Bundle id and app record.** Register `com.gamequarry.plainproof` (developer.apple.com, Identifiers) and create the app in App Store Connect with the name from the listing. If Apple says the name is taken, try the alternatives in the listing.
+1. **Bundle id and app record.** Done 2026-11-11: `com.gamequarry.plainproof` is registered and the app "Plainproof: Home Inventory" exists in App Store Connect, with an internal TestFlight group ("Me", automatic distribution).
 2. **The purchase.** App Store Connect, the app, Monetization, In-App Purchases: one Non-Consumable, product id `com.gamequarry.plainproof.pro`, $5.99, display name "Plainproof Pro".
 3. **RevenueCat.** A project for the app with an App Store app for the bundle id; import the product; an entitlement named exactly `plainproof_pro` with the product attached; and a current offering whose Lifetime package is that product (the app reads the current offering to find the product and its local price).
 4. **The key.** Give Claude the public App Store SDK key (it starts with `appl_`; it ships inside the app and is not a secret). It goes in `src/pro/config.ts`. Never a secret key.
@@ -126,11 +126,11 @@ The critic also asked for the dark folder to be less muddy: it is a little warme
 
 - **Nothing has run on a real iPhone.** The first Expo Go run is the real test of the camera, the PDF, the share sheet, the date picker, the tab bar and the splash screen. Expect a few fixes.
 - **Page numbers in the iPhone's PDF.** The foot is written as page-margin text, which the web preview prints and WebKit (which makes the PDF on the phone) has not supported. If it is missing on the phone, the fix is a native header and footer, or laying the pages out by hand.
-- **The TestFlight upload has not run.** The unsigned half of the iPhone build passed on GitHub on 2026-11-11 (the first time the native code compiled and linked); signing and uploading need the owner's four secrets, so the first real run may need a fix.
+- **The TestFlight upload works** (first signed upload: build 1.0.0 (14), playtest, 2026-11-11). Only the playtest flavor has been uploaded; the first `release` upload waits for the store key.
 - **Reordering rooms** is "Move up" and "Move down" in the room's menu. Both critics asked for dragging in the Rooms list; that needs a gesture library and is the first polish job after the owner's test.
 - **Where backup lives** (Report tab or Settings) is an open question for the owner (review 2, finding 9).
 - **Store screenshots** should use believable made-up names, not "Sample household / Example Mutual / HO-0000000".
 - **The web preview's note and the Developer section** show in App Store-style screenshots taken from the browser run. Store screenshots must be shot with both hidden.
 - **VoiceOver** labels are on the controls but have not been listened to on a phone.
 - **iPad** is off (`supportsTablet: false`): the layout is a phone's.
-- **App Store name** not checked (see "Money").
+- **App Store name** accepted by Apple (see "Money").
