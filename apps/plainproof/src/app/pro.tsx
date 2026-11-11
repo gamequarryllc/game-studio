@@ -2,11 +2,12 @@ import { Stack, useRouter } from 'expo-router';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { totalItems } from '@/domain/library';
 import { FREE_ITEM_LIMIT } from '@/domain/limits';
 import { success } from '@/platform/haptics';
 import { EXPECTED_PRICE } from '@/pro/config';
 import { DEV_TOOLS, pro, usePro } from '@/pro/pro';
-import { useDoc } from '@/state/store';
+import { useLibrary } from '@/state/store';
 import { notify } from '@/ui/dialogs';
 import { Icon } from '@/ui/Icon';
 import { BarButton, Button } from '@/ui/kit';
@@ -14,6 +15,7 @@ import { HAIRLINE, space, type, useTheme } from '@/ui/theme';
 
 const POINTS = [
   'As many items as your home holds',
+  'More than one place: a rental, an office, a storage unit',
   'Pay once. It is yours for good, with no subscription',
   'Still no account, and nothing leaves your iPhone',
 ];
@@ -28,10 +30,10 @@ export default function ProScreen() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const doc = useDoc();
+  const held = totalItems(useLibrary());
   const state = usePro();
-  const used = Math.min(doc.items.length, FREE_ITEM_LIMIT);
-  const full = doc.items.length >= FREE_ITEM_LIMIT;
+  const used = Math.min(held, FREE_ITEM_LIMIT);
+  const full = held >= FREE_ITEM_LIMIT;
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   const buy = async () => {

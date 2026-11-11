@@ -583,7 +583,10 @@ async function main() {
       const names = Object.keys(files).sort();
       const manifest = JSON.parse(strFromU8(files['plainproof.json']));
       assert.strictEqual(manifest.format, 'plainproof-backup');
-      assert.strictEqual(manifest.doc.items.length, 5);
+      // A backup holds every place; there is one here, with the five items.
+      assert.strictEqual(manifest.formatVersion, 2);
+      assert.strictEqual(manifest.library.places.length, 1);
+      assert.strictEqual(manifest.library.places[0].doc.items.length, 5);
       assert.strictEqual(names.filter((n) => /^photos\/[a-z0-9]+\.jpg$/.test(n)).length, 6, names.join(', '));
       assert.strictEqual(names.filter((n) => /_t\.jpg$/.test(n)).length, 6);
       assert.ok(!JSON.stringify(manifest).includes('pretend'), 'the backup carries Pro state');
@@ -752,6 +755,89 @@ async function main() {
       assert.ok(Math.abs(back.y - atRest.y) < 1, 'the folders did not go back where they were');
     });
 
+    await step('places: a second cabinet needs Pro, keeps to itself, and can be removed', async () => {
+      await h.tab('Rooms');
+      await h.tap('places');
+      await h.visible('places-screen');
+      await h.visible('place-14 Alder Lane');
+      await h.expectText('place-sum-14 Alder Lane', /^\$[\d,]+ · 4\d items$/);
+      // The free version keeps one place: the tile says Pro, and tapping it opens the Pro screen.
+      await h.visible('place-add-pro');
+      await h.shot('38-places-one');
+      await h.tap('place-add');
+      await h.visible('pro-screen');
+      assert.ok((await t('pro-screen').first().innerText()).includes('More than one place'), 'the Pro screen does not mention places');
+      await h.tap('pro-close');
+      await h.gone('pro-screen');
+      await h.tap('places-close');
+      await h.gone('places-screen');
+      await h.tab('Settings');
+      await h.tap('dev-pretend-pro');
+      await h.tab('Rooms');
+      await h.tap('places');
+      await h.visible('places-screen');
+      assert.strictEqual(await t('place-add-pro').count(), 0, 'Pro is on but the tile still says Pro');
+      // A new place: a name, a kind, and it opens with a few rooms of its own.
+      await h.tap('place-add');
+      await h.answer('Lake cabin');
+      await h.choose('Rental property');
+      await h.gone('places-screen');
+      await h.visible('rooms-screen');
+      await h.expectText('folder-label', /^lake cabin$/i);
+      await h.expectText('home-count', '4 rooms ready to fill');
+      for (const room of ['Living room', 'Kitchen', 'Bedroom', 'Bathroom']) await h.visible(`room-${room}`);
+      assert.strictEqual(await t('room-Garage').count(), 0, 'a room of the first place shows in the second');
+      await h.shot('39-rooms-second-place');
+      await h.tap('add-item');
+      await h.quickAdd('Canoe', '900');
+      await h.tap('form-save');
+      await h.visible('rooms-screen');
+      await h.expectText('home-total', '$900');
+      await h.expectText('home-count', '1 item in 4 rooms');
+      // Its things are its own: the Items tab and the search see the canoe and nothing from the first place.
+      await h.tab('Items');
+      await h.expectText('items-count', '1 item');
+      await h.fill('items-search', 'television');
+      await h.gone('items-count');
+      await h.fill('items-search', '');
+      await h.tab('Rooms');
+      // The cabinets: each with its own total, the open one marked.
+      await h.tap('places');
+      await h.visible('places-screen');
+      await h.expectText('place-sum-Lake cabin', '$900 · 1 item');
+      await h.expectText('place-sum-14 Alder Lane', /^\$[\d,]+ · 4\d items$/);
+      await h.visible('place-open-Lake cabin');
+      assert.strictEqual(await t('place-open-14 Alder Lane').count(), 0, 'two places are marked as open');
+      await h.shot('40-places-two');
+      await h.tap('place-more-Lake cabin');
+      await h.choose('Rename');
+      await h.answer('The cabin');
+      await h.visible('place-The cabin');
+      assert.strictEqual(await t('place-Lake cabin').count(), 0);
+      // Back to the first place: everything as it was left.
+      await h.tap('place-14 Alder Lane');
+      await h.gone('places-screen');
+      await h.expectText('folder-label', /^14 alder lane$/i);
+      await h.expectText('home-count', /^4\d items in 8 rooms$/);
+      await h.visible('room-Garage');
+      // Remove the second place. The last one can't be removed: its menu has no such choice.
+      await h.tap('places');
+      await h.tap('place-more-The cabin');
+      await h.choose('Delete this place');
+      assert.match(await h.dialogText(), /Delete The cabin\?.*Its 1 item and their photos will be deleted/);
+      await h.confirm();
+      await h.gone('place-The cabin');
+      await h.tap('place-more-14 Alder Lane');
+      assert.ok(!(await h.dialogText()).includes('Delete this place'), 'the last place can be deleted');
+      await h.cancel();
+      await h.tap('places-close');
+      await h.gone('places-screen');
+      await h.tab('Settings');
+      await h.tap('dev-pretend-pro');
+      await h.tab('Rooms');
+      await h.visible('free-note');
+    });
+
     await step('a very large home: 650 items stay usable', async () => {
       await h.tab('Settings');
       await h.tap('dev-pretend-pro');
@@ -788,7 +874,7 @@ async function main() {
       const [download] = await Promise.all([page.waitForEvent('download'), h.tap('backup-now')]);
       timings.heavyBackupMs = Date.now() - t0;
       const files = unzipSync(new Uint8Array(fs.readFileSync(await download.path())));
-      assert.ok(JSON.parse(strFromU8(files['plainproof.json'])).doc.items.length > 640);
+      assert.ok(JSON.parse(strFromU8(files['plainproof.json'])).library.places[0].doc.items.length > 640);
       assert.ok(timings.itemsTabMs < 4000 && timings.searchMs < 4000 && timings.heavyReportMs < 20000, JSON.stringify(timings));
     });
 

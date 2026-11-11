@@ -4,12 +4,13 @@ import { Animated, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { addRoom } from '@/domain/actions';
+import { currentPlace, placeName, totalItems } from '@/domain/library';
 import { FREE_ITEM_LIMIT, freeItemsLeft } from '@/domain/limits';
 import { formatMoney } from '@/domain/money';
 import { homeSummary, plural, roomSummaries } from '@/domain/selectors';
 import { usePro } from '@/pro/pro';
 import { openNewItem } from '@/state/nav';
-import { store, useDoc } from '@/state/store';
+import { store, useDoc, useLibrary } from '@/state/store';
 import { FolderCard } from '@/ui/FolderCard';
 import { ask } from '@/ui/dialogs';
 import { Button, Card, Divider, RoundButton, Row, SectionLabel, TabScreen } from '@/ui/kit';
@@ -25,7 +26,10 @@ export default function RoomsTab() {
   const summary = homeSummary(doc);
   const rooms = roomSummaries(doc);
   const currency = doc.settings.currency;
-  const left = freeItemsLeft(doc, isPro);
+  const library = useLibrary();
+  // The free version counts every item in every place.
+  const held = totalItems(library);
+  const left = freeItemsLeft(held, isPro);
   const insets = useSafeAreaInsets();
   const [scrollY] = useState(() => new Animated.Value(0));
 
@@ -58,10 +62,15 @@ export default function RoomsTab() {
       testID="rooms-screen"
       title="Rooms"
       scrollY={scrollY}
-      action={<RoundButton testID="add-item" icon="add" label="Add an item" onPress={() => openNewItem(router)} />}>
+      action={
+        <View style={{ flexDirection: 'row', gap: space.s }}>
+          <RoundButton testID="places" icon="cabinets" label="Places" onPress={() => router.push('/places')} />
+          <RoundButton testID="add-item" icon="add" label="Add an item" onPress={() => openNewItem(router)} />
+        </View>
+      }>
       <FolderCard
         plate
-        label={doc.profile.homeName || 'Household'}
+        label={placeName(currentPlace(library))}
         summary={summary}
         currency={currency}
         whenEmpty={
@@ -100,7 +109,7 @@ export default function RoomsTab() {
         <Text testID="free-note" style={[type.footnote, { color: c.ink2, textAlign: 'center', marginTop: space.xxl, marginHorizontal: space.xxl }]}>
           {left === 0
             ? `The free version is full at ${FREE_ITEM_LIMIT} items. `
-            : `Free version: ${doc.items.length} of ${FREE_ITEM_LIMIT} items used. `}
+            : `Free version: ${held} of ${FREE_ITEM_LIMIT} items used. `}
           <Text accessibilityRole="link" style={{ color: c.green, fontWeight: '600' }} onPress={() => router.push('/pro')}>
             See Pro
           </Text>

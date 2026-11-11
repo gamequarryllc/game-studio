@@ -15,6 +15,7 @@ import {
 } from '../backup';
 import { buildCsv, csvCell } from '../csv';
 import { DocError, emptyDoc } from '../doc';
+import { addPlace, currentDoc, libraryOf } from '../library';
 import { buildReportHtml, cssText, escapeHtml, moneyColumnEm, pageFootCss, reportFileName, reportPhotoIds } from '../report';
 import { sampleHome } from '../sample';
 import type { Doc } from '../types';
@@ -155,7 +156,7 @@ describe('backups', () => {
 
   async function makeBackup(d: Doc = doc) {
     const chunks: Uint8Array[] = [];
-    const result = await writeBackup(d, source, { now: NOW, appVersion: '0.1.0', onChunk: (c) => chunks.push(c) });
+    const result = await writeBackup(libraryOf(d), source, { now: NOW, appVersion: '0.1.0', onChunk: (c) => chunks.push(c) });
     return { bytes: concat(chunks), result };
   }
 
@@ -167,7 +168,8 @@ describe('backups', () => {
     for (let at = 0; at < bytes.length; at += chunkSize) {
       reader.push(bytes.subarray(at, at + chunkSize), at + chunkSize >= bytes.length);
     }
-    return { doc: reader.finish(), photos };
+    const library = reader.finish();
+    return { doc: currentDoc(library), library, photos };
   }
 
   it('names photo files safely', () => {
@@ -188,6 +190,32 @@ describe('backups', () => {
       expect(Array.from(back.photos['photo0001:full'])).toEqual([1, 2, 3, 4, 5]);
       expect(back.photos['rcpt00001:full']).toHaveLength(70_000);
     }
+  });
+
+  it('carries every place and the photos of each', async () => {
+    const first = libraryOf(doc);
+    const { library: two, placeId } = addPlace(first, 'Lake cabin', 'rental', NOW);
+    expect(placeId).not.toBeNull();
+    const cabin = currentDoc(two);
+    const draft = emptyDraft(cabin.rooms[0].id);
+    draft.name = 'Canoe';
+    draft.valueCents = 90000;
+    draft.photos = [{ id: 'cabinphoto1', width: 4, height: 3 }];
+    const withCanoe = { ...two, places: two.places.map((p) => (p.id === placeId ? { ...p, doc: addItem(p.doc, draft, NOW).doc } : p)) };
+    const chunks: Uint8Array[] = [];
+    const all = { ...files, 'cabinphoto1:full': new Uint8Array([4, 2]) };
+    const result = await writeBackup(
+      withCanoe,
+      { readPhoto: async (id: string, size: PhotoSize) => all[`${id}:${size}` as keyof typeof all] ?? null },
+      { now: NOW, appVersion: '0.1.0', onChunk: (c) => chunks.push(c) },
+    );
+    expect(result).toEqual({ photos: 3, missing: 0 });
+    const back = restore(concat(chunks), 4096);
+    expect(back.library.places.map((p) => p.doc.profile.homeName)).toEqual(['Fern Cottage', 'Lake cabin']);
+    expect(back.library.places[1].kind).toBe('rental');
+    expect(back.library.currentId).toBe(placeId);
+    expect(back.library.places[1].doc.items.map((i) => i.name)).toEqual(['Canoe']);
+    expect(Object.keys(back.photos)).toContain('cabinphoto1:full');
   });
 
   it('counts photos whose files have gone missing and carries on', async () => {
@@ -211,7 +239,11 @@ describe('backups', () => {
     expect(() => parseManifest(JSON.stringify({ format: 'plainproof-backup', formatVersion: 9, doc }), NOW)).toThrow(/newer version/);
     expect(() => parseManifest(JSON.stringify({ format: 'other', doc }), NOW)).toThrow(DocError);
     expect(() => parseManifest('{', NOW)).toThrow(DocError);
-    expect(parseManifest(buildManifest(doc, NOW, '0.1.0'), NOW).items).toHaveLength(2);
+    expect(currentDoc(parseManifest(buildManifest(libraryOf(doc), NOW, '0.1.0'), NOW)).items).toHaveLength(2);
+    // A backup from before places existed (format 1, one home under "doc") still restores, as one place.
+    const old = parseManifest(JSON.stringify({ format: 'plainproof-backup', formatVersion: 1, doc }), NOW);
+    expect(old.places).toHaveLength(1);
+    expect(currentDoc(old).items).toHaveLength(2);
     expect(MANIFEST_NAME).toBe('plainproof.json');
   });
 });

@@ -186,17 +186,17 @@ describe('the free limit', () => {
   it('lets the free version hold exactly the limit', () => {
     let doc = twoRooms();
     for (let i = 0; i < FREE_ITEM_LIMIT - 1; i++) doc = withItem(`Thing ${i}`, {}, doc).doc;
-    expect(canAddItem(doc, false)).toBe(true);
-    expect(freeItemsLeft(doc, false)).toBe(1);
+    expect(canAddItem(doc.items.length, false)).toBe(true);
+    expect(freeItemsLeft(doc.items.length, false)).toBe(1);
     doc = withItem('Last free thing', {}, doc).doc;
-    expect(canAddItem(doc, false)).toBe(false);
-    expect(freeItemsLeft(doc, false)).toBe(0);
-    expect(canAddItem(doc, true)).toBe(true);
-    expect(freeItemsLeft(doc, true)).toBeNull();
+    expect(canAddItem(doc.items.length, false)).toBe(false);
+    expect(freeItemsLeft(doc.items.length, false)).toBe(0);
+    expect(canAddItem(doc.items.length, true)).toBe(true);
+    expect(freeItemsLeft(doc.items.length, true)).toBeNull();
   });
 
   it('never goes negative when a restored inventory is already over the limit', () => {
-    expect(freeItemsLeft(sampleHome(NOW), false)).toBe(0);
+    expect(freeItemsLeft(sampleHome(NOW).items.length, false)).toBe(0);
   });
 });
 

@@ -4,13 +4,14 @@ import { useState } from 'react';
 import { Platform, Switch, Text, View } from 'react-native';
 
 import { setCurrency } from '@/domain/actions';
+import { mapDocs, totalItems } from '@/domain/library';
 import { FREE_ITEM_LIMIT } from '@/domain/limits';
 import { CURRENCIES } from '@/domain/money';
 import { plural } from '@/domain/selectors';
 import { success, warning } from '@/platform/haptics';
 import { DEV_TOOLS, pro, usePro } from '@/pro/pro';
 import { appVersion, eraseEverything, loadSample } from '@/state/operations';
-import { store, useDoc } from '@/state/store';
+import { store, useDoc, useLibrary } from '@/state/store';
 import { choose, confirm, notify } from '@/ui/dialogs';
 import { FormRow } from '@/ui/form';
 import { Icon } from '@/ui/Icon';
@@ -26,12 +27,14 @@ export default function SettingsTab() {
   const doc = useDoc();
   const proState = usePro();
   const [working, setWorking] = useState(false);
-  const count = doc.items.length;
+  // Every item in every place: what the free version counts, and what the sample home or an erase replaces.
+  const count = totalItems(useLibrary());
   const currency = CURRENCIES.find((k) => k.code === doc.settings.currency);
 
   const pickCurrency = async () => {
     const picked = await choose({ title: 'Currency for values', choices: CURRENCIES.map((k) => ({ key: k.code, label: `${k.name} (${k.code})` })) });
-    if (picked) store.update((d) => setCurrency(d, picked));
+    // One currency for every place.
+    if (picked) store.updateLibrary((lib) => mapDocs(lib, (d) => setCurrency(d, picked)));
   };
 
   const restorePurchase = async () => {

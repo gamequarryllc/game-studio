@@ -1,14 +1,18 @@
 import { Unzip, UnzipInflate, Zip, ZipDeflate, ZipPassThrough, strFromU8, strToU8 } from 'fflate';
 
-import { DocError, parseDoc, photoIdsInUse } from './doc';
+import { DocError, parseDoc } from './doc';
 import { isSafeId } from './ids';
-import type { Doc } from './types';
+import { libraryOf, libraryPhotoIds, parseLibrary, type Library } from './library';
 
-// A backup is one .zip: the document as JSON plus every photo file. It is made
-// and read in pieces so a large inventory never has to sit in memory at once.
+// A backup is one .zip: everything the app keeps as JSON (every place and its
+// inventory) plus every photo file. It is made and read in pieces so a large
+// inventory never has to sit in memory at once.
+//
+// Format 1 held one home's document under "doc". Format 2 holds the library
+// under "library". Both are read; only format 2 is written.
 
 export const BACKUP_FORMAT = 'plainproof-backup';
-export const BACKUP_FORMAT_VERSION = 1;
+export const BACKUP_FORMAT_VERSION = 2;
 export const MANIFEST_NAME = 'plainproof.json';
 
 export type PhotoSize = 'full' | 'thumb';
@@ -31,31 +35,35 @@ export function backupFileName(now: number): string {
   return `Plainproof-backup-${stamp}.zip`;
 }
 
-export function buildManifest(doc: Doc, now: number, appVersion: string): string {
+export function buildManifest(library: Library, now: number, appVersion: string): string {
   return JSON.stringify({
     format: BACKUP_FORMAT,
     formatVersion: BACKUP_FORMAT_VERSION,
     exportedAt: now,
     appVersion,
-    doc,
+    library,
   });
 }
 
-export function parseManifest(text: string, now: number): Doc {
+export function parseManifest(text: string, now: number): Library {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
     throw new DocError('This file is not a Plainproof backup.', 'not-a-document');
   }
-  const m = raw as { format?: unknown; formatVersion?: unknown; doc?: unknown } | null;
+  const m = raw as { format?: unknown; formatVersion?: unknown; doc?: unknown; library?: unknown } | null;
   if (!m || typeof m !== 'object' || m.format !== BACKUP_FORMAT) {
     throw new DocError('This file is not a Plainproof backup.', 'not-a-document');
   }
   if (typeof m.formatVersion === 'number' && m.formatVersion > BACKUP_FORMAT_VERSION) {
     throw new DocError('This backup was made by a newer version of Plainproof.', 'too-new');
   }
-  return parseDoc(m.doc, now);
+  // A backup from before places existed holds one home.
+  if (m.library === undefined) return libraryOf(parseDoc(m.doc, now));
+  const library = m.library as { format?: unknown } | null;
+  if (!library || typeof library !== 'object') throw new DocError('This file is not a Plainproof backup.', 'not-a-document');
+  return parseLibrary({ ...library, format: 'plainproof-library' }, now);
 }
 
 export interface ZipWriter {
@@ -141,15 +149,15 @@ export interface BackupSource {
  * the caller can put each piece on disk before the next one is read.
  */
 export async function writeBackup(
-  doc: Doc,
+  library: Library,
   source: BackupSource,
   opts: { now: number; appVersion: string; onChunk: (chunk: Uint8Array) => void; flush?: () => Promise<void> },
 ): Promise<{ photos: number; missing: number }> {
   const writer = createZipWriter(opts.onChunk);
-  writer.add(MANIFEST_NAME, textToBytes(buildManifest(doc, opts.now, opts.appVersion)), true);
+  writer.add(MANIFEST_NAME, textToBytes(buildManifest(library, opts.now, opts.appVersion)), true);
   let photos = 0;
   let missing = 0;
-  for (const id of photoIdsInUse(doc)) {
+  for (const id of libraryPhotoIds(library)) {
     const full = await source.readPhoto(id, 'full');
     if (!full) {
       missing += 1;
@@ -167,7 +175,7 @@ export async function writeBackup(
 }
 
 export interface RestoreResult {
-  doc: Doc;
+  library: Library;
   /** Photo files found in the backup that the document uses. */
   photos: { id: string; size: PhotoSize; data: Uint8Array }[];
 }
@@ -175,12 +183,12 @@ export interface RestoreResult {
 /**
  * Collects what a backup holds. `onPhoto` is called for each photo the
  * document will need, as it is read, so photos can go straight to disk.
- * The document itself is only returned at the end, once everything parsed.
+ * The library itself is only returned at the end, once everything parsed.
  */
 export function createBackupReader(
   now: number,
   onPhoto: (id: string, size: PhotoSize, data: Uint8Array) => void,
-): { push(chunk: Uint8Array, final: boolean): void; finish(): Doc } {
+): { push(chunk: Uint8Array, final: boolean): void; finish(): Library } {
   let manifest: string | null = null;
   const reader = createZipReader((name, data) => {
     if (name === MANIFEST_NAME) {

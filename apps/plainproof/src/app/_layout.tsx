@@ -75,6 +75,7 @@ export default function RootLayout() {
             <Stack.Screen name="item/[id]" options={{ title: '' }} />
             <Stack.Screen name="item-form" options={{ presentation: 'modal', title: 'New item' }} />
             <Stack.Screen name="pro" options={{ presentation: 'modal', title: '' }} />
+            <Stack.Screen name="places" options={{ presentation: 'modal', title: 'Places' }} />
             <Stack.Screen name="photo" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade', title: 'Photo' }} />
             <Stack.Screen name="+not-found" options={{ title: '' }} />
           </Stack>

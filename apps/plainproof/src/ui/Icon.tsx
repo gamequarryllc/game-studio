@@ -40,6 +40,10 @@ const ICONS = {
   warning: { ios: 'exclamationmark.triangle', web: 'warning' },
   info: { ios: 'info.circle', web: 'info' },
   key: { ios: 'key.fill', web: 'key' },
+  // Places
+  cabinets: { ios: 'tray.2.fill', web: 'dns' },
+  building: { ios: 'building.2.fill', web: 'apartment' },
+  pin: { ios: 'mappin.and.ellipse', web: 'location_on' },
   tabRooms: { ios: 'house', web: 'home' },
   tabItems: { ios: 'list.bullet.rectangle', web: 'list_alt' },
   tabReport: { ios: 'doc.text', web: 'description' },

@@ -160,7 +160,7 @@ export default function ItemForm() {
       store.update((d, now) => updateItem(d, editing.id, finished, now));
       void dropPhotos(removed);
     } else {
-      if (!canAddItem(store.get(), pro.snapshot().isPro)) {
+      if (!canAddItem(store.itemCount(), pro.snapshot().isPro)) {
         router.replace('/pro');
         return;
       }
@@ -169,7 +169,7 @@ export default function ItemForm() {
     }
     imported.current = [];
     success();
-    if (another && canAddItem(store.get(), pro.snapshot().isPro)) {
+    if (another && canAddItem(store.itemCount(), pro.snapshot().isPro)) {
       // The next one starts in the same room; everything else starts blank.
       setDraft(emptyDraft(finished.roomId));
       setValueText('');

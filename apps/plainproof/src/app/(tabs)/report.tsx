@@ -10,7 +10,8 @@ import { LIMITS, type Profile } from '@/domain/types';
 import { success } from '@/platform/haptics';
 import { MAKES_PDF } from '@/platform/exporter';
 import { backUp, exportSpreadsheet, makeReport, restoreFromBackup } from '@/state/operations';
-import { store, useDoc } from '@/state/store';
+import { totalItems } from '@/domain/library';
+import { store, useDoc, useLibrary } from '@/state/store';
 import { confirm, notify } from '@/ui/dialogs';
 import { FormRow, TextRow } from '@/ui/form';
 import { Button, Card, Divider, Footnote, Notice, Row, SectionLabel, TabScreen } from '@/ui/kit';
@@ -78,6 +79,8 @@ export default function ReportTab() {
   const [busy, setBusy] = useState<'report' | 'csv' | 'backup' | 'restore' | null>(null);
   const [now] = useState(() => Date.now());
   const count = doc.items.length;
+  // A restore replaces every place, so it is weighed against everything held, not only this place.
+  const held = totalItems(useLibrary());
 
   const setProfile = (patch: Partial<Profile>) => store.update((d) => updateProfile(d, patch));
 
@@ -121,15 +124,18 @@ export default function ReportTab() {
           confirm({
             title: 'Replace what’s on this iPhone?',
             message:
-              `The backup holds ${plural(found.items, 'item')} in ${plural(found.rooms, 'room')}. ` +
-              (count > 0 ? `It will replace the ${plural(count, 'item')} here now.` : 'This inventory is empty, so nothing is lost.'),
+              `The backup holds ${plural(found.items, 'item')} in ${plural(found.rooms, 'room')}${found.places > 1 ? ` across ${found.places} places` : ''}. ` +
+              (held > 0 ? `It will replace the ${plural(held, 'item')} here now.` : 'This inventory is empty, so nothing is lost.'),
             confirmLabel: 'Replace',
-            destructive: count > 0,
+            destructive: held > 0,
           }),
         );
         if (outcome.kind === 'restored') {
           success();
-          await notify('Backup restored', `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}, with ${plural(outcome.photos, 'photo')}.`);
+          await notify(
+            'Backup restored',
+            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ${plural(outcome.photos, 'photo')}.`,
+          );
         }
       },
       'That backup could not be restored',
