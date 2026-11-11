@@ -75,7 +75,7 @@
     },
     {
       "slug": "screen-battery",
-      "title": "Screen time battery",
+      "title": "Plainlimit",
       "color": "#4ac56e",
       "tagline": "A six-cell battery on the home screen that drains as the day's screen time is used, then recharges at a time you set.",
       "status": "building",

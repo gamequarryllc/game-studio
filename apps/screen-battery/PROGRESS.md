@@ -1,4 +1,4 @@
-# Screen Battery: progress
+# Plainlimit: progress
 
 Kept current after every finished item, so a run that is cut off can be picked up from here.
 

@@ -1,4 +1,4 @@
-# Screen Battery: notes
+# Plainlimit: notes
 
 Working name. Slug `screen-battery`, bundle id `com.gamequarry.screenbattery`.
 
@@ -87,3 +87,16 @@ None of this can be built or tried in Expo Go or a browser, and none of it can b
 - Bugs found by looking at the screenshots, each now a test: the recharge stepper ran out of its card on a 320 pt phone (it drops to its own line); the three choices did not tell a screen reader which was chosen in the browser.
 - After the second look pass: 38 unit tests (the accent on the dark ground, the countdown wording), the same 16 browser steps clean, screenshots taken once the movement has settled. One bug from the screenshots: the battery's casing changed colour at once while the ground behind it eased, so the two disagreed for half a second (the casing now eases with it).
 - Not done yet: a fresh-eyes critic on the screenshots; anything on a real iPhone.
+
+## Name
+
+The owner chose **Plainlimit** on 2026-11-11, as a sibling to Plainworth ("Plain" plus the thing the app is about). The folder, the URL scheme and the bundle id still use the working name `screen-battery` / `screenbattery`; nothing is registered with Apple yet, so they can still change.
+
+Draft for the store fields, not final:
+
+- Name (30): `Plainlimit Screen Time Battery` (30 exactly; with a colon it is 31, one too long). Fallback: `Plainlimit: Screen Time Widget` (30).
+- Subtitle (30): `Scroll less, see your day left` (30).
+- Words for the hidden keyword field, none repeated from the two above: reduce, phone, usage, blocker, focus, detox, doomscroll, habit, lock.
+- "Drained" stays as the word for the empty battery in the app and in the screenshots.
+
+A web search on 2026-11-11 found no app called Plainlimit. Nearby names on the App Store: several apps called "Limit", and a screen-time app once called "Plain Mode". That was a search, not a trademark check.

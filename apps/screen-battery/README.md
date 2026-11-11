@@ -1,8 +1,8 @@
-# Screen Battery: your screen time as a battery
+# Plainlimit: your screen time as a battery
 
 A six-cell battery for the home screen. It drains as the day's screen time is used, turns from green to red on the way, and recharges at a time you set. No account and no server: everything stays on the phone.
 
-"Screen Battery" is a working name. Design notes, what is real and what is still pretend, and what is left are in [NOTES.md](NOTES.md) and [PROGRESS.md](PROGRESS.md).
+The owner chose the name on 2026-11-11; the folder and bundle id still use the working name `screen-battery`. Design notes, what is real and what is still pretend, and what is left are in [NOTES.md](NOTES.md) and [PROGRESS.md](PROGRESS.md).
 
 **Where it stands:** the app's own screens and all of its logic are built and tested. The parts that belong to Apple's Screen Time (reading real use, the home screen widget, the warning and empty screens over other apps, the lock) are not wired in yet. They need Apple's approval and a build made for a real iPhone; NOTES.md has the list. Until then the battery runs on pretend use.
 
