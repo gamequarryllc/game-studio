@@ -1,6 +1,20 @@
 import { wordFor } from '../battery';
 import { checkpointsFor } from '../checkpoints';
-import { ACTIVITY, ALLOWED_ID, COUNTED_ID, TOPUP_ACTIVITY, TOPUP_EVENT, WIDGET_PLAN_KEY, clockOf, monitorPlan, puzzleNotice, rgbOf, spanOf } from '../monitorPlan';
+import {
+  ACTIVITY,
+  ALLOWED_ID,
+  COUNTED_ID,
+  TOPUP_ACTIVITY,
+  TOPUP_EVENT,
+  WIDGET_PLAN_KEY,
+  clockOf,
+  countStart,
+  includesEarlierUse,
+  monitorPlan,
+  puzzleNotice,
+  rgbOf,
+  spanOf,
+} from '../monitorPlan';
 import { DEFAULT_SETTINGS } from '../settings';
 import { toneForCells } from '../tone';
 import type { Settings } from '../types';
@@ -75,6 +89,23 @@ describe('the plan handed to the phone', () => {
     expect(monitorPlan(settings({ countMode: 'timeWasters' })).coverEverything).toBe(false);
   });
 
+  test('the day counting is turned on starts from that moment; later days start at the recharge', () => {
+    const recharge = new Date(2026, 10, 11, 6, 0);
+    const turnedOn = new Date(2026, 10, 11, 16, 30).getTime();
+    // Turned on this afternoon: do not ask for the morning's use, and nothing can arrive before 16:30.
+    expect(includesEarlierUse(recharge, turnedOn)).toBe(false);
+    expect(countStart(recharge, turnedOn).getTime()).toBe(turnedOn);
+    // The next morning's recharge: counting was already on, so the whole day counts.
+    const next = new Date(2026, 10, 12, 6, 0);
+    expect(includesEarlierUse(next, turnedOn)).toBe(true);
+    expect(countStart(next, turnedOn).getTime()).toBe(next.getTime());
+    // Never recorded: behave as if it had always been on.
+    expect(includesEarlierUse(recharge, null)).toBe(true);
+    expect(countStart(recharge, null).getTime()).toBe(recharge.getTime());
+    expect(monitorPlan(settings(), 0, turnedOn).widget.countFrom).toBe(turnedOn);
+    expect(monitorPlan(settings()).widget.countFrom).toBe(0);
+  });
+
   test('colours are whole numbers from 0 to 255', () => {
     expect(rgbOf('#FF8000')).toEqual({ red: 255, green: 128, blue: 0 });
     for (const shield of monitorPlan(settings()).shields) {
@@ -110,7 +141,8 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain(`"${WIDGET_PLAN_KEY}"`);
     expect(swift).toContain('reached("empty"');
     expect(swift).toContain('reached("cell-\\(emptied)"');
-    expect(Object.keys(monitorPlan(settings()).widget).sort()).toEqual(['goalMinutes', 'rechargeMinute']);
+    expect(Object.keys(monitorPlan(settings()).widget).sort()).toEqual(['countFrom', 'goalMinutes', 'rechargeMinute']);
+    expect(swift).toContain('plan["countFrom"]');
     expect(swift).toContain('plan["goalMinutes"]');
     expect(swift).toContain('plan["rechargeMinute"]');
   });

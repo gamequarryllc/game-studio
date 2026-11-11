@@ -84,7 +84,8 @@ Decisions made while writing it, each of which the owner can change:
 2. **"Everything" counts every app, the always-allowed ones too.** Apple's counting has no "everything except". The always-allowed apps are only spared from being covered.
 3. **"Time-wasters" on a phone is whatever is ticked in Apple's picker.** An app cannot pre-tick Social, Games and Entertainment; the screen asks the person to. So on a phone, Time-wasters and "your own picks" are the same thing, and there is nothing left for Pro to unlock there. Pro needs a different hook (ideas: the lock screen widget, more than one top-up a day, the pinned steps and groups).
 4. **Settings lock while the battery is empty** (on a real phone only). Otherwise the way round an empty battery is to nudge the goal up.
-5. **The first day counts from the recharge time, not from setup.** The phone is asked to include the day's earlier use, so the battery can be part-drained the moment Screen Time is turned on.
+5. **The day Screen Time is turned on counts from that moment**, not from the recharge time. (The first test build did the opposite, which with a small goal emptied the battery the instant it was turned on.) From the next recharge on, the phone is asked to keep the whole day's use, so a change to the settings does not refill the battery. On that first day only, changing a setting does restart the count.
+6. **Test builds can always get out.** In a playtest build the Screen Time card has "Start the day over" (a full battery, every cover removed, counting from now) and keeps "Turn off" even while the settings are locked. Neither is in a store build.
 
 ## What is still needed
 

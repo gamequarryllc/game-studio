@@ -3,7 +3,7 @@ import { Text } from 'react-native';
 
 import { clockLabel } from '@/domain/day';
 import { askToNotify } from '@/platform/notices';
-import { SCREEN_TIME_AVAILABLE, isOn, permission } from '@/platform/screenTime';
+import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, permission } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { BigButton, Card, Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
@@ -43,6 +43,13 @@ export function ScreenTimeCard() {
         ) : (
           <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} />
         )}
+        {DEV_TOOLS ? (
+          <>
+            <Text style={[body, { color: c.ink3, marginTop: 6 }]}>Test build only: these two are not in the App Store version.</Text>
+            <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
+            {settingsLocked() ? <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} /> : null}
+          </>
+        ) : null}
       </Card>
     );
   }

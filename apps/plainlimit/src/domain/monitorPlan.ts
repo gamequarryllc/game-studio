@@ -76,7 +76,7 @@ export interface MonitorPlan {
   /** True when every app is covered (except the always-allowed); false when only the person's picks are. */
   coverEverything: boolean;
   /** For the widget. */
-  widget: { goalMinutes: number; rechargeMinute: number };
+  widget: { goalMinutes: number; rechargeMinute: number; countFrom: number };
 }
 
 export function clockOf(minuteOfDay: number): Clock {
@@ -111,7 +111,27 @@ export function puzzleNotice(topUpsSoFar: number): { title: string; body: string
   return { title: 'Earn more time', body: `Tap to solve ${plan.sums} sums for ${plan.minutes} more minutes.`, route: '/puzzle' };
 }
 
-export function monitorPlan(settings: Settings, topUpsSoFar = 0): MonitorPlan {
+/**
+ * When today's count began: the last recharge, or the moment counting was
+ * turned on (or started over) if that was later. A checkpoint for N minutes
+ * cannot honestly arrive sooner than N minutes after this.
+ */
+export function countStart(periodStart: Date, countingSince: number | null): Date {
+  if (countingSince !== null && countingSince > periodStart.getTime()) return new Date(countingSince);
+  return periodStart;
+}
+
+/**
+ * Whether the phone should be asked to include use from before now. Yes on
+ * any day that began with counting already on, so a change to the settings
+ * keeps the day's use. No on the day counting is turned on (or started over):
+ * that day starts from zero, not from whatever was used since the recharge.
+ */
+export function includesEarlierUse(periodStart: Date, countingSince: number | null): boolean {
+  return countingSince === null || countingSince <= periodStart.getTime();
+}
+
+export function monitorPlan(settings: Settings, topUpsSoFar = 0, countingSince: number | null = null): MonitorPlan {
   const events: PlanEvent[] = checkpointsFor(settings.goalMinutes).map((checkpoint) => {
     const actions: PlanAction[] = [];
     if (checkpoint.effect === 'warning' && checkpoint.id.startsWith('cell-')) actions.push({ kind: 'cover', shield: 'warning' });
@@ -129,6 +149,6 @@ export function monitorPlan(settings: Settings, topUpsSoFar = 0): MonitorPlan {
     events,
     shields: [shieldFor('warning', settings, topUpsSoFar), shieldFor('empty', settings, topUpsSoFar)],
     coverEverything: settings.countMode === 'everything',
-    widget: { goalMinutes: settings.goalMinutes, rechargeMinute: settings.rechargeMinute },
+    widget: { goalMinutes: settings.goalMinutes, rechargeMinute: settings.rechargeMinute, countFrom: countingSince ?? 0 },
   };
 }

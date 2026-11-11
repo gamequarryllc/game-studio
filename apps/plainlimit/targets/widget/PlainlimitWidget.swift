@@ -4,7 +4,7 @@ import WidgetKit
 // The battery on the home screen and the lock screen.
 //
 // It draws from two things in the App Group's shared settings:
-//   plainlimit_plan                              written by the app: the goal and the recharge time
+//   plainlimit_plan                              written by the app: the goal, the recharge time, and when counting began
 //   events_plday_eventDidReachThreshold_<name>   written by the monitor extension each time a
 //                                                checkpoint is reached (milliseconds since 1970)
 // A checkpoint counts for today when it was reached after the last recharge.
@@ -92,7 +92,9 @@ func readState(now: Date) -> BatteryState {
     return BatteryState(isSetUp: false, cells: cellCount, rechargeMinute: 360)
   }
 
-  let start = periodStart(now: now, rechargeMinute: recharge).timeIntervalSince1970 * 1000
+  // Today's count began at the last recharge, or when counting was turned on if that was later.
+  let countFrom = (plan["countFrom"] as? NSNumber)?.doubleValue ?? 0
+  let start = max(periodStart(now: now, rechargeMinute: recharge).timeIntervalSince1970 * 1000, countFrom)
 
   // A checkpoint for N minutes of use cannot honestly arrive sooner than N minutes
   // into the day. iOS has been seen to deliver them early; those are ignored.

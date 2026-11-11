@@ -90,11 +90,23 @@ export const store = {
   async turnOnScreenTime(): Promise<'on' | 'denied' | 'failed'> {
     const answer = await screenTime.askPermission();
     if (answer !== 'approved') return 'denied';
-    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
+    // Counting starts now: the first day does not include what was used before this moment.
+    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, true);
     // Start from what the phone says, not from any pretend use.
     const day = { ...snapshot.doc.day, usedMinutes: 0 };
     set({ ...snapshot.doc, day: withRealUse(snapshot.doc, day) });
     return ok ? 'on' : 'failed';
+  },
+  /**
+   * Developer, on a real phone: a full battery and a count that starts again
+   * from now, with every cover taken away. For trying the app without waiting
+   * for the recharge time.
+   */
+  async startDayOver() {
+    const now = new Date();
+    const day = freshDay(now, snapshot.doc.settings.rechargeMinute);
+    await screenTime.applyPlan(snapshot.doc.settings, 0, true);
+    set({ ...snapshot.doc, day });
   },
   turnOffScreenTime() {
     screenTime.turnOff();

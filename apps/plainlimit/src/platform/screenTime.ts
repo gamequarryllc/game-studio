@@ -4,7 +4,7 @@ import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
 import { checkpointsFor, isPlausible, usedFloor } from '@/domain/checkpoints';
-import { nextRecharge } from '@/domain/day';
+import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
   ALLOWED_ID,
@@ -12,6 +12,8 @@ import {
   TOPUP_ACTIVITY,
   TOPUP_EVENT,
   WIDGET_PLAN_KEY,
+  countStart,
+  includesEarlierUse,
   monitorPlan,
   puzzleNotice,
   spanOf,
@@ -94,6 +96,18 @@ export function pickCount(id: typeof COUNTED_ID | typeof ALLOWED_ID): number {
   }
 }
 
+/** Where the moment counting was turned on (or started over) is kept, in milliseconds. */
+const SINCE_KEY = 'plainlimit_since';
+
+function countingSince(): number | null {
+  try {
+    const value = DeviceActivity.userDefaultsGet<number>(SINCE_KEY);
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 const UNCOVER: Action[] = [{ type: 'disableBlockAllMode' }, { type: 'resetBlocks' }];
 
 function coverAction(shield: string, coverEverything: boolean): Action {
@@ -152,10 +166,22 @@ function countedToken(settings: Settings): string {
  * and what the widget needs. Safe to call again whenever a setting changes;
  * the phone keeps today's count.
  */
-export async function applyPlan(settings: Settings, topUpsSoFar: number): Promise<boolean> {
+export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh = false): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return false;
-  const plan = monitorPlan(settings, topUpsSoFar);
   try {
+    const now = new Date();
+    if (fresh) {
+      // Counting starts (or starts over) now: forget earlier checkpoints and take every cover away.
+      DeviceActivity.stopMonitoring([ACTIVITY, TOPUP_ACTIVITY]);
+      DeviceActivity.userDefaultsClearWithPrefix(`events_${ACTIVITY}`);
+      DeviceActivity.userDefaultsClearWithPrefix(`events_${TOPUP_ACTIVITY}`);
+      DeviceActivity.disableBlockAllMode('plainlimit');
+      DeviceActivity.resetBlocks('plainlimit');
+      DeviceActivity.userDefaultsSet(SINCE_KEY, now.getTime());
+    }
+    const since = countingSince();
+    const plan = monitorPlan(settings, topUpsSoFar, since);
+    const earlier = includesEarlierUse(periodStartOf(now, settings.rechargeMinute), since);
     for (const shield of plan.shields) writeShield(shield, topUpsSoFar);
 
     DeviceActivity.clearWhitelist();
@@ -178,7 +204,7 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number): Promis
     await DeviceActivity.startMonitoring(
       plan.activity,
       { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
-      plan.events.map((event) => ({ eventName: event.name, familyActivitySelection: token, threshold: event.after, includesPastActivity: true })),
+      plan.events.map((event) => ({ eventName: event.name, familyActivitySelection: token, threshold: event.after, includesPastActivity: earlier })),
     );
     reloadWidget();
     return true;
@@ -195,6 +221,7 @@ export function turnOff() {
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
     DeviceActivity.userDefaultsRemove(WIDGET_PLAN_KEY);
+    DeviceActivity.userDefaultsRemove(SINCE_KEY);
     reloadWidget();
   } catch {
     // Nothing more to do.
@@ -209,9 +236,10 @@ export function usedSoFar(goalMinutes: number, periodStart: Date): number | null
   if (!SCREEN_TIME_AVAILABLE) return null;
   try {
     const reported = DeviceActivity.getEvents(ACTIVITY).filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName);
+    const from = countStart(periodStart, countingSince());
     const arrived = checkpointsFor(goalMinutes).filter((checkpoint) => {
       const report = reported.find((e) => e.eventName === checkpoint.id);
-      return report !== undefined && report.lastCalledAt.getTime() >= periodStart.getTime() && isPlausible(checkpoint, periodStart, report.lastCalledAt);
+      return report !== undefined && report.lastCalledAt.getTime() >= from.getTime() && isPlausible(checkpoint, from, report.lastCalledAt);
     });
     return usedFloor(arrived);
   } catch {
@@ -238,7 +266,7 @@ export async function grantExtraTime(minutes: number, settings: Settings, topUps
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
 
-    const plan = monitorPlan(settings, topUpsAfter);
+    const plan = monitorPlan(settings, topUpsAfter, countingSince());
     const empty = plan.shields.find((s) => s.id === 'empty');
     if (empty) writeShield(empty, topUpsAfter);
 
