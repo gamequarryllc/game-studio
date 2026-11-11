@@ -146,7 +146,7 @@ Sources: a comparison page published by another inventory app, so read it with c
 
 **What this means for the app.**
 
-- **Price: $5.99 once. Free limit: 25 items, with every feature.** It matches the one pay-once competitor with a free tier and sits under the other, and the loudest complaint in the category is the thing this app does not do. Nothing a person has added is ever locked, and the backup is a plain file they keep: the opposite of the lost-inventory story.
+- **Price: $5.99 once. Free limit: 20 items, with every feature** (the research suggested 25, the one pay-once competitor's number; the owner set 20 on 2026-11-11). It matches the one pay-once competitor with a free tier and sits under the other, and the loudest complaint in the category is the thing this app does not do. Nothing a person has added is ever locked, and the backup is a plain file they keep: the opposite of the lost-inventory story.
 - **Store text leads with the three things reviewers ask for:** pay once, no account, your data stays yours. Draft in `store/plainproof/listing.json`.
 - **Search terms** (no volume data was found; this is a guess to be replaced by App Store Connect's own numbers after launch): "home inventory" is the main term and the crowded one, so it is in the name; "insurance" and "belongings" are in the subtitle; the keyword field covers household, contents, claim, renters, homeowners, moving, possessions, serial, receipt, valuables.
 - **Name:** the owner chose "Plainproof" on 2026-11-11 (the working name was Roomfile). Apple accepted "Plainproof: Home Inventory" when the app record was created, so the name is free on the App Store.

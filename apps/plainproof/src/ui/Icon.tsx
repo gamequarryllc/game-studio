@@ -16,6 +16,7 @@ const ICONS = {
   library: { ios: 'photo.on.rectangle', web: 'photo_library' },
   photo: { ios: 'photo', web: 'image' },
   receipt: { ios: 'doc.text', web: 'receipt_long' },
+  tag: { ios: 'tag.fill', web: 'sell' },
   chevron: { ios: 'chevron.right', web: 'chevron_right' },
   chevronDown: { ios: 'chevron.up.chevron.down', web: 'unfold_more' },
   search: { ios: 'magnifyingglass', web: 'search' },

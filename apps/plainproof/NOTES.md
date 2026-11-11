@@ -31,14 +31,16 @@ The whole design follows from one fact about the job: people do it once, in an a
 
 **Type:** Newsreader (SIL Open Font License; the licence ships in `@expo-google-fonts/newsreader`) for titles and totals only. Everything else is the system font at the iOS text-style sizes, so Dynamic Type scales it. Figures use tabular numerals.
 
-**The motif:** the folder with a slanted tab at the top of the Rooms tab, labelled with the name of the home. It appears in exactly two places: there, and as a marked example on the welcome screen. While a home is empty, the folder itself holds the one prompt and the "Add your first item" button, so the screen never stacks two empty states. The icon is the same idea reduced to one shape: a folder whose tab is a roof.
+**The motif:** the folder with a slanted tab at the top of the Rooms tab, labelled with the name of the home. It appears in exactly two places: there, and in the picture on the welcome screen.
+
+**The welcome picture** (`src/ui/WelcomeArt.tsx`, drawn with `react-native-svg`): three snapshots standing in the folder, an armchair, a laptop and a guitar, each a photo print with two lines of handwriting and a green price tag. It replaced a paragraph and an example folder full of figures after the owner's first run on his phone (2026-11-11: "This is a lot of words, easy imagery would be better"). The prints keep their light paper and colours in dark mode, as real prints would; only the folder follows the theme. Under it the screen has one headline, three words (Photo, Value, Report) and one line about privacy. **The owner's rule for every screen since: pictures first, few words.** The room picker on the second welcome screen is a grid of tiles with large symbols for the same reason. While a home is empty, the folder itself holds the one prompt and the "Add your first item" button, so the screen never stacks two empty states. The icon is the same idea reduced to one shape: a folder whose tab is a roof.
 
 **Where the look comes from** (none of them apps): manila file folders and their index tabs; bank passbooks and ledger paper; the object labels in a museum case, with their small serif titles and plain facts.
 
 **House rules that keep it from looking generated:**
 
 - One uppercase label in the whole app: the folder's tab. No eyebrow above headlines.
-- No lists of three icons in tinted squares. If a screen needs to explain the app, it shows the app (the example folder).
+- No lists of three icons in tinted squares. If a screen needs to explain the app, it shows a picture drawn for it (the welcome picture), not a paragraph.
 - Sentence case, no exclamation marks, and say a thing once ("No results for ..." rather than a title and a body that repeat each other).
 - Amber means "worth filling in" and nothing else. A room whose things have no value says so in amber instead of showing "$0".
 - The add button beside a large title is a quiet toolbar circle, not a filled floating button.
@@ -48,9 +50,9 @@ The whole design follows from one fact about the job: people do it once, in an a
 
 ## Money
 
-- **Free:** the first 25 items, with every feature. Nothing already added is ever locked: at the limit, editing, the report and backups all keep working, and only adding stops.
+- **Free:** the first 20 items, with every feature (the owner set 20 on 2026-11-11; the first build had 25). Nothing already added is ever locked: at the limit, editing, the report and backups all keep working, and only adding stops.
 - **Plainproof Pro:** one payment, $5.99 (draft), removes the limit. Non-consumable `com.gamequarry.plainproof.pro`, RevenueCat entitlement `plainproof_pro`. No subscription, no ads.
-- **Why these numbers** (research/market.md, "Home inventory", 2026-11-11): the pay-once apps in this category sit at $5.99 and $6.99, one of them with the same 25-item free tier; the subscription apps charge about $35 to $80 a year, and recurring fees for a set-it-up-once tool are the complaint that comes up most in their reviews. 25 items is enough to see the whole app work on one room and not enough to finish a home.
+- **Why these numbers** (research/market.md, "Home inventory", 2026-11-11): the pay-once apps in this category sit at $5.99 and $6.99, one of them with a 25-item free tier; the subscription apps charge about $35 to $80 a year, and recurring fees for a set-it-up-once tool are the complaint that comes up most in their reviews. 25 items is enough to see the whole app work on one room and not enough to finish a home.
 - **Store name:** "Plainproof: Home Inventory", subtitle "Belongings list for insurance" (`store/plainproof/listing.json`). **Apple accepted the name** when the app record was created on 2026-11-11, so it is free on the App Store. A web search the same day found no app called Plainproof; that was a search, not a trademark check.
 - **Privacy label:** the app list was planned as "Data Not Collected". RevenueCat's own guide says an app that uses it must declare Purchase History, because RevenueCat keeps the purchase record. The honest draft is "Data not linked to you: Purchases", everything else not collected (`privacy_label` in the listing). The owner decides, and should give this app whatever the reference app's listing already declares.
 

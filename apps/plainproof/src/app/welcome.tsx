@@ -7,25 +7,17 @@ import { SUGGESTED_ROOMS, addRooms, setOnboarded } from '@/domain/actions';
 import { FREE_ITEM_LIMIT } from '@/domain/limits';
 import { success, tap } from '@/platform/haptics';
 import { store, useDoc } from '@/state/store';
-import type { HomeSummary } from '@/domain/selectors';
-import { FolderCard } from '@/ui/FolderCard';
-import { Icon } from '@/ui/Icon';
+import { Icon, type IconName } from '@/ui/Icon';
+import { WelcomeArt } from '@/ui/WelcomeArt';
 import { Button } from '@/ui/kit';
 import { HAIRLINE, display, space, type, useTheme } from '@/ui/theme';
 
-/** The folder shown on the first screen: a picture of where this leads, clearly marked as an example. */
-// The counts are kept short on purpose: "9 of 12" lets the two meters share a row even on the narrowest iPhone.
-const EXAMPLE: HomeSummary = {
-  count: 12,
-  pieces: 15,
-  rooms: 4,
-  totalCents: 946000,
-  withPhoto: 9,
-  withValue: 11,
-  withSerial: 5,
-  withReceipt: 4,
-  missingSerial: 2,
-};
+/** What the app does, in three words. The picture above them carries the rest. */
+const STEPS: readonly { icon: IconName; word: string }[] = [
+  { icon: 'addPhoto', word: 'Photo' },
+  { icon: 'tag', word: 'Value' },
+  { icon: 'report', word: 'Report' },
+];
 
 const PRESELECTED = new Set(['Living room', 'Kitchen', 'Bedroom', 'Bathroom']);
 
@@ -62,22 +54,32 @@ export default function Welcome() {
     <View style={{ flex: 1, backgroundColor: c.paper }}>
       <ScrollView
         testID={`welcome-${step}`}
-        contentContainerStyle={{ paddingTop: insets.top + (compact ? 16 : 44), paddingHorizontal: space.xxl, paddingBottom: compact ? space.l : space.xxl }}>
+        // On a tall phone the first screen sits in the middle of the space above the button instead of leaving a gap under it.
+        contentContainerStyle={[
+          { paddingTop: insets.top + (compact ? 16 : 28), paddingHorizontal: space.xxl, paddingBottom: compact ? space.l : space.xxl },
+          step === 'intro' ? styles.centered : null,
+        ]}>
         {step === 'intro' ? (
           <>
             <Text style={[styles.wordmark, { color: c.green }]}>Plainproof</Text>
+            <View style={[styles.art, compact ? styles.artCompact : null]}>
+              <WelcomeArt />
+            </View>
             <Text accessibilityRole="header" style={[type.largeTitle, styles.title, compact ? styles.titleCompact : null, { color: c.ink }]}>
               Know what you own, before you need to.
             </Text>
-            <Text style={[compact ? type.callout : type.body, { color: c.ink2, marginTop: compact ? space.s : space.m }]}>
-              After a fire, a flood or a break-in, an insurer asks for a list of everything. Photograph each thing, note its serial number and what it would cost to replace, and the report is ready when you need it.
-            </Text>
-            <View style={[styles.example, compact ? { marginTop: space.l } : null]}>
-              <FolderCard sample label="An example" summary={EXAMPLE} currency={doc.settings.currency} />
+            <View style={styles.steps} accessible accessibilityLabel="Photograph it, put a value on it, and the report is ready.">
+              {STEPS.map((s, i) => (
+                <View key={s.word} style={styles.step}>
+                  {i > 0 ? <Icon name="chevron" size={11} color={c.ink3} style={styles.stepArrow} /> : null}
+                  <Icon name={s.icon} size={17} color={c.green} />
+                  <Text style={[type.callout, { color: c.ink, fontWeight: '600' }]}>{s.word}</Text>
+                </View>
+              ))}
             </View>
-            <View style={styles.promise}>
-              <Icon name="lock" size={15} color={c.ink2} style={{ marginTop: 2 }} />
-              <Text style={[type.subhead, { color: c.ink2, flex: 1 }]}>No account, and nothing is uploaded. You decide where reports and backups go.</Text>
+            <View testID="welcome-promise" style={styles.promise}>
+              <Icon name="lock" size={14} color={c.ink2} />
+              <Text style={[type.subhead, { color: c.ink2 }]}>No account. Nothing is uploaded.</Text>
             </View>
           </>
         ) : (
@@ -85,9 +87,7 @@ export default function Welcome() {
             <Text accessibilityRole="header" style={[type.largeTitle, styles.title, { color: c.ink }]}>
               Which rooms do you have?
             </Text>
-            <Text style={[type.body, { color: c.ink2, marginTop: space.m }]}>
-              Pick a few to start. You can rename them and add more later.
-            </Text>
+            <Text style={[type.body, { color: c.ink2, marginTop: space.s }]}>You can change these later.</Text>
             <View style={styles.rooms}>
               {SUGGESTED_ROOMS.map((r) => {
                 const on = picked.has(r.name);
@@ -99,11 +99,15 @@ export default function Welcome() {
                     accessibilityState={{ checked: on }}
                     onPress={() => toggle(r.name)}
                     style={[styles.room, { backgroundColor: on ? c.greenSoft : c.card, borderColor: on ? c.green : c.rule }]}>
-                    <Icon name={r.icon} size={18} color={on ? c.green : c.ink2} />
-                    <Text style={[type.callout, { color: on ? c.green : c.ink, fontWeight: on ? '600' : '400', flex: 1 }]} numberOfLines={1}>
+                    <Icon name={r.icon} size={26} color={on ? c.green : c.ink2} />
+                    <Text style={[type.subhead, styles.roomName, { color: on ? c.green : c.ink, fontWeight: on ? '600' : '400' }]} numberOfLines={1}>
                       {r.name}
                     </Text>
-                    {on ? <Icon name="check" size={15} color={c.green} /> : null}
+                    {on ? (
+                      <View style={[styles.roomCheck, { backgroundColor: c.green }]}>
+                        <Icon name="check" size={11} color={c.onGreen} />
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -111,12 +115,12 @@ export default function Welcome() {
           </>
         )}
       </ScrollView>
-      <View style={[styles.footer, { paddingBottom: insets.bottom + space.l, borderTopColor: c.rule, backgroundColor: c.paper }]}>
+      <View testID="welcome-footer" style={[styles.footer, { paddingBottom: insets.bottom + space.l, borderTopColor: c.rule, backgroundColor: c.paper }]}>
         {step === 'intro' ? (
           <>
             <Button testID="welcome-continue" label="Set up my rooms" onPress={() => setStep('rooms')} />
             <Text style={[type.footnote, { color: c.ink2, textAlign: 'center', marginTop: space.m }]}>
-              Free for your first {FREE_ITEM_LIMIT} items, with every feature. One payment removes the limit.
+              Free for your first {FREE_ITEM_LIMIT} items.
             </Text>
           </>
         ) : (
@@ -136,13 +140,21 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
+  centered: { flexGrow: 1, justifyContent: 'center' },
   wordmark: { fontFamily: display.semibold, fontSize: 21, lineHeight: 26, letterSpacing: -0.1 },
-  title: { marginTop: space.m },
-  titleCompact: { marginTop: space.s, fontSize: 28, lineHeight: 33 },
-  // The folder brings its own side margins; this cancels the screen's, so it is as wide here as on the Rooms tab.
-  example: { marginTop: space.xxl, marginHorizontal: -space.xxl },
-  promise: { flexDirection: 'row', gap: space.s, marginTop: space.l },
-  rooms: { marginTop: space.xl, gap: space.s },
-  room: { flexDirection: 'row', alignItems: 'center', gap: space.m, minHeight: 50, borderRadius: 12, borderWidth: 1, paddingHorizontal: space.l },
+  // The picture is a little wider than the text column, so the folder reads as the main thing on the screen.
+  art: { marginTop: space.l, marginHorizontal: -space.m },
+  artCompact: { marginTop: space.s, marginHorizontal: space.l },
+  title: { marginTop: space.l },
+  titleCompact: { marginTop: space.m, fontSize: 28, lineHeight: 33 },
+  steps: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: space.l, rowGap: space.s },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepArrow: { marginHorizontal: space.s },
+  promise: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.m },
+  rooms: { marginTop: space.xl, flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
+  // Two tiles to a row: the gap is taken off the pair, so they share the width exactly.
+  room: { flexBasis: '47%', flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 6, height: 78, borderRadius: 14, borderWidth: 1, paddingHorizontal: space.s },
+  roomName: { textAlign: 'center', alignSelf: 'stretch' },
+  roomCheck: { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   footer: { paddingHorizontal: space.xxl, paddingTop: space.l, borderTopWidth: HAIRLINE },
 });

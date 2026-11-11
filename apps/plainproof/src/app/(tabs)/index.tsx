@@ -50,7 +50,7 @@ export default function RoomsTab() {
         whenEmpty={
           <>
             <Text style={[type.subhead, { color: c.manilaInk2, marginBottom: space.l }]}>
-              Start with whatever would hurt most to replace: the television, a laptop, a ring. It takes about a minute.
+              Start with what would cost most to replace.
             </Text>
             <Button testID="add-first-item" label="Add your first item" icon="add" onPress={() => openNewItem(router)} />
           </>

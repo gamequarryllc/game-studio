@@ -12,11 +12,12 @@ The preview was built and published by CI for the first time on 2026-11-11 (the 
 
 ## Done
 
+- **After the owner's first run on his phone (2026-11-11):** the welcome screen is a picture with a few words instead of a paragraph (`src/ui/WelcomeArt.tsx`; NOTES.md, "The welcome picture"), the room picker is a grid of tiles, the first prompt on the Rooms tab is one short line, and the free version holds 20 items instead of 25. The browser run now checks that the picture is drawn and that the first screen fits above the button on every phone size.
 - Expo SDK 58 project (the SDK the current Expo Go runs), Expo Router, TypeScript.
 - Logic in `src/domain/` (pure, unit tested): the document and its repair-on-load parser, rooms and items, totals and gaps, search/filter/sort, money parsing and formatting, dates, the report HTML, the CSV, the backup zip (streamed), the free limit, a sample home.
 - Storage: one JSON document written safely to the app's documents folder, photos as files beside it (full and small copy); IndexedDB on the web preview.
 - Screens: welcome (two steps, with an example folder), Rooms, room, item, add/edit form, photo viewer, Items (search, filters, sort), Report (PDF report, spreadsheet, backup, restore), Settings (Pro, currency, links, erase everything, developer tools), Pro.
-- Pro: free up to 25 items with every feature; RevenueCat adapter behind `src/pro/`, off until a key is set; "Pretend Pro is bought" developer switch; `npm run check:release` refuses a store build without the key.
+- Pro: free up to 20 items with every feature (the owner's number, 2026-11-11); RevenueCat adapter behind `src/pro/`, off until a key is set; "Pretend Pro is bought" developer switch; `npm run check:release` refuses a store build without the key.
 - Browser run with screenshots at three phone sizes and in dark mode.
 - Screenshot review and critic review 1; fixes for both (list in NOTES.md, "QA").
 - App icon, splash mark (light and dark) and favicon, drawn as SVG in `art/`.

@@ -1,7 +1,7 @@
 import type { Doc } from './types';
 
 /** The free version holds this many items, with every feature. Pro removes the limit. */
-export const FREE_ITEM_LIMIT = 25;
+export const FREE_ITEM_LIMIT = 20;
 
 export function canAddItem(doc: Doc, isPro: boolean): boolean {
   return isPro || doc.items.length < FREE_ITEM_LIMIT;

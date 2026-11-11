@@ -173,6 +173,20 @@ function helpers(page) {
       await h.visible('rooms-screen');
     },
     /** The folder's two meters: each label clear of its count, nothing wrapped onto a second line. */
+    /** The welcome picture is really drawn (not a zero-size box), and the first screen fits above the button without scrolling. */
+    async welcomeFits() {
+      await h.visible('welcome-art');
+      const art = await t('welcome-art').boundingBox();
+      const promise = await t('welcome-promise').boundingBox();
+      const footer = await t('welcome-footer').boundingBox();
+      const view = page.viewportSize();
+      assert.ok(art && art.width > view.width * 0.6 && art.height > 120, `welcome picture is ${JSON.stringify(art)}`);
+      assert.ok(art.x >= 0 && art.x + art.width <= view.width + 0.5, `welcome picture runs off the screen: ${JSON.stringify(art)}`);
+      const shapes = await t('welcome-art').locator('rect, path, circle, ellipse').count();
+      assert.ok(shapes > 40, `welcome picture has only ${shapes} shapes`);
+      assert.ok(promise.y + promise.height <= footer.y + 0.5, `welcome text runs under the button: ${JSON.stringify({ promise, footer })}`);
+      assert.ok(footer.y + footer.height <= view.height + 0.5, 'welcome button is below the fold');
+    },
     async metersTidy(prefix = '') {
       for (const key of ['meter-photo', 'meter-value']) {
         const label = await t(`${prefix}${key}-label`).first().boundingBox();
@@ -212,8 +226,7 @@ async function main() {
       await page.goto(url);
       await h.visible('welcome-intro');
       assert.ok(page.url().endsWith('/welcome'), page.url());
-      await h.visible('folder-sample');
-      await h.metersTidy('sample-');
+      await h.welcomeFits();
       await h.shot('01-welcome');
       await h.tap('welcome-continue');
       await h.visible('welcome-rooms');
@@ -228,7 +241,7 @@ async function main() {
       await h.expectText('home-empty', 'Nothing filed yet');
       assert.strictEqual(await t('home-total').count(), 0, 'an empty home shows a total');
       await h.expectText('home-count', '5 rooms ready to fill');
-      await h.expectText('free-note', /Free version: 0 of 25 items used/);
+      await h.expectText('free-note', /Free version: 0 of 20 items used/);
       await h.shot('03-rooms-empty');
     });
 
@@ -621,20 +634,20 @@ async function main() {
       await h.back();
     });
 
-    await step('the free limit: full at 25, Pro unlocks it, nothing is held hostage', async () => {
-      // 5 items so far; add 20 more to reach the limit exactly.
+    await step('the free limit: full at 20, Pro unlocks it, nothing is held hostage', async () => {
+      // 5 items so far; add 15 more to reach the limit exactly.
       await h.tap('add-item');
-      for (let i = 6; i <= 25; i++) {
+      for (let i = 6; i <= 20; i++) {
         await h.quickAdd(`Box of books no. ${i}`, '40');
         await h.tap('form-save-another');
-        if (i < 25) await h.expectText('field-name', '');
+        if (i < 20) await h.expectText('field-name', '');
       }
-      await h.visible('rooms-screen'); // the 25th save closes the form: there is no room for another
-      await h.expectText('home-count', '25 items in 4 rooms');
-      await h.expectText('free-note', /The free version is full at 25 items\./);
+      await h.visible('rooms-screen'); // the 20th save closes the form: there is no room for another
+      await h.expectText('home-count', '20 items in 4 rooms');
+      await h.expectText('free-note', /The free version is full at 20 items\./);
       await h.tap('add-item');
       await h.visible('pro-screen');
-      await h.expectText('pro-status', /holds 25 items, and yours is full\. Everything you have added stays/);
+      await h.expectText('pro-status', /holds 20 items, and yours is full\. Everything you have added stays/);
       await h.shot('32-pro-locked');
       // No store in this build: the button says so when tapped, and nothing is unlocked.
       await h.tap('pro-buy');
@@ -654,7 +667,7 @@ async function main() {
       await h.gone('pro-screen');
       await h.back();
       await h.tab('Settings');
-      await h.expectText('pro-row', /25 of 25 free items used/);
+      await h.expectText('pro-row', /20 of 20 free items used/);
       await h.tap('restore-purchase');
       assert.match(await h.dialogText(), /Purchases aren’t switched on in this build/);
       await h.confirm();
@@ -668,14 +681,14 @@ async function main() {
       await h.tab('Rooms');
       assert.strictEqual(await t('free-note').count(), 0);
       await h.tap('add-item');
-      await h.quickAdd('The 26th thing', '10');
+      await h.quickAdd('The 21st thing', '10');
       await h.tap('form-save');
-      await h.expectText('home-count', '26 items in 4 rooms');
-      // Pro off again: the 26 items stay, adding stops.
+      await h.expectText('home-count', '21 items in 4 rooms');
+      // Pro off again: the 21 items stay, adding stops.
       await h.tab('Settings');
       await h.tap('dev-pretend-pro');
       await h.tab('Rooms');
-      await h.expectText('home-count', '26 items in 4 rooms');
+      await h.expectText('home-count', '21 items in 4 rooms');
       await h.tap('add-item');
       await h.visible('pro-screen');
       await h.tap('pro-close');
@@ -756,7 +769,7 @@ async function main() {
         const k = helpers(p);
         await p.goto(url);
         await k.visible('welcome-intro');
-        await k.metersTidy('sample-'); // the example's label used to run into its count on a small phone
+        await k.welcomeFits(); // the picture, the headline and the button all fit, even on a small phone
         await k.shot(`${v.label}-01-welcome`);
         await k.onboard(['Kitchen']);
         await k.tab('Report');
