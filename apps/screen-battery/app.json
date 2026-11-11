@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Screen Battery",
+    "slug": "screen-battery",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "screenbattery",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#101214",
+    "ios": {
+      "bundleIdentifier": "com.gamequarry.screenbattery",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.gamequarry.screenbattery"
+    },
+    "web": {
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#101214",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 120
+        }
+      ]
+    ],
+    "experiments": {
+      "reactCompiler": true
+    }
+  }
+}
