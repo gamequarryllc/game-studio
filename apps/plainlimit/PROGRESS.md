@@ -23,7 +23,7 @@ The web preview and Expo Go still run on pretend use and are unchanged. A build 
 
 ## Next, in order
 
-1. **A TestFlight build.** Apple's side is ready: Family Controls (Distribution) is on for the app and its extensions, and the app record exists. The studio's iPhone build has to get an app with extensions through signing (NOTES.md, "What is still needed").
+1. **A TestFlight build.** The first run compiled and archived everything, then stopped at signing: the App Store Connect key in the repository secrets has App Manager access and needs Admin. The owner replaces it (NOTES.md, "What is still needed"), then the build is run again.
 2. **On the owner's phone:** the eleven checks in NOTES.md, "To check on the phone", and fixing what they find.
 3. First-run setup: pick a goal and a recharge time, then the Screen Time permission and the widget.
 4. A fresh-eyes critic on the screenshots, and its findings fixed.

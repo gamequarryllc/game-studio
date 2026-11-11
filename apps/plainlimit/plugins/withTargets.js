@@ -56,14 +56,26 @@ module.exports = function withTargets(config) {
   const library = path.dirname(require.resolve('react-native-device-activity/package.json', { paths: [projectRoot] }));
   const targets = path.join(projectRoot, 'targets');
   fs.mkdirSync(targets, { recursive: true });
+  // This runs every time the app's settings are read, which Xcode's build steps
+  // also do. Copy only when the library's version has changed since the last
+  // copy, and never delete the folder: the step that writes the Xcode project
+  // leaves each target's entitlements file in it, and a build in progress is
+  // reading these files.
+  const version = require(path.join(library, 'package.json')).version;
+  const stamp = `react-native-device-activity ${version}, patch 1\n`;
   for (const name of EXTENSIONS) {
     const to = path.join(targets, name);
-    fs.rmSync(to, { recursive: true, force: true });
+    const marker = path.join(to, '.prepared');
+    if (fs.existsSync(marker) && fs.readFileSync(marker, 'utf8') === stamp) continue;
+    fs.mkdirSync(to, { recursive: true });
     fs.cpSync(path.join(library, 'targets', name), to, { recursive: true });
     fs.copyFileSync(path.join(library, 'ios', 'Shared.swift'), path.join(to, 'Shared.swift'));
+    if (name === 'ActivityMonitorExtension') {
+      fs.writeFileSync(path.join(to, 'expo-target.config.js'), MONITOR_CONFIG);
+      patchMonitor(path.join(to, 'DeviceActivityMonitorExtension.swift'));
+    }
+    fs.writeFileSync(marker, stamp);
   }
-  fs.writeFileSync(path.join(targets, 'ActivityMonitorExtension', 'expo-target.config.js'), MONITOR_CONFIG);
-  patchMonitor(path.join(targets, 'ActivityMonitorExtension', 'DeviceActivityMonitorExtension.swift'));
   // The app only ever shows notifications it makes on the phone itself. The
   // notifications package asks for Apple's push service by default, which would
   // need a capability the app does not use; take that back out.

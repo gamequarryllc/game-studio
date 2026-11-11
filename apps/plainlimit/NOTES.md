@@ -88,9 +88,12 @@ Decisions made while writing it, each of which the owner can change:
 
 ## What is still needed
 
-1. **A signed build on the owner's phone, by TestFlight.** Everything it needs from Apple is in place as of 2026-11-11: Family Controls (Distribution) is on for the app and its three extensions, and the app record "Plainlimit" exists in App Store Connect. What is left is the studio's "iOS app build" in testflight mode working for an app with extensions. `tools/ios_app_build.sh` archives such an app "signed to run locally" so the entitlements survive, then signs for the App Store while exporting; that path has not succeeded yet. If it cannot be made to work, the fallback is its signed-archive route, which needs one iPhone registered under Devices in Apple's developer portal (there are none today).
-2. **Trying it on the phone** ("To check on the phone", below), and fixing what that finds.
-3. First-run setup, a critic pass, Pro, the store listing, privacy and support sections (PROGRESS.md).
+1. **An App Store Connect key that may sign (the owner).** The first TestFlight run (2026-11-11) got as far as it can without one: the app and all four extensions compiled and archived, then the export step was refused with "Cloud signing permission error". The key in the `ASC_KEY_ID` / `ASC_KEY_P8` secrets has App Manager access; letting Xcode create the App Store certificate and profiles for it needs Admin. The owner makes a new team key with Admin access and replaces those two secrets. Everything else Apple needs is in place: Family Controls (Distribution) is on for the app and its three extensions, and the app record "Plainlimit" exists.
+2. **Run "iOS app build" again** for `plainlimit` in testflight mode. `tools/ios_app_build.sh` archives an app with extensions "signed to run locally" so the entitlements survive, lists which entitlements each extension kept, then signs for the App Store while exporting. The archive half has worked; the export half has not been reached with a key that is allowed to.
+3. **Trying it on the phone** ("To check on the phone", below), and fixing what that finds.
+4. First-run setup, a critic pass, Pro, the store listing, privacy and support sections (PROGRESS.md).
+
+Found on that first run and fixed: `plugins/withTargets.js` used to wipe and re-copy the library's extensions every time the app's settings were read, which Xcode's own build steps do, and that deleted the extensions' entitlement files in the middle of a build. It now copies once per library version and never deletes.
 
 ## Known limits and risks
 
