@@ -68,7 +68,10 @@ export default function Welcome() {
             <Text accessibilityRole="header" style={[type.largeTitle, styles.title, compact ? styles.titleCompact : null, { color: c.ink }]}>
               Know what you own, before you need to.
             </Text>
-            <View style={styles.steps} accessible accessibilityLabel="Photograph it, put a value on it, and the report is ready.">
+            <Text testID="welcome-why" style={[compact ? type.callout : type.body, { color: c.ink2, marginTop: space.s }]}>
+              Your proof for an insurance claim.
+            </Text>
+            <View style={styles.steps} accessible accessibilityLabel="Photograph it, put a value on it, and the report for an insurance claim is ready.">
               {STEPS.map((s, i) => (
                 <View key={s.word} style={styles.step}>
                   {i > 0 ? <Icon name="chevron" size={11} color={c.ink3} style={styles.stepArrow} /> : null}

@@ -12,6 +12,7 @@ The preview was built and published by CI for the first time on 2026-11-11 (the 
 
 ## Done
 
+- **The file drawer (2026-11-11, the owner's idea):** the Rooms tab shows the rooms as manila folders in a drawer, with stepped tabs, a pile that gathers at the top as the list scrolls, and a lift on press (`src/ui/RoomDrawer.tsx`; NOTES.md, "The drawer"). The browser run checks the tabs (names clear of the slanted edge, stepped positions), scrolls the drawer, checks the pile and opens a room from it. The welcome screen also says why: one line about insurance and a shield on the folder.
 - **After the owner's first run on his phone (2026-11-11):** the welcome screen is a picture with a few words instead of a paragraph (`src/ui/WelcomeArt.tsx`; NOTES.md, "The welcome picture"), the room picker is a grid of tiles, the first prompt on the Rooms tab is one short line, and the free version holds 20 items instead of 25. The browser run now checks that the picture is drawn and that the first screen fits above the button on every phone size.
 - Expo SDK 58 project (the SDK the current Expo Go runs), Expo Router, TypeScript.
 - Logic in `src/domain/` (pure, unit tested): the document and its repair-on-load parser, rooms and items, totals and gaps, search/filter/sort, money parsing and formatting, dates, the report HTML, the CSV, the backup zip (streamed), the free limit, a sample home.
@@ -33,6 +34,7 @@ The preview was built and published by CI for the first time on 2026-11-11 (the 
 
 ## Next (after the owner's feedback, which comes first)
 
+0. **Cabinets: more than one place** (the second half of the owner's idea). A place (home, office, storage unit, rental) is a file cabinet; the Rooms tab is the open drawer of one cabinet, and a cabinets view switches between them. Needs: places in the document (with a version step and a repair-on-load path for today's one-home documents), rooms that belong to a place, the report and the spreadsheet per place, backups that carry all places, and the picture of a cabinet. Planned as a Pro feature: the free version keeps one place (the pay-once competitor's free tier is also one property; research/market.md).
 1. Whatever the owner finds on the phone. Everything native has only run in a browser so far (list below).
 2. Done 2026-11-11: the first real `testflight` run. The first try (under the old id) built and archived, then stopped at "Error Downloading App Information" because the app had no identifier or app record with Apple; with both in place the next run signed and uploaded with no change to `tools/ios_app_build.sh`. A new build for the phone is one run of the workflow: app `plainproof`, mode `testflight`, flavor `playtest`.
 3. Polish left from the two reviews: drag to reorder rooms (needs a gesture library); page numbers in the iPhone's PDF; whether backup lives on the Report tab or in Settings (the owner's call). NOTES.md, "Known gaps".

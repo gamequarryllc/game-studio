@@ -306,10 +306,17 @@ async function main() {
       await h.visible('rooms-screen');
       await h.expectText('home-total', '$1,899');
       await h.expectText('home-count', '1 item in 5 rooms');
-      // The label on the folder's tab used to lose its last letter under the slanted edge.
-      const label = await t('folder-label').first().boundingBox();
-      const slant = await t('folder-slant').first().boundingBox();
-      assert.ok(label.x + label.width <= slant.x + 0.5, `the folder label runs under the tab's edge (${label.x + label.width} > ${slant.x})`);
+      // The name on a folder's tab must stop short of the tab's slanted edge, and every room's tab must be on the screen.
+      for (const room of ['Living room', 'Kitchen', 'Bedroom', 'Home office', 'Garage']) {
+        const label = await t(`room-tab-${room}`).first().boundingBox();
+        const slant = await t(`room-slant-${room}`).first().boundingBox();
+        assert.ok(label.x + label.width <= slant.x + 0.5, `${room}: the name runs under the tab's edge (${label.x + label.width} > ${slant.x})`);
+        assert.ok(slant.x + slant.width <= page.viewportSize().width - 18, `${room}: the tab runs off the folder`);
+      }
+      // The tabs step across, as cut tabs do: the second starts to the right of the first, the fourth is back under the first.
+      const tabX = async (room) => (await t(`room-tab-${room}`).first().boundingBox()).x;
+      assert.ok((await tabX('Kitchen')) > (await tabX('Living room')) + 40, 'the tabs are not staggered');
+      assert.ok(Math.abs((await tabX('Home office')) - (await tabX('Living room'))) < 1, 'the fourth tab is not back in the first position');
       await h.shot('10-rooms-one-item');
     });
 
@@ -713,6 +720,36 @@ async function main() {
       await h.expectText('home-total', /^\$[\d,]+$/);
       await h.shot('34-rooms-sample');
       await h.shot('34b-rooms-sample-full', { fullPage: true });
+      // Sifting through the drawer: scroll, and the folders already passed gather at the top instead of leaving.
+      const pane = t('rooms-screen');
+      const firstTab = () => t('room-tab-Living room').first().boundingBox();
+      const drawer = await t('room-drawer').boundingBox();
+      const atRest = await firstTab();
+      const scrollTo = async (y) => {
+        // scrollTop, not scrollTo: on this element scrollTo takes its arguments the React Native way round.
+        await pane.evaluate((el, top) => {
+          el.scrollTop = top;
+        }, y);
+        await page.waitForTimeout(250);
+      };
+      const past = Math.round(drawer.y) + 150; // far enough that the first three folders would be off the top
+      await scrollTo(past);
+      const held = await firstTab();
+      assert.ok(held.y > 0 && held.y < 60, `the first folder did not stay at the top of the drawer: its tab is at ${held.y} (it was at ${atRest.y})`);
+      const second = await t('room-tab-Kitchen').first().boundingBox();
+      const third = await t('room-tab-Bedroom').first().boundingBox();
+      assert.ok(second.y > held.y + 10 && second.y < held.y + 40, `the second folder is not piled just under the first (${second.y} vs ${held.y})`);
+      assert.ok(third.y > second.y + 10 && third.y < second.y + 40, `the third folder is not piled just under the second (${third.y} vs ${second.y})`);
+      await h.shot('34c-rooms-sifted');
+      // A folder in the pile is still a tap away, by its tab.
+      await t('room-tab-Kitchen').first().click();
+      await h.visible('room-screen');
+      await h.expectText('room-title', 'Kitchen');
+      await h.back();
+      await h.visible('rooms-screen');
+      await scrollTo(0);
+      const back = await firstTab();
+      assert.ok(Math.abs(back.y - atRest.y) < 1, 'the folders did not go back where they were');
     });
 
     await step('a very large home: 650 items stay usable', async () => {

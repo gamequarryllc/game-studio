@@ -1,5 +1,7 @@
 import { useRouter } from 'expo-router';
-import { Text, View } from 'react-native';
+import { useState } from 'react';
+import { Animated, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { addRoom } from '@/domain/actions';
 import { FREE_ITEM_LIMIT, freeItemsLeft } from '@/domain/limits';
@@ -10,8 +12,9 @@ import { openNewItem } from '@/state/nav';
 import { store, useDoc } from '@/state/store';
 import { FolderCard } from '@/ui/FolderCard';
 import { ask } from '@/ui/dialogs';
-import { Button, Card, Divider, IconTile, RoundButton, Row, SectionLabel, TabScreen } from '@/ui/kit';
-import { Icon, roomIconName } from '@/ui/Icon';
+import { Button, Card, Divider, RoundButton, Row, SectionLabel, TabScreen } from '@/ui/kit';
+import { roomIconName } from '@/ui/Icon';
+import { RoomDrawer, type DrawerRoom } from '@/ui/RoomDrawer';
 import { space, type, useTheme } from '@/ui/theme';
 
 export default function RoomsTab() {
@@ -23,6 +26,18 @@ export default function RoomsTab() {
   const rooms = roomSummaries(doc);
   const currency = doc.settings.currency;
   const left = freeItemsLeft(doc, isPro);
+  const insets = useSafeAreaInsets();
+  const [scrollY] = useState(() => new Animated.Value(0));
+
+  // The rooms as the folders in the drawer. A room whose things have no value says so in amber instead of showing "$0".
+  const folders: DrawerRoom[] = rooms.map((r) => ({
+    id: r.room.id,
+    name: r.room.name,
+    icon: roomIconName(r.room.icon),
+    line: r.count === 0 ? 'Nothing here yet' : r.valued === 0 ? `${plural(r.count, 'item')} · no value yet` : plural(r.count, 'item'),
+    lineTone: r.count > 0 && r.valued === 0 ? 'amber' : 'muted',
+    value: r.valued === 0 ? undefined : formatMoney(r.totalCents, currency, { whole: true }),
+  }));
 
   const newRoom = async () => {
     const name = await ask({ title: 'New room', placeholder: 'Guest room, shed, storage unit', confirmLabel: 'Add' });
@@ -42,14 +57,16 @@ export default function RoomsTab() {
     <TabScreen
       testID="rooms-screen"
       title="Rooms"
+      scrollY={scrollY}
       action={<RoundButton testID="add-item" icon="add" label="Add an item" onPress={() => openNewItem(router)} />}>
       <FolderCard
+        plate
         label={doc.profile.homeName || 'Household'}
         summary={summary}
         currency={currency}
         whenEmpty={
           <>
-            <Text style={[type.subhead, { color: c.manilaInk2, marginBottom: space.l }]}>
+            <Text style={[type.subhead, { color: c.ink2, marginBottom: space.l }]}>
               Start with what would cost most to replace.
             </Text>
             <Button testID="add-first-item" label="Add your first item" icon="add" onPress={() => openNewItem(router)} />
@@ -57,37 +74,13 @@ export default function RoomsTab() {
         }
       />
 
-      <SectionLabel>Rooms</SectionLabel>
-      <Card>
-        {rooms.map((r, index) => (
-          <View key={r.room.id}>
-            {index > 0 ? <Divider inset={space.l + 36 + space.m} /> : null}
-            <Row
-              testID={`room-${r.room.name}`}
-              leading={<IconTile name={roomIconName(r.room.icon)} />}
-              title={r.room.name}
-              subtitle={r.count === 0 ? 'Nothing here yet' : r.valued === 0 ? `${plural(r.count, 'item')} · no value yet` : plural(r.count, 'item')}
-              subtitleTone={r.count > 0 && r.valued === 0 ? 'amber' : 'muted'}
-              value={r.valued === 0 ? undefined : formatMoney(r.totalCents, currency, { whole: true })}
-              valueTone="ink"
-              chevron
-              onPress={() => router.push({ pathname: '/room/[id]', params: { id: r.room.id } })}
-            />
-          </View>
-        ))}
-        {rooms.length > 0 ? <Divider inset={space.l + 36 + space.m} /> : null}
-        <Row
-          testID="add-room"
-          leading={
-            <View style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="add" size={20} color={c.green} />
-            </View>
-          }
-          title="Add a room"
-          tint
-          onPress={newRoom}
-        />
-      </Card>
+      <RoomDrawer
+        rooms={folders}
+        scrollY={scrollY}
+        pileAt={insets.top + 12}
+        onOpen={(id) => router.push({ pathname: '/room/[id]', params: { id } })}
+      />
+      <Button testID="add-room" kind="plain" icon="add" label="Add a room" onPress={newRoom} style={{ marginTop: space.m, alignSelf: 'center' }} />
 
       {gaps.length > 0 ? (
         <>

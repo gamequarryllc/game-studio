@@ -5,8 +5,9 @@ import Svg, { Circle, Ellipse, G, Path, Rect } from 'react-native-svg';
 import { useTheme } from '@/ui/theme';
 
 // The picture on the welcome screen: three snapshots of things in a home, each
-// with its price tag, standing in the manila folder. It says what the app does
-// without a paragraph: photograph it, put a value on it, keep it on file.
+// with its price tag, standing in the manila folder, and a shield on the folder
+// for what it is all for: an insurance claim. It says what the app does without
+// a paragraph: photograph it, put a value on it, keep it on file.
 //
 // The snapshots are photo prints, so their paper and their pictures keep the
 // same colours in dark mode; only the folder around them follows the theme.
@@ -146,7 +147,7 @@ export function WelcomeArt() {
       testID="welcome-art"
       accessible
       accessibilityRole="image"
-      accessibilityLabel="Three snapshots in a folder: an armchair, a laptop and a guitar, each with a price tag."
+      accessibilityLabel="Three snapshots in a folder marked with a shield: an armchair, a laptop and a guitar, each with a price tag."
       style={{ width: '100%', aspectRatio: WELCOME_ART_RATIO }}>
       <Svg width="100%" height="100%" viewBox="0 0 340 222">
       <Path d="M22 208 V34 a12 12 0 0 1 12 -12 H116 a11 11 0 0 1 9 4.8 L137 44 H306 a12 12 0 0 1 12 12 V208 Z" fill={t.back} />
@@ -163,6 +164,11 @@ export function WelcomeArt() {
       <Path d="M36 172.6 H304" stroke={t.edge} strokeWidth={1.2} fill="none" />
       <Rect x={42} y={186} width={92} height={20} rx={4} fill={t.label} />
         <Path d="M52 196 h46" stroke={t.labelInk} strokeWidth={3} strokeLinecap="round" fill="none" />
+        {/* Covered: the shield an insurer's paperwork carries, on the front of the folder. */}
+        <G transform="translate(290 196)">
+          <Path d="M0 -13 L11 -9 V1 C11 7.5 6 11.5 0 14 C-6 11.5 -11 7.5 -11 1 V-9 Z" fill={GREEN} />
+          <Path d="M-4.8 0.6 l3.3 3.4 l6.4 -7.2" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </G>
       </Svg>
     </View>
   );

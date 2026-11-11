@@ -24,22 +24,26 @@ The whole design follows from one fact about the job: people do it once, in an a
 | Card | `#FFFFFF` | `#1D1B18` | Lists and forms |
 | Ink | `#1C1B18` | `#F1EDE4` | Text; `ink2` and `ink3` are its two quieter steps |
 | Ledger green | `#1E5B48` | `#74C7A7` | Actions, and the figures that add up |
-| Manila | `#EDDCB1` | `#2A2620` | The folder, and nothing else. In dark mode it is a warm brown-grey with a lighter tab (`#37322A`): a dark gold looked dirty |
+| Manila | `#EDDCB1` | `#2A2620` | The folders (one per room), and nothing else. In dark mode it is a warm brown-grey with a lighter tab (`#37322A`): a dark gold looked dirty |
 | Button | `#1E5B48` | `#2F8A62` | Filled buttons, always with white text. The mint above is for links and symbols only |
 | Amber | `#9A5B13` | `#E3A85C` | A gap worth filling in (no photo, no value) |
 | Red | `#B3261E` | `#F2685E` | Deleting |
 
 **Type:** Newsreader (SIL Open Font License; the licence ships in `@expo-google-fonts/newsreader`) for titles and totals only. Everything else is the system font at the iOS text-style sizes, so Dynamic Type scales it. Figures use tabular numerals.
 
-**The motif:** the folder with a slanted tab at the top of the Rooms tab, labelled with the name of the home. It appears in exactly two places: there, and in the picture on the welcome screen.
+**The motif: a file cabinet.** A place (a home, an office) is a cabinet, and each of its rooms is a manila folder in the drawer. That is the owner's idea, from his first evening with the app on his phone (2026-11-11): "high level is file cabinet, and per room level is the folders".
 
-**The welcome picture** (`src/ui/WelcomeArt.tsx`, drawn with `react-native-svg`): three snapshots standing in the folder, an armchair, a laptop and a guitar, each a photo print with two lines of handwriting and a green price tag. It replaced a paragraph and an example folder full of figures after the owner's first run on his phone (2026-11-11: "This is a lot of words, easy imagery would be better"). The prints keep their light paper and colours in dark mode, as real prints would; only the folder follows the theme. Under it the screen has one headline, three words (Photo, Value, Report) and one line about privacy. **The owner's rule for every screen since: pictures first, few words.** The room picker on the second welcome screen is a grid of tiles with large symbols for the same reason. While a home is empty, the folder itself holds the one prompt and the "Add your first item" button, so the screen never stacks two empty states. The icon is the same idea reduced to one shape: a folder whose tab is a roof.
+**The drawer** (`src/ui/RoomDrawer.tsx`, the Rooms tab): the rooms are folders standing one behind the other, each with its name on a tab and its count and total on the strip under it. The tabs step across in three positions, as cut tabs do. Sifting: when the list scrolls, a folder that reaches the top of the screen stops there and the next ones close up over it, so the folders already passed gather into a pile of tabs, each name still readable and still a tap away; the writing on a folder fades as it is covered, so the pile never shows cut-off lines. Pressing a folder lifts it a little before it opens. It is all `Animated` transforms tied to the scroll position (no gesture library), on the native driver on iPhone. Above the drawer, the home's total sits on a plain card, the drawer's label plate (`FolderCard` with `plate`): it used to be a folder itself, and one screen cannot have the home and its rooms both be folders. **Cabinets for more than one place are next** (PROGRESS.md).
+
+The folder also appears in the picture on the welcome screen.
+
+**The welcome picture** (`src/ui/WelcomeArt.tsx`, drawn with `react-native-svg`): three snapshots standing in the folder, an armchair, a laptop and a guitar, each a photo print with two lines of handwriting and a green price tag, and a green shield on the front of the folder. The shield and the one line under the headline ("Your proof for an insurance claim.") are there because the owner asked for the screen to say why you would track your things at all: insurance. It replaced a paragraph and an example folder full of figures after the owner's first run on his phone (2026-11-11: "This is a lot of words, easy imagery would be better"). The prints keep their light paper and colours in dark mode, as real prints would; only the folder follows the theme. Under it the screen has one headline, three words (Photo, Value, Report) and one line about privacy. **The owner's rule for every screen since: pictures first, few words.** The room picker on the second welcome screen is a grid of tiles with large symbols for the same reason. While a home is empty, the folder itself holds the one prompt and the "Add your first item" button, so the screen never stacks two empty states. The icon is the same idea reduced to one shape: a folder whose tab is a roof.
 
 **Where the look comes from** (none of them apps): manila file folders and their index tabs; bank passbooks and ledger paper; the object labels in a museum case, with their small serif titles and plain facts.
 
 **House rules that keep it from looking generated:**
 
-- One uppercase label in the whole app: the folder's tab. No eyebrow above headlines.
+- One uppercase label in the whole app: the name of the place on the drawer's label plate. No eyebrow above headlines.
 - No lists of three icons in tinted squares. If a screen needs to explain the app, it shows a picture drawn for it (the welcome picture), not a paragraph.
 - Sentence case, no exclamation marks, and say a thing once ("No results for ..." rather than a title and a body that repeat each other).
 - Amber means "worth filling in" and nothing else. A room whose things have no value says so in amber instead of showing "$0".
