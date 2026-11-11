@@ -55,3 +55,13 @@ export function goalLabel(goalMinutes: number): string {
   const hours = Math.round((goalMinutes / 60) * 100) / 100;
   return `${String(hours)} hour day`;
 }
+
+/** How long until a moment, in the fewest words: "in 13 h 40 min", "in 40 min", "now". */
+export function untilLabel(now: Date, then: Date): string {
+  const minutes = Math.ceil((then.getTime() - now.getTime()) / 60000);
+  if (minutes <= 0) return 'now';
+  if (minutes < 60) return `in ${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `in ${h} h` : `in ${h} h ${m} min`;
+}

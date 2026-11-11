@@ -6,7 +6,7 @@ Kept current after every finished item, so a run that is cut off can be picked u
 
 Built in the owner's conversation. The studio's two engines leave this folder alone (STUDIO.md, "Apps").
 
-**Checks right now:** lint clean, typecheck clean, 36 unit tests pass, the web export and the iPhone bundle build, the browser run (`node e2e/run.cjs`, 16 steps) passes with no console errors. The unsigned iPhone build on GitHub compiles and links (first run, 2026-11-11); it then stopped on the version number, which `app.config.js` now takes from the build.
+**Checks right now:** lint clean, typecheck clean, 38 unit tests pass, the web export and the iPhone bundle build, the browser run (`node e2e/run.cjs`, 16 steps) passes with no console errors. The unsigned iPhone build on GitHub compiles and links (first run, 2026-11-11); it then stopped on the version number, which `app.config.js` now takes from the build.
 
 ## Done
 
@@ -17,6 +17,7 @@ Built in the owner's conversation. The studio's two engines leave this folder al
 - Developer tools for the preview: pretend use, recharge now, the two previews.
 - Icon, favicon and splash mark drawn by `art/make_icons.py`.
 - README, NOTES.md.
+- Second look pass after the owner called the first build dull: Today as an edge-to-edge field of the day's colour, the sticker battery, the day's colour as the app's accent, movement, larger type, the day's ruler (NOTES.md, "Look").
 - What the studio's iPhone build expects of an app: `app.config.js` reads the version and build number, a privacy manifest in `app.json`, and the Developer section can be kept in a playtest build (`EXPO_PUBLIC_PLAYTEST=1`).
 
 ## Next, in order

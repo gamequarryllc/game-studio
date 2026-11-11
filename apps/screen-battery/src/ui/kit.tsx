@@ -68,7 +68,7 @@ export function StepButton({ sign, label, onPress, size = 48 }: { sign: '−' | 
         tap();
         onPress();
       }}
-      style={({ pressed }) => [{ width: size, height: size, borderRadius: size * 0.32, backgroundColor: c.raised, alignItems: 'center', justifyContent: 'center' }, pressed ? { opacity: 0.7 } : null]}>
+      style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, borderWidth: 1.5, borderColor: c.outline, backgroundColor: pressed ? c.raised : 'transparent', alignItems: 'center', justifyContent: 'center' }]}>
       <Text style={{ color: c.ink, fontSize: size * 0.5, lineHeight: size * 0.6, fontWeight: '400' }}>{sign}</Text>
     </Pressable>
   );
@@ -102,7 +102,7 @@ export function Chevron({ color = c.ink3 }: { color?: string }) {
 }
 
 /** A choice among a few: the chosen one is light, the others dark. */
-export function Choice({ title, line, chosen, onPress, tag, disabled = false }: { title: string; line: string; chosen: boolean; onPress: () => void; tag?: string; disabled?: boolean }) {
+export function Choice({ title, line, chosen, onPress, tag, disabled = false, accent = c.paper }: { title: string; line: string; chosen: boolean; onPress: () => void; tag?: string; disabled?: boolean; accent?: string }) {
   return (
     <Pressable
       accessibilityRole="radio"
@@ -113,11 +113,12 @@ export function Choice({ title, line, chosen, onPress, tag, disabled = false }: 
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.choice, { backgroundColor: chosen ? c.paper : c.ground }, pressed ? { opacity: 0.8 } : null]}>
+      style={({ pressed }) => [styles.choice, chosen ? { backgroundColor: accent, borderColor: accent } : null, disabled ? { opacity: 0.6 } : null, pressed ? { opacity: 0.8 } : null]}>
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: chosen ? c.onPaper : c.ink }}>{title}</Text>
-        <Text style={{ fontSize: 14, lineHeight: 19, color: chosen ? c.onPaper2 : c.ink3 }}>{line}</Text>
+        <Text style={{ fontFamily: display.semi, fontSize: 18, lineHeight: 22, color: chosen ? c.onTone : c.ink }}>{title}</Text>
+        <Text style={{ fontSize: 14, lineHeight: 19, fontWeight: chosen ? '500' : '400', color: chosen ? c.onTone : c.ink3 }}>{line}</Text>
       </View>
+      {chosen ? <View style={styles.dot} /> : null}
       {tag ? (
         <View style={styles.tag}>
           <Text style={styles.tagText}>{tag}</Text>
@@ -128,18 +129,19 @@ export function Choice({ title, line, chosen, onPress, tag, disabled = false }: 
 }
 
 const styles = StyleSheet.create({
-  title: { fontFamily: display.bold, fontSize: 34, lineHeight: 40, color: c.ink, marginBottom: 4 },
+  title: { fontFamily: display.bold, fontSize: 40, lineHeight: 44, letterSpacing: -1, color: c.ink, marginBottom: 6 },
   lead: { fontSize: 16, lineHeight: 22, color: c.ink2, marginBottom: 6 },
-  label: { fontSize: 13, fontWeight: '600', letterSpacing: 1, textTransform: 'uppercase', color: c.ink3 },
-  card: { borderRadius: 20, backgroundColor: c.card, paddingHorizontal: 16 },
-  big: { minHeight: 56, borderRadius: 18, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
-  bigQuiet: { backgroundColor: c.raised },
+  label: { fontSize: 12, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: c.ink3 },
+  card: { borderRadius: 22, backgroundColor: c.card, borderWidth: 1, borderColor: c.rule, paddingHorizontal: 16 },
+  big: { minHeight: 58, borderRadius: 29, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  bigQuiet: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: c.outline },
   bigText: { fontSize: 17, fontWeight: '600', color: c.onPaper },
   row: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
   rowValue: { fontSize: 16, color: c.ink3, flexShrink: 1 },
-  choice: { minHeight: 58, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  choice: { minHeight: 62, borderRadius: 16, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, paddingVertical: 11, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: c.onTone },
   tag: { borderWidth: 1, borderColor: c.ink3, borderRadius: 8, paddingVertical: 3, paddingHorizontal: 8 },
   tagText: { fontSize: 12, fontWeight: '600', color: c.ink2 },
 });

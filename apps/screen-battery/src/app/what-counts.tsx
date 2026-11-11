@@ -1,11 +1,12 @@
 import { Text, View } from 'react-native';
 
-import { store, useDoc } from '@/state/store';
+import { store } from '@/state/store';
 import { Choice, Lead, Page, Title } from '@/ui/kit';
 import { c } from '@/ui/theme';
+import { useDay } from '@/ui/useDay';
 
 export default function WhatCounts() {
-  const { settings } = useDoc();
+  const { settings, accent } = useDay();
   return (
     <Page top={8}>
       <Title>What counts</Title>
@@ -15,12 +16,14 @@ export default function WhatCounts() {
           title="Everything"
           line="Every app drains it, always-allowed apps included."
           chosen={settings.countMode === 'everything'}
+          accent={accent}
           onPress={() => store.setCountMode('everything')}
         />
         <Choice
           title="Time-wasters"
           line="Social, Games and Entertainment. Work apps don't drain it."
           chosen={settings.countMode === 'timeWasters'}
+          accent={accent}
           onPress={() => store.setCountMode('timeWasters')}
         />
         <Choice title="Your own picks" line="Tick the apps and categories yourself. Not built yet." chosen={settings.countMode === 'custom'} onPress={() => {}} tag="Pro" disabled />

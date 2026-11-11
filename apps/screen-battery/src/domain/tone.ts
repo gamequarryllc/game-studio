@@ -91,3 +91,15 @@ export function contrast(a: string, b: string): number {
   const lb = luminance(b);
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
+
+/** The app's own dark ground. */
+export const GROUND = '#0E1011';
+
+/**
+ * The day's colour for use on the app's dark ground (a chosen setting, the
+ * tab that is open). It is the battery's colour, except that the deep red of
+ * an empty battery is too dark to read there and gives way to a lighter red.
+ */
+export function accentOnDark(tone: Tone): string {
+  return tone.dark ? '#FF7B6B' : tone.bg;
+}

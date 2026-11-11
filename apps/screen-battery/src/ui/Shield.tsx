@@ -21,8 +21,8 @@ export function Shield({ tone, cells, title, line, primary, secondary }: { tone:
   return (
     <View style={[styles.page, { backgroundColor: tone.bg, paddingTop: insets.top, paddingBottom: insets.bottom + 32 }]}>
       <View style={styles.middle}>
-        <View style={{ width: 190 }}>
-          <Battery cells={cells} tone={tone} height={64} />
+        <View style={{ width: 232 }}>
+          <Battery cells={cells} tone={tone} height={80} />
         </View>
         <Text accessibilityRole="header" style={[styles.title, { color: tone.fg }]}>
           {title}
@@ -58,9 +58,9 @@ export function Shield({ tone, cells, title, line, primary, secondary }: { tone:
 const styles = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 28, justifyContent: 'space-between' },
   middle: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24 },
-  title: { fontFamily: display.bold, fontSize: 46, lineHeight: 50, letterSpacing: -1, textAlign: 'center' },
+  title: { fontFamily: display.bold, fontSize: 54, lineHeight: 54, letterSpacing: -2, textAlign: 'center' },
   line: { fontSize: 18, lineHeight: 25, fontWeight: '500', textAlign: 'center', maxWidth: 310 },
-  primary: { minHeight: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
-  secondary: { minHeight: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  primary: { minHeight: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  secondary: { minHeight: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
   buttonText: { fontSize: 17, fontWeight: '600' },
 });

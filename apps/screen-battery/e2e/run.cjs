@@ -48,7 +48,11 @@ async function main() {
   });
   page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
 
-  const shot = (name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+  // Colours and cells ease into place; a picture is taken once they have settled.
+  const shot = async (name) => {
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+  };
   const see = (text) => page.getByText(text, { exact: true }).first().waitFor({ state: 'visible', timeout: 8000 });
   const gone = (text) => page.getByText(text, { exact: true }).first().waitFor({ state: 'hidden', timeout: 8000 });
   const press = (name) => page.getByRole('button', { name, exact: true }).first().click();

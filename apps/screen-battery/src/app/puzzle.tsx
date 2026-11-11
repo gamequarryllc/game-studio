@@ -7,9 +7,10 @@ import { cellsLeft } from '@/domain/battery';
 import { clockLabelOf } from '@/domain/day';
 import { isRight, makeRandom, makeSums, topUpPlan, type Sum } from '@/domain/puzzle';
 import { success, warning } from '@/platform/haptics';
-import { store, useDoc } from '@/state/store';
+import { store } from '@/state/store';
 import { BigButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
+import { useDay } from '@/ui/useDay';
 
 // "Work for it": a few sums for a little more time. Each top-up since the
 // last recharge asks for more sums and gives fewer minutes.
@@ -17,7 +18,7 @@ import { c, display } from '@/ui/theme';
 export default function Puzzle() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { settings, day } = useDoc();
+  const { settings, day, accent } = useDay();
 
   // The plan and the sums are fixed when the screen opens, so earning the
   // time (which raises the count) does not change what is on the screen.
@@ -95,7 +96,7 @@ export default function Puzzle() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {sums.map((_, i) => (
-              <View key={i} style={{ width: sums.length > 5 ? 22 : 34, height: 8, borderRadius: 4, backgroundColor: i <= at ? c.ink : '#34383D' }} />
+              <View key={i} style={{ width: sums.length > 5 ? 22 : 34, height: 8, borderRadius: 4, backgroundColor: i < at ? accent : i === at ? c.ink : c.raised }} />
             ))}
           </View>
           <Text style={styles.count}>
@@ -145,11 +146,11 @@ export default function Puzzle() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: c.ground, paddingHorizontal: 24, justifyContent: 'space-between' },
-  title: { fontFamily: display.bold, fontSize: 34, lineHeight: 38, color: c.ink },
+  title: { fontFamily: display.bold, fontSize: 40, lineHeight: 42, letterSpacing: -1.2, color: c.ink },
   lead: { fontSize: 16, lineHeight: 22, color: c.ink2 },
   small: { fontSize: 14, lineHeight: 20, color: c.ink3 },
   count: { fontSize: 14, fontWeight: '600', color: c.ink3 },
-  sum: { fontFamily: display.bold, fontSize: 76, lineHeight: 80, letterSpacing: -1.5, color: c.ink },
+  sum: { fontFamily: display.bold, fontSize: 88, lineHeight: 90, letterSpacing: -3.5, color: c.ink },
   fieldLabel: { fontSize: 14, fontWeight: '600', color: c.ink3 },
   input: { height: 64, borderRadius: 18, borderWidth: 2, borderColor: c.outline, backgroundColor: c.card, color: c.ink, paddingHorizontal: 18, fontSize: 28, fontWeight: '600' },
   wrong: { fontSize: 15, color: '#F0A08C' },

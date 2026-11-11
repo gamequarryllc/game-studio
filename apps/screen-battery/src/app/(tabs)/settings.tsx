@@ -1,34 +1,53 @@
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { clockLabel, durationLabel } from '@/domain/day';
 import { topUpPlan } from '@/domain/puzzle';
 import type { CountMode } from '@/domain/types';
 import { DEV_TOOLS } from '@/platform/screenTime';
-import { store, useDoc, useNow } from '@/state/store';
+import { store } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
+import { Battery } from '@/ui/Battery';
 import { c, display } from '@/ui/theme';
+import { useDay } from '@/ui/useDay';
 
 const COUNT_NAMES: Record<CountMode, string> = { everything: 'Everything', timeWasters: 'Time-wasters', custom: 'Your own picks' };
 
+/** "30 minutes", "17 and a half minutes", "1 hour". */
+function cellWords(goalMinutes: number): string {
+  const each = goalMinutes / 6;
+  if (each === 60) return '1 hour';
+  if (each > 60) return `${durationLabel(each)}`;
+  const whole = Math.floor(each);
+  if (each === whole) return `${whole} minutes`;
+  return `${whole} and a half minutes`;
+}
+
 export default function Settings() {
   const router = useRouter();
-  useNow();
-  const { settings, day } = useDoc();
+  const { settings, day, cells, accent } = useDay();
   const first = topUpPlan(0);
+  // On a narrow phone the goal's figures give the two round buttons room.
+  const narrow = Math.min(useWindowDimensions().width, 480) < 360;
 
   return (
     <Page top={24} bottom={24}>
       <Title>Settings</Title>
 
-      <Card style={{ paddingVertical: 14, gap: 6 }}>
+      <Card style={{ paddingTop: 16, paddingBottom: 18, gap: 10 }}>
         <Label>Daily goal</Label>
         <View style={styles.stepper}>
-          <StepButton sign="−" label="Less time" onPress={() => store.stepGoal(-1)} />
-          <Text accessibilityLabel={`Daily goal, ${durationLabel(settings.goalMinutes)}`} style={styles.goal}>
+          <StepButton sign="−" label="Less time" size={narrow ? 46 : 52} onPress={() => store.stepGoal(-1)} />
+          <Text accessibilityLabel={`Daily goal, ${durationLabel(settings.goalMinutes)}`} style={[styles.goal, { color: accent }, narrow ? { fontSize: 50, lineHeight: 54, letterSpacing: -1.6 } : null]}>
             {durationLabel(settings.goalMinutes)}
           </Text>
-          <StepButton sign="+" label="More time" onPress={() => store.stepGoal(1)} />
+          <StepButton sign="+" label="More time" size={narrow ? 46 : 52} onPress={() => store.stepGoal(1)} />
+        </View>
+        <View style={styles.cellRow}>
+          <View style={{ width: 74 }}>
+            <Battery cells={cells} tone={{ fg: c.ink, track: 'rgba(244,245,242,0.22)', bg: c.card }} height={26} flat decorative />
+          </View>
+          <Text style={styles.cellNote}>Six cells of {cellWords(settings.goalMinutes)} each</Text>
         </View>
       </Card>
 
@@ -50,9 +69,9 @@ export default function Settings() {
 
       <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>
         <Label>When the battery is empty</Label>
-        <Choice title="Warn" line="Red screen, then tap through" chosen={settings.emptyLevel === 'warn'} onPress={() => store.setEmptyLevel('warn')} />
-        <Choice title="Work for it" line={`Solve sums to get ${first.minutes} more minutes`} chosen={settings.emptyLevel === 'work'} onPress={() => store.setEmptyLevel('work')} />
-        <Choice title="Locked" line="Nothing opens until it recharges" chosen={settings.emptyLevel === 'locked'} onPress={() => store.setEmptyLevel('locked')} />
+        <Choice title="Warn" line="Red screen, then tap through" chosen={settings.emptyLevel === 'warn'} accent={accent} onPress={() => store.setEmptyLevel('warn')} />
+        <Choice title="Work for it" line={`Solve sums to get ${first.minutes} more minutes`} chosen={settings.emptyLevel === 'work'} accent={accent} onPress={() => store.setEmptyLevel('work')} />
+        <Choice title="Locked" line="Nothing opens until it recharges" chosen={settings.emptyLevel === 'locked'} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
       </Card>
 
       {DEV_TOOLS ? (
@@ -74,7 +93,9 @@ export default function Settings() {
 
 const styles = StyleSheet.create({
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  goal: { fontFamily: display.bold, fontSize: 52, lineHeight: 58, letterSpacing: -1, color: c.ink },
+  goal: { fontFamily: display.bold, fontSize: 64, lineHeight: 66, letterSpacing: -2.4, color: c.ink },
+  cellRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2 },
+  cellNote: { flex: 1, fontSize: 14, lineHeight: 19, color: c.ink3 },
   rechargeRow: { minHeight: 60, paddingVertical: 10, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 12, rowGap: 8 },
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
   rechargeValue: { fontFamily: display.semi, fontSize: 17, color: c.ink, minWidth: 84, textAlign: 'center' },

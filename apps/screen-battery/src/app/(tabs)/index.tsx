@@ -1,69 +1,88 @@
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { cellsLeft, fractionUsed, wordFor } from '@/domain/battery';
-import { clockLabel, clockLabelOf, durationLabel } from '@/domain/day';
+import { wordFor } from '@/domain/battery';
+import { clockLabel, clockLabelOf, durationLabel, goalLabel, nextRecharge, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
-import { toneAt } from '@/domain/tone';
 import { DEV_TOOLS, SCREEN_TIME_AVAILABLE } from '@/platform/screenTime';
-import { useDoc, useNow } from '@/state/store';
 import { Battery } from '@/ui/Battery';
-import { BigButton, Card, Label, Page, Title } from '@/ui/kit';
+import { BigButton, Label } from '@/ui/kit';
+import { useEasedColor } from '@/ui/motion';
+import { Ruler } from '@/ui/Ruler';
 import { c, display } from '@/ui/theme';
+import { useDay } from '@/ui/useDay';
+
+// Today: the top of the screen is the battery's colour, edge to edge, so the
+// state of the day is the first thing seen and the only colour on the page.
 
 export default function Today() {
   const router = useRouter();
-  const now = useNow();
-  const { settings, day } = useDoc();
+  const insets = useSafeAreaInsets();
+  const { now, settings, day, fraction, cells, tone, accent } = useDay();
+  const field = useEasedColor(tone.bg);
+  // The word is as large as the phone allows without breaking onto a second line.
+  const width = Math.min(useWindowDimensions().width, 480);
+  const wordSize = Math.min(58, Math.floor((width - 48) / 5.7));
 
-  const cells = cellsLeft(day.usedMinutes, settings.goalMinutes);
-  const tone = toneAt(fractionUsed(day.usedMinutes, settings.goalMinutes));
   const recharge = clockLabel(settings.rechargeMinute);
   const empty = cells === 0;
   const unlocked = isUnlocked(day, now);
   const next = topUpPlan(day.topUps);
 
   return (
-    <Page top={24} bottom={24}>
-      <Title>Today</Title>
-
-      <View style={[styles.hero, { backgroundColor: tone.bg }]}>
-        <Battery cells={cells} tone={tone} height={84} />
-        <View style={{ gap: 6 }}>
-          <Text style={[styles.word, { color: tone.fg }]}>{wordFor(cells)}</Text>
-          <Text style={[styles.recharge, { color: tone.fg }]}>Recharges at {recharge}</Text>
+    <ScrollView style={{ flex: 1, backgroundColor: c.ground }} contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
+      <Animated.View style={[styles.field, { backgroundColor: field, paddingTop: Math.max(insets.top, 12) + 16 }]}>
+        <View style={styles.top}>
+          <Text accessibilityRole="header" style={[styles.title, { color: tone.fg }]}>
+            Today
+          </Text>
+          <Text style={[styles.goal, { color: tone.fg, borderColor: tone.fg }]}>{goalLabel(settings.goalMinutes)}</Text>
         </View>
-      </View>
+        <Battery cells={cells} tone={tone} height={104} fill={field} />
+        <View style={{ gap: 4 }}>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.word, { color: tone.fg, fontSize: wordSize, lineHeight: wordSize + 2 }]}>
+            {wordFor(cells)}
+          </Text>
+          <View style={styles.rechargeRow}>
+            <Text style={[styles.recharge, { color: tone.fg }]}>Recharges at {recharge}</Text>
+            <Text style={[styles.until, { color: tone.fg }]}>{untilLabel(now, nextRecharge(now, settings.rechargeMinute))}</Text>
+          </View>
+        </View>
+      </Animated.View>
 
-      {unlocked ? (
-        <Card style={{ paddingVertical: 14 }}>
-          <Text style={styles.body}>Earned time runs until {clockLabelOf(new Date(day.unlockedUntil as string))}.</Text>
-        </Card>
-      ) : null}
+      <View style={styles.rest}>
+        {unlocked ? (
+          <View style={[styles.strip, { borderColor: accent }]}>
+            <Text style={styles.body}>Earned time runs until {clockLabelOf(new Date(day.unlockedUntil as string))}.</Text>
+          </View>
+        ) : null}
+        {empty && !unlocked && settings.emptyLevel === 'work' ? (
+          <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} />
+        ) : null}
+        {empty && !unlocked && settings.emptyLevel === 'locked' ? (
+          <View style={[styles.strip, { borderColor: accent }]}>
+            <Text style={styles.body}>
+              Locked until {recharge}. {allowedLine(settings.allowed)}
+            </Text>
+          </View>
+        ) : null}
 
-      {empty && !unlocked && settings.emptyLevel === 'work' ? (
-        <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} />
-      ) : null}
-      {empty && !unlocked && settings.emptyLevel === 'locked' ? (
-        <Card style={{ paddingVertical: 14 }}>
-          <Text style={styles.body}>Locked until {recharge}. {allowedLine(settings.allowed)}</Text>
-        </Card>
-      ) : null}
-
-      <View style={{ marginTop: 8, gap: 10 }}>
-        <View style={styles.usedRow}>
+        <View style={{ gap: 12 }}>
           <Label>Used so far</Label>
           <Text style={styles.used}>
-            {durationLabel(day.usedMinutes)} of {durationLabel(settings.goalMinutes)}
+            {durationLabel(day.usedMinutes)} <Text style={styles.usedOf}>of {durationLabel(settings.goalMinutes)}</Text>
           </Text>
+          <Ruler fraction={fraction} color={accent} />
         </View>
-        <Card style={{ paddingVertical: 14, gap: 6 }}>
+
+        <View style={{ gap: 6 }}>
           <Text style={styles.body}>{SCREEN_TIME_AVAILABLE ? 'The time each app used shows here.' : 'On an iPhone, the time each app used shows here.'}</Text>
           {DEV_TOOLS && !SCREEN_TIME_AVAILABLE ? <Text style={styles.note}>This preview has no real screen time. Drain the battery from Settings, under Developer.</Text> : null}
-        </Card>
+        </View>
       </View>
-    </Page>
+    </ScrollView>
   );
 }
 
@@ -75,11 +94,18 @@ export function allowedLine(allowed: readonly string[]): string {
 }
 
 const styles = StyleSheet.create({
-  hero: { borderRadius: 28, paddingHorizontal: 24, paddingTop: 22, paddingBottom: 24, gap: 18 },
-  word: { fontFamily: display.bold, fontSize: 38, lineHeight: 42, letterSpacing: -0.6 },
-  recharge: { fontSize: 16, fontWeight: '600' },
-  usedRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  used: { fontFamily: display.semi, fontSize: 17, color: c.ink },
+  field: { paddingHorizontal: 24, paddingBottom: 30, gap: 26, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  title: { fontFamily: display.bold, fontSize: 22, lineHeight: 26, letterSpacing: -0.3 },
+  goal: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', borderWidth: 1.5, borderRadius: 99, paddingVertical: 5, paddingHorizontal: 11, overflow: 'hidden' },
+  word: { fontFamily: display.bold, fontSize: 58, lineHeight: 58, letterSpacing: -2.2 },
+  rechargeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 10, rowGap: 2 },
+  recharge: { fontSize: 17, fontWeight: '700' },
+  until: { fontSize: 17, fontWeight: '500' },
+  rest: { paddingHorizontal: 24, paddingTop: 28, gap: 26 },
+  strip: { borderLeftWidth: 0, borderWidth: 1.5, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
+  used: { fontFamily: display.bold, fontSize: 48, lineHeight: 50, letterSpacing: -1.6, color: c.ink },
+  usedOf: { fontFamily: display.semi, fontSize: 22, letterSpacing: -0.3, color: c.ink3 },
   body: { fontSize: 15, lineHeight: 21, color: c.ink2 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
 });

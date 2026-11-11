@@ -1,4 +1,4 @@
-import { clockLabel, durationLabel, goalLabel, nextRecharge, periodStart, wrapMinute } from '../day';
+import { clockLabel, durationLabel, goalLabel, nextRecharge, periodStart, untilLabel, wrapMinute } from '../day';
 import { freshDay, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse } from '../dayState';
 
 const SIX = 6 * 60;
@@ -36,6 +36,18 @@ describe('the recharge clock', () => {
     expect(goalLabel(180)).toBe('3 hour day');
     expect(goalLabel(150)).toBe('2.5 hour day');
     expect(goalLabel(105)).toBe('1.75 hour day');
+  });
+});
+
+describe('how long until the recharge', () => {
+  const at = (h: number, m: number, sec = 0) => new Date(2026, 10, 11, h, m, sec);
+  it('says it in the fewest words', () => {
+    expect(untilLabel(at(16, 20), new Date(2026, 10, 12, 6, 0))).toBe('in 13 h 40 min');
+    expect(untilLabel(at(5, 20), at(6, 0))).toBe('in 40 min');
+    expect(untilLabel(at(4, 0), at(6, 0))).toBe('in 2 h');
+    expect(untilLabel(at(5, 59, 30), at(6, 0))).toBe('in 1 min');
+    expect(untilLabel(at(6, 0), at(6, 0))).toBe('now');
+    expect(untilLabel(at(7, 0), at(6, 0))).toBe('now');
   });
 });
 

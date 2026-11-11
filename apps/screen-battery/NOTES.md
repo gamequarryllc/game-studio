@@ -25,13 +25,18 @@ An app is never told how many minutes have been used. It can only ask the phone 
 
 ## Look
 
-- One dark, plain look (`#101214` ground), no light version: the battery's colour is the only colour on any screen.
-- Space Grotesk for the battery's word, titles and figures; the system font for everything else.
-- The colour of the day is worked out in OKLCH and turned into hex (`src/domain/tone.ts`), and a test holds every point of the day to a text contrast of 4.5 to 1.
-- The battery is one drawing (`src/ui/Battery.tsx`) used at every size, and the icon is the same battery (`art/make_icons.py`).
+The owner's note on the first build (2026-11-11): a good baseline, but dull. The second pass:
+
+- **Today is the battery's colour, edge to edge.** The top of the screen is a field of the day's colour with a large battery, the word at the largest size the phone allows on one line, and the recharge time with a live "in 12 h 13 min". The rest of the app stays on one dark ground (`#0E1011`), so that colour is the only colour on any screen. No light version.
+- **The colour marks what is chosen everywhere else:** the open tab, the chosen level, the goal's figures, the filled part of the day's ruler, finished sums. The deep red of an empty battery is too dark to read on the dark ground, so there it gives way to a lighter red (`accentOnDark` in `src/domain/tone.ts`, held to 4.5 to 1 by a test).
+- **The battery is drawn like a sticker:** a thick casing, a hard shadow under it, a short glint on each lit cell. One drawing (`src/ui/Battery.tsx`) at every size; the icon is the same battery (`art/make_icons.py`).
+- **Movement:** a used-up cell fades and shrinks away, the colour eases to the next one over half a second, and the last cell left breathes slowly. All of it stands still when the phone is set to reduce motion (`src/ui/motion.ts`).
+- **The day's ruler** under "Used so far": six stretches, one per cell, filling as the battery empties.
+- Space Grotesk for the word, titles and figures, set large and tight; the system font for everything else.
+- The colour of the day is worked out in OKLCH and turned into hex, and a test holds every point of the day to a text contrast of 4.5 to 1.
 - The cells and the word carry the meaning as well as the colour, so it reads without colour vision.
 - The screens that cover an app keep to what an iPhone allows there: a picture, a title, one line, two buttons. Once the battery is empty the main button is always "Close this app"; the way through is the smaller one.
-- Sentence case, no exclamation marks, one uppercase label style (the small group labels).
+- Sentence case, no exclamation marks, one uppercase label style (the small group labels and the goal chip).
 
 ## What is real and what is pretend
 
@@ -80,4 +85,5 @@ None of this can be built or tried in Expo Go or a browser, and none of it can b
 - 36 unit tests: cells for goals that do and do not divide by six, the colour and its contrast at every point of the day, the recharge clock across midnight, a month end and a clock change, checkpoints and the early-arrival check, sums (always two digits with a carry, repeatable from a seed), top-ups that shrink and never run past the recharge, settings limits, reading back a damaged saved copy, and the wording of the warning and empty screens at each level.
 - The browser run (`e2e/run.cjs`, 16 steps, no console errors): fresh start; the goal and recharge steppers to their limits; what counts; removing and adding always-allowed apps including a duplicate, an empty name and an over-long one; draining cell by cell; the warning screen; the empty screen at all three levels; a wrong answer, letters and an empty answer on the sums; earning 15 minutes then 10; reload; far past the goal; recharge; the sums refused while there is charge; a reloaded inner page and an unknown page; a 320 pt phone.
 - Bugs found by looking at the screenshots, each now a test: the recharge stepper ran out of its card on a 320 pt phone (it drops to its own line); the three choices did not tell a screen reader which was chosen in the browser.
+- After the second look pass: 38 unit tests (the accent on the dark ground, the countdown wording), the same 16 browser steps clean, screenshots taken once the movement has settled. One bug from the screenshots: the battery's casing changed colour at once while the ground behind it eased, so the two disagreed for half a second (the casing now eases with it).
 - Not done yet: a fresh-eyes critic on the screenshots; anything on a real iPhone.

@@ -1,6 +1,6 @@
 import { CELLS, cellsLeft, fractionUsed, wordFor } from '../battery';
 import { checkpointsFor, finalWarningMinutes, isPlausible, usedFloor } from '../checkpoints';
-import { contrast, oklchToHex, toneAt, toneForCells } from '../tone';
+import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
 
 describe('cells', () => {
   it('starts full and empties one cell per sixth of the goal', () => {
@@ -50,6 +50,14 @@ describe('colour', () => {
       expect(tone.bg).toMatch(/^#[0-9A-F]{6}$/);
       expect(contrast(tone.bg, tone.fg)).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('can always be read as an accent on the dark ground', () => {
+    for (let t = 0; t <= 1.2; t += 0.01) {
+      expect(contrast(accentOnDark(toneAt(t)), GROUND)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(accentOnDark(toneAt(0.5))).toBe(toneAt(0.5).bg);
+    expect(accentOnDark(toneAt(1))).not.toBe(toneAt(1).bg);
   });
 
   it('is deep red and light-on-dark only once the battery is empty', () => {
