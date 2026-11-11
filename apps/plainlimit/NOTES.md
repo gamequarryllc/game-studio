@@ -40,36 +40,57 @@ The owner's note on the first build (2026-11-11): a good baseline, but dull. The
 
 ## What is real and what is pretend
 
-| Part | Now | On an iPhone, later |
+| Part | In a browser or Expo Go | In an iPhone build with Screen Time on |
 |---|---|---|
-| Goal, recharge time, levels, always-allowed list | Real, saved on the phone | The same |
-| Battery cells, colour, words | Real logic, fed by pretend use | Fed by the phone's checkpoints |
-| Minutes used | Pretend: added by hand under Developer | From Apple's Screen Time |
-| Per-app times on Today | A note saying where they will be | Apple's own report view |
-| Always-allowed list | Names typed in | Apple's app picker (the app never learns the names) |
-| What counts | Everything or the preset, saved | Applied through Apple's picker and categories |
+| Goal, recharge time, levels | Real, saved on the phone | The same, and handed to the phone as the day's plan |
+| Battery cells, colour, words | Real logic, fed by pretend use | Fed by the checkpoints the phone reports |
+| Minutes used | Pretend: added by hand under Developer | A floor: the largest checkpoint reached ("At least 1h 30m") |
+| Per-app times on Today | Not built | Not built (needs Apple's report extension; not in version one) |
+| Always-allowed list | Names typed in | Apple's app picker; the app only learns how many are ticked |
+| What counts | Everything or the preset, saved | Everything, or whatever is ticked in Apple's picker |
 | Warning and empty screens | Previews opened from Developer | Drawn by the phone over other apps |
 | Sums | Real | The same, reached from a notification |
-| Home screen and lock screen widgets | Not built | Native, in Swift |
-| The lock | Not built | Apple's Screen Time |
-| Pro | Not built | RevenueCat, like the other apps |
+| Home screen and lock screen widgets | Not there | Native, in Swift (`targets/widget/`) |
+| The lock | Not there | Apple's Screen Time |
+| Pro | Not built | Not built |
 
-The Developer section (pretend use, recharge now, the two previews) shows in test builds and the web preview, never in a store build (`DEV_TOOLS` in `src/platform/screenTime.ts`).
+The Developer section (pretend use, recharge now, the two previews) shows in test builds and the web preview, never in a store build, and it hides once real Screen Time is on (`DEV_TOOLS` in `src/platform/screenTime.ts`).
 
-## What the real thing needs
+## How the iPhone side is put together
 
-None of this can be built or tried in Expo Go or a browser, and none of it can be tested in the studio workspace.
+**Written 2026-11-11 and compiled on the studio's Mac runners. Not one line of it has run on a real iPhone yet.** Everything below is how it is meant to work; "To check on the phone" further down is the list of what has to be seen with eyes.
 
-1. **Apple's approval (the owner).** Family Controls needs a distribution entitlement that Apple grants on request, per bundle id: the app and each of its extensions. Request it at developer.apple.com/contact/request/family-controls-distribution from the business's developer account. Developers report waits of weeks, so this is worth doing first. A development build on the owner's own iPhone works without it.
-2. **A development build.** The Screen Time pieces are native. The plan is `react-native-device-activity` (an Expo config plugin that adds the extensions) plus a WidgetKit widget in Swift; that means `expo prebuild` and a build on a Mac or a Mac build service, then installing on a real iPhone. The simulator does not run Screen Time.
-3. **The native pieces:**
-   - Screen Time permission, asked once at setup.
-   - Apple's app picker for "your own picks" and "always allowed". It hands back tokens, not names.
-   - A monitor extension: registers the checkpoints from `src/domain/checkpoints.ts` on a schedule that runs from recharge to recharge, and on each one writes the new state where the widget can read it, redraws the widget, and puts up the warning screen or the lock.
-   - The screens over apps (title, line and buttons from `src/domain/shield.ts`) and their button handling.
-   - The widget: small, medium and lock screen, drawn from the same cells, words and colours (`src/domain/battery.ts`, `tone.ts`).
-   - A notification on the last cell, and one that opens the sums.
-   - Shared storage between the app, the extension and the widget (an App Group), replacing `src/platform/storage.ts` for the shared part.
+- **The library.** `react-native-device-activity` 0.6.1 gives the app Screen Time permission, Apple's app picker, monitoring, and three extensions (monitor, shield action, shield configuration) that it drives from settings the app writes into the shared App Group. The app writes no Swift for those.
+- **`plugins/withTargets.js`** runs on every `expo prebuild`: it copies the library's three extensions into `targets/` (not kept in git), gives the monitor the bundle id registered with Apple, adds three lines to the monitor so it redraws the widget, and removes the push-notification entitlement that the notifications package adds by default.
+- **`targets/widget/`** is ours: the six-cell battery for the home screen (small, medium) and the lock screen. It reads the goal and recharge time the app left in the App Group (`plainlimit_plan`) and the times the monitor recorded for each checkpoint, and applies the same rules as the app: a checkpoint counts if it came after the last recharge and not impossibly early. A test (`monitorPlan.test.ts`) keeps its colours, words and names equal to the app's.
+- **`modules/plainlimit-widgets/`** is a ten-line native module so the app can ask for a widget redraw after a setting changes.
+- **`src/domain/monitorPlan.ts`** turns the settings into the day's plan as plain data. **`src/platform/screenTime.ts`** is the only file that hands it to the library.
+
+The day's plan:
+
+| When | What the phone does |
+|---|---|
+| Each cell used up (`cell-1` to `cell-5`) | Records the time; the widget redraws |
+| Last cell begins (`cell-5`) | Covers the counted apps with the "Last cell" screen. "Keep going" takes it away |
+| A few minutes before the end (`final-warning`) | A "Nearly out" notification |
+| Goal reached (`empty`) | Covers the counted apps with the empty screen for the chosen level |
+| A minute before the recharge time | Takes every covering screen away |
+
+What the empty screen's second button does: Warn takes the screen away for the rest of the day; Work for it sends a notification that opens the sums (a covering screen cannot open an app directly); Locked has no second button. After the sums are solved the app uncovers the apps and asks the phone to cover them again after that many more minutes of use.
+
+Decisions made while writing it, each of which the owner can change:
+
+1. **iOS 18 or later.** The library's extensions are built for 18; an app that installed on older phones but could not count there would be worse than not installing.
+2. **"Everything" counts every app, the always-allowed ones too.** Apple's counting has no "everything except". The always-allowed apps are only spared from being covered.
+3. **"Time-wasters" on a phone is whatever is ticked in Apple's picker.** An app cannot pre-tick Social, Games and Entertainment; the screen asks the person to. So on a phone, Time-wasters and "your own picks" are the same thing, and there is nothing left for Pro to unlock there. Pro needs a different hook (ideas: the lock screen widget, more than one top-up a day, the pinned steps and groups).
+4. **Settings lock while the battery is empty** (on a real phone only). Otherwise the way round an empty battery is to nudge the goal up.
+5. **The first day counts from the recharge time, not from setup.** The phone is asked to include the day's earlier use, so the battery can be part-drained the moment Screen Time is turned on.
+
+## What is still needed
+
+1. **A signed build on the owner's phone, by TestFlight.** Everything it needs from Apple is in place as of 2026-11-11: Family Controls (Distribution) is on for the app and its three extensions, and the app record "Plainlimit" exists in App Store Connect. What is left is the studio's "iOS app build" in testflight mode working for an app with extensions. `tools/ios_app_build.sh` archives such an app "signed to run locally" so the entitlements survive, then signs for the App Store while exporting; that path has not succeeded yet. If it cannot be made to work, the fallback is its signed-archive route, which needs one iPhone registered under Devices in Apple's developer portal (there are none today).
+2. **Trying it on the phone** ("To check on the phone", below), and fixing what that finds.
+3. First-run setup, a critic pass, Pro, the store listing, privacy and support sections (PROGRESS.md).
 
 ## Known limits and risks
 
@@ -79,6 +100,26 @@ None of this can be built or tried in Expo Go or a browser, and none of it can b
 - **Block-everything-except has had bugs** where the exceptions were blocked too. Because the list is for emergencies, it must be tried on a real phone before anyone relies on it.
 - **Widget updates are a request, not a command.** A cell can go dark a few minutes late. Six cells make that invisible; a finer colour fade between cells is a bonus if it proves reliable.
 - **A second device.** Screen Time shared across devices is not handled; one iPhone only.
+
+- **An early checkpoint can still cover apps.** The plausibility check protects what the app and the widget show. The covering itself is done by the phone the moment it reports a checkpoint, early or not. If the phone turns out to report them early, the cover actions need a guard of their own.
+- **Counting "everything" rests on an assumption:** that a checkpoint registered with no apps, categories or sites counts all use of the phone. If it does not, "Everything" has to become "tick every category in Apple's picker".
+- **Changing a setting re-registers the day.** The phone is asked to keep the day's count when that happens (iOS 17.4 and later can), and checkpoints already passed should simply be reported again. Unverified.
+
+## To check on the phone (nothing here has been tried)
+
+In order; each one that fails changes the code, not just a setting.
+
+1. The app installs and opens, and Settings shows the Screen Time card.
+2. "Turn on Screen Time" brings up Apple's sheet; allowing it turns the card to "On".
+3. The widget can be added (small, medium, lock screen) and shows a battery, not "Open Plainlimit to set up".
+4. With a 30-minute goal (the smallest), use the phone: a cell goes dark about every five minutes, on the widget without opening the app, and in the app.
+5. On the last cell the "Last cell" screen covers apps; "Keep going" removes it.
+6. At the goal the empty screen appears with the right buttons for the level. Phone and Messages (ticked under Always allowed) still open.
+7. Work for it: "I need more time" sends a notification; tapping it opens the sums; solving them uncovers the apps; they are covered again after the earned minutes.
+8. At the recharge time everything uncovers and the widget is full, without the app being opened.
+9. Changing the goal mid-day keeps the day's use.
+10. Time-wasters: ticking a few apps in Apple's picker makes only those drain the battery and only those get covered.
+11. No screen appears impossibly early (see "Known limits").
 
 ## QA (2026-11-11)
 
@@ -94,17 +135,19 @@ Done in the owner's developer account on 2026-11-11, by the owner's conversation
 
 | Identifier | For | Capabilities switched on |
 |---|---|---|
-| `com.gamequarry.plainlimit` | the app | App Groups, Family Controls (Development), In-App Purchase |
-| `com.gamequarry.plainlimit.ActivityMonitor` | the monitor extension | App Groups, Family Controls (Development) |
-| `com.gamequarry.plainlimit.ShieldAction` | buttons on the screens over apps | App Groups, Family Controls (Development) |
-| `com.gamequarry.plainlimit.ShieldConfiguration` | the look of the screens over apps | App Groups, Family Controls (Development) |
+| `com.gamequarry.plainlimit` | the app | App Groups, Family Controls (Development and Distribution), In-App Purchase |
+| `com.gamequarry.plainlimit.ActivityMonitor` | the monitor extension | App Groups, Family Controls (Development and Distribution) |
+| `com.gamequarry.plainlimit.ShieldAction` | buttons on the screens over apps | App Groups, Family Controls (Development and Distribution) |
+| `com.gamequarry.plainlimit.ShieldConfiguration` | the look of the screens over apps | App Groups, Family Controls (Development and Distribution) |
 | `com.gamequarry.plainlimit.widget` | the home screen widget | App Groups |
 | `group.com.gamequarry.plainlimit` | the App Group all five share | (assigned to all five) |
+
+The app record "Plainlimit" (iOS, English (U.S.), SKU `plainlimit`) was created in App Store Connect the same day, which also holds the name.
 
 The three extension names are the ones `react-native-device-activity` expects; the widget's is ours.
 
 - **Family Controls (Development)** needs no approval and is enough for a development build on the owner's own iPhone.
-- **Family Controls (Distribution)** was requested the same day and is not switched on anywhere yet. When Apple grants it, tick it on the first four identifiers. Until then a TestFlight or App Store build cannot be signed with the Screen Time parts in it.
+- **Family Controls (Distribution)** was requested the same day, showed as "Assigned" under Capability Requests within hours, and is now ticked on the first four identifiers (the widget does not need it).
 - Apple's list also has a newer "Family Controls App and Website Usage" capability. Nobody has looked at what it is for; it is off.
 
 ## Name

@@ -2,11 +2,9 @@
 
 Kept current after every finished item, so a run that is cut off can be picked up from here.
 
-## Status: building (first build, 2026-11-11)
+## Status: building. The iPhone side is written and compiles; none of it has run on a real iPhone (2026-11-11)
 
-Built in the owner's conversation. The studio's two engines leave this folder alone (STUDIO.md, "Apps").
-
-**Checks right now:** lint clean, typecheck clean, 38 unit tests pass, the web export and the iPhone bundle build, the browser run (`node e2e/run.cjs`, 16 steps) passes with no console errors. The unsigned iPhone build on GitHub compiles and links (first run, 2026-11-11); it then stopped on the version number, which `app.config.js` now takes from the build.
+The web preview and Expo Go still run on pretend use and are unchanged. A build with the Screen Time pieces needs signing; Apple's side of that is ready and the studio's build has to do the rest (step 1 below).
 
 ## Done
 
@@ -20,15 +18,18 @@ Built in the owner's conversation. The studio's two engines leave this folder al
 - Second look pass after the owner called the first build dull: Today as an edge-to-edge field of the day's colour, the sticker battery, the day's colour as the app's accent, movement, larger type, the day's ruler (NOTES.md, "Look").
 - What the studio's iPhone build expects of an app: `app.config.js` reads the version and build number, a privacy manifest in `app.json`, and the Developer section can be kept in a playtest build (`EXPO_PUBLIC_PLAYTEST=1`).
 
+- The iPhone side: the Screen Time library and its three extensions, the widget in Swift (small, medium, lock screen), the day's plan as tested plain data, permission, Apple's app picker for What counts and Always allowed, the covering screens and their buttons, earned extra time, the notifications, and settings that lock while the battery is empty (NOTES.md, "How the iPhone side is put together").
+- The app's identifiers and App Group are registered with Apple.
+
 ## Next, in order
 
-1. **Waiting on Apple:** the owner asked for the Family Controls (Distribution) entitlement on 2026-11-11; Apple answers by email. Once it is granted, tick "Family Controls (Distribution)" on the app's identifier and its three extension identifiers in Apple's developer portal (NOTES.md, "Registered with Apple"). TestFlight and the App Store need it; a development build on the owner's own iPhone does not.
-2. A fresh-eyes critic on the screenshots, and its findings fixed.
-3. First-run setup: pick a goal and a recharge time, then (on an iPhone) the Screen Time permission.
-4. The native pieces, in a development build on the owner's iPhone: the monitor extension and checkpoints, the widget in its three sizes, the screens over apps, the lock, the two notifications, shared storage.
-5. Pro: the person's own picks of what counts (RevenueCat, the studio's `src/pro/` plumbing), and the store listing in `store/plainlimit/`.
+1. **A TestFlight build.** Apple's side is ready: Family Controls (Distribution) is on for the app and its extensions, and the app record exists. The studio's iPhone build has to get an app with extensions through signing (NOTES.md, "What is still needed").
+2. **On the owner's phone:** the eleven checks in NOTES.md, "To check on the phone", and fixing what they find.
+3. First-run setup: pick a goal and a recharge time, then the Screen Time permission and the widget.
+4. A fresh-eyes critic on the screenshots, and its findings fixed.
+5. Pro: it needs a new hook now that "your own picks" cannot be held back on a phone (NOTES.md, decision 3), then RevenueCat and the store listing in `store/plainlimit/`.
 6. Privacy and support sections on the studio's app pages.
 
 ## Not yet tried on a real iPhone
 
-Everything. The app's screens have only run in a browser, and no Screen Time code exists yet.
+Everything. The app's screens have only run in a browser. The Screen Time code and the widget compile on the studio's Mac runners and have never been run. NOTES.md, "To check on the phone", is the list.

@@ -4,7 +4,7 @@ A six-cell battery for the home screen. It drains as the day's screen time is us
 
 Design notes, what is real and what is still pretend, and what is left are in [NOTES.md](NOTES.md) and [PROGRESS.md](PROGRESS.md).
 
-**Where it stands:** the app's own screens and all of its logic are built and tested. The parts that belong to Apple's Screen Time (reading real use, the home screen widget, the warning and empty screens over other apps, the lock) are not wired in yet. They need Apple's approval and a build made for a real iPhone; NOTES.md has the list. Until then the battery runs on pretend use.
+**Where it stands:** the app's own screens and all of its logic are built and tested. The parts that belong to Apple's Screen Time (reading real use, the home screen widget, the warning and empty screens over other apps, the lock) are written and compile, and have never run on a real iPhone: they need a signed build through TestFlight, which is the next step. NOTES.md has the details. In a browser and in Expo Go the battery runs on pretend use.
 
 ## Try it in a browser
 

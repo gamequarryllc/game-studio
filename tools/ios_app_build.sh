@@ -206,9 +206,28 @@ upload() {
 # First try: archive without signing, then let Xcode sign for the App Store with
 # a cloud-managed certificate while it uploads. This needs no certificate or
 # device on the build machine.
-say "Archive (unsigned)"
-xcb "$logs/archive.log" "${common[@]}" -archivePath "$archive" archive "${unsigned[@]}"
-check_app "$archive/Products/Applications/$name.app"
+if [ -d "$app/targets" ]; then
+  # An app with extensions (a widget, Screen Time) needs its entitlements: the
+  # App Group they share, and Apple's permission to use Screen Time. A fully
+  # unsigned archive carries none, and the export step has nothing to sign them
+  # back in from. Signing "to run locally" needs no certificate or device either,
+  # and it writes each target's entitlements into the archive, where the export
+  # step finds them. Only apps that have a targets/ folder take this path.
+  say "Archive (signed to run locally, so the extensions keep their entitlements)"
+  xcb "$logs/archive.log" "${common[@]}" -archivePath "$archive" archive \
+    CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES \
+    AD_HOC_CODE_SIGNING_ALLOWED=YES PROVISIONING_PROFILE_SPECIFIER= DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+  check_app "$archive/Products/Applications/$name.app"
+  kept="$(codesign -d --entitlements - --xml "$archive/Products/Applications/$name.app" 2>/dev/null | plutil -p - 2>/dev/null || true)"
+  echo "$kept" | grep -q "application-groups" || { echo "The archived app lost its App Group entitlement; an upload would not work on a phone" >&2; exit 1; }
+  for appex in "$archive/Products/Applications/$name.app"/PlugIns/*.appex; do
+    [ -d "$appex" ] && echo "extension: $(basename "$appex")"
+  done
+else
+  say "Archive (unsigned)"
+  xcb "$logs/archive.log" "${common[@]}" -archivePath "$archive" archive "${unsigned[@]}"
+  check_app "$archive/Products/Applications/$name.app"
+fi
 say "Sign and upload to TestFlight"
 if upload "$logs/upload.log"; then
   say "OK: $slug $VERSION ($BUILD_NUMBER) uploaded. It shows in TestFlight after Apple finishes processing."
