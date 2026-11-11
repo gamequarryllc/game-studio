@@ -55,6 +55,23 @@ def load_terms(path):
     return terms
 
 
+def lockfile_text(label, text, hits):
+    """An npm lockfile is generated from the public registry. Its "deprecated"
+    notices are other people's text (some carry a maintainer's address), so
+    those lines are blanked, line numbers kept. Every package must come from
+    the public registry: a private or home-network one would leak a hostname."""
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        stripped = line.lstrip()
+        if stripped.startswith('"deprecated":'):
+            out.append("")
+            continue
+        if stripped.startswith('"resolved":') and '"https://registry.npmjs.org/' not in stripped:
+            hits.append(f"{label}:{n}: package not from the public npm registry")
+        out.append(line)
+    return "\n".join(out)
+
+
 def scan_text(label, text, terms, hits):
     for n, line in enumerate(text.splitlines(), 1):
         for what, rx in GENERIC:
@@ -90,6 +107,8 @@ def main():
                 text = fh.read()
         except (UnicodeDecodeError, OSError):
             continue
+        if os.path.basename(f) == "package-lock.json":
+            text = lockfile_text(f, text, hits)
         scan_text(f, text, terms, hits)
 
     if args.commits:

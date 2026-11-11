@@ -33,7 +33,7 @@ PRIVACY_URL = SITE_URL + "privacy/"
 SUPPORT_URL = SITE_URL + "support/"
 ISSUES_URL = "https://github.com/gamequarryllc/game-studio/issues"
 # Top-level folders of the site that a game's folder name must never take.
-RESERVED_SLUGS = ("privacy", "support")
+RESERVED_SLUGS = ("privacy", "support", "apps")
 
 EMAIL_RX = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 META_RX = re.compile(r"\A<!--\s*title:\s*(?P<title>.*?)\s*\|\s*updated:\s*(?P<updated>.*?)\s*-->")

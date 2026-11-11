@@ -1,5 +1,80 @@
 {
-  "_about": "The studio queue. Order = build priority. status: queued | building | first-playable | polishing | ready-to-play | shipped | parked. The site page and the loop both read this file.",
+  "_about": "The studio queue. \"apps\" come first (the owner's decision, 2026-11-11), in the owner's order, one at a time; then \"games\". Order = build priority. status: queued | building | first-playable | polishing | ready-to-play | shipped | parked (apps: queued | building | ready-to-test | shipped | parked). The site page and the loop both read this file.",
+  "apps": [
+    {
+      "slug": "home-inventory",
+      "title": "Home inventory for insurance",
+      "color": "#1e5b48",
+      "tagline": "Photos, serial numbers and values of what you own, room by room, with a PDF report for an insurance claim.",
+      "status": "building",
+      "note": "First build in progress (daily backstop, 2026-11-11)"
+    },
+    {
+      "slug": "receipt-vault",
+      "title": "Warranty and receipt vault",
+      "color": "#7a4b2a",
+      "tagline": "Snap a receipt, keep the purchase date and warranty length, and hear about it before the warranty runs out.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "upkeep-log",
+      "title": "Home and car maintenance log",
+      "color": "#3d5a80",
+      "tagline": "Furnace filters, smoke detector batteries, oil changes and the like, each with a repeating reminder.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "clean-photo",
+      "title": "Photo metadata stripper",
+      "color": "#5b5f97",
+      "tagline": "Takes the GPS location and camera details out of a photo before you share it, straight from the share sheet.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "split-ledger",
+      "title": "Trip and roommate expense splitter",
+      "color": "#b5651d",
+      "tagline": "One person logs the expenses; the app works out who owes whom in the fewest payments and shares a summary.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "pet-log",
+      "title": "Pet care log",
+      "color": "#2f7f79",
+      "tagline": "Vet visits, medicine, weight and feeding for every pet in the house.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "gift-list",
+      "title": "Gift tracker",
+      "color": "#a23b4a",
+      "tagline": "Gift ideas and budgets for each person, with a reminder before every birthday.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "collection-catalog",
+      "title": "Collection catalog",
+      "color": "#4a5d23",
+      "tagline": "Cards, coins, vinyl or LEGO: photos, condition and what you paid.",
+      "status": "queued",
+      "note": ""
+    },
+    {
+      "slug": "chore-chart",
+      "title": "Chore chart",
+      "color": "#c17c24",
+      "tagline": "Kids earn points or allowance for chores and a parent approves. A parent's app: no ads, nothing collected.",
+      "status": "queued",
+      "note": ""
+    }
+  ],
+  "_apps_order_reason": "2026-11-11: the owner's order. Work them top-down, one app at a time, each to 'ready to test' (the bar in STUDIO.md, 'Apps'), ahead of all game work. Titles are working titles until each store name is chosen.",
   "games": [
     {
       "slug": "burn-down-a-forest",
