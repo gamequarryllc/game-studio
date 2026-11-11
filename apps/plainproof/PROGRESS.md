@@ -4,7 +4,7 @@ Kept current after every finished item, so a run that is cut off can be picked u
 
 ## Status: in TestFlight, waiting for the owner's first run on a phone (2026-11-11)
 
-**Build 1.0.0 (14), playtest flavor, was signed on GitHub and uploaded to TestFlight on 2026-11-11** ("iOS app build", run 43098533628). The app has its identifier (`com.gamequarry.plainproof`) and its App Store Connect record ("Plainproof: Home Inventory"; Apple accepted the name), and an internal testing group, "Me", with automatic distribution and the account holder as its one tester. The owner ran build 14 on his iPhone the same day; **build 1.0.0 (17)** carries the changes he asked for after that run (the welcome picture, fewer words, 20 free items) and is the one in TestFlight now.
+**Build 1.0.0 (14), playtest flavor, was signed on GitHub and uploaded to TestFlight on 2026-11-11** ("iOS app build", run 43098533628). The app has its identifier (`com.gamequarry.plainproof`) and its App Store Connect record ("Plainproof: Home Inventory"; Apple accepted the name), and an internal testing group, "Me", with automatic distribution and the account holder as its one tester. The owner ran build 14 on his iPhone the same day; build 17 carried the changes he asked for after that run (the welcome picture, fewer words, 20 free items), build 19 the file drawer, and **build 1.0.0 (20)**, the one in TestFlight now, adds the cabinets.
 
 The preview was built and published by CI for the first time on 2026-11-11 (the build and the Pages deployment both succeeded; the live page itself cannot be opened from the workspace, as with the games).
 
