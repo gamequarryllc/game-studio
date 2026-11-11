@@ -10,8 +10,12 @@ import { buy, restore, startStore, storeAvailable, type BuyResult, type RestoreR
 
 const FILE = 'pro.json';
 
-/** Developer tools (pretend Pro, sample homes) show in dev builds and on the web preview, never in a store build. */
-export const DEV_TOOLS = __DEV__ || Platform.OS === 'web';
+/**
+ * Developer tools (pretend Pro, sample homes) show in dev builds, on the web
+ * preview and in a "playtest" build for TestFlight, which the iPhone build
+ * makes by setting EXPO_PUBLIC_PLAYTEST=1. They are never in a store build.
+ */
+export const DEV_TOOLS = __DEV__ || Platform.OS === 'web' || process.env.EXPO_PUBLIC_PLAYTEST === '1';
 
 export interface ProState {
   ready: boolean;

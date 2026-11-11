@@ -1,0 +1,165 @@
+name: iOS app build
+
+# Builds the studio's apps (the Expo projects in apps/) for iPhone on a Mac runner.
+#
+#   check       Unsigned build. Needs no Apple account. Proves an app compiles and
+#               packages for iPhone. Runs for every app when the pipeline or an app's
+#               native settings change, and on request for one app.
+#   testflight  Signs with the owner's App Store Connect API key and uploads the build
+#               to TestFlight. Only ever started by hand (Actions > iOS app build > Run workflow).
+#
+# The Xcode project is written fresh each time by `expo prebuild` (tools/ios_app_build.sh);
+# nothing native is kept in the repo.
+#
+# Nothing here submits an app for review; that stays a manual step in App Store Connect.
+# Secrets (the owner adds them; see store/README.md), the same four the games use:
+#   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, APPLE_TEAM_ID
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App folder name in apps/, e.g. home-inventory"
+        required: true
+        type: string
+      mode:
+        description: "check = unsigned test build; testflight = sign and upload"
+        required: true
+        type: choice
+        options: [check, testflight]
+        default: check
+      flavor:
+        description: "playtest = with the Developer section (pretend Pro, sample data), for trying on a phone; release = App Store build"
+        required: true
+        type: choice
+        options: [playtest, release]
+        default: playtest
+      version:
+        description: "Version shown in TestFlight and on the App Store"
+        required: true
+        type: string
+        default: "1.0.0"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ios-app.yml"
+      - "tools/ios_app_build.sh"
+      - "apps/*/app.json"
+      - "apps/*/app.config.js"
+      - "apps/*/package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-app-${{ github.event_name }}-${{ inputs.app || 'all' }}
+  cancel-in-progress: true
+
+jobs:
+  pick:
+    runs-on: ubuntu-24.04
+    outputs:
+      apps: ${{ steps.pick.outputs.apps }}
+      mode: ${{ steps.pick.outputs.mode }}
+      version: ${{ steps.pick.outputs.version }}
+      flavor: ${{ steps.pick.outputs.flavor }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Privacy check (no personal information in a public repo)
+        run: python3 tools/privacy_check.py
+
+      - name: Pick the apps and the mode
+        id: pick
+        env:
+          IN_APP: ${{ inputs.app }}
+          IN_MODE: ${{ inputs.mode }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_FLAVOR: ${{ inputs.flavor }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$IN_APP" in *[!a-z0-9-]*|"") echo "::error::Bad app name"; exit 1;; esac
+            [ -f "apps/$IN_APP/app.json" ] || { echo "::error::No app at apps/$IN_APP"; exit 1; }
+            case "$IN_MODE" in check|testflight) ;; *) echo "::error::Bad mode"; exit 1;; esac
+            echo "$IN_VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "::error::Version must look like 1.0.0"; exit 1; }
+            case "$IN_FLAVOR" in playtest|release) ;; *) echo "::error::Bad flavor"; exit 1;; esac
+            apps="[\"$IN_APP\"]"; mode="$IN_MODE"; version="$IN_VERSION"; flavor="$IN_FLAVOR"
+          else
+            # The pipeline or an app's native settings changed: check-build every app.
+            apps="$(ls apps/*/app.json | sed -E 's#apps/([^/]+)/app.json#"\1"#' | paste -sd, -)"
+            apps="[$apps]"; mode="check"; version="1.0.0"; flavor="release"
+          fi
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "flavor=$flavor" >> "$GITHUB_OUTPUT"
+          echo "Building $apps in $mode mode ($flavor)"
+
+  build:
+    needs: pick
+    runs-on: macos-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.pick.outputs.apps) }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+
+      - name: Restore downloaded pods from cache
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ matrix.app }}-${{ hashFiles(format('apps/{0}/package-lock.json', matrix.app)) }}-v1
+          restore-keys: |
+            pods-${{ matrix.app }}-
+
+      - name: Use the newest released Xcode on the runner
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          newest="$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|candidate|_rc' | sort -V | tail -1)"
+          if [ -n "$newest" ]; then sudo xcode-select -s "$newest"; fi
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
+
+      - name: Build ${{ matrix.app }} (${{ needs.pick.outputs.mode }})
+        env:
+          APP: ${{ matrix.app }}
+          MODE: ${{ needs.pick.outputs.mode }}
+          VERSION: ${{ needs.pick.outputs.version }}
+          FLAVOR: ${{ needs.pick.outputs.flavor }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          WORK: ${{ runner.temp }}/ios-app
+          EXPO_NO_TELEMETRY: "1"
+          ASC_KEY_ID: ${{ needs.pick.outputs.mode == 'testflight' && secrets.ASC_KEY_ID || '' }}
+          ASC_ISSUER_ID: ${{ needs.pick.outputs.mode == 'testflight' && secrets.ASC_ISSUER_ID || '' }}
+          ASC_KEY_P8: ${{ needs.pick.outputs.mode == 'testflight' && secrets.ASC_KEY_P8 || '' }}
+          APPLE_TEAM_ID: ${{ needs.pick.outputs.mode == 'testflight' && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          set -euo pipefail
+          bash tools/ios_app_build.sh "$APP" "$MODE" 2>&1 | tee "$RUNNER_TEMP/ios_app_build.txt"
+          {
+            echo "### $APP ($MODE)"
+            echo '```'
+            grep -E '^(name on|bundle id|version:|architectures|minimum iOS|size|== OK)' "$RUNNER_TEMP/ios_app_build.txt" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the build logs when something fails
+        if: failure() && needs.pick.outputs.mode == 'check'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-logs-${{ matrix.app }}
+          path: ${{ runner.temp }}/ios-app/logs
+          retention-days: 7

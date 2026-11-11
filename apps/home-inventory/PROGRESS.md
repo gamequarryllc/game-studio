@@ -24,7 +24,7 @@ The preview was built and published by CI for the first time on 2026-11-11 (the 
 
 ## In progress
 
-- Nothing. Waiting for the owner's first run on an iPhone.
+- **The iPhone build pipeline** (2026-11-11, started at the owner's request so the app can go on his phone through TestFlight): `.github/workflows/ios-app.yml` and `tools/ios_app_build.sh` write the Xcode project with `expo prebuild`, build it on a Mac runner, and in `testflight` mode sign and upload it. The first unsigned `check` build is running; until it is green, treat the pipeline as unproven. The `testflight` half cannot be tried until the owner's four secrets exist.
 
 ## Next (after the owner's feedback, which comes first)
 
