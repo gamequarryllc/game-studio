@@ -2,9 +2,9 @@
 
 Kept current after every finished item, so a run that is cut off can be picked up from here.
 
-## Status: building. The iPhone side is written and compiles; none of it has run on a real iPhone (2026-11-11)
+## Status: in TestFlight for the owner to try. None of the Screen Time code has run on a real iPhone before this build (2026-11-11)
 
-The web preview and Expo Go still run on pretend use and are unchanged. A build with the Screen Time pieces needs signing; Apple's side of that is ready and the studio's build has to do the rest (step 1 below).
+The web preview and Expo Go still run on pretend use and are unchanged.
 
 ## Done
 
@@ -23,7 +23,7 @@ The web preview and Expo Go still run on pretend use and are unchanged. A build 
 
 ## Next, in order
 
-1. **A TestFlight build.** The first run compiled and archived everything, then stopped at signing: the App Store Connect key in the repository secrets has App Manager access and needs Admin. The owner replaces it (NOTES.md, "What is still needed"), then the build is run again.
+1. **Done 2026-11-11: the first build, 1.0.0 (15), is in TestFlight.**
 2. **On the owner's phone:** the eleven checks in NOTES.md, "To check on the phone", and fixing what they find.
 3. First-run setup: pick a goal and a recharge time, then the Screen Time permission and the widget.
 4. A fresh-eyes critic on the screenshots, and its findings fixed.
