@@ -18,5 +18,9 @@ import { Platform } from 'react-native';
 /** True only in a build that carries the Screen Time pieces. */
 export const SCREEN_TIME_AVAILABLE = false;
 
-/** Developer tools (pretend use, screen previews) show in dev builds and on the web preview, never in a store build. */
-export const DEV_TOOLS = __DEV__ || Platform.OS === 'web';
+/**
+ * Developer tools (pretend use, screen previews) show in dev builds, on the
+ * web preview and in a "playtest" build for TestFlight, which the iPhone build
+ * makes by setting EXPO_PUBLIC_PLAYTEST=1. They are never in a store build.
+ */
+export const DEV_TOOLS = __DEV__ || Platform.OS === 'web' || process.env.EXPO_PUBLIC_PLAYTEST === '1';
