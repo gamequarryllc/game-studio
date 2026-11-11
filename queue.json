@@ -2,12 +2,12 @@
   "_about": "The studio queue. \"apps\" come first (the owner's decision, 2026-11-11), in the owner's order, one at a time; then \"games\". Order = build priority. status: queued | building | first-playable | polishing | ready-to-play | shipped | parked (apps: queued | building | ready-to-test | shipped | parked). The site page and the loop both read this file.",
   "apps": [
     {
-      "slug": "home-inventory",
-      "title": "Home inventory for insurance",
+      "slug": "plainproof",
+      "title": "Plainproof",
       "color": "#1e5b48",
       "tagline": "Photos, serial numbers and values of what you own, room by room, with a PDF report for an insurance claim.",
       "status": "ready-to-test",
-      "note": "Working name Roomfile. Ready for the owner's first run on an iPhone: Expo Go today, or TestFlight after the one-time Apple steps (both in its README). Two critics: almost. The native build compiles on GitHub; nothing has run on a real phone yet"
+      "note": "Named Plainproof by the owner on 2026-11-11 (was Roomfile, slug home-inventory). Ready for the owner's first run on an iPhone: Expo Go today, or TestFlight after the one-time Apple steps (both in its README). Two critics: almost. The native build compiles on GitHub; nothing has run on a real phone yet"
     },
     {
       "slug": "receipt-vault",

@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       app:
-        description: "App folder name in apps/, e.g. home-inventory"
+        description: "App folder name in apps/, e.g. plainproof"
         required: true
         type: string
       mode:

@@ -132,18 +132,18 @@ check_app() {
   got_version="$(plist_value "$info" CFBundleShortVersionString)"; got_build="$(plist_value "$info" CFBundleVersion)"
   if [ "$got_version" != "$VERSION" ] || [ "$got_build" != "$BUILD_NUMBER" ]; then
     if [ "$mode" = "testflight" ]; then
-      echo "The built app is version $got_version ($got_build), wanted $VERSION ($BUILD_NUMBER): its app.config.js must read APP_VERSION and APP_BUILD_NUMBER (see apps/home-inventory/app.config.js)" >&2; exit 1
+      echo "The built app is version $got_version ($got_build), wanted $VERSION ($BUILD_NUMBER): its app.config.js must read APP_VERSION and APP_BUILD_NUMBER (see apps/plainproof/app.config.js)" >&2; exit 1
     fi
-    echo "::warning title=$slug::The built app is version $got_version ($got_build), not $VERSION ($BUILD_NUMBER). Its app.config.js must read APP_VERSION and APP_BUILD_NUMBER before a TestFlight upload (see apps/home-inventory/app.config.js)."
+    echo "::warning title=$slug::The built app is version $got_version ($got_build), not $VERSION ($BUILD_NUMBER). Its app.config.js must read APP_VERSION and APP_BUILD_NUMBER before a TestFlight upload (see apps/plainproof/app.config.js)."
   fi
   [ -s "$built/main.jsbundle" ] || { echo "The app's JavaScript (main.jsbundle) is missing from the app" >&2; exit 1; }
   if [ ! -f "$built/PrivacyInfo.xcprivacy" ]; then
     # Apple asks every app to say why it uses certain system calls (React Native uses several).
     # A playtest or check build can do without; a store build cannot.
     if [ "$mode" = "testflight" ] && [ "$FLAVOR" = "release" ]; then
-      echo "The privacy manifest is missing from the app: add ios.privacyManifests to app.json (see apps/home-inventory/app.json)" >&2; exit 1
+      echo "The privacy manifest is missing from the app: add ios.privacyManifests to app.json (see apps/plainproof/app.json)" >&2; exit 1
     fi
-    echo "::warning title=$slug::No privacy manifest in the app. Add ios.privacyManifests to app.json before a store build (see apps/home-inventory/app.json)."
+    echo "::warning title=$slug::No privacy manifest in the app. Add ios.privacyManifests to app.json before a store build (see apps/plainproof/app.json)."
   fi
   [ -f "$built/Assets.car" ] || { echo "No compiled asset catalog (icons) in the app" >&2; exit 1; }
   # An app that takes photos must say why, in its own words.

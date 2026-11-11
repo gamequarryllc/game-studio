@@ -122,7 +122,7 @@ Real numbers from individual developers:
 
 The owner's nine no-server utility apps come first (STUDIO.md, "Apps"). This section is filled in app by app as each one is built; the full weekly refresh adds the rest. Everything here is from one short research pass, mostly third-party pages, and is marked where it is weak.
 
-### 1. Home inventory (`home-inventory`, working name Roomfile)
+### 1. Home inventory (`plainproof`; named Plainproof by the owner on 2026-11-11, working name was Roomfile)
 
 **Competitors and what they charge** (third-party pages, checked 2026-11-11; the App Store's own pages and search could not be reached from the workspace):
 
@@ -147,7 +147,7 @@ Sources: a comparison page published by another inventory app, so read it with c
 **What this means for the app.**
 
 - **Price: $5.99 once. Free limit: 25 items, with every feature.** It matches the one pay-once competitor with a free tier and sits under the other, and the loudest complaint in the category is the thing this app does not do. Nothing a person has added is ever locked, and the backup is a plain file they keep: the opposite of the lost-inventory story.
-- **Store text leads with the three things reviewers ask for:** pay once, no account, your data stays yours. Draft in `store/home-inventory/listing.json`.
+- **Store text leads with the three things reviewers ask for:** pay once, no account, your data stays yours. Draft in `store/plainproof/listing.json`.
 - **Search terms** (no volume data was found; this is a guess to be replaced by App Store Connect's own numbers after launch): "home inventory" is the main term and the crowded one, so it is in the name; "insurance" and "belongings" are in the subtitle; the keyword field covers household, contents, claim, renters, homeowners, moving, possessions, serial, receipt, valuables.
 - **Name:** "Roomfile" returned no app in a web search, but the App Store's own search was not reachable, so the name is **not verified**.
 - **Privacy label:** RevenueCat's guide says an app that uses it must declare Purchase History ("Purchases"), not linked to the person when ids are anonymous (https://www.revenuecat.com/docs/platform-resources/apple-platform-resources/apple-app-privacy). So an app with RevenueCat is "Data not linked to you: Purchases", not "Data Not Collected". This applies to all nine apps and is the owner's call.
