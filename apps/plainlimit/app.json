@@ -1,15 +1,15 @@
 {
   "expo": {
     "name": "Plainlimit",
-    "slug": "screen-battery",
+    "slug": "plainlimit",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "screenbattery",
+    "scheme": "plainlimit",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#101214",
     "ios": {
-      "bundleIdentifier": "com.gamequarry.screenbattery",
+      "bundleIdentifier": "com.gamequarry.plainlimit",
       "supportsTablet": false,
       "config": {
         "usesNonExemptEncryption": false
@@ -48,7 +48,7 @@
       }
     },
     "android": {
-      "package": "com.gamequarry.screenbattery"
+      "package": "com.gamequarry.plainlimit"
     },
     "web": {
       "output": "single",

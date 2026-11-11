@@ -4,7 +4,7 @@
 // sums, a reload, and a recharge. It fails on any broken expectation and on
 // any console error.
 //
-//   APP_BASE_URL=/game-studio/apps/screen-battery EXPO_OFFLINE=1 npx expo export --platform web
+//   APP_BASE_URL=/game-studio/apps/plainlimit EXPO_OFFLINE=1 npx expo export --platform web
 //   node e2e/run.cjs                # screenshots go to a temp folder
 //   SHOTS_DIR=/some/folder node e2e/run.cjs
 //
@@ -18,7 +18,7 @@ const { chromium } = require('playwright');
 
 const { listen } = require('./serve.cjs');
 
-const SHOTS = process.env.SHOTS_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'screen-battery-shots-'));
+const SHOTS = process.env.SHOTS_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'plainlimit-shots-'));
 const PHONE = { width: 393, height: 852 };
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 

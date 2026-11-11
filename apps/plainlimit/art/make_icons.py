@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draws the app's icon, favicon and splash mark: the six-cell battery.
 
-    python3 art/make_icons.py        (from apps/screen-battery/)
+    python3 art/make_icons.py        (from apps/plainlimit/)
 
 Needs Pillow. The colours are the app's own: the green of a nearly full
 battery and the near-black ink used on it.

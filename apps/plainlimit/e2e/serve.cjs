@@ -8,7 +8,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 
-const BASE = '/game-studio/apps/screen-battery';
+const BASE = '/game-studio/apps/plainlimit';
 const DIST = path.join(__dirname, '..', 'dist');
 const TYPES = {
   '.html': 'text/html; charset=utf-8',

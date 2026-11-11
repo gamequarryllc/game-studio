@@ -2,7 +2,7 @@
 // decides for itself:
 //
 //   APP_BASE_URL       the sub-folder the web preview is served from on the studio site
-//                      (APP_BASE_URL=/game-studio/apps/screen-battery npx expo export --platform web)
+//                      (APP_BASE_URL=/game-studio/apps/plainlimit npx expo export --platform web)
 //   APP_VERSION        the version shown in TestFlight and on the App Store (default: app.json's)
 //   APP_BUILD_NUMBER   the build number, which must go up with every upload (default: 1)
 //

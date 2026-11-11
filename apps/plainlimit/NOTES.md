@@ -1,6 +1,6 @@
 # Plainlimit: notes
 
-Working name. Slug `screen-battery`, bundle id `com.gamequarry.screenbattery`.
+Slug `plainlimit`, bundle id `com.gamequarry.plainlimit`. Until 2026-11-11 the working name was "Screen Battery" and the folder was `apps/screen-battery/`.
 
 ## The idea (the owner's, 2026-11-11)
 
@@ -90,7 +90,7 @@ None of this can be built or tried in Expo Go or a browser, and none of it can b
 
 ## Name
 
-The owner chose **Plainlimit** on 2026-11-11, as a sibling to Plainworth ("Plain" plus the thing the app is about). The folder, the URL scheme and the bundle id still use the working name `screen-battery` / `screenbattery`; nothing is registered with Apple yet, so they can still change.
+The owner chose **Plainlimit** on 2026-11-11, as a sibling to Plainworth ("Plain" plus the thing the app is about). The folder, the URL scheme and the bundle id were renamed to `plainlimit` the same day, before anything was registered with Apple.
 
 Draft for the store fields, not final:
 

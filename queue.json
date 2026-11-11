@@ -74,12 +74,12 @@
       "note": ""
     },
     {
-      "slug": "screen-battery",
+      "slug": "plainlimit",
       "title": "Plainlimit",
       "color": "#4ac56e",
       "tagline": "A six-cell battery on the home screen that drains as the day's screen time is used, then recharges at a time you set.",
       "status": "building",
-      "note": "Outside the list of nine: added by the owner on 2026-11-11 and built in the owner's own conversation. The daily backstop leaves it alone. The preview runs on pretend use; the real screen-time parts wait for Apple's Family Controls approval and a development build (apps/screen-battery/NOTES.md)"
+      "note": "Outside the list of nine: added by the owner on 2026-11-11 and built in the owner's own conversation. The daily backstop leaves it alone. The preview runs on pretend use; the real screen-time parts wait for Apple's Family Controls approval and a development build (apps/plainlimit/NOTES.md)"
     }
   ],
   "_apps_order_reason": "2026-11-11: the owner's order. Work them top-down, one app at a time, each to 'ready to test' (the bar in STUDIO.md, 'Apps'), ahead of all game work. Titles are working titles until each store name is chosen.",

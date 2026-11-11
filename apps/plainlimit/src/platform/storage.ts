@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Everything the app remembers is one small piece of JSON kept on the phone
 // (in the browser, for the web preview). Nothing is sent anywhere.
 
-const KEY = 'screen-battery.doc.v1';
+const KEY = 'plainlimit.doc.v1';
 
 export async function readSaved(): Promise<unknown> {
   try {
