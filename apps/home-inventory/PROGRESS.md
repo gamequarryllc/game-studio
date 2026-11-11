@@ -2,7 +2,9 @@
 
 Kept current after every finished item, so a run that is cut off can be picked up from here.
 
-## Status: ready to test once its preview is confirmed on the site (2026-11-11)
+## Status: ready to test (2026-11-11)
+
+The preview was built and published by CI for the first time on 2026-11-11 (the build and the Pages deployment both succeeded; the live page itself cannot be opened from the workspace, as with the games).
 
 **Checks right now:** lint clean, typecheck clean, 75 unit tests pass, the web export and the iPhone bundle both build, the browser run (`node e2e/run.cjs`, 20 steps, three phone sizes and dark mode) passes with no console errors, `python3 tools/store_check.py` passes. The fresh-eyes critic said **almost** (review 1 in NOTES.md); every finding that could be fixed without a phone is fixed and has a test.
 

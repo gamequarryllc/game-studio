@@ -6,8 +6,8 @@
       "title": "Home inventory for insurance",
       "color": "#1e5b48",
       "tagline": "Photos, serial numbers and values of what you own, room by room, with a PDF report for an insurance claim.",
-      "status": "building",
-      "note": "Working name Roomfile. All checks pass and the critic says almost; it becomes ready-to-test once its first preview is confirmed on the site (2026-11-11)"
+      "status": "ready-to-test",
+      "note": "Working name Roomfile. Ready for the owner's first run on an iPhone (Expo Go steps in its README). Critic: almost. Nothing native has run on a real phone yet"
     },
     {
       "slug": "receipt-vault",
