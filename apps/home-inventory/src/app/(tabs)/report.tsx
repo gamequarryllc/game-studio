@@ -1,0 +1,213 @@
+import { useState } from 'react';
+import { Platform, StyleSheet, Switch, Text, View } from 'react-native';
+
+import { updateProfile } from '@/domain/actions';
+import { displayTime, relativeDay } from '@/domain/dates';
+import { formatMoney } from '@/domain/money';
+import { reportTitle } from '@/domain/report';
+import { homeSummary, plural, roomSummaries } from '@/domain/selectors';
+import { LIMITS, type Profile } from '@/domain/types';
+import { success } from '@/platform/haptics';
+import { MAKES_PDF } from '@/platform/exporter';
+import { backUp, exportSpreadsheet, makeReport, restoreFromBackup } from '@/state/operations';
+import { store, useDoc } from '@/state/store';
+import { confirm, notify } from '@/ui/dialogs';
+import { FormRow, TextRow } from '@/ui/form';
+import { Button, Card, Divider, Footnote, Notice, Row, SectionLabel, TabScreen } from '@/ui/kit';
+import { display, space, type, useTheme } from '@/ui/theme';
+
+/** The first page of the report in miniature, with the real figures on it. */
+function Sheet() {
+  const { c, dark } = useTheme();
+  const doc = useDoc();
+  const summary = homeSummary(doc);
+  const rooms = roomSummaries(doc).filter((r) => r.count > 0);
+  const currency = doc.settings.currency;
+  const [today] = useState(() => Date.now());
+  const paper = dark ? '#ECE7DB' : '#FFFFFF';
+  const ink = '#1C1B18';
+  const soft = '#6B675E';
+  const rule = '#D8D2C4';
+  const green = '#1E5B48';
+  return (
+    <View testID="report-sheet" style={[styles.sheet, { backgroundColor: paper, shadowColor: '#000', borderColor: dark ? 'transparent' : c.rule }]} accessible accessibilityLabel="Preview of the report’s first page">
+      <Text style={[styles.sheetKicker, { color: green }]}>Home inventory</Text>
+      <Text style={{ fontFamily: display.semibold, fontSize: 21, lineHeight: 25, color: ink }} numberOfLines={1}>
+        {reportTitle(doc)}
+      </Text>
+      <Text style={{ fontSize: 10, lineHeight: 14, color: soft, marginTop: 1 }}>
+        {doc.profile.ownerName ? `Prepared for ${doc.profile.ownerName} · ` : ''}
+        {displayTime(today)}
+      </Text>
+      <View style={[styles.sheetTotals, { borderColor: green }]}>
+        <View style={{ flex: 1.3 }}>
+          <Text style={[styles.sheetLabel, { color: soft }]}>Total value</Text>
+          <Text style={[type.tabular, { fontFamily: display.medium, fontSize: 17, lineHeight: 21, color: ink }]} numberOfLines={1} adjustsFontSizeToFit>
+            {formatMoney(summary.totalCents, currency)}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.sheetLabel, { color: soft }]}>Items</Text>
+          <Text style={[type.tabular, { fontFamily: display.medium, fontSize: 17, lineHeight: 21, color: ink }]}>{summary.count}</Text>
+        </View>
+        <View style={{ flex: 0.8 }}>
+          <Text style={[styles.sheetLabel, { color: soft }]}>Rooms</Text>
+          <Text style={[type.tabular, { fontFamily: display.medium, fontSize: 17, lineHeight: 21, color: ink }]}>{rooms.length}</Text>
+        </View>
+      </View>
+      {rooms.slice(0, 4).map((r) => (
+        <View key={r.room.id} style={[styles.sheetRow, { borderBottomColor: rule }]}>
+          <Text style={{ flex: 1, fontSize: 11, lineHeight: 15, color: ink }} numberOfLines={1}>
+            {r.room.name}
+          </Text>
+          <Text style={[type.tabular, { fontSize: 11, lineHeight: 15, color: soft, width: 46, textAlign: 'right' }]}>{r.count}</Text>
+          <Text style={[type.tabular, { fontSize: 11, lineHeight: 15, color: ink, width: 84, textAlign: 'right' }]}>{formatMoney(r.totalCents, currency)}</Text>
+        </View>
+      ))}
+      {rooms.length === 0 ? <Text style={{ fontSize: 11, lineHeight: 15, color: soft, marginTop: 8 }}>Rooms and their totals are listed here once you add something.</Text> : null}
+      {rooms.length > 4 ? <Text style={{ fontSize: 10, lineHeight: 14, color: soft, marginTop: 5 }}>and {plural(rooms.length - 4, 'more room')}, then every item with its photo</Text> : null}
+    </View>
+  );
+}
+
+export default function ReportTab() {
+  const { c } = useTheme();
+  const doc = useDoc();
+  const [includePhotos, setIncludePhotos] = useState(true);
+  const [includeReceipts, setIncludeReceipts] = useState(true);
+  const [busy, setBusy] = useState<'report' | 'csv' | 'backup' | 'restore' | null>(null);
+  const [now] = useState(() => Date.now());
+  const count = doc.items.length;
+
+  const setProfile = (patch: Partial<Profile>) => store.update((d) => updateProfile(d, patch));
+
+  const run = async (kind: NonNullable<typeof busy>, job: () => Promise<void>, failTitle: string, failBody: string) => {
+    if (busy) return;
+    setBusy(kind);
+    try {
+      await job();
+    } catch (e) {
+      const message = e instanceof Error && e.name === 'DocError' ? e.message : failBody;
+      await notify(failTitle, message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const report = () =>
+    run('report', () => makeReport({ includePhotos, includeReceipts }).then(success), 'The report could not be made', 'Try again. If it keeps happening, try it without photos.');
+
+  const csv = () => run('csv', exportSpreadsheet, 'The spreadsheet could not be made', 'Try again in a moment.');
+
+  const backup = () =>
+    run(
+      'backup',
+      async () => {
+        const result = await backUp();
+        success();
+        if (result.missing > 0) {
+          await notify('Backup made, with a gap', `${plural(result.missing, 'photo')} could not be found on this iPhone and ${result.missing === 1 ? 'is' : 'are'} not in the backup.`);
+        }
+      },
+      'The backup could not be made',
+      'Check that there is free space on this iPhone, then try again.',
+    );
+
+  const restore = () =>
+    run(
+      'restore',
+      async () => {
+        const outcome = await restoreFromBackup((found) =>
+          confirm({
+            title: 'Replace what’s on this iPhone?',
+            message:
+              `The backup holds ${plural(found.items, 'item')} in ${plural(found.rooms, 'room')}. ` +
+              (count > 0 ? `It will replace the ${plural(count, 'item')} here now.` : 'This inventory is empty, so nothing is lost.'),
+            confirmLabel: 'Replace',
+            destructive: count > 0,
+          }),
+        );
+        if (outcome.kind === 'restored') {
+          success();
+          await notify('Backup restored', `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}, with ${plural(outcome.photos, 'photo')}.`);
+        }
+      },
+      'That backup could not be restored',
+      'The file may be damaged. Nothing on this iPhone was changed.',
+    );
+
+  const lastBackup = doc.meta.lastBackupAt;
+  const switchColors = { trackColor: { true: c.green, false: c.sunk }, ...(Platform.OS === 'web' ? { activeThumbColor: '#fff' } : {}) };
+
+  return (
+    <TabScreen testID="report-screen" title="Report">
+      <Sheet />
+      <View style={{ marginHorizontal: space.xl, marginTop: space.xl, gap: space.s }}>
+        <Button testID="make-report" label={MAKES_PDF ? 'Create the PDF report' : 'Open the report'} icon="report" busy={busy === 'report'} onPress={report} />
+        <Button testID="make-csv" label="Export a spreadsheet" icon="table" kind="soft" busy={busy === 'csv'} onPress={csv} />
+      </View>
+      {MAKES_PDF ? (
+        <Footnote>The report opens in the share sheet, so you can save it to Files, print it or send it to your insurer.</Footnote>
+      ) : (
+        <Notice icon="phone">In this web preview the report opens in a new tab and files download. On iPhone it becomes a PDF in the share sheet.</Notice>
+      )}
+
+      <SectionLabel>In the report</SectionLabel>
+      <Card>
+        <FormRow label="A photo of each item">
+          <Switch testID="opt-photos" accessibilityLabel="A photo of each item" value={includePhotos} onValueChange={setIncludePhotos} {...switchColors} />
+        </FormRow>
+        <Divider />
+        <FormRow label="Receipts, at the end">
+          <Switch testID="opt-receipts" accessibilityLabel="Receipts, at the end" value={includeReceipts} onValueChange={setIncludeReceipts} {...switchColors} />
+        </FormRow>
+      </Card>
+
+      <SectionLabel>On the first page</SectionLabel>
+      <Card>
+        <TextRow testID="profile-home" label="Home" value={doc.profile.homeName} onChangeText={(t) => setProfile({ homeName: t })} placeholder="12 Mill Lane" maxLength={LIMITS.short} autoCapitalize="words" />
+        <Divider />
+        <TextRow testID="profile-owner" label="Your name" value={doc.profile.ownerName} onChangeText={(t) => setProfile({ ownerName: t })} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="words" textContentType="name" />
+        <Divider />
+        <TextRow testID="profile-insurer" label="Insurer" value={doc.profile.insurer} onChangeText={(t) => setProfile({ insurer: t })} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="words" />
+        <Divider />
+        <TextRow testID="profile-policy" label="Policy number" value={doc.profile.policyNumber} onChangeText={(t) => setProfile({ policyNumber: t })} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="characters" autoCorrect={false} />
+      </Card>
+      <Footnote>Printed at the top of the report. Like everything else, it is kept only on this iPhone.</Footnote>
+
+      <SectionLabel>Backup</SectionLabel>
+      <Card style={{ padding: space.l }}>
+        <Text style={[type.subhead, { color: c.ink }]}>
+          This inventory lives on this iPhone and nowhere else. Keep a copy somewhere the phone isn’t, so losing one doesn’t mean losing both.
+        </Text>
+        <Text testID="last-backup" style={[type.footnote, { color: lastBackup ? c.ink2 : c.amber, marginTop: space.s, fontWeight: lastBackup ? '400' : '600' }]}>
+          {lastBackup ? `Last backed up ${relativeDay(lastBackup, Math.max(now, lastBackup))}.` : count > 0 ? 'Not backed up yet.' : 'Nothing to back up yet.'}
+        </Text>
+        <Button testID="backup-now" label="Back up now" icon="backup" kind="soft" busy={busy === 'backup'} onPress={backup} style={{ marginTop: space.l }} />
+      </Card>
+      <Card style={{ marginTop: space.m }}>
+        <Row testID="restore" title="Restore from a backup" tint onPress={restore} />
+      </Card>
+      <Footnote>A backup is one file with every item and photo in it. Save it to iCloud Drive, a computer, or email it to yourself.</Footnote>
+    </TabScreen>
+  );
+}
+
+const styles = StyleSheet.create({
+  sheet: {
+    marginHorizontal: space.xxl + space.s,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
+    borderRadius: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  sheetKicker: { fontSize: 8, lineHeight: 11, letterSpacing: 1.3, fontWeight: '700', textTransform: 'uppercase', marginBottom: 2 },
+  sheetLabel: { fontSize: 7.5, lineHeight: 10, letterSpacing: 0.7, textTransform: 'uppercase' },
+  sheetTotals: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 2, paddingHorizontal: 9, paddingVertical: 7, marginTop: 10, marginBottom: 4 },
+  sheetRow: { flexDirection: 'row', paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth },
+});
