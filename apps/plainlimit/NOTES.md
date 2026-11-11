@@ -88,6 +88,25 @@ None of this can be built or tried in Expo Go or a browser, and none of it can b
 - After the second look pass: 38 unit tests (the accent on the dark ground, the countdown wording), the same 16 browser steps clean, screenshots taken once the movement has settled. One bug from the screenshots: the battery's casing changed colour at once while the ground behind it eased, so the two disagreed for half a second (the casing now eases with it).
 - Not done yet: a fresh-eyes critic on the screenshots; anything on a real iPhone.
 
+## Registered with Apple
+
+Done in the owner's developer account on 2026-11-11, by the owner's conversation:
+
+| Identifier | For | Capabilities switched on |
+|---|---|---|
+| `com.gamequarry.plainlimit` | the app | App Groups, Family Controls (Development), In-App Purchase |
+| `com.gamequarry.plainlimit.ActivityMonitor` | the monitor extension | App Groups, Family Controls (Development) |
+| `com.gamequarry.plainlimit.ShieldAction` | buttons on the screens over apps | App Groups, Family Controls (Development) |
+| `com.gamequarry.plainlimit.ShieldConfiguration` | the look of the screens over apps | App Groups, Family Controls (Development) |
+| `com.gamequarry.plainlimit.widget` | the home screen widget | App Groups |
+| `group.com.gamequarry.plainlimit` | the App Group all five share | (assigned to all five) |
+
+The three extension names are the ones `react-native-device-activity` expects; the widget's is ours.
+
+- **Family Controls (Development)** needs no approval and is enough for a development build on the owner's own iPhone.
+- **Family Controls (Distribution)** was requested the same day and is not switched on anywhere yet. When Apple grants it, tick it on the first four identifiers. Until then a TestFlight or App Store build cannot be signed with the Screen Time parts in it.
+- Apple's list also has a newer "Family Controls App and Website Usage" capability. Nobody has looked at what it is for; it is off.
+
 ## Name
 
 The owner chose **Plainlimit** on 2026-11-11, as a sibling to Plainworth ("Plain" plus the thing the app is about). The folder, the URL scheme and the bundle id were renamed to `plainlimit` the same day, before anything was registered with Apple.

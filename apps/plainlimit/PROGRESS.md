@@ -22,7 +22,7 @@ Built in the owner's conversation. The studio's two engines leave this folder al
 
 ## Next, in order
 
-1. **The owner:** ask Apple for the Family Controls entitlement for `com.gamequarry.plainlimit` (NOTES.md, "What the real thing needs"). Nothing below step 3 can ship without it.
+1. **Waiting on Apple:** the owner asked for the Family Controls (Distribution) entitlement on 2026-11-11; Apple answers by email. Once it is granted, tick "Family Controls (Distribution)" on the app's identifier and its three extension identifiers in Apple's developer portal (NOTES.md, "Registered with Apple"). TestFlight and the App Store need it; a development build on the owner's own iPhone does not.
 2. A fresh-eyes critic on the screenshots, and its findings fixed.
 3. First-run setup: pick a goal and a recharge time, then (on an iPhone) the Screen Time permission.
 4. The native pieces, in a development build on the owner's iPhone: the monitor extension and checkpoints, the widget in its three sizes, the screens over apps, the lock, the two notifications, shared storage.
