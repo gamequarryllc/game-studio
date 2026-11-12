@@ -142,6 +142,10 @@ The whole loop ran on the phone with nothing done from the app in between, read 
 - **At 1:29:00 AM the phone covered the apps again by itself**: "Covers last changed: 1:29:00 AM by actions_for_pltop_intervalDidEnd", with the timer then gone from "Registered" as intended, and the empty screen offering the next, dearer top-up.
 - After "Start the day over" on this build nothing was covered again, where build 28 had covered everything within minutes. Not seen again; not explained.
 
+Apple also wrote after each upload that the report extension's build number (1) did not match the app's (ITMS-90473, a warning; the builds were accepted). The kind of target the report borrows is created with a build number of 1. The build script now gives the archive both numbers on the command line and refuses to upload if any extension differs from the app.
+
+The lock screens' main button: the phone draws its label much paler than asked (deep red came out pink; near-black on orange came out brown). The label is now the light ink on a deeper fill, checked for contrast in the tests, and the screens' look is written to the phone again whenever the app starts, so an update reaches it.
+
 Still open: the widget runs about a minute behind (it was still orange when the battery was already empty); a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do); the recharge at the start of a new day has not been watched yet.
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 

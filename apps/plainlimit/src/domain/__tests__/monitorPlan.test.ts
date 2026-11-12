@@ -127,8 +127,13 @@ describe('the plan handed to the phone', () => {
   test('the words on a covering screen are light, because the phone darkens whatever is behind them', () => {
     for (const shield of monitorPlan(settings()).shields) {
       expect(shield.text).toEqual({ red: 244, green: 245, blue: 242 });
-      // The main button must be readable on its own: a bright fill with dark words, or a light fill with deep red ones.
-      expect(shield.button).not.toEqual(shield.buttonText);
+      // The phone pales the main button's label, so it is the light ink on a fill deep enough to read it on (4.5 to 1).
+      expect(shield.buttonText).toEqual(shield.text);
+      const light = (c: { red: number; green: number; blue: number }) => {
+        const part = (v: number) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+        return 0.2126 * part(c.red) + 0.7152 * part(c.green) + 0.0722 * part(c.blue);
+      };
+      expect((light(shield.buttonText) + 0.05) / (light(shield.button) + 0.05)).toBeGreaterThanOrEqual(4.5);
     }
   });
 

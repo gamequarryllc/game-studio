@@ -14,8 +14,9 @@
 //      request has left before iOS puts the extension to sleep. Without this the widget would only
 //      catch up when iOS next feels like refreshing it.
 //
-//   4. Writes targets/report/Info.plist (the usage report extension), with the
-//      app's version and build number.
+//   4. Writes targets/report/Info.plist (the usage report extension). Its
+//      version and build number come from Xcode's settings, which the build
+//      script sets to the app's.
 //   5. Removes the push-notification entitlement the notifications package adds.
 //
 // targets/widget/ and targets/report/ are the app's own and are kept in git.
@@ -81,12 +82,13 @@ module.exports = function withTargets(config) {
     }
     fs.writeFileSync(marker, stamp);
   }
-  // The report extension's Info.plist: which kind of extension it is, and the
-  // same version and build number as the app (Apple compares them on upload).
+  // The report extension's Info.plist: which kind of extension it is. Its
+  // version and build number are left to Xcode's own settings, which the build
+  // script gives on the command line. (The number used to be written here, but
+  // the target is created with a build number of 1 and that is what reached
+  // Apple, who wrote to say it did not match the app's.)
   const reportDir = path.join(targets, 'report');
   if (fs.existsSync(reportDir)) {
-    const version = String(config.version ?? '1.0.0');
-    const build = String(config.ios?.buildNumber ?? '1');
     fs.writeFileSync(
       path.join(reportDir, 'Info.plist'),
       `<?xml version="1.0" encoding="UTF-8"?>
@@ -94,9 +96,9 @@ module.exports = function withTargets(config) {
 <plist version="1.0">
   <dict>
     <key>CFBundleShortVersionString</key>
-    <string>${version}</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
-    <string>${build}</string>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>EXAppExtensionAttributes</key>
     <dict>
       <key>EXExtensionPointIdentifier</key>

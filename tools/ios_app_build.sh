@@ -216,12 +216,21 @@ if [ -d "$app/targets" ]; then
   say "Archive (signed to run locally, so the extensions keep their entitlements)"
   xcb "$logs/archive.log" "${common[@]}" -archivePath "$archive" archive \
     CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES \
-    AD_HOC_CODE_SIGNING_ALLOWED=YES PROVISIONING_PROFILE_SPECIFIER= DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+    AD_HOC_CODE_SIGNING_ALLOWED=YES PROVISIONING_PROFILE_SPECIFIER= DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+    CURRENT_PROJECT_VERSION="$BUILD_NUMBER" MARKETING_VERSION="$VERSION"
   check_app "$archive/Products/Applications/$name.app"
   for part in "$archive/Products/Applications/$name.app" "$archive/Products/Applications/$name.app"/PlugIns/*.appex "$archive/Products/Applications/$name.app"/Extensions/*.appex; do
     [ -d "$part" ] || continue
     kept="$(codesign -d --entitlements - --xml "$part" 2>/dev/null | plutil -p - 2>/dev/null || true)"
     echo "$(basename "$part"): $(echo "$kept" | grep -oE '"[a-z.-]*(application-groups|family-controls)"' | tr -d '"' | sed 's/.*\.//' | sort -u | paste -sd, - || true)"
+    # Apple compares every extension's version and build number with the app's
+    # and writes to the account holder about any that differ (ITMS-90473). Some
+    # kinds of extension are created with a build number of 1, which is why the
+    # archive above is told both numbers on the command line.
+    part_version="$(plist_value "$part/Info.plist" CFBundleShortVersionString)"; part_build="$(plist_value "$part/Info.plist" CFBundleVersion)"
+    if [ "$part_version" != "$VERSION" ] || [ "$part_build" != "$BUILD_NUMBER" ]; then
+      echo "$(basename "$part") is version $part_version ($part_build), but the app is $VERSION ($BUILD_NUMBER)" >&2; exit 1
+    fi
     # Everything shares the App Group except a sealed report extension (in Extensions/), which may not.
     case "$part" in */Extensions/*) continue;; esac
     echo "$kept" | grep -q "application-groups" || { echo "$(basename "$part") lost its App Group entitlement in the archive; an upload would not work on a phone" >&2; exit 1; }

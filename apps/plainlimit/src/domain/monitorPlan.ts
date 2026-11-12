@@ -59,7 +59,7 @@ export interface PlanShield {
    * Colours as 0 to 255. The phone lays the background over a dark, blurred
    * view of the app beneath, so it comes out much darker than asked for; the
    * words are therefore always light, and only the icon and the main button
-   * carry the bright colour.
+   * carry the colour.
    */
   background: Rgb;
   text: Rgb;
@@ -119,6 +119,17 @@ export function rgbOf(hex: string): Rgb {
 /** The light ink the app uses on its dark ground. */
 const LIGHT: Rgb = { red: 244, green: 245, blue: 242 };
 
+/**
+ * The phone draws the main button's label much paler than asked for (a deep
+ * red came out pink, near-black on orange came out brown), so the label is
+ * always the light ink, which cannot get paler, and the button under it is
+ * deep enough for that ink to read. The day's orange is too bright as it is.
+ */
+function deeper(colour: Rgb): Rgb {
+  const by = 0.66;
+  return { red: Math.round(colour.red * by), green: Math.round(colour.green * by), blue: Math.round(colour.blue * by) };
+}
+
 function shieldFor(id: ShieldId, settings: Settings, topUpsSoFar: number): PlanShield {
   if (id === 'warning') {
     const tone = toneForCells(1);
@@ -131,14 +142,14 @@ function shieldFor(id: ShieldId, settings: Settings, topUpsSoFar: number): PlanS
       background: rgbOf(tone.bg),
       text: LIGHT,
       accent: rgbOf(tone.bg),
-      button: rgbOf(tone.bg),
-      buttonText: rgbOf(tone.fg),
+      button: deeper(rgbOf(tone.bg)),
+      buttonText: LIGHT,
       icon: 'battery.25percent',
     };
   }
   const tone = toneForCells(0);
   const secondary: ButtonEffect | null = settings.emptyLevel === 'warn' ? 'uncover' : settings.emptyLevel === 'work' ? 'puzzle' : null;
-  return { id, copy: emptyCopy(settings, topUpsSoFar), primary: 'close', secondary, background: rgbOf(tone.bg), text: LIGHT, accent: LIGHT, button: LIGHT, buttonText: rgbOf(tone.bg), icon: 'battery.0percent' };
+  return { id, copy: emptyCopy(settings, topUpsSoFar), primary: 'close', secondary, background: rgbOf(tone.bg), text: LIGHT, accent: LIGHT, button: rgbOf(tone.bg), buttonText: LIGHT, icon: 'battery.0percent' };
 }
 
 /** The notification that carries someone from the empty screen to the sums. */

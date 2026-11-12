@@ -170,6 +170,21 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
 }
 
 /**
+ * Writes the covering screens' look and words again, and nothing else. Called
+ * when the app starts, so that an update which changes how the screens look
+ * reaches the phone without the day having to be registered again (which on a
+ * first day would restart the count).
+ */
+export function refreshScreens(settings: Settings, topUpsSoFar: number) {
+  if (!SCREEN_TIME_AVAILABLE || !isOn()) return;
+  try {
+    for (const shield of monitorPlan(settings, topUpsSoFar, countingSince()).shields) writeShield(shield, topUpsSoFar);
+  } catch (error) {
+    note('the screens', error);
+  }
+}
+
+/**
  * The token for what counts. An empty one means "all use of the phone": the
  * phone is asked about every app, and the always-allowed ones are only spared
  * from being covered, not from counting.

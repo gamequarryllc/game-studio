@@ -88,6 +88,7 @@ export const store = {
     if (snapshot.state === 'ready') return;
     const doc = repairDoc(await readSaved(), new Date());
     set({ ...doc, day: withRealUse(doc, doc.day) }, false);
+    screenTime.refreshScreens(doc.settings, doc.day.topUps);
     screenTime.onCheckpoint(() => store.tick(new Date()));
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
     AppState.addEventListener('change', (state) => {
