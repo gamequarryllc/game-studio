@@ -29,7 +29,8 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
   return (
     <View style={{ gap: 10 }}>
       <Label>What used it</Label>
-      <View style={{ height: 300, alignSelf: 'stretch' }}>
+      {/* Nothing in the list can be tapped, and touches must pass through it so the screen still scrolls under a finger. */}
+      <View pointerEvents="none" style={{ height: 300, alignSelf: 'stretch' }}>
         {/* Shows through only until the phone has drawn the list over it. */}
         <Text style={{ position: 'absolute', top: 14, left: 0, right: 0, fontSize: 16, lineHeight: 22, color: c.ink3 }}>Waiting for the phone&apos;s Screen Time to draw the list…</Text>
         <NativeReport fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />

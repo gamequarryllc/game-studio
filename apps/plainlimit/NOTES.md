@@ -146,7 +146,9 @@ Apple also wrote after each upload that the report extension's build number (1) 
 
 The lock screens' main button: the phone draws its label much paler than asked (deep red came out pink; near-black on orange came out brown). The label is now the light ink on a deeper fill, checked for contrast in the tests, and the screens' look is written to the phone again whenever the app starts, so an update reaches it.
 
-Still open: the widget runs about a minute behind (it was still orange when the battery was already empty); a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do); the recharge at the start of a new day has not been watched yet.
+The next morning the battery had recharged by itself at the recharge time (the owner's report; day two then counted normally). And the "What used it" list turned out to swallow touches: a finger on it could not scroll Today. The list now lets every touch through.
+
+Still open: the widget runs about a minute behind (it was still orange when the battery was already empty); a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do).
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 
 Not yet seen by anyone: the "Last cell" screen and its buttons, Warn and Locked levels, the recharge at 6:00 AM, changing the goal mid-day, and whether the covers come back on time after earned time.

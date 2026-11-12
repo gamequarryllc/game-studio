@@ -45,6 +45,15 @@ class UsageReportView: ExpoView {
     super.init(appContext: appContext)
     clipsToBounds = true
     backgroundColor = .clear
+    isUserInteractionEnabled = false
+  }
+
+  // The list is a picture drawn by another process, with nothing in it to tap.
+  // Left alone it takes every touch that lands on it and passes none on, so a
+  // finger on the list could not scroll the screen it sits in. Touches go
+  // straight through to whatever is behind.
+  override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+    return nil
   }
 
   override func layoutSubviews() {
