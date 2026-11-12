@@ -77,9 +77,12 @@ What the app needs from App Store Connect, and who does it. The Paid Apps agreem
 
 1. **Bundle id and app record.** Done 2026-11-11: `com.gamequarry.plainproof` is registered and the app "Plainproof: Home Inventory" exists in App Store Connect, with an internal TestFlight group ("Me", automatic distribution).
 2. **The Paid Apps agreement** (owner only: it asks for bank and tax details). Without it the App Store offers no product, in the sandbox or anywhere, and the Pro screen says Pro can't be bought right now.
-3. **The purchase.** One Non-Consumable, product id `com.gamequarry.plainproof.pro`, $5.99, display name "Plainproof Pro", with a review screenshot of the Pro screen. Claude enters it for the owner, with his say-so.
+3. **The purchase.** Done 2026-11-12: one Non-Consumable, `com.gamequarry.plainproof.pro`, "Plainproof Pro", $5.99 in the United States with Apple's matching prices elsewhere, sold everywhere, with the Pro screen as its review screenshot. Apple shows it as Ready to Submit. It goes to review with the app's first version: on the version's page, under In-App Purchases, it has to be picked once (Apple has no API for that).
 4. **A release build.** Actions > "iOS app build" > Run workflow, flavor `release`, which is refused until `npm run check:release` passes (the product id matches the bundle id and the store is built in). No Expo account or Mac is needed. Real purchases can't run in Expo Go.
-5. **The listing.** The text, the two links, the screenshots and the privacy answer ("Data Not Collected") from `store/plainproof/`. Claude enters them; the owner reads the privacy policy once (https://gamequarryllc.github.io/game-studio/apps/privacy/) and presses Submit for Review. Nothing in the repo submits anything.
+5. **The listing.** Done 2026-11-12 by `tools/asc_listing.py` (Actions > "Store listing"; `plan` looks, `apply` writes, and running it again changes only what differs): subtitle, privacy link, categories (Productivity, Lifestyle), the age-rating answers (4+), the description, keywords, promotional text, support link, copyright, the five screenshots, the notes for App Review, the app's price (free) and where it is sold. **The EU is left out**, as the owner chose for the studio's first game, because selling there needs a trader declaration under the Digital Services Act; `leave_out_eu` in the listing turns that off.
+6. **Left for a person, because Apple has no API for it or it is personal:** the App Privacy answer ("Data Not Collected"), picking the purchase on the version's page, the contact person for App Review (a name, a phone number and an email address: never in this repository), and Submit for Review.
+
+**The screenshots** (`store/plainproof/screenshots/`, made by `node e2e/store-shots.cjs` after a web export): five screens of the app with the sample home, each under one short line, at 1320 x 2868. They are drawn by the web build, which runs the same screens from the same code; the note about the web preview is hidden and the report button carries the iPhone's words. The sample home in them has 45 items, which is more than the free version holds, so the last picture says in so many words what is free and what Pro adds. Run the script again whenever a screen in them changes, then "Store listing" with `apply`.
 
 ## How places are kept
 
@@ -149,7 +152,6 @@ The critic also asked for the dark folder to be less muddy: it is a little warme
 - **The TestFlight upload works** (first signed upload: build 1.0.0 (14), playtest, 2026-11-11). Only the playtest flavor has been uploaded; the first `release` upload waits for the store key.
 - **Reordering rooms** is "Move up" and "Move down" in the room's menu. Both critics asked for dragging in the Rooms list; that needs a gesture library and is the first polish job after the owner's test.
 - **Where backup lives** (Report tab or Settings) is an open question for the owner (review 2, finding 9).
-- **Store screenshots** should use believable made-up names, not "Sample household / Example Mutual / HO-0000000".
 - **The web preview's note and the Developer section** show in App Store-style screenshots taken from the browser run. Store screenshots must be shot with both hidden.
 - **VoiceOver** labels are on the controls but have not been listened to on a phone.
 - **iPad** is off (`supportsTablet: false`): the layout is a phone's.

@@ -337,7 +337,7 @@ class Run:
     def age_rating(self):
         decl = self.c.get(f"/v1/appInfos/{self.info}/ageRatingDeclaration")["data"]
         attrs = decl["attributes"]
-        unanswered = sorted(k for k, v in attrs.items() if v is None and k not in ("kidsAgeBand", "ageRatingOverride", "ageRatingOverrideV2", "koreaAgeRatingOverride", "developerAgeRatingInfoUrl"))
+        unanswered = sorted(k for k, v in attrs.items() if v is None and k not in ("kidsAgeBand", "ageRatingOverride", "ageRatingOverrideV2", "koreaAgeRatingOverride", "developerAgeRatingInfoUrl", "gracRatingClassificationNumber"))
         self.say("answers so far: " + json.dumps({k: v for k, v in attrs.items() if v is not None}, sort_keys=True))
         if not unanswered:
             self.say("every age-rating question is answered")
