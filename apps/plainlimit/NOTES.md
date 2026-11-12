@@ -131,6 +131,18 @@ By the readout's own times: last cell reported 9:40:57 PM, empty 9:46:18 PM, sum
 - **The readout itself was stale, so the first finding above is in doubt.** A tab that is out of view stops redrawing, and a screenshot taken straight after switching to Settings showed the readout as it was when Settings was last looked at. The owner reports the apps did lock again on time on build 25, so its timer may have been registered after all. From build 31 the readout reads itself again every three seconds and on coming into view, says when it was read, and says who last changed what is covered.
 - **Build 28: covered apps with a full battery** a few minutes after "Start the day over". Cause not yet known; the readout of that moment was stale. Build 31's "Covers last changed" line is there to name it.
 - **"What used it" drew once (9:47 PM) and was blank before and after.** Build 27 attaches its view to the screen differently; whether that is the whole cause is not known.
+
+## What build 31 showed (2026-11-12, small hours, a 30-minute day)
+
+The whole loop ran on the phone with nothing done from the app in between, read from a fresh readout:
+
+- Five cells reported in turn; "What used it" showed the same minutes for the browser as the cells implied, and drew every time it was looked at.
+- "Last cell" screen one second after `cell-5`, readable. No second alert with it. (The "Keep going" label is still faint on its orange button: the phone lightens a button's label, so a dark label on orange comes out brown. To fix.)
+- `empty` six minutes later; "I need more time", the notification, the sums; "Your apps open until 1:29 AM".
+- **At 1:29:00 AM the phone covered the apps again by itself**: "Covers last changed: 1:29:00 AM by actions_for_pltop_intervalDidEnd", with the timer then gone from "Registered" as intended, and the empty screen offering the next, dearer top-up.
+- After "Start the day over" on this build nothing was covered again, where build 28 had covered everything within minutes. Not seen again; not explained.
+
+Still open: the widget runs about a minute behind (it was still orange when the battery was already empty); a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do); the recharge at the start of a new day has not been watched yet.
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 
 Not yet seen by anyone: the "Last cell" screen and its buttons, Warn and Locked levels, the recharge at 6:00 AM, changing the goal mid-day, and whether the covers come back on time after earned time.
