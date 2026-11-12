@@ -281,6 +281,8 @@ export function diagnostics(): string[] {
   if (!SCREEN_TIME_AVAILABLE) return [];
   try {
     const lines: string[] = [];
+    // So a screenshot shows how old the lines below are.
+    lines.push(`Read at: ${timeOf(Date.now())}`);
     lines.push(`Counting since: ${timeOf(countingSince())}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
     const reported = DeviceActivity.getEvents()
@@ -291,6 +293,15 @@ export function diagnostics(): string[] {
     const cells = DeviceActivity.userDefaultsGet<number>('plainlimit_widget_cells');
     lines.push(`Widget last drew: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_widget_drew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
     lines.push(`Picked: ${pickCount(COUNTED_ID)} counted, ${pickCount(ALLOWED_ID)} always allowed`);
+    // The library notes who last changed what is covered, and when.
+    const last = DeviceActivity.userDefaultsGet<Record<string, unknown>>('lastBlockUpdate');
+    if (last && typeof last === 'object') {
+      const at = typeof last.blockedAt === 'string' ? timeOf(new Date(last.blockedAt).getTime()) : 'unknown';
+      const what = last.blockingAllModeEnabled ? 'everything' : `${Number(last.blocklistCategoryCount ?? 0)} categories, ${Number(last.blocklistAppCount ?? 0)} apps`;
+      lines.push(`Covers last changed: ${at} by ${String(last.triggeredBy ?? 'unknown')} (now covering ${what})`);
+    } else {
+      lines.push('Covers last changed: never');
+    }
     lines.push(`Last problem: ${(DeviceActivity.userDefaultsGet(PROBLEM_KEY) as string | undefined) ?? 'none'}`);
     return lines;
   } catch (error) {

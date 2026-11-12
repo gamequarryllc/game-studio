@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import { clockLabel } from '@/domain/day';
@@ -15,8 +16,18 @@ import { c } from '@/ui/theme';
  */
 export function ScreenTimeCard() {
   const { settings } = useDoc();
-  // Keeps the test build's readout fresh.
   useNow();
+  // The test build's readout is read again every few seconds and whenever this
+  // screen comes back into view. (A tab that is out of view stops redrawing, so
+  // without this a screenshot taken straight after switching tabs showed the
+  // readout as it was when the tab was last looked at.)
+  const [, readAgain] = useState(0);
+  useFocusEffect(useCallback(() => readAgain((n) => n + 1), []));
+  useEffect(() => {
+    if (!DEV_TOOLS) return;
+    const id = setInterval(() => readAgain((n) => n + 1), 3000);
+    return () => clearInterval(id);
+  }, []);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (!SCREEN_TIME_AVAILABLE) return null;

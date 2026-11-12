@@ -128,8 +128,10 @@ export const store = {
   async startDayOver() {
     const now = new Date();
     const day = freshDay(now, snapshot.doc.settings.rechargeMinute);
-    await screenTime.applyPlan(snapshot.doc.settings, 0, true);
+    // The fresh day first: while the phone is being told, nothing may act on the old one.
     set({ ...snapshot.doc, day });
+    await screenTime.applyPlan(snapshot.doc.settings, 0, true);
+    set({ ...snapshot.doc, day: withRealUse(snapshot.doc, snapshot.doc.day) });
   },
   turnOffScreenTime() {
     screenTime.turnOff();
