@@ -12,13 +12,14 @@ import { useDoc } from '@/state/store';
 import { choose } from '@/ui/dialogs';
 import { Icon } from '@/ui/Icon';
 import { Button, Card, Chip, Divider, EmptyState, Footnote, RoundButton, SectionLabel, TabScreen } from '@/ui/kit';
-import { HAIRLINE, NO_ORPHAN, NO_OUTLINE, plate, radius, space, type, useTheme } from '@/ui/theme';
+import { NO_ORPHAN, NO_OUTLINE, plate, radius, space, type, useTheme } from '@/ui/theme';
 
 function EntryRow({ entry, thingName, showThing, onPress }: { entry: Entry; thingName: string; showThing: boolean; onPress: () => void }) {
   const { c } = useTheme();
   const doc = useDoc();
   const unit = doc.settings.distanceUnit;
-  const under = [showThing ? thingName : null, entry.skipped ? 'Skipped' : null, entry.distance !== null && !entry.skipped ? distanceText(entry.distance, unit) : null, entry.note ? entry.note.replace(/\n+/g, ' ') : null].filter(Boolean).join(' · ');
+  const under = [showThing ? thingName : null, entry.skipped ? 'Skipped' : null, entry.distance !== null && !entry.skipped ? distanceText(entry.distance, unit) : null].filter(Boolean).join(' · ');
+  const note = entry.note.replace(/\n+/g, ' ');
   return (
     <Pressable
       testID={`entry-${entry.id}`}
@@ -30,9 +31,9 @@ function EntryRow({ entry, thingName, showThing, onPress }: { entry: Entry; thin
       }}
       style={({ pressed }) => [styles.row, pressed ? { backgroundColor: c.sunk } : null]}>
       {/* The date, stamped the way a service sticker has it. */}
-      <View style={[styles.stamp, { borderColor: c.rule }]}>
+      <View style={styles.stamp}>
         <Text style={[styles.stampDay, { color: entry.skipped ? c.ink3 : c.ink }]}>{dayOfMonth(entry.ymd)}</Text>
-        <Text style={[styles.stampMonth, { color: c.ink2 }]}>{monthAbbr(entry.ymd)}</Text>
+        <Text style={[type.caption, { color: c.ink2 }]}>{monthAbbr(entry.ymd)}</Text>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[type.body, NO_ORPHAN, { color: entry.skipped ? c.ink2 : c.ink }]} numberOfLines={2} lineBreakStrategyIOS="push-out">
@@ -43,8 +44,14 @@ function EntryRow({ entry, thingName, showThing, onPress }: { entry: Entry; thin
             {under}
           </Text>
         ) : null}
+        {note ? (
+          <Text style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={2}>
+            {note}
+          </Text>
+        ) : null}
       </View>
-      {entry.cost !== null ? <Text style={[type.body, type.tabular, { color: c.ink2 }]}>{formatMoney(entry.cost, doc.settings.currency, { whole: true })}</Text> : null}
+      {entry.cost !== null ? <Text style={[type.body, type.tabular, { color: c.ink2 }]}>{formatMoney(entry.cost, doc.settings.currency)}</Text> : null}
+      <Icon name="chevron" size={13} color={c.ink3} />
     </Pressable>
   );
 }
@@ -93,7 +100,7 @@ export default function LogTab() {
         <EmptyState
           title="Nothing logged yet"
           body="Each job you mark done lands here, with its date, cost and reading. Repairs and one-offs can be logged too."
-          action={doc.things.length > 0 ? <Button testID="log-empty-add" label="Log something" kind="soft" onPress={add} /> : undefined}
+          action={<Button testID="log-empty-add" label={doc.things.length > 0 ? 'Log something' : 'Add something to look after'} onPress={add} />}
         />
       </TabScreen>
     );
@@ -139,13 +146,13 @@ export default function LogTab() {
           <Fragment key={group.year}>
             <SectionLabel
               testID={`year-${group.year}`}
-              trailing={group.spent !== null ? <Text testID={`spent-${group.year}`} style={[type.subhead, type.tabular, { color: c.ink2 }]}>{formatMoney(Math.round(group.spent / 100) * 100, doc.settings.currency, { whole: true })} spent</Text> : undefined}>
+              trailing={group.spent !== null ? <Text testID={`spent-${group.year}`} style={[type.subhead, type.tabular, { color: c.ink2 }]}>{formatMoney(group.spent, doc.settings.currency)} spent</Text> : undefined}>
               {String(group.year)}
             </SectionLabel>
             <Card>
               {group.entries.map((e, i) => (
                 <Fragment key={e.id}>
-                  {i > 0 ? <Divider inset={space.l + 44 + space.m} /> : null}
+                  {i > 0 ? <Divider inset={space.l + 34 + space.m} /> : null}
                   <EntryRow entry={e} thingName={names.get(e.thingId) ?? ''} showThing={active === null && doc.things.length > 1} onPress={() => router.push({ pathname: '/done', params: { entryId: e.id } })} />
                 </Fragment>
               ))}
@@ -160,7 +167,6 @@ export default function LogTab() {
 const styles = StyleSheet.create({
   search: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginHorizontal: space.xl, borderRadius: radius.m, paddingHorizontal: space.m, minHeight: 38 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: 10, minHeight: 64 },
-  stamp: { width: 44, height: 44, borderRadius: radius.s, borderWidth: HAIRLINE, alignItems: 'center', justifyContent: 'center' },
-  stampDay: { fontFamily: plate.semibold, fontSize: 22, lineHeight: 22 },
-  stampMonth: { fontFamily: plate.medium, fontSize: 12, lineHeight: 13, letterSpacing: 0.5 },
+  stamp: { width: 34, alignItems: 'center', justifyContent: 'center' },
+  stampDay: { fontFamily: plate.semibold, fontSize: 24, lineHeight: 25 },
 });

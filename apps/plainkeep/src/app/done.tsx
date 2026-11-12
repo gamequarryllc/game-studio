@@ -96,7 +96,7 @@ export default function DoneForm() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.page }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top + 44}>
       <Stack.Screen
         options={{
-          title: mode === 'edit' ? 'Entry' : mode === 'done' ? 'Done' : 'Log something',
+          title: mode === 'edit' ? 'Log entry' : mode === 'done' ? 'Mark done' : 'Log something',
           headerLeft: () => <BarButton testID="form-cancel" label="Cancel" onPress={() => goBack(router)} />,
           headerRight: () => <BarButton testID="form-save" label="Save" bold onPress={save} />,
         }}

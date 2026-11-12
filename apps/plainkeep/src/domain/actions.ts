@@ -128,6 +128,9 @@ export function addJob(doc: Doc, input: JobInput, now: number, id: string = newI
     }
   }
 
+  // No last date and no first date given: the dates above are only a day to check it by.
+  const unsure = !lastDone && input.firstDueYmd == null && input.firstDueDistance == null && (every !== null || everyDistance !== null);
+
   const job: Job = {
     id,
     thingId: thing.id,
@@ -139,6 +142,7 @@ export function addJob(doc: Doc, input: JobInput, now: number, id: string = newI
     startYmd,
     startDistance,
     leadDays: input.leadDays,
+    unsure,
     paused: false,
     createdAt: now,
   };
@@ -149,7 +153,7 @@ export function addJob(doc: Doc, input: JobInput, now: number, id: string = newI
   return next;
 }
 
-export type JobPatch = Partial<Pick<Job, 'name' | 'note' | 'every' | 'everyDistance' | 'anchor' | 'startYmd' | 'startDistance' | 'leadDays' | 'paused'>>;
+export type JobPatch = Partial<Pick<Job, 'name' | 'note' | 'every' | 'everyDistance' | 'anchor' | 'startYmd' | 'startDistance' | 'leadDays' | 'paused' | 'unsure'>>;
 
 export function updateJob(doc: Doc, id: string, patch: JobPatch, now: number): Doc {
   let changed = false;
@@ -175,6 +179,7 @@ export function updateJob(doc: Doc, id: string, patch: JobPatch, now: number): D
       startYmd,
       startDistance: patch.startDistance !== undefined ? patch.startDistance : j.startDistance,
       leadDays: patch.leadDays !== undefined ? patch.leadDays : j.leadDays,
+      unsure: patch.unsure ?? j.unsure,
       paused: patch.paused ?? j.paused,
     };
   });

@@ -2,14 +2,16 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Fragment } from 'react';
 import { Text, View } from 'react-native';
 
-import { deleteJob, skipOnce, updateJob } from '@/domain/actions';
+import { skipOnce, updateJob } from '@/domain/actions';
 import { displayYmd, shortYmd, todayYmd } from '@/domain/dates';
 import { distanceText, dueText, leadText, repeatText } from '@/domain/labels';
 import { formatMoney } from '@/domain/money';
 import { dueOf, entriesOf, lastDone } from '@/domain/schedule';
-import { success, warning } from '@/platform/haptics';
+import { success } from '@/platform/haptics';
+import { DELIVERS } from '@/platform/notify';
 import { useToday } from '@/state/clock';
 import { goBack } from '@/state/nav';
+import { useReminderPermission } from '@/state/reminders';
 import { store, useDoc } from '@/state/store';
 import { confirm } from '@/ui/dialogs';
 import { dueTone, readoutOf } from '@/ui/due';
@@ -37,6 +39,7 @@ export default function JobScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const doc = useDoc();
   const today = useToday();
+  const allowed = useReminderPermission();
   const job = doc.jobs.find((j) => j.id === params.id);
   const thing = job ? doc.things.find((t) => t.id === job.thingId) : undefined;
 
@@ -57,25 +60,13 @@ export default function JobScreen() {
   const last = lastDone(job.id, doc.entries);
   const lead = job.leadDays ?? doc.settings.leadDays;
   const live = due.state !== 'paused' && due.state !== 'finished';
+  const reminderText = !doc.settings.reminders ? 'Reminders are off' : DELIVERS && allowed === 'denied' ? 'On here, but notifications are off in the iPhone’s Settings' : leadText(lead);
 
   const skip = async () => {
     const sure = await confirm({ title: 'Skip it this time?', message: 'Nothing is logged as done. The job moves on to its next turn.', confirmLabel: 'Skip' });
     if (!sure) return;
     store.update((d, now) => skipOnce(d, job.id, todayYmd(now), now));
     success();
-  };
-
-  const remove = async () => {
-    const sure = await confirm({
-      title: `Delete ${job.name}?`,
-      message: history.length > 0 ? 'What has been logged for it stays in the log.' : undefined,
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!sure) return;
-    warning();
-    goBack(router);
-    store.update((d, now) => deleteJob(d, job.id, now));
   };
 
   // For a mileage job: the day the odometer should get there, from the person's own driving.
@@ -106,13 +97,23 @@ export default function JobScreen() {
           ) : null}
           {live ? null : (
             <Text testID="job-due" style={[type.callout, { color: c.ink2 }]}>
-              {due.state === 'paused' ? 'Put away for now. No due dates or reminders.' : 'Done. It was a one-off.'}
+              {due.state === 'paused' ? 'Paused. No due dates or reminders until you bring it back.' : 'Done. It was a one-off.'}
             </Text>
           )}
           {live && due.state === 'unknown' ? (
             <Text testID="job-due" style={[type.callout, { color: c.ink }]}>
               {dueText(due, unit, today)}
             </Text>
+          ) : null}
+          {due.state === 'unlogged' ? (
+            <>
+              <Text testID="job-due" style={[type.title, { color: c.ink }]}>
+                Not logged yet
+              </Text>
+              <Text style={[type.subhead, { color: c.ink2, marginTop: 4 }]}>
+                Mark it done with the day you last did it, and it counts down from there. Until then{due.whenYmd ? `, you’ll be asked about it on ${shortYmd(due.whenYmd, today)}` : ' it has no date'}.
+              </Text>
+            </>
           ) : null}
           {live && due.used !== null ? (
             <View style={{ marginTop: space.l }}>
@@ -143,7 +144,7 @@ export default function JobScreen() {
       <Card>
         <Stacked testID="job-repeat" label="Comes round" value={repeatText(job, unit)} />
         <Divider />
-        <Stacked label="Reminder" value={doc.settings.reminders ? leadText(lead) : 'Reminders are off'} />
+        <Stacked testID="job-reminder" label="Reminder" value={reminderText} />
         {job.note ? (
           <>
             <Divider />
@@ -152,7 +153,7 @@ export default function JobScreen() {
         ) : null}
       </Card>
 
-      <SectionLabel>Each time</SectionLabel>
+      <SectionLabel>Log</SectionLabel>
       {history.length === 0 ? (
         <Footnote style={{ marginTop: 0 }}>Nothing logged yet. If you know when it was last done, mark it done and set that date.</Footnote>
       ) : (
@@ -164,7 +165,7 @@ export default function JobScreen() {
                 testID={`entry-${e.id}`}
                 title={displayYmd(e.ymd)}
                 subtitle={[e.skipped ? 'Skipped' : null, e.distance !== null && !e.skipped ? distanceText(e.distance, unit) : null, e.note || null].filter(Boolean).join(' · ') || undefined}
-                value={e.cost !== null ? formatMoney(e.cost, doc.settings.currency, { whole: true }) : undefined}
+                value={e.cost !== null ? formatMoney(e.cost, doc.settings.currency) : undefined}
                 chevron
                 onPress={() => router.push({ pathname: '/done', params: { entryId: e.id } })}
               />
@@ -175,11 +176,9 @@ export default function JobScreen() {
 
       <View style={{ marginTop: space.xxl }}>
         <Card>
-          <SwitchRow testID="job-paused" label="Put away for now" value={job.paused} onChange={(on) => store.update((d, now) => updateJob(d, job.id, { paused: on }, now))} />
-          <Divider />
-          <Row testID="job-delete" title="Delete this job" destructive onPress={remove} />
+          <SwitchRow testID="job-paused" label="Pause this job" value={job.paused} onChange={(on) => store.update((d, now) => updateJob(d, job.id, { paused: on }, now))} />
         </Card>
-        <Footnote>Put a job away when it is out of season, like a mower in winter. It keeps its history and comes back when you turn this off.</Footnote>
+        <Footnote>Pause a job when it is out of season, like a mower in winter. It keeps its history and comes back when you turn this off.</Footnote>
       </View>
     </PushedScreen>
   );

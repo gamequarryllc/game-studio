@@ -1,6 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FREE_THING_LIMIT } from '@/domain/limits';
@@ -26,6 +26,7 @@ const NO_STORE_BODY = DEV_TOOLS ? 'Nothing can be bought here. To try Pro, turn 
 export default function ProScreen() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const router = useRouter();
   const held = useDoc().things.length;
   const state = usePro();
@@ -75,8 +76,8 @@ export default function ProScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: c.page }}>
       <Stack.Screen options={{ title: 'Plainkeep Pro', headerLeft: () => <BarButton testID="pro-close" label="Close" onPress={close} /> }} />
-      <ScrollView testID="pro-screen" contentContainerStyle={{ paddingHorizontal: space.xxl, paddingTop: space.xl, paddingBottom: insets.bottom + space.xxl }}>
-        <Text accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink }]}>
+      <ScrollView testID="pro-screen" contentContainerStyle={{ paddingHorizontal: space.xxl, paddingTop: space.l, paddingBottom: space.xl }}>
+        <Text accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink }, width < 360 ? { fontSize: 32, lineHeight: 34 } : null]}>
           {state.isPro ? 'Pro is unlocked.' : 'Room for the whole household.'}
         </Text>
         <Text testID="pro-status" style={[type.body, { color: c.ink2, marginTop: space.m }]}>
@@ -99,14 +100,14 @@ export default function ProScreen() {
           ))}
         </View>
 
-        {state.isPro ? null : (
-          <View style={{ marginTop: space.xxl, gap: space.xs }}>
-            <Button testID="pro-buy" label={price ? `Unlock Pro for ${price}` : 'Unlock Pro'} busy={state.busy} onPress={buy} />
-            <Button testID="pro-restore" label="Restore purchase" kind="plain" disabled={state.busy} onPress={restore} />
-            <Text style={[type.footnote, { color: c.ink2, textAlign: 'center' }]}>One payment through the App Store. Still no account, and nothing leaves your iPhone.</Text>
-          </View>
-        )}
       </ScrollView>
+      {state.isPro ? null : (
+        <View style={{ paddingHorizontal: space.xxl, paddingTop: space.m, paddingBottom: insets.bottom + space.m, gap: space.xs, borderTopWidth: HAIRLINE, borderTopColor: c.rule, backgroundColor: c.page }}>
+          <Button testID="pro-buy" label={price ? `Unlock Pro for ${price}` : 'Unlock Pro'} busy={state.busy} onPress={buy} />
+          <Button testID="pro-restore" label="Restore purchase" kind="plain" disabled={state.busy} onPress={restore} />
+          <Text style={[type.footnote, { color: c.ink2, textAlign: 'center' }]}>One payment through the App Store. Still no account, and nothing leaves your iPhone.</Text>
+        </View>
+      )}
     </View>
   );
 }

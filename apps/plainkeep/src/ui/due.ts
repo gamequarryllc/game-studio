@@ -1,5 +1,5 @@
 import { groupDigits, spanParts } from '@/domain/labels';
-import type { Due } from '@/domain/schedule';
+import type { Due, Listed } from '@/domain/schedule';
 import type { DistanceUnit } from '@/domain/types';
 
 import type { Tone } from './theme';
@@ -34,16 +34,24 @@ export function leadsByDistance(due: Due): boolean {
 
 /** The figure for a job's line: what is left of whichever limit comes first. */
 export function readoutOf(due: Due, unit: DistanceUnit): Readout | null {
-  if (due.state === 'paused' || due.state === 'finished') return null;
+  if (due.state === 'paused' || due.state === 'finished' || due.state === 'unlogged') return null;
   const useDistance = leadsByDistance(due);
   if (useDistance && due.distanceLeft !== null) {
     if (due.distanceLeft === 0) return { figure: 'Now', unit: 'due' };
-    return { figure: groupDigits(Math.abs(due.distanceLeft)), unit: due.distanceLeft < 0 ? `${unit} over` : unit };
+    return { figure: groupDigits(Math.abs(due.distanceLeft)), unit: due.distanceLeft < 0 ? `${unit} overdue` : unit };
   }
   if (due.daysLeft !== null) {
     if (due.daysLeft === 0) return { figure: 'Today', unit: 'due' };
     const parts = spanParts(due.daysLeft);
-    return { figure: parts.figure, unit: due.daysLeft < 0 ? `${parts.unit} over` : parts.unit };
+    return { figure: parts.figure, unit: due.daysLeft < 0 ? `${parts.unit} overdue` : parts.unit };
   }
   return null;
+}
+
+/** How a thing stands: the colour of its most pressing job. Used for its symbol wherever it is shown. */
+export function standing(jobs: Listed[]): Tone {
+  const live = jobs.filter((j) => j.due.state !== 'paused' && j.due.state !== 'finished');
+  if (live.some((j) => j.due.state === 'overdue')) return 'red';
+  if (live.some((j) => j.due.state === 'today' || j.due.state === 'soon')) return 'amber';
+  return live.length === 0 ? 'muted' : 'blue';
 }

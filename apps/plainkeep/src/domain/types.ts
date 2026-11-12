@@ -58,7 +58,12 @@ export interface Job {
   startDistance: number | null;
   /** Days of warning before it is due; null uses the app's setting. */
   leadDays: number | null;
-  /** Put away for now (a mower in winter): not due, not reminded. */
+  /**
+   * Nobody has said when this was last done or when it is first due: the first date is only a day to
+   * check it by. Until it is logged once it is shown as "not logged yet", never as a countdown.
+   */
+  unsure: boolean;
+  /** Paused (a mower in winter): not due, not reminded. */
   paused: boolean;
   createdAt: number;
 }

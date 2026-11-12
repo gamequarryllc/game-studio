@@ -41,7 +41,7 @@ function byDate(daysLeft: number): string {
 }
 
 function byDistance(left: number, unit: DistanceUnit): string {
-  if (left < 0) return `${distanceText(-left, unit)} over`;
+  if (left < 0) return `${distanceText(-left, unit)} overdue`;
   if (left === 0) return 'Due now';
   return `Due in ${distanceText(left, unit)}`;
 }
@@ -50,9 +50,11 @@ function byDistance(left: number, unit: DistanceUnit): string {
 export function dueText(due: Due, unit: DistanceUnit, today: Ymd): string {
   switch (due.state) {
     case 'paused':
-      return 'Put away';
+      return 'Paused';
     case 'finished':
       return 'Done';
+    case 'unlogged':
+      return 'Not logged yet';
     case 'unknown':
       return due.distance !== null ? `Due at ${distanceText(due.distance, unit)}` : 'Needs an odometer reading';
     default:
@@ -81,8 +83,9 @@ export function dueText(due: Due, unit: DistanceUnit, today: Ymd): string {
  * which already says how long is left, so it never repeats it.
  */
 export function dueWhere(due: Due, unit: DistanceUnit, today: Ymd, only?: 'date' | 'distance'): string {
-  if (due.state === 'paused') return 'Put away';
+  if (due.state === 'paused') return 'Paused';
   if (due.state === 'finished') return 'Done';
+  if (due.state === 'unlogged') return 'Not logged yet';
   const date = due.ymd !== null ? shortYmd(due.ymd, today) : null;
   const dist = due.distance !== null ? `at ${distanceText(due.distance, unit)}` : null;
   // On a narrow line there is room for one of the two: the one the figure beside it is counting.

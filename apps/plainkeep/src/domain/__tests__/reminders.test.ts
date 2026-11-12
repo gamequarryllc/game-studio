@@ -29,7 +29,7 @@ describe('planning reminders', () => {
     let doc = withJob(base(), { thingId: HOME, name: 'Service', every: { n: 1, unit: 'year' }, lastDoneYmd: '2026-01-10', leadDays: 30 }, 'hvac000001');
     doc = setSettings(doc, { remindHour: 18, remindMinute: 30 }, NOW);
     const plan = planReminders(doc, NOW);
-    expect(plan[0]).toMatchObject({ fireAt: at('2026-12-11', 18, 30), body: 'Home · due in 4 weeks, on Jan 10' });
+    expect(plan[0]).toMatchObject({ fireAt: at('2026-12-11', 18, 30), body: 'Home · due in 4 weeks, on Jan 10, 2027' });
   });
 
   it('skips what is already past, including this morning', () => {
@@ -47,7 +47,29 @@ describe('planning reminders', () => {
     expect(toYmd(new Date(planReminders(doc, NOW)[0].fireAt))).toBe('2027-05-05');
   });
 
-  it('leaves out jobs that are put away', () => {
+  it('a job nobody has logged gets a nudge to look on its check day and once more, with no countdown', () => {
+    const doc = withJob(base(), { thingId: HOME, name: 'Chimney sweep', every: { n: 1, unit: 'year' } }, 'chimney001');
+    const plan = planReminders(doc, NOW);
+    expect(plan.map((p) => [toYmd(new Date(p.fireAt)), p.kind, p.body])).toEqual([
+      ['2026-12-12', 'check', 'Home · not logged yet. When was it last done?'],
+      ['2026-12-22', 'check', 'Home · not logged yet. When was it last done?'],
+    ]);
+  });
+
+  it('a home just set up gets one nudge for all its unlogged jobs, not one each', () => {
+    let doc = base();
+    for (const name of ['Furnace filter', 'Clean dryer vent', 'Smoke alarm batteries']) doc = withJob(doc, { thingId: HOME, name, every: { n: 1, unit: 'year' } }, nextId('job'));
+    const plan = planReminders(doc, NOW);
+    expect(plan).toHaveLength(2);
+    expect(plan[0]).toMatchObject({ kind: 'several', title: '3 jobs aren’t logged yet', body: 'Clean dryer vent (Home), Furnace filter (Home), Smoke alarm batteries (Home)', fireAt: at('2026-12-12') });
+  });
+
+  it('says which reminders only come if the job is still not done', () => {
+    const doc = withJob(base(), { thingId: HOME, lastDoneYmd: '2026-09-01' }, 'filter0001');
+    expect(planReminders(doc, NOW).map((p) => p.kind)).toEqual(['ahead', 'day', 'after', 'after']);
+  });
+
+  it('leaves out paused jobs', () => {
     let doc = withJob(base(), { thingId: HOME, lastDoneYmd: '2026-09-01' }, 'filter0001');
     doc = updateJob(doc, 'filter0001', { paused: true }, NOW);
     expect(planReminders(doc, NOW)).toEqual([]);
@@ -71,7 +93,7 @@ describe('planning reminders', () => {
     expect(oil.map((p) => toYmd(new Date(p.fireAt)))).toEqual(['2027-01-13', '2027-01-20', '2027-01-23', '2027-01-30']);
     const odo = plan.filter((p) => p.key.startsWith('odo:'));
     expect(odo).toHaveLength(1);
-    expect(odo[0]).toMatchObject({ fireAt: at('2026-12-12'), thingId: CAR, jobId: null, title: 'What does the Wagon odometer say?' });
+    expect(odo[0]).toMatchObject({ fireAt: at('2026-12-12'), thingId: CAR, jobId: null, title: 'Wagon: what does the odometer say?', kind: 'odometer' });
   });
 
   it('asks for a reading tomorrow when a car with distance jobs has none', () => {
@@ -95,7 +117,7 @@ describe('planning reminders', () => {
     }
     const plan = planReminders(doc, NOW);
     expect(plan).toHaveLength(4);
-    expect(plan[1]).toMatchObject({ title: '4 jobs need a look', body: 'Furnace filter, Pest control, Range hood filter and 1 more', jobId: null });
+    expect(plan[1]).toMatchObject({ title: '4 jobs need a look', body: 'Furnace filter (Home), Pest control (Home), Range hood filter (Home) and 1 more', jobId: null, kind: 'several' });
   });
 
   it('keeps within what the iPhone will hold, nearest first', () => {

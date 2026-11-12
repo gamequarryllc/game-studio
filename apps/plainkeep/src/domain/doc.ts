@@ -81,6 +81,7 @@ function parseJob(v: unknown, things: Set<string>, now: number): Job | null {
     startYmd,
     startDistance: whole(v.startDistance, 0, LIMITS.distance),
     leadDays: whole(v.leadDays, 0, LIMITS.leadDays),
+    unsure: v.unsure === true,
     paused: v.paused === true,
     createdAt: stamp(v.createdAt, now),
   };

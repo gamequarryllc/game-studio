@@ -109,11 +109,10 @@ export function displayYmd(ymd: Ymd | null): string {
   return `${MONTHS[mo - 1]} ${d}, ${y}`;
 }
 
-/** "Mar 4" when it is this year (or within six months), otherwise "Mar 4, 2027". */
+/** "Mar 4" when it is this year, otherwise "Mar 4, 2027": a date in another year always says so. */
 export function shortYmd(ymd: Ymd, today: Ymd): string {
   const [y, mo, d] = parts(ymd);
-  const near = y === parts(today)[0] || Math.abs(daysBetween(today, ymd)) < 183;
-  return near ? `${MONTHS[mo - 1]} ${d}` : `${MONTHS[mo - 1]} ${d}, ${y}`;
+  return y === parts(today)[0] ? `${MONTHS[mo - 1]} ${d}` : `${MONTHS[mo - 1]} ${d}, ${y}`;
 }
 
 export function monthAbbr(ymd: Ymd): string {

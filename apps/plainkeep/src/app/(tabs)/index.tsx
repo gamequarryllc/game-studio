@@ -12,7 +12,6 @@ import { useDoc } from '@/state/store';
 import { notify } from '@/ui/dialogs';
 import { JobRow } from '@/ui/JobRow';
 import { Button, Card, Divider, EmptyState, Footnote, LinkText, Notice, RoundButton, SectionLabel, TabScreen } from '@/ui/kit';
-import { TagArt } from '@/ui/TagArt';
 import { space, type Tone } from '@/ui/theme';
 
 export default function DueTab() {
@@ -64,11 +63,6 @@ export default function DueTab() {
     return (
       <TabScreen testID="due-screen" title="Due" action={action}>
         <EmptyState
-          art={
-            <View style={{ marginLeft: -16 }}>
-              <TagArt width={210} />
-            </View>
-          }
           title="Nothing to keep up yet"
           body="Add your home or a car, then the jobs that come round: a filter, a battery, an oil change."
           action={<Button testID="empty-add-thing" label="Add something to look after" onPress={() => openNewThing(router)} />}
@@ -116,9 +110,15 @@ export default function DueTab() {
 
       {section('Overdue', groups.overdue, 'red', 'section-overdue')}
       {section('Coming up', groups.soon, 'amber', 'section-soon')}
+      {section('Not logged yet', groups.unlogged, undefined, 'section-unlogged')}
+      {groups.unlogged.length > 0 ? (
+        <Footnote>
+          When you do one of these, tap its ring. If you know when it was last done, tap the ring and set that day. From then on it counts down by itself.
+        </Footnote>
+      ) : null}
       {section('Later', groups.later, undefined, 'section-later')}
       {section('Needs an odometer reading', groups.unknown, undefined, 'section-unknown')}
-      {section('Put away', groups.paused, undefined, 'section-paused')}
+      {section('Paused', groups.paused, undefined, 'section-paused')}
       {section('Finished', groups.finished, undefined, 'section-finished')}
     </TabScreen>
   );

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { addJob, defaultFirstDue, updateJob } from '@/domain/actions';
+import { addJob, defaultFirstDue, deleteJob, updateJob } from '@/domain/actions';
 import { displayYmd } from '@/domain/dates';
 import { groupDigits, leadText } from '@/domain/labels';
 import { currentReading, lastEntry } from '@/domain/schedule';
@@ -13,10 +13,10 @@ import { useToday } from '@/state/clock';
 import { goBack } from '@/state/nav';
 import { store, useDoc } from '@/state/store';
 import { DateField } from '@/ui/DateField';
-import { choose } from '@/ui/dialogs';
-import { FormRow, PickRow, SwitchRow, TextRow } from '@/ui/form';
+import { choose, confirm } from '@/ui/dialogs';
+import { FormRow, PickRow, Segmented, SwitchRow, TextRow } from '@/ui/form';
 import { Icon } from '@/ui/Icon';
-import { BarButton, Card, Divider, Footnote, SectionLabel } from '@/ui/kit';
+import { BarButton, Card, Divider, Footnote, Row, SectionLabel } from '@/ui/kit';
 import { NO_OUTLINE, radius, space, type, useTheme } from '@/ui/theme';
 
 const UNITS: { key: IntervalUnit; one: string; many: string }[] = [
@@ -27,6 +27,8 @@ const UNITS: { key: IntervalUnit; one: string; many: string }[] = [
 ];
 
 const digits = (s: string) => s.replace(/[^\d]/g, '');
+
+type Mode = 'date' | 'distance' | 'both' | 'once';
 
 export default function JobForm() {
   const { c } = useTheme();
@@ -44,7 +46,7 @@ export default function JobForm() {
 
   const [name, setName] = useState(editing?.name ?? '');
   const [note, setNote] = useState(editing?.note ?? '');
-  const [byDate, setByDate] = useState(editing ? editing.every !== null : true);
+  const [mode, setMode] = useState<Mode>(editing ? (editing.every && editing.everyDistance !== null ? 'both' : editing.every ? 'date' : editing.everyDistance !== null ? 'distance' : 'once') : 'date');
   const [everyN, setEveryN] = useState(String(editing?.every?.n ?? 3));
   const [everyUnit, setEveryUnit] = useState<IntervalUnit>(editing?.every?.unit ?? 'month');
   const [distance, setDistance] = useState(editing?.everyDistance != null ? String(editing.everyDistance) : '');
@@ -55,14 +57,17 @@ export default function JobForm() {
   const [lead, setLead] = useState<number | null>(editing?.leadDays ?? null);
   const [showErrors, setShowErrors] = useState(false);
 
+  // A thing with no odometer can only go by the date, or happen once.
+  const byDate = mode === 'date' || mode === 'both' || (mode === 'distance' && !vehicle);
+  const byDistance = vehicle && (mode === 'distance' || mode === 'both');
   const n = Number(digits(everyN));
   const every: Interval | null = byDate && n >= 1 && n <= LIMITS.intervalN ? { n, unit: everyUnit } : null;
-  const everyDistance = vehicle && digits(distance) !== '' ? Number(digits(distance)) : null;
+  const everyDistance = byDistance && digits(distance) !== '' ? Number(digits(distance)) : null;
   const nameMissing = name.trim() === '';
   const intervalBad = byDate && every === null;
-  const distanceBad = everyDistance !== null && (everyDistance < 1 || everyDistance > LIMITS.distance);
+  const distanceBad = byDistance && (everyDistance === null || everyDistance < 1 || everyDistance > LIMITS.distance);
   const logged = editing ? lastEntry(editing.id, doc.entries) : null;
-  const once = !byDate && everyDistance === null;
+  const once = !byDate && !byDistance;
   const reading = thing && vehicle ? currentReading(thing) : null;
 
   const pickThing = async () => {
@@ -93,7 +98,7 @@ export default function JobForm() {
     }
     if (editing) {
       store.update((d, now) =>
-        updateJob(d, editing.id, { name, note, every, everyDistance, anchor: fixed && every ? 'fixed' : 'done', startYmd: fixed || !logged ? (firstDue ?? editing.startYmd ?? (every || once ? defaultFirstDue(every, today) : null)) : editing.startYmd, leadDays: lead }, now),
+        updateJob(d, editing.id, { name, note, every, everyDistance, anchor: fixed && every ? 'fixed' : 'done', startYmd: fixed || !logged ? (firstDue ?? editing.startYmd ?? (every || once ? defaultFirstDue(every, today) : null)) : editing.startYmd, leadDays: lead, unsure: firstDue !== null && firstDue !== editing.startYmd ? false : editing.unsure }, now),
       );
     } else {
       store.update((d, now) =>
@@ -119,6 +124,16 @@ export default function JobForm() {
     goBack(router);
   };
 
+  const remove = async () => {
+    if (!editing) return;
+    const sure = await confirm({ title: `Delete ${editing.name}?`, message: logged ? 'What has been logged for it stays in the log.' : undefined, confirmLabel: 'Delete', destructive: true });
+    if (!sure) return;
+    warning();
+    // Out of the form and off the job's own screen before it goes.
+    router.dismissTo({ pathname: '/thing/[id]', params: { id: editing.thingId } });
+    store.update((d, now) => deleteJob(d, editing.id, now));
+  };
+
   if (doc.things.length === 0 || (params.id && !editing)) {
     return (
       <View style={{ flex: 1, backgroundColor: c.page, padding: space.xxl }}>
@@ -128,7 +143,7 @@ export default function JobForm() {
     );
   }
 
-  const dueLabel = fixed ? 'On' : once ? 'Due' : 'First due';
+  const dueLabel = once ? 'Due' : 'Next due';
   const showFirstDue = fixed || (editing ? !logged && (byDate || once) : !lastDone && (byDate || once));
 
   return (
@@ -173,7 +188,24 @@ export default function JobForm() {
 
         <SectionLabel>How often</SectionLabel>
         <Card>
-          <SwitchRow testID="field-by-date" label="By the calendar" value={byDate} onChange={setByDate} />
+          <Segmented
+            testID="mode"
+            value={mode === 'distance' && !vehicle ? 'date' : mode === 'both' && !vehicle ? 'date' : mode}
+            onChange={setMode}
+            options={
+              vehicle
+                ? [
+                    { key: 'date', label: 'Date' },
+                    { key: 'distance', label: unit === 'mi' ? 'Mileage' : 'Distance' },
+                    { key: 'both', label: 'Both' },
+                    { key: 'once', label: 'Once' },
+                  ]
+                : [
+                    { key: 'date', label: 'Repeats' },
+                    { key: 'once', label: 'Once' },
+                  ]
+            }
+          />
           {byDate ? (
             <>
               <Divider />
@@ -211,7 +243,7 @@ export default function JobForm() {
               />
             </>
           ) : null}
-          {vehicle ? (
+          {byDistance ? (
             <>
               <Divider />
               <TextRow
@@ -219,7 +251,7 @@ export default function JobForm() {
                 label={byDate ? 'Or every' : 'Every'}
                 value={distance}
                 onChangeText={(t) => setDistance(digits(t).slice(0, 7))}
-                placeholder="Distance, if it goes by one"
+                placeholder="5000"
                 keyboardType="number-pad"
                 suffix={unit}
                 error={showErrors && distanceBad ? 'Enter a distance.' : null}
@@ -227,10 +259,10 @@ export default function JobForm() {
             </>
           ) : null}
         </Card>
-        {vehicle && byDate ? <Footnote>With both, whichever comes first decides.</Footnote> : null}
-        {once ? <Footnote>With neither, it happens once: give it a date below.</Footnote> : null}
+        {mode === 'both' && vehicle ? <Footnote>Whichever comes first decides.</Footnote> : null}
+        {once ? <Footnote>It happens once: give it a date below, and it is finished when you mark it done.</Footnote> : null}
 
-        <SectionLabel>{editing ? 'Dates' : 'Where it stands'}</SectionLabel>
+        <SectionLabel>{once ? 'When' : 'Last done and next due'}</SectionLabel>
         <Card>
           {editing ? (
             logged ? (
@@ -255,12 +287,12 @@ export default function JobForm() {
             <>
               {editing && !logged ? null : <Divider />}
               <FormRow label={dueLabel}>
-                <DateField testID="field-first-due" label={dueLabel} value={firstDue} onChange={setFirstDue} emptyLabel={once ? 'No date' : fixed ? 'Choose the date' : 'Within a month'} />
+                <DateField testID="field-first-due" label={dueLabel} value={firstDue} onChange={setFirstDue} emptyLabel={once ? 'No date' : fixed ? 'Choose the date' : 'Not sure'} />
               </FormRow>
             </>
           ) : null}
         </Card>
-        {!editing && !lastDone && !fixed && !once ? <Footnote>If you’re not sure when it was last done, it comes up within a month so you can check.</Footnote> : null}
+        {!editing && !lastDone && !firstDue && !once ? <Footnote>Leave both as “Not sure” and the job waits under “Not logged yet” until you first mark it done. You’ll get one reminder to look at it, within a month.</Footnote> : null}
 
         <SectionLabel>Reminder</SectionLabel>
         <Card>
@@ -282,6 +314,12 @@ export default function JobForm() {
             style={[type.body, NO_OUTLINE, { color: c.ink, minHeight: 76, paddingHorizontal: space.l, paddingVertical: space.m, textAlignVertical: 'top' }]}
           />
         </Card>
+
+        {editing ? (
+          <Card style={{ marginTop: space.huge }}>
+            <Row testID="job-delete" title="Delete this job" destructive onPress={remove} />
+          </Card>
+        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );

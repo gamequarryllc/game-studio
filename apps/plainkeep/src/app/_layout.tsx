@@ -89,7 +89,7 @@ export default function RootLayout() {
             <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade', title: 'Welcome' }} />
             <Stack.Screen name="thing/[id]" options={{ title: '' }} />
             <Stack.Screen name="job/[id]" options={{ title: '' }} />
-            <Stack.Screen name="coming" options={{ title: 'Coming reminders' }} />
+            <Stack.Screen name="coming" options={{ title: 'Upcoming reminders' }} />
             <Stack.Screen name="thing-form" options={{ presentation: 'modal', title: '' }} />
             <Stack.Screen name="suggestions" options={{ presentation: 'modal', title: 'Suggested jobs' }} />
             <Stack.Screen name="job-form" options={{ presentation: 'modal', title: '' }} />

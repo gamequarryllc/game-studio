@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { dueText, dueWhere } from '@/domain/labels';
+import { dueText, dueWhere, repeatText } from '@/domain/labels';
 import type { Listed } from '@/domain/schedule';
 import type { DistanceUnit, Ymd } from '@/domain/types';
 import { tap } from '@/platform/haptics';
@@ -20,12 +20,12 @@ export function Punch({ onPress, color, label, testID }: { onPress: () => void; 
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
-      hitSlop={10}
+      hitSlop={{ top: 12, bottom: 12, left: 14, right: 8 }}
       onPress={() => {
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.punch, { borderColor: color, backgroundColor: pressed ? color : c.page }]}>
+      style={({ pressed }) => [styles.punch, { borderColor: color, backgroundColor: pressed ? color : c.card }]}>
       {({ pressed }) => (pressed ? <Icon name="check" size={14} color={c.card} /> : null)}
     </Pressable>
   );
@@ -54,10 +54,13 @@ export function JobRow({
   const readout = readoutOf(due, unit);
   const quiet = due.state === 'paused' || due.state === 'finished';
   const line = dueText(due, unit, today);
-  const where = dueWhere(due, unit, today, leadsByDistance(due) ? 'distance' : 'date');
+  // A job nobody has logged has no date to show: say how often it comes round instead.
+  const where = due.state === 'unlogged' ? repeatText(job, unit) : dueWhere(due, unit, today, leadsByDistance(due) ? 'distance' : 'date');
+  // The rule is for what is pressing; further out, the figure says enough.
+  const ruled = due.used !== null && (due.state === 'overdue' || due.state === 'today' || due.state === 'soon');
   return (
     <View style={styles.row}>
-      {quiet ? <View style={styles.punchSpace} /> : <Punch testID={`punch-${job.id}`} color={color} label={`Mark ${job.name} done`} onPress={onDone} />}
+      {quiet ? <View style={styles.punchSpace} /> : <Punch testID={`punch-${job.id}`} color={due.state === 'unlogged' ? c.ink3 : color} label={`Mark ${job.name} done`} onPress={onDone} />}
       <Pressable
         testID={`job-${job.id}`}
         accessibilityRole="button"
@@ -68,24 +71,32 @@ export function JobRow({
         }}
         style={({ pressed }) => [styles.body, pressed ? { opacity: 0.6 } : null]}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[type.body, NO_ORPHAN, { color: quiet ? c.ink2 : c.ink }]} numberOfLines={2} lineBreakStrategyIOS="push-out">
+          <Text style={[type.body, NO_ORPHAN, { color: quiet ? c.ink2 : c.ink }]} numberOfLines={3} lineBreakStrategyIOS="push-out">
             {job.name}
           </Text>
-          <Text style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={1}>
-            {showThing ? `${thing.name} · ${where}` : where}
-          </Text>
-          {quiet || due.used === null ? null : (
-            <View style={{ marginTop: 7, maxWidth: 132 }}>
+          {/* The thing's name gives way when there is no room; the date or the reading never does. */}
+          <View style={styles.under}>
+            {showThing ? (
+              <Text style={[type.footnote, { color: c.ink2, flexShrink: 1 }]} numberOfLines={1}>
+                {thing.name}
+              </Text>
+            ) : null}
+            <Text testID={`where-${job.id}`} style={[type.footnote, { color: c.ink2, flexShrink: 0 }]} numberOfLines={1}>
+              {showThing ? `\u00A0· ${where}` : where}
+            </Text>
+          </View>
+          {ruled ? (
+            <View style={{ marginTop: 7, width: 128 }}>
               <Gauge used={due.used} tone={tone} marks={22} height={7} />
             </View>
-          )}
+          ) : null}
         </View>
         {readout ? (
           <View style={styles.readout}>
             <Text style={[type.readout, { color }]} numberOfLines={1}>
               {readout.figure}
             </Text>
-            <Text style={[type.unit, { color: c.ink2 }]} numberOfLines={1}>
+            <Text style={[type.caption, { color: c.ink2 }]} numberOfLines={1}>
               {readout.unit}
             </Text>
           </View>
@@ -97,7 +108,8 @@ export function JobRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.l, minHeight: 74 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.l, minHeight: 64 },
+  under: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
   punch: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.75, alignItems: 'center', justifyContent: 'center' },
   punchSpace: { width: 26, height: 26 },
   body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingLeft: space.m, paddingRight: space.m, paddingVertical: 11 },

@@ -10,8 +10,10 @@ export interface Colors {
   page: string;
   /** Tags, lists, forms. */
   card: string;
-  /** Wells: inputs, the unfilled part of a gauge. */
+  /** Wells: inputs, a pressed row. */
   sunk: string;
+  /** The marks of a rule that are still to come. */
+  mark: string;
   ink: string;
   ink2: string;
   ink3: string;
@@ -40,6 +42,7 @@ export const LIGHT: Colors = {
   page: '#ECEEEC',
   card: '#FFFFFF',
   sunk: '#E1E5E3',
+  mark: '#CCD2CF',
   ink: '#161A1E',
   ink2: '#57616A',
   ink3: '#8C959C',
@@ -56,16 +59,17 @@ export const LIGHT: Colors = {
   onPlate: '#F3F5F4',
   plateRule: '#343B43',
   scrim: 'rgba(22,26,30,0.42)',
-  bar: 'rgba(245,247,246,0.88)',
+  bar: 'rgba(245,247,246,0.97)',
 };
 
 export const DARK: Colors = {
   page: '#0F1215',
   card: '#191D21',
   sunk: '#242A2F',
+  mark: '#4B545C',
   ink: '#ECEFF0',
   ink2: '#A1AAB2',
-  ink3: '#6B747C',
+  ink3: '#7E878F',
   rule: '#2B3137',
   blue: '#8ABBE8',
   blueSoft: '#1A2937',
@@ -75,11 +79,11 @@ export const DARK: Colors = {
   amberSoft: '#32281A',
   red: '#F27A61',
   redSoft: '#3A1F1A',
-  plate: '#07090B',
-  onPlate: '#ECEFF0',
-  plateRule: '#262C32',
+  plate: '#2C333A',
+  onPlate: '#F3F5F4',
+  plateRule: '#454D56',
   scrim: 'rgba(0,0,0,0.6)',
-  bar: 'rgba(20,24,27,0.88)',
+  bar: 'rgba(20,24,27,0.97)',
 };
 
 export interface Theme {
@@ -93,8 +97,8 @@ export function useTheme(): Theme {
 }
 
 export const space = { xs: 4, s: 8, m: 12, l: 16, xl: 20, xxl: 28, huge: 40 } as const;
-/** Tags are cut square: small radii, and one corner clipped where a tag has its hole. */
-export const radius = { s: 4, m: 8, l: 12 } as const;
+/** Small squares (a stamp, an odometer) are cut square; cards and buttons take the iPhone's own rounder corner. */
+export const radius = { s: 4, m: 12, l: 16 } as const;
 
 /** Barlow Condensed, loaded in the root layout. Titles and every figure. */
 export const plate = { medium: 'BarlowCondensed_500Medium', semibold: 'BarlowCondensed_600SemiBold' } as const;

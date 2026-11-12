@@ -110,6 +110,8 @@ export type DueState =
   /** Due today, or the odometer has just reached it. */
   | 'today'
   | 'soon'
+  /** Never logged, and nobody has said when it was last done: there is nothing honest to count down from. */
+  | 'unlogged'
   | 'later'
   /** A distance job on a vehicle with no reading to judge it by. */
   | 'unknown'
@@ -135,11 +137,11 @@ export interface Due {
   used: number | null;
 }
 
-/** "Soon" is the last quarter of a job's interval, never more than a month. */
-export function soonDays(job: Job): number {
-  if (!job.every) return 30;
-  return Math.min(30, Math.max(1, Math.round(intervalDays(job.every) * 0.25)));
-}
+/**
+ * "Coming up" is the next 30 days, for every job alike. One window for all of them keeps the list in
+ * order: nothing in "Later" is ever sooner than something in "Coming up".
+ */
+export const SOON_DAYS = 30;
 
 /** "Soon" by distance: the last tenth of the interval, and at least 300. */
 export function soonDistance(job: Job): number {
@@ -158,6 +160,10 @@ export function dueOf(job: Job, doc: Pick<Doc, 'things' | 'entries'>, today: Ymd
   if (job.paused) return { ...none, state: 'paused' };
 
   const last = lastEntry(job.id, doc.entries);
+  if (job.unsure && !last) {
+    // The day to check it by is kept for the reminder; nothing is counted down.
+    return { ...none, state: 'unlogged', whenYmd: job.startYmd };
+  }
   const ymd = nextDueYmd(job, doc.entries);
   const distance = nextDueDistance(job, doc.entries, thing);
   if (ymd === null && distance === null) {
@@ -208,8 +214,8 @@ export function dueOf(job: Job, doc: Pick<Doc, 'things' | 'entries'>, today: Ymd
   if ((daysLeft !== null && daysLeft < 0) || (distanceLeft !== null && distanceLeft < 0)) state = 'overdue';
   else if (daysLeft === 0 || distanceLeft === 0) state = 'today';
   else if (daysLeft === null && distanceLeft === null) state = 'unknown';
-  else if ((daysLeft !== null && daysLeft <= soonDays(job)) || (distanceLeft !== null && distanceLeft <= soonDistance(job))) state = 'soon';
-  else if (whenYmd !== null && by === 'distance' && daysBetween(today, whenYmd) <= 14) state = 'soon';
+  else if ((daysLeft !== null && daysLeft <= SOON_DAYS) || (distanceLeft !== null && distanceLeft <= soonDistance(job))) state = 'soon';
+  else if (whenYmd !== null && by === 'distance' && daysBetween(today, whenYmd) <= SOON_DAYS) state = 'soon';
   else state = 'later';
 
   return { state, ymd, distance, daysLeft, distanceLeft, by, whenYmd, used };
@@ -226,13 +232,18 @@ export interface Listed {
   due: Due;
 }
 
-const ORDER: Record<DueState, number> = { overdue: 0, today: 1, soon: 2, later: 3, unknown: 4, paused: 5, finished: 6 };
+const ORDER: Record<DueState, number> = { overdue: 0, today: 1, soon: 2, unlogged: 3, later: 4, unknown: 5, paused: 6, finished: 7 };
 
 /** A number to sort by within a state: how close the job is, in days where that can be said. */
-function urgency(due: Due): number {
-  if (due.daysLeft !== null && due.by !== 'distance') return due.daysLeft;
+function urgency(due: Due, today: Ymd): number {
+  // The day to plan around, when there is one: it already takes the nearer of the date and the odometer.
+  if (due.whenYmd !== null && due.state !== 'unlogged') {
+    const days = daysBetween(today, due.whenYmd);
+    // Past its reading: the further past, the more pressing.
+    if (due.distanceLeft !== null && due.distanceLeft < 0) return Math.min(days, due.distanceLeft / 40);
+    return days;
+  }
   if (due.distanceLeft !== null) return due.distanceLeft / 40;
-  if (due.daysLeft !== null) return due.daysLeft;
   return Number.MAX_SAFE_INTEGER;
 }
 
@@ -248,7 +259,7 @@ export function listJobs(doc: Pick<Doc, 'things' | 'jobs' | 'entries'>, today: Y
   return out.sort((a, b) => {
     const s = ORDER[a.due.state] - ORDER[b.due.state];
     if (s !== 0) return s;
-    const u = urgency(a.due) - urgency(b.due);
+    const u = urgency(a.due, today) - urgency(b.due, today);
     if (u !== 0) return u;
     return a.job.name.localeCompare(b.job.name);
   });
@@ -257,6 +268,7 @@ export function listJobs(doc: Pick<Doc, 'things' | 'jobs' | 'entries'>, today: Y
 export interface DueGroups {
   overdue: Listed[];
   soon: Listed[];
+  unlogged: Listed[];
   later: Listed[];
   unknown: Listed[];
   paused: Listed[];
@@ -264,11 +276,12 @@ export interface DueGroups {
 }
 
 export function groupJobs(listed: Listed[]): DueGroups {
-  const g: DueGroups = { overdue: [], soon: [], later: [], unknown: [], paused: [], finished: [] };
+  const g: DueGroups = { overdue: [], soon: [], unlogged: [], later: [], unknown: [], paused: [], finished: [] };
   for (const item of listed) {
     const s = item.due.state;
     if (s === 'overdue') g.overdue.push(item);
     else if (s === 'today' || s === 'soon') g.soon.push(item);
+    else if (s === 'unlogged') g.unlogged.push(item);
     else if (s === 'later') g.later.push(item);
     else if (s === 'unknown') g.unknown.push(item);
     else if (s === 'paused') g.paused.push(item);

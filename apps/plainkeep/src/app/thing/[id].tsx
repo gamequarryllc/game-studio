@@ -2,20 +2,19 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Fragment, useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { deleteThing } from '@/domain/actions';
 import { displayYmd, shortYmd } from '@/domain/dates';
 import { distanceText } from '@/domain/labels';
 import { formatMoney } from '@/domain/money';
 import { currentReading, distancePerDay, listJobs } from '@/domain/schedule';
 import { logNewestFirst, sumCost } from '@/domain/selectors';
-import { warning } from '@/platform/haptics';
 import { MAKES_PDF } from '@/platform/exporter';
 import { usePro } from '@/pro/pro';
 import { useToday } from '@/state/clock';
 import { goBack } from '@/state/nav';
 import { makeServiceRecord } from '@/state/operations';
-import { store, useDoc } from '@/state/store';
-import { confirm, notify } from '@/ui/dialogs';
+import { useDoc } from '@/state/store';
+import { notify } from '@/ui/dialogs';
+import { standing } from '@/ui/due';
 import { thingIconName } from '@/ui/Icon';
 import { JobRow } from '@/ui/JobRow';
 import { BarButton, Button, Card, Divider, EmptyState, Footnote, IconPlate, PushedScreen, Row, SectionLabel } from '@/ui/kit';
@@ -49,6 +48,7 @@ export default function ThingScreen() {
   const vehicle = thing.kind === 'vehicle';
   const reading = vehicle ? currentReading(thing) : null;
   const pace = vehicle ? distancePerDay(thing) : null;
+  const tone = standing(jobs);
 
   const record = async () => {
     if (!isPro) {
@@ -66,24 +66,11 @@ export default function ThingScreen() {
     }
   };
 
-  const remove = async () => {
-    const sure = await confirm({
-      title: `Delete ${thing.name}?`,
-      message: jobs.length + log.length === 0 ? undefined : 'Its jobs and its whole log go with it. A backup, if you made one, is not touched.',
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!sure) return;
-    warning();
-    goBack(router, '/things');
-    store.update((d, now) => deleteThing(d, thing.id, now));
-  };
-
   return (
     <PushedScreen testID="thing-screen">
       <Stack.Screen options={{ title: '', headerRight: () => <BarButton testID="thing-edit" label="Edit" onPress={() => router.push({ pathname: '/thing-form', params: { id: thing.id } })} /> }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xl, paddingTop: space.s }}>
-        <IconPlate name={thingIconName(thing.icon)} size={48} />
+        <IconPlate name={thingIconName(thing.icon)} size={48} tone={tone === 'muted' ? 'blue' : tone} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text testID="thing-name" accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, fontSize: 36, lineHeight: 38 }]} numberOfLines={2}>
             {thing.name}
@@ -98,7 +85,8 @@ export default function ThingScreen() {
             <View style={{ flex: 1, gap: 6 }}>
               <Odometer testID="thing-odometer" value={reading?.value ?? null} unit={unit} size="m" />
               <Text testID="thing-reading-note" style={[type.footnote, { color: c.ink2 }]}>
-                {reading ? `Read ${shortYmd(reading.ymd, today)}${pace !== null ? ` · about ${distanceText(Math.round(pace * 30), unit)} a month` : ''}` : 'No reading yet. Distance jobs need one.'}
+                {reading ? `Read ${shortYmd(reading.ymd, today)}` : 'No reading yet. Mileage jobs need one.'}
+                {reading && pace !== null ? `\nAbout ${distanceText(Math.round(pace * 30), unit)} a month` : ''}
               </Text>
             </View>
             <Button testID="thing-update-odometer" label="Update" kind="soft" onPress={() => router.push({ pathname: '/odometer', params: { thingId: thing.id } })} style={{ minHeight: 40, paddingHorizontal: space.l }} />
@@ -127,7 +115,7 @@ export default function ThingScreen() {
         <Row testID="thing-suggest" title="Suggested jobs" tint onPress={() => router.push({ pathname: '/suggestions', params: { thingId: thing.id } })} />
       </Card>
 
-      <SectionLabel trailing={spent !== null ? <Text style={[type.subhead, type.tabular, { color: c.ink2 }]}>{formatMoney(spent, doc.settings.currency, { whole: true })} in all</Text> : undefined}>Log</SectionLabel>
+      <SectionLabel trailing={spent !== null ? <Text style={[type.subhead, type.tabular, { color: c.ink2 }]}>{formatMoney(spent, doc.settings.currency)} spent</Text> : undefined}>Log</SectionLabel>
       <Card>
         {log.slice(0, RECENT).map((e) => (
           <Fragment key={e.id}>
@@ -135,7 +123,7 @@ export default function ThingScreen() {
               testID={`entry-${e.id}`}
               title={e.title}
               subtitle={[displayYmd(e.ymd), e.skipped ? 'Skipped' : null, e.distance !== null && !e.skipped ? distanceText(e.distance, unit) : null].filter(Boolean).join(' · ')}
-              value={e.cost !== null ? formatMoney(e.cost, doc.settings.currency, { whole: true }) : undefined}
+              value={e.cost !== null ? formatMoney(e.cost, doc.settings.currency) : undefined}
               chevron
               onPress={() => router.push({ pathname: '/done', params: { entryId: e.id } })}
             />
@@ -164,11 +152,6 @@ export default function ThingScreen() {
       </Card>
       <Footnote>For a buyer, a landlord or a warranty claim: one page that shows it was looked after.</Footnote>
 
-      <View style={{ marginTop: space.xxl }}>
-        <Card>
-          <Row testID="thing-delete" title={`Delete ${thing.name}`} destructive onPress={remove} />
-        </Card>
-      </View>
     </PushedScreen>
   );
 }

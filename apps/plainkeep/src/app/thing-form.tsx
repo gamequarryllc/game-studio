@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { addThing, updateThing } from '@/domain/actions';
+import { addThing, deleteThing, updateThing } from '@/domain/actions';
 import { newId } from '@/domain/ids';
 import { canAddThing } from '@/domain/limits';
 import { LIMITS, type ThingIcon, type ThingKind } from '@/domain/types';
@@ -13,7 +13,8 @@ import { goBack } from '@/state/nav';
 import { store, useDoc } from '@/state/store';
 import { Segmented, TextRow } from '@/ui/form';
 import { Icon, thingIconName } from '@/ui/Icon';
-import { BarButton, Card, Divider, Footnote, SectionLabel } from '@/ui/kit';
+import { confirm } from '@/ui/dialogs';
+import { BarButton, Card, Divider, Footnote, Row, SectionLabel } from '@/ui/kit';
 import { NO_OUTLINE, radius, space, type, useTheme } from '@/ui/theme';
 
 const ICONS: Record<ThingKind, ThingIcon[]> = {
@@ -76,11 +77,28 @@ export default function ThingForm() {
     router.replace({ pathname: '/suggestions', params: { thingId: id, fresh: '1' } });
   };
 
+  const remove = async () => {
+    if (!editing) return;
+    const jobs = doc.jobs.filter((j) => j.thingId === editing.id).length;
+    const entries = doc.entries.filter((e) => e.thingId === editing.id).length;
+    const sure = await confirm({
+      title: `Delete ${editing.name}?`,
+      message: jobs + entries === 0 ? undefined : `Its ${jobs} ${jobs === 1 ? 'job' : 'jobs'} and ${entries} log ${entries === 1 ? 'entry' : 'entries'} go with it. A backup, if you made one, is not touched.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!sure) return;
+    warning();
+    // Out of the form and off the thing's own screen before it goes.
+    router.dismissTo('/things');
+    store.update((d, now) => deleteThing(d, editing.id, now));
+  };
+
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.page }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top + 44}>
       <Stack.Screen
         options={{
-          title: editing ? 'Edit' : 'Something to look after',
+          title: editing ? 'Edit' : 'New thing',
           headerLeft: () => <BarButton testID="form-cancel" label="Cancel" onPress={() => goBack(router, '/things')} />,
           headerRight: () => <BarButton testID="form-save" label={editing ? 'Save' : 'Next'} bold onPress={save} />,
         }}
@@ -93,9 +111,9 @@ export default function ThingForm() {
               value={kind}
               onChange={changeKind}
               options={[
-                { key: 'home', label: 'A home' },
-                { key: 'vehicle', label: 'A vehicle' },
-                { key: 'other', label: 'Something else' },
+                { key: 'home', label: 'Home' },
+                { key: 'vehicle', label: 'Vehicle' },
+                { key: 'other', label: 'Other' },
               ]}
             />
           </View>
@@ -163,6 +181,12 @@ export default function ThingForm() {
             );
           })}
         </View>
+
+        {editing ? (
+          <Card style={{ marginTop: space.huge }}>
+            <Row testID="thing-delete" title={`Delete ${editing.name}`} destructive onPress={remove} />
+          </Card>
+        ) : null}
       </ScrollView>
     </KeyboardAvoidingView>
   );

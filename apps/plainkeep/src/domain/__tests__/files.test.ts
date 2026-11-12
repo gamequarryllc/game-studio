@@ -111,9 +111,11 @@ describe('the service record', () => {
   it('prints one thing’s history, its totals and what is kept up', () => {
     const doc = sampleDoc(NOW);
     const html = serviceRecordHtml(doc, SAMPLE_IDS.car, NOW);
-    expect(html).toContain('<h1>Outback</h1>');
+    expect(html).toContain('<h1 class="plate">Outback</h1>');
+    expect(html).toContain('Maintenance schedule');
+    expect(html).toContain('<dt>Total spent</dt>');
     expect(html).toContain('2019 Subaru Outback 2.5i');
-    expect(html).toContain('Odometer 62,418 mi');
+    expect(html).toContain('<dt>Odometer</dt><dd>62,418 mi');
     expect(html).toContain('New front brake pads and rotors');
     expect(html).toContain('$412.00');
     expect(html).toContain('Every 5,000 mi or 6 months');
@@ -157,7 +159,7 @@ describe('words', () => {
 
   it('says when a job is due, led by whichever limit is nearer', () => {
     const doc = withJob(base(), { thingId: CAR, every: { n: 6, unit: 'month' }, everyDistance: 5000, lastDoneYmd: '2026-08-01', lastDoneDistance: 57000 }, 'oil0000001');
-    expect(dueText(dueOf(j(doc, 'oil0000001'), doc, TODAY), 'mi', TODAY)).toBe('Due in 2,000 mi, or by Feb 1');
+    expect(dueText(dueOf(j(doc, 'oil0000001'), doc, TODAY), 'mi', TODAY)).toBe('Due in 2,000 mi, or by Feb 1, 2027');
     const home = withJob(base(), { thingId: HOME, lastDoneYmd: '2026-09-01' }, 'filter0001');
     expect(dueText(dueOf(j(home, 'filter0001'), home, TODAY), 'mi', TODAY)).toBe('Due in 3 weeks');
     expect(dueText(dueOf(j(home, 'filter0001'), home, '2026-12-01'), 'mi', '2026-12-01')).toBe('Due today');
@@ -168,12 +170,12 @@ describe('words', () => {
   it('says where a job’s limit lies, without repeating how long is left', () => {
     const doc = withJob(base(), { thingId: CAR, every: { n: 6, unit: 'month' }, everyDistance: 5000, lastDoneYmd: '2026-08-01', lastDoneDistance: 57000 }, 'oil0000001');
     const due = dueOf(j(doc, 'oil0000001'), doc, TODAY);
-    expect(dueWhere(due, 'mi', TODAY)).toBe('at 62,000 mi or Feb 1');
+    expect(dueWhere(due, 'mi', TODAY)).toBe('at 62,000 mi or Feb 1, 2027');
     expect(dueWhere(due, 'mi', TODAY, 'distance')).toBe('at 62,000 mi');
-    expect(dueWhere(due, 'mi', TODAY, 'date')).toBe('Feb 1');
+    expect(dueWhere(due, 'mi', TODAY, 'date')).toBe('Feb 1, 2027');
     const home = withJob(base(), { thingId: HOME, lastDoneYmd: '2026-09-01' }, 'filter0001');
     expect(dueWhere(dueOf(j(home, 'filter0001'), home, TODAY), 'mi', TODAY, 'distance')).toBe('Dec 1');
-    expect(dueWhere({ ...due, state: 'paused' }, 'mi', TODAY)).toBe('Put away');
+    expect(dueWhere({ ...due, state: 'paused' }, 'mi', TODAY)).toBe('Paused');
   });
 
   it('says how often a job comes round', () => {

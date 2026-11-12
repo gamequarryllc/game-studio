@@ -153,7 +153,7 @@ export default function SettingsTab() {
               <TimeField testID="remind-time" hour={s.remindHour} minute={s.remindMinute} onChange={(remindHour, remindMinute) => store.update((d, now) => setSettings(d, { remindHour, remindMinute }, now))} />
             </FormRow>
             <Divider />
-            <Row testID="coming" title="Coming reminders" chevron onPress={() => router.push('/coming')} />
+            <Row testID="coming" title="Upcoming reminders" chevron onPress={() => router.push('/coming')} />
           </>
         ) : null}
         {blocked ? (
@@ -177,13 +177,13 @@ export default function SettingsTab() {
           onChange={(distanceUnit) => store.update((d, now) => setSettings(d, { distanceUnit }, now))}
           options={[
             { key: 'mi', label: 'Miles' },
-            { key: 'km', label: 'Kilometres' },
+            { key: 'km', label: 'Kilometers' },
           ]}
         />
         <Divider />
         <Row testID="currency" title="Currency" value={currency ? currency.code : s.currency} chevron onPress={pickCurrency} />
       </Card>
-      <Footnote>Changing a unit changes the label, not the numbers.</Footnote>
+      <Footnote>Readings and costs you have already entered are not converted.</Footnote>
 
       <SectionLabel>Your data</SectionLabel>
       <Card>

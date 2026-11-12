@@ -26,7 +26,7 @@ export function Gauge({ used, tone, marks = 24, height = 10, testID }: { used: n
               width: 2,
               height: last ? height + 4 : major ? height : height * 0.62,
               borderRadius: 1,
-              backgroundColor: i < filled ? on : last ? c.ink3 : c.rule,
+              backgroundColor: i < filled ? on : last ? c.ink3 : c.mark,
             }}
           />
         );

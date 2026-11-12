@@ -37,7 +37,7 @@ export default function Welcome() {
         </Text>
       </View>
       <View style={{ gap: space.s, marginTop: space.xxl }}>
-        <Button testID="welcome-home" label="Start with my home" onPress={() => begin('home')} />
+        <Button testID="welcome-home" label="Start with a home" onPress={() => begin('home')} />
         <Button testID="welcome-car" label="Start with a car" kind="soft" onPress={() => begin('vehicle')} />
         <Button testID="welcome-skip" label="Look around first" kind="plain" onPress={() => begin(null)} />
         <Text style={[type.footnote, { color: c.ink2, textAlign: 'center', marginTop: space.xs }]}>No account. Nothing leaves this iPhone.</Text>

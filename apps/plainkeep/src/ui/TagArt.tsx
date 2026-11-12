@@ -33,7 +33,7 @@ export function TagArt({ width = 260 }: { width?: number }) {
         <Rect x="84" y="78" width="40" height="5" rx="2.5" fill={c.ink3} />
         {/* the rule: marks inked up to today, the tall one is the due day */}
         {Array.from({ length: 12 }, (_, i) => (
-          <Rect key={i} x={84 + i * 6.2} y={i === 11 ? 100 : i % 3 === 0 ? 104 : 108} width="2.4" height={i === 11 ? 20 : i % 3 === 0 ? 16 : 12} rx="1.2" fill={i < 8 ? c.blue : i === 11 ? c.ink3 : c.rule} />
+          <Rect key={i} x={84 + i * 6.2} y={i === 11 ? 100 : i % 3 === 0 ? 104 : 108} width="2.4" height={i === 11 ? 20 : i % 3 === 0 ? 16 : 12} rx="1.2" fill={i < 8 ? c.blue : i === 11 ? c.red : c.mark} />
         ))}
         {/* the punched ring, done */}
         <Circle cx="136" cy="150" r="13" fill={c.blue} />

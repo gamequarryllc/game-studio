@@ -210,14 +210,14 @@ async function main() {
       await h.shot('05-thing-home-new', { tall: 1500 });
     });
 
-    await step('new jobs come up within a month; the monthly one within its own month', async () => {
+    await step('new jobs wait under "Not logged yet": no made-up countdown, just how often each comes round', async () => {
       await h.back();
       await h.t('due-screen').waitFor();
-      await h.sees('Coming up');
-      const alarms = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Test smoke and CO alarms' });
-      await alarms.first().waitFor();
-      assert.match(await alarms.first().innerText(), /Dec 12/);
-      assert.match(await page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Furnace filter' }).first().innerText(), /Dec 12[\s\S]*4[\s\S]*weeks/);
+      await h.t('section-unlogged').waitFor();
+      assert.strictEqual(await h.t('section-soon').count(), 0);
+      const alarms = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Test smoke and CO alarms' }).first();
+      assert.match(await alarms.innerText(), /Home\s+· Every month/);
+      assert.doesNotMatch(await alarms.innerText(), /weeks|days/);
       await h.shot('06-due-new-home', { tall: 1300 });
     });
 
@@ -232,9 +232,9 @@ async function main() {
       await h.shot('07-done-form');
       await h.save();
       await h.openJob('Furnace filter');
-      // Three months from Oct 1 is Jan 1: 50 days away.
+      // Three months from Oct 1 is Jan 1: 50 days away, and in another year, so the year is shown.
       assert.strictEqual(await h.text('job-figure'), '7');
-      assert.match(await h.text('job-ends'), /Due Jan 1/);
+      assert.match(await h.text('job-ends'), /Due Jan 1, 2027/);
       assert.strictEqual(await h.text('job-repeat'), 'Every 3 months');
       await h.shot('08-job', { tall: 1300 });
     });
@@ -250,12 +250,12 @@ async function main() {
       assert.match(await h.text('job-ends'), /Due Dec 1/);
       assert.strictEqual(await h.text('job-note'), 'Buy MERV 11');
       await h.tap('job-paused');
-      await h.sees('Put away for now. No due dates or reminders.');
+      await h.sees('Paused. No due dates or reminders until you bring it back.');
       await h.tap('job-paused');
       await h.tap('job-skip');
       await h.confirm();
       // Skipped today: two months from Nov 12.
-      assert.match(await h.text('job-ends'), /Due Jan 12/);
+      assert.match(await h.text('job-ends'), /Due Jan 12, 2027/);
       await h.sees('Skipped');
       await h.back();
     });
@@ -275,11 +275,9 @@ async function main() {
       await h.tap('suggest-add');
       await h.t('thing-screen').waitFor();
       assert.match(await h.text('thing-reading-note'), /Read Nov 12/);
-      // Oil: every 5,000 mi or 6 months; never done, so 5,000 from today's reading or within a month.
+      // Oil: every 5,000 mi or 6 months; never logged, so it says how often and counts nothing down.
       const oil = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Oil and filter change' }).first();
-      // The line has room for one limit, the one its figure counts: the date, which comes first here.
-      assert.match(await oil.innerText(), /Outback|Dec 12/);
-      assert.match(await oil.innerText(), /Dec 12/);
+      assert.match(await oil.innerText(), /Every 5,000 mi or 6 months/);
       await h.shot('10-thing-car', { tall: 1300 });
     });
 
@@ -291,9 +289,10 @@ async function main() {
       await h.fill('field-cost', '74,95');
       await h.save();
       const oil = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Oil and filter change' }).first();
-      assert.match(await oil.innerText(), /May 12/);
+      // The line has room for one limit, the one its figure counts: the date, which comes first here.
+      assert.match(await oil.innerText(), /May 12, 2027/);
       await h.openJob('Oil and filter change');
-      assert.match(await h.text('job-ends'), /Due May 12 or 67,500 mi/);
+      assert.match(await h.text('job-ends'), /Due May 12, 2027 or 67,500 mi/);
       await h.back();
       assert.match(await h.t('thing-odometer').getAttribute('aria-label'), /62500/);
     });
@@ -312,7 +311,7 @@ async function main() {
       await h.shot('11-odometer');
       await h.save();
       // 1,500 in 42 days is about 1,071 a month.
-      assert.match(await h.text('thing-reading-note'), /about 1,071 mi a month/);
+      assert.match(await h.text('thing-reading-note'), /About 1,071 mi a month/);
     });
 
     await step('a one-off repair goes in the log; the log searches, filters, edits and deletes', async () => {
@@ -330,7 +329,7 @@ async function main() {
       await h.back();
       await h.tab('Log');
       await h.sees('New front brake pads');
-      assert.strictEqual(await h.text('spent-2026'), '$506 spent');
+      assert.strictEqual(await h.text('spent-2026'), '$505.94 spent');
       await h.shot('12-log', { tall: 1100 });
       await h.fill('log-search', 'brake');
       assert.strictEqual(await h.rows('entry-').count(), 1);
@@ -347,7 +346,7 @@ async function main() {
       await h.fill('field-cost', '430');
       await h.save();
       await h.sees('New front brake pads and rotors');
-      assert.strictEqual(await h.text('spent-2026'), '$524 spent');
+      assert.strictEqual(await h.text('spent-2026'), '$523.94 spent');
       await page.locator('[data-testid^="entry-"]').filter({ visible: true }).filter({ hasText: 'Skipped' }).click();
       await h.tap('entry-delete');
       await h.confirm();
@@ -388,8 +387,9 @@ async function main() {
       await h.tap('coming');
       await h.t('coming-screen').waitFor();
       await h.t('coming-web-note').waitFor();
-      const firstPlanned = await h.text('planned-0');
-      assert.match(firstPlanned, /9:00 AM/);
+      await h.sees('Each arrives at 9:00 AM.');
+      await h.sees('if it isn’t done');
+      await h.sees('jobs aren’t logged yet');
       assert.ok((await h.rows('planned-').count()) >= 10, 'expected a list of reminders');
       await h.shot('15-coming', { tall: 1500 });
       await h.back();
@@ -397,7 +397,7 @@ async function main() {
       await h.choice('14');
       await h.fill('remind-time', '18:30');
       await h.tap('coming');
-      assert.match(await h.text('planned-0'), /6:30 PM/);
+      await h.sees('Each arrives at 6:30 PM.');
       await h.back();
       await h.tap('reminders-switch');
       await h.tap('reminders-switch');
@@ -448,7 +448,7 @@ async function main() {
       await popup.waitForLoadState();
       await popup.getByText('Service record').first().waitFor();
       const record = await popup.content();
-      assert.ok(record.includes('<h1>Outback</h1>'));
+      assert.ok(record.includes('<h1 class="plate">Outback</h1>'));
       assert.ok(record.includes('New front brake pads and rotors'));
       assert.ok(record.includes('$430.00'));
       assert.ok(!record.includes('Furnace filter'));
@@ -479,13 +479,21 @@ async function main() {
       await h.tab('Things');
       await h.openThing('Outback');
       await h.openJob('Oil and filter change');
+      await h.tap('job-edit');
+      await h.t('job-form').waitFor();
       await h.tap('job-delete');
+      await h.sees('What has been logged for it stays in the log.');
       await h.confirm();
+      await page.waitForTimeout(500);
       await h.t('thing-screen').waitFor();
       assert.strictEqual(await page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Oil and filter change' }).count(), 0);
       assert.ok((await page.locator('[data-testid^="entry-"]').filter({ visible: true }).filter({ hasText: 'Oil and filter change' }).count()) >= 1);
+      await h.tap('thing-edit');
+      await h.t('thing-form').waitFor();
       await h.tap('thing-delete');
+      await h.sees('go with it');
       await h.confirm();
+      await page.waitForTimeout(500);
       await h.t('things-screen').waitFor();
       assert.strictEqual(await h.rows('thing-status-').count(), 2);
       await h.tab('Log');
@@ -563,6 +571,9 @@ async function main() {
       await h.save();
       await h.sees('Enter a number from 1 to 999.');
       await h.fill('field-every-n', '999');
+      await h.tap('mode-both');
+      await h.save();
+      await h.sees('Enter a distance.');
       await h.fill('field-distance', '9999999');
       await h.save();
       await h.tap('thing-log-other');
@@ -578,7 +589,7 @@ async function main() {
       await h.tab('Due');
       await h.shot('24-due-long', { tall: 1700 });
       await h.tab('Log');
-      await h.sees('$100,000,524 spent');
+      await h.sees('$100,000,523.93 spent');
       await h.shot('25-log-huge');
     });
 
@@ -633,7 +644,7 @@ async function main() {
       await h2.tap('currency');
       await h2.choice('GBP');
       await h2.tab('Things');
-      await h2.sees('308 km over');
+      await h2.sees('308 km overdue');
       await h2.tab('Log');
       await h2.sees('£');
       await h2.tab('Settings');

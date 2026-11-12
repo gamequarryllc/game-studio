@@ -55,10 +55,13 @@ export function serviceRecordHtml(doc: Doc, thingId: string, now: number): strin
     })
     .join('\n');
 
-  const facts: string[] = [];
-  if (thing.detail) facts.push(esc(thing.detail));
-  if (reading) facts.push(`Odometer ${esc(distanceText(reading.value, unit))} on ${esc(displayYmd(reading.ymd))}`);
-  facts.push(`${done.length} ${done.length === 1 ? 'entry' : 'entries'}${total !== null ? `, ${esc(formatMoney(total, currency))} in all` : ''}`);
+  const first = done.length > 0 ? done[done.length - 1].ymd : null;
+  const facts: [string, string][] = [];
+  if (thing.detail) facts.push(['Details', esc(thing.detail)]);
+  if (reading) facts.push(['Odometer', `${esc(distanceText(reading.value, unit))} <span class="soft">on ${esc(displayYmd(reading.ymd))}</span>`]);
+  facts.push(['Period', first ? `${esc(displayYmd(first))} to ${esc(displayYmd(today))}` : `To ${esc(displayYmd(today))}`]);
+  facts.push(['Entries', String(done.length)]);
+  if (total !== null) facts.push(['Total spent', esc(formatMoney(total, currency))]);
 
   return `<!doctype html>
 <html lang="en">
@@ -67,36 +70,49 @@ export function serviceRecordHtml(doc: Doc, thingId: string, now: number): strin
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(thing.name)}: service record</title>
 <style>
-  @page { size: auto; margin: 16mm 15mm 18mm; }
+  @page { margin: 0.75in; }
   * { box-sizing: border-box; }
-  body { font: 10.5pt/1.4 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: #171b1f; margin: 0; padding: 0; }
-  header { border-bottom: 2pt solid #171b1f; padding-bottom: 9pt; margin-bottom: 16pt; }
-  .kicker { font-size: 8.5pt; letter-spacing: 0.08em; text-transform: uppercase; color: #59626b; }
-  h1 { font-size: 21pt; line-height: 1.15; margin: 3pt 0 5pt; font-weight: 700; }
-  .facts { color: #3b434a; }
-  .facts span + span::before { content: "  ·  "; color: #8e969d; }
-  h2 { font-size: 11pt; margin: 18pt 0 5pt; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font: 10.5pt/1.42 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: #161a1e; margin: 0; }
+  /* On a screen (the web preview) the page gets the margins paper has. */
+  @media screen { body { max-width: 7in; margin: 0 auto; padding: 0.6in 0.5in; } }
+  .plate { font-family: "Avenir Next Condensed", "HelveticaNeue-CondensedBold", "Arial Narrow", sans-serif; font-weight: 600; letter-spacing: 0.01em; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 18pt; border-bottom: 2.25pt solid #1d4f7c; padding-bottom: 10pt; }
+  .kicker { font-size: 10pt; color: #1d4f7c; }
+  h1 { font-size: 30pt; line-height: 1.02; margin: 2pt 0 0; }
+  .made { font-size: 8.5pt; color: #57616a; text-align: right; white-space: nowrap; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(1.5in, 1fr)); gap: 9pt 18pt; margin: 12pt 0 0; padding: 0; }
+  dt { font-size: 8pt; color: #57616a; margin: 0; }
+  dd { margin: 1pt 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .soft { font-weight: 400; color: #57616a; }
+  h2 { font-size: 15pt; margin: 22pt 0 4pt; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 8.5pt; font-weight: 600; color: #59626b; border-bottom: 0.75pt solid #171b1f; padding: 4pt 8pt 4pt 0; }
-  td { vertical-align: top; padding: 6pt 8pt 6pt 0; border-bottom: 0.5pt solid #d8dcda; }
-  tr { page-break-inside: avoid; }
+  th { text-align: left; font-size: 8pt; font-weight: 600; color: #57616a; border-bottom: 0.75pt solid #161a1e; padding: 4pt 10pt 4pt 0; }
+  td { vertical-align: top; padding: 6.5pt 10pt 6.5pt 0; border-bottom: 0.5pt solid #d5dad8; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  thead { display: table-header-group; }
   th.num, td.num { text-align: right; white-space: nowrap; padding-right: 0; font-variant-numeric: tabular-nums; }
-  td.date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.date { white-space: nowrap; font-variant-numeric: tabular-nums; width: 1.05in; }
   .what { font-weight: 600; }
-  .note { color: #59626b; font-size: 9.5pt; }
-  tfoot td { border-bottom: 0; border-top: 0.75pt solid #171b1f; font-weight: 700; }
-  .empty { color: #59626b; padding: 8pt 0; }
-  footer { margin-top: 22pt; font-size: 8.5pt; color: #59626b; }
+  .note { color: #57616a; font-size: 9.5pt; }
+  tfoot td { border-bottom: 0; border-top: 0.75pt solid #161a1e; font-weight: 700; }
+  .empty { color: #57616a; padding: 8pt 0; }
+  footer { margin-top: 24pt; padding-top: 8pt; border-top: 0.5pt solid #d5dad8; font-size: 8.5pt; color: #57616a; }
 </style>
 </head>
 <body>
 <header>
-  <div class="kicker">Service record</div>
-  <h1>${esc(thing.name)}</h1>
-  <div class="facts">${facts.map((f) => `<span>${f}</span>`).join('')}</div>
+  <div>
+    <div class="kicker plate">Service record</div>
+    <h1 class="plate">${esc(thing.name)}</h1>
+  </div>
+  <div class="made">Printed ${esc(displayYmd(today))}</div>
 </header>
+<dl>
+${facts.map(([k, v]) => `  <div><dt>${k}</dt><dd>${v}</dd></div>`).join('\n')}
+</dl>
 
-<h2>What has been done</h2>
+<h2 class="plate">Work done</h2>
 ${
   done.length === 0
     ? '<div class="empty">Nothing has been logged yet.</div>'
@@ -112,7 +128,7 @@ ${total !== null ? `<tfoot><tr><td colspan="${vehicle ? 3 : 2}">Total</td><td cl
 ${
   jobs.length === 0
     ? ''
-    : `<h2>What is kept up</h2>
+    : `<h2 class="plate">Maintenance schedule</h2>
 <table>
 <thead><tr><th>Job</th><th>How often</th><th>Last done</th><th>Next</th></tr></thead>
 <tbody>
@@ -121,7 +137,7 @@ ${jobRows}
 </table>`
 }
 
-<footer>Kept with Plainkeep. Printed ${esc(displayYmd(today))}. Dates, readings and costs are as the owner entered them.</footer>
+<footer>Kept with Plainkeep. Dates, readings and costs are as the owner entered them.</footer>
 </body>
 </html>`;
 }

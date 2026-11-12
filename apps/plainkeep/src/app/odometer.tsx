@@ -75,12 +75,13 @@ export default function OdometerForm() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.page }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top + 44}>
       <Stack.Screen
         options={{
-          title: thing.name,
+          title: 'Odometer',
           headerLeft: () => <BarButton testID="form-cancel" label="Cancel" onPress={() => goBack(router, '/things')} />,
           headerRight: () => <BarButton testID="form-save" label="Save" bold onPress={save} />,
         }}
       />
       <ScrollView testID="odometer-form" keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerStyle={{ paddingTop: space.m, paddingBottom: insets.bottom + space.huge }}>
+        <Text style={[type.subhead, { color: c.ink2, marginHorizontal: space.xl + 2, marginBottom: space.s }]}>{thing.name}</Text>
         <Card>
           <TextRow
             testID="field-reading"

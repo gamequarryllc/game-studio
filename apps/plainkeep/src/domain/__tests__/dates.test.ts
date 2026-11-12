@@ -45,7 +45,7 @@ describe('calendar days', () => {
     expect(displayYmd('2027-03-04')).toBe('Mar 4, 2027');
     expect(displayYmd(null)).toBe('');
     expect(shortYmd('2026-12-04', '2026-11-12')).toBe('Dec 4');
-    expect(shortYmd('2027-02-04', '2026-11-12')).toBe('Feb 4');
+    expect(shortYmd('2027-02-04', '2026-11-12')).toBe('Feb 4, 2027');
     expect(shortYmd('2028-02-04', '2026-11-12')).toBe('Feb 4, 2028');
     expect(weekdayName('2026-11-12')).toBe('Thursday');
     expect(displayClock(9, 0)).toBe('9:00 AM');

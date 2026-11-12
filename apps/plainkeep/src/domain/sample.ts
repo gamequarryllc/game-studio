@@ -36,7 +36,7 @@ export function sampleDoc(now: number, size: 'starter' | 'full' = 'full', settin
   const dryer = sid('job');
   doc = addJob(doc, { thingId: SAMPLE_IDS.home, name: 'Clean dryer vent', note: '', every: { n: 1, unit: 'year' }, everyDistance: null, anchor: 'done', lastDoneYmd: ago(150), leadDays: null }, now, dryer, sid('ent'));
   const heater = sid('job');
-  doc = addJob(doc, { thingId: SAMPLE_IDS.home, name: 'Flush water heater', note: '', every: { n: 1, unit: 'year' }, everyDistance: null, anchor: 'done', firstDueYmd: addDays(today, 21), leadDays: null }, now, heater, sid('ent'));
+  doc = addJob(doc, { thingId: SAMPLE_IDS.home, name: 'Flush water heater', note: '', every: { n: 1, unit: 'year' }, everyDistance: null, anchor: 'done', lastDoneYmd: ago(344), leadDays: null }, now, heater, sid('ent'));
   doc = logEntry(doc, { thingId: SAMPLE_IDS.home, jobId: null, title: 'Replaced kitchen faucet cartridge', ymd: ago(44), distance: null, cost: 3250, note: '', skipped: false }, now, sid('ent'));
 
   // Car: a year of readings, about 31 a day.

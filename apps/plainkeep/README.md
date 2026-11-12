@@ -8,7 +8,7 @@ It was the list's `upkeep-log`; it is named Plainkeep so the folder, the bundle 
 
 https://gamequarryllc.github.io/game-studio/apps/plainkeep/
 
-Open it on a phone, or in a desktop browser (it keeps the proportions of a phone). What you enter stays in that browser. To see it full: Settings, then "Load the sample household". A browser tab cannot deliver a reminder weeks from now, so the preview only lists what the iPhone would have waiting (Settings > Coming reminders); files download instead of opening the share sheet, and the service record opens in a new tab.
+Open it on a phone, or in a desktop browser (it keeps the proportions of a phone). What you enter stays in that browser. To see it full: Settings, then "Load the sample household". A browser tab cannot deliver a reminder weeks from now, so the preview only lists what the iPhone would have waiting (Settings > Upcoming reminders); files download instead of opening the share sheet, and the service record opens in a new tab.
 
 ## Install it on an iPhone (TestFlight)
 
@@ -21,7 +21,7 @@ The app is built on GitHub and sent to TestFlight; there is nothing to install o
 
 The `playtest` flavor is the whole app with the Developer section left in (Settings > Developer: "Pretend Pro is bought", the sample household). The `release` flavor is what goes to the App Store; the build refuses to upload it until `npm run check:release` passes. Nothing in the workflow sends an app to App Review.
 
-**What only a real iPhone can show:** reminders arriving (the planning is unit-tested and the list in Settings > Coming reminders is what gets scheduled, but delivery is the iPhone's), the notification permission question, the PDF in the share sheet, the system date and time pickers, and buying Pro in TestFlight's sandbox.
+**What only a real iPhone can show:** reminders arriving (the planning is unit-tested and the list in Settings > Upcoming reminders is what gets scheduled, but delivery is the iPhone's), the notification permission question, the PDF in the share sheet, the system date and time pickers, and buying Pro in TestFlight's sandbox.
 
 ## Working on it
 

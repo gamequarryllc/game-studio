@@ -85,7 +85,7 @@ export function Footnote({ children, style }: { children: ReactNode; style?: Sty
 export function Card({ children, style, testID }: { children: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
   const { c } = useTheme();
   return (
-    <View testID={testID} style={[styles.card, { backgroundColor: c.card, borderColor: c.rule }, style]}>
+    <View testID={testID} style={[styles.card, { backgroundColor: c.card }, style]}>
       {children}
     </View>
   );
@@ -170,7 +170,7 @@ export function IconPlate({ name, size = 36, tone = 'blue' }: { name: IconName; 
   const bg = tone === 'red' ? c.redSoft : tone === 'amber' ? c.amberSoft : tone === 'blue' ? c.blueSoft : c.sunk;
   const fg = tone === 'muted' ? c.ink2 : toneColor(c, tone);
   return (
-    <View style={{ width: size, height: size, borderRadius: radius.s + 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, borderRadius: 9, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
       <Icon name={name} size={size * 0.54} color={fg} />
     </View>
   );
@@ -235,7 +235,7 @@ export function RoundButton({ icon, onPress, label, testID }: { icon: IconName; 
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.round, { backgroundColor: pressed ? c.sunk : c.card, borderColor: c.rule }]}>
+      style={({ pressed }) => [styles.round, { backgroundColor: pressed ? c.sunk : c.card }]}>
       <Icon name={icon} size={20} color={c.blue} />
     </Pressable>
   );
@@ -262,8 +262,8 @@ export function Chip({ label, selected, onPress, testID }: { label: string; sele
         tap();
         onPress();
       }}
-      style={[styles.chip, { backgroundColor: selected ? c.ink : c.card, borderColor: selected ? c.ink : c.rule }]}>
-      <Text style={[type.subhead, { color: selected ? c.page : c.ink, fontWeight: selected ? '600' : '400' }]} numberOfLines={1}>
+      style={[styles.chip, { backgroundColor: selected ? c.button : c.card }]}>
+      <Text style={[type.subhead, { color: selected ? c.onButton : c.ink, fontWeight: selected ? '600' : '400' }]} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -313,11 +313,11 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xl, marginBottom: space.m },
   sectionLabel: { flexDirection: 'row', alignItems: 'baseline', marginHorizontal: space.xl + 2, marginTop: space.xxl, marginBottom: space.s },
   sectionText: { fontFamily: plate.semibold, fontSize: 21, lineHeight: 24, letterSpacing: 0.3 },
-  card: { marginHorizontal: space.xl, borderRadius: radius.m, borderWidth: HAIRLINE, overflow: 'hidden' },
+  card: { marginHorizontal: space.xl, borderRadius: radius.m, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: 11, minHeight: 48 },
   button: { minHeight: 50, borderRadius: radius.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s, paddingHorizontal: space.xl },
-  round: { width: 38, height: 38, borderRadius: 19, borderWidth: HAIRLINE, alignItems: 'center', justifyContent: 'center' },
-  chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 13, height: 34, borderRadius: radius.s + 2, borderWidth: HAIRLINE, maxWidth: 200 },
+  round: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, height: 38, borderRadius: 19, maxWidth: 200 },
   empty: { paddingHorizontal: space.xl + 2, paddingTop: space.xl, paddingBottom: space.xl },
   notice: { flexDirection: 'row', gap: space.s, marginHorizontal: space.xl, marginTop: space.m, padding: space.m, borderRadius: radius.m },
 });

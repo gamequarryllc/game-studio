@@ -1,5 +1,5 @@
 import { addReading, markDone, skipOnce, updateJob } from '../actions';
-import { distancePerDay, dueOf, groupJobs, listJobs, nextDueDistance, nextDueYmd, soonDays } from '../schedule';
+import { distancePerDay, dueOf, groupJobs, listJobs, nextDueDistance, nextDueYmd, SOON_DAYS } from '../schedule';
 import type { Doc, Job } from '../types';
 
 import { CAR, HOME, NOW, TODAY, base, nextId, withJob } from '../__fixtures__/helpers';
@@ -30,11 +30,18 @@ describe('a job that counts from when it was last done', () => {
     expect(due(doc, 'alarm00001', '2026-11-13').used).toBeGreaterThan(1);
   });
 
-  it('first comes up within a month when nobody knows when it was last done', () => {
+  it('is "not logged yet", with a day to check it by and no countdown, when nobody knows when it was last done', () => {
     const yearly = withJob(base(), { thingId: HOME, every: { n: 1, unit: 'year' } }, 'hvac000001');
-    expect(due(yearly, 'hvac000001')).toMatchObject({ ymd: '2026-12-12', daysLeft: 30, state: 'soon' });
+    expect(job(yearly, 'hvac000001').unsure).toBe(true);
+    expect(due(yearly, 'hvac000001')).toEqual({ state: 'unlogged', ymd: null, distance: null, daysLeft: null, distanceLeft: null, by: null, whenYmd: '2026-12-12', used: null });
     const weekly = withJob(base(), { thingId: HOME, every: { n: 1, unit: 'week' } }, 'bins000001');
-    expect(due(weekly, 'bins000001')).toMatchObject({ ymd: '2026-11-19', daysLeft: 7 });
+    expect(due(weekly, 'bins000001')).toMatchObject({ state: 'unlogged', whenYmd: '2026-11-19' });
+    // Logged once, it is an ordinary job from then on.
+    const logged = markDone(yearly, 'hvac000001', { ymd: '2026-11-01' }, NOW, nextId());
+    expect(due(logged, 'hvac000001')).toMatchObject({ state: 'later', ymd: '2027-11-01' });
+    // Given a first date, it is not unsure: that date is real.
+    const dated = withJob(base(), { thingId: HOME, every: { n: 1, unit: 'year' }, firstDueYmd: '2026-12-01' }, 'dated00001');
+    expect(due(dated, 'dated00001')).toMatchObject({ state: 'soon', ymd: '2026-12-01', daysLeft: 19 });
   });
 
   it('counts a skipped turn as a turn', () => {
@@ -44,13 +51,20 @@ describe('a job that counts from when it was last done', () => {
     expect(due(doc, 'gutter0001')).toMatchObject({ state: 'later', ymd: '2027-05-12' });
   });
 
-  it('calls the last quarter of the interval "soon", and never more than a month', () => {
-    const j = (every: Job['every']) => ({ every }) as Job;
-    expect(soonDays(j({ n: 1, unit: 'week' }))).toBe(2);
-    expect(soonDays(j({ n: 1, unit: 'month' }))).toBe(8);
-    expect(soonDays(j({ n: 3, unit: 'month' }))).toBe(23);
-    expect(soonDays(j({ n: 1, unit: 'year' }))).toBe(30);
-    expect(soonDays(j(null))).toBe(30);
+  it('"coming up" is the next 30 days for every job, so nothing later is ever listed above something sooner', () => {
+    expect(SOON_DAYS).toBe(30);
+    let doc = base();
+    // A yearly job 30 days out and a two-monthly job 19 days out are both coming up; 31 days out is later.
+    doc = withJob(doc, { thingId: HOME, name: 'Yearly', every: { n: 1, unit: 'year' }, lastDoneYmd: '2025-12-12' }, 'year000001');
+    doc = withJob(doc, { thingId: HOME, name: 'Two-monthly', every: { n: 2, unit: 'month' }, lastDoneYmd: '2026-10-01' }, 'twom000001');
+    doc = withJob(doc, { thingId: HOME, name: 'Just outside', every: { n: 1, unit: 'year' }, lastDoneYmd: '2025-12-13' }, 'out0000001');
+    doc = withJob(doc, { thingId: HOME, name: 'Unknown' }, 'unsure0001');
+    const groups = groupJobs(listJobs(doc, TODAY));
+    expect(groups.soon.map((l) => l.job.name)).toEqual(['Two-monthly', 'Yearly']);
+    expect(groups.unlogged.map((l) => l.job.name)).toEqual(['Unknown']);
+    expect(groups.later.map((l) => l.job.name)).toEqual(['Just outside']);
+    const all = listJobs(doc, TODAY).filter((l) => l.due.daysLeft !== null).map((l) => l.due.daysLeft);
+    expect(all).toEqual([...all].sort((a, b) => (a as number) - (b as number)));
   });
 });
 
@@ -130,15 +144,18 @@ describe('a job that goes by the odometer', () => {
     expect(distancePerDay(doc.things[1])).toBeCloseTo(30, 5);
   });
 
-  it('never done, it is first due one interval from the reading today', () => {
+  it('never done and nobody knows when: not logged yet; given a first reading, it is due at it', () => {
     const doc = withJob(base(), { thingId: CAR, every: null, everyDistance: 6000 }, 'rotate0001');
-    expect(due(doc, 'rotate0001')).toMatchObject({ distance: 66000, distanceLeft: 6000, state: 'later' });
+    expect(due(doc, 'rotate0001').state).toBe('unlogged');
+    expect(job(doc, 'rotate0001').startDistance).toBe(66000);
+    const given = withJob(base(), { thingId: CAR, every: null, everyDistance: 6000, firstDueDistance: 64000 }, 'rotate0002');
+    expect(due(given, 'rotate0002')).toMatchObject({ distance: 64000, distanceLeft: 4000, state: 'later' });
   });
 
   it('cannot be placed without a reading, and says so rather than guessing', () => {
     let doc = base();
     doc = { ...doc, things: doc.things.map((t) => (t.id === CAR ? { ...t, readings: [] } : t)) };
-    doc = withJob(doc, { thingId: CAR, every: null, everyDistance: 6000 }, 'rotate0001');
+    doc = withJob(doc, { thingId: CAR, every: null, everyDistance: 6000, lastDoneYmd: '2026-08-01' }, 'rotate0001');
     expect(due(doc, 'rotate0001').state).toBe('unknown');
   });
 
@@ -162,7 +179,7 @@ describe('one-offs, pausing and the list', () => {
     expect(due(doc, 'roof000001').state).toBe('finished');
   });
 
-  it('a job that is put away is not due', () => {
+  it('a paused job is not due', () => {
     let doc = withJob(base(), { thingId: HOME, lastDoneYmd: '2025-01-01' }, 'mower00001');
     doc = updateJob(doc, 'mower00001', { paused: true }, NOW);
     expect(due(doc, 'mower00001')).toMatchObject({ state: 'paused', whenYmd: null });
