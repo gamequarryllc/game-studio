@@ -441,6 +441,8 @@ class Run:
             return
         builds = self.c.get("/v1/builds", **{"filter[app]": self.app, "filter[version]": self.build, "limit": 5})["data"]
         if not builds:
+            recent = self.c.get("/v1/builds", **{"filter[app]": self.app, "sort": "-uploadedDate", "limit": 6})["data"]
+            self.say("newest builds Apple lists: " + ", ".join(f"{r['attributes']['version']} ({r['attributes'].get('processingState')})" for r in recent))
             raise ValueError(f"build {self.build} is not in App Store Connect yet (Apple may still be processing it)")
         b = builds[0]
         self.say(f"build {self.build}: processing {b['attributes'].get('processingState')}, expired {b['attributes'].get('expired')}")
