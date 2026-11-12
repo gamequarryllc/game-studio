@@ -216,7 +216,7 @@ async function main() {
       await h.t('section-unlogged').waitFor();
       assert.strictEqual(await h.t('section-soon').count(), 0);
       const alarms = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Test smoke and CO alarms' }).first();
-      assert.match(await alarms.innerText(), /Home\s+· Every month/);
+      assert.match(await alarms.innerText(), /Home · Every\smonth/);
       assert.doesNotMatch(await alarms.innerText(), /weeks|days/);
       await h.shot('06-due-new-home', { tall: 1300 });
     });
@@ -277,7 +277,7 @@ async function main() {
       assert.match(await h.text('thing-reading-note'), /Read Nov 12/);
       // Oil: every 5,000 mi or 6 months; never logged, so it says how often and counts nothing down.
       const oil = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Oil and filter change' }).first();
-      assert.match(await oil.innerText(), /Every 5,000 mi or 6 months/);
+      assert.match(await oil.innerText(), /Every\s5,000\smi\sor\s6\smonths/);
       await h.shot('10-thing-car', { tall: 1300 });
     });
 
@@ -290,7 +290,7 @@ async function main() {
       await h.save();
       const oil = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Oil and filter change' }).first();
       // The line has room for one limit, the one its figure counts: the date, which comes first here.
-      assert.match(await oil.innerText(), /May 12, 2027/);
+      assert.match(await oil.innerText(), /May\s12,\s2027/);
       await h.openJob('Oil and filter change');
       assert.match(await h.text('job-ends'), /Due May 12, 2027 or 67,500 mi/);
       await h.back();
@@ -380,7 +380,14 @@ async function main() {
 
     await step('reminders: off until asked for, then the plan can be read', async () => {
       await h.t('reminders-off').waitFor();
-      await h.tap('reminders-turn-on');
+      // "Not now" puts the offer away for good; reminders are then turned on from Settings.
+      await h.tap('reminders-not-now');
+      await h.gone('reminders-off');
+      await h.openJob('Property tax');
+      await h.tap('job-reminder-on');
+      await h.t('job-reminder').waitFor();
+      assert.strictEqual(await h.text('job-reminder'), 'A month before');
+      await h.back();
       await h.gone('reminders-off');
       await h.tab('Settings');
       await h.shot('14-settings', { tall: 1900 });
@@ -564,7 +571,8 @@ async function main() {
       await h.save();
       await h.tap('suggest-add');
       await h.t('thing-screen').waitFor();
-      assert.strictEqual((await h.text('thing-name')).length, 60);
+      // Names stop at 80 characters; this one is shorter, so all of it is kept.
+      assert.strictEqual(await h.text('thing-name'), long);
       await h.tap('thing-add-job');
       await h.fill('field-name', 'Replace the left-hand rear suspension bush and check the other side too');
       await h.fill('field-every-n', '0');

@@ -6,7 +6,6 @@ import type { DistanceUnit, Ymd } from '@/domain/types';
 import { tap } from '@/platform/haptics';
 
 import { dueTone, leadsByDistance, readoutOf } from './due';
-import { Gauge } from './Gauge';
 import { Icon } from './Icon';
 import { NO_ORPHAN, space, toneColor, type, useTheme } from './theme';
 
@@ -30,6 +29,14 @@ export function Punch({ onPress, color, label, testID }: { onPress: () => void; 
     </Pressable>
   );
 }
+
+/** A thing's name, short enough to share a line with a date. */
+function shortName(name: string): string {
+  return name.length > 22 ? `${name.slice(0, 21).trimEnd()}…` : name;
+}
+
+/** Joined with non-breaking spaces, so a date or a reading wraps whole or not at all. */
+const solid = (text: string) => text.replace(/ /g, '\u00A0');
 
 export function JobRow({
   item,
@@ -56,8 +63,6 @@ export function JobRow({
   const line = dueText(due, unit, today);
   // A job nobody has logged has no date to show: say how often it comes round instead.
   const where = due.state === 'unlogged' ? repeatText(job, unit) : dueWhere(due, unit, today, leadsByDistance(due) ? 'distance' : 'date');
-  // The rule is for what is pressing; further out, the figure says enough.
-  const ruled = due.used !== null && (due.state === 'overdue' || due.state === 'today' || due.state === 'soon');
   return (
     <View style={styles.row}>
       {quiet ? <View style={styles.punchSpace} /> : <Punch testID={`punch-${job.id}`} color={due.state === 'unlogged' ? c.ink3 : color} label={`Mark ${job.name} done`} onPress={onDone} />}
@@ -74,22 +79,10 @@ export function JobRow({
           <Text style={[type.body, NO_ORPHAN, { color: quiet ? c.ink2 : c.ink }]} numberOfLines={3} lineBreakStrategyIOS="push-out">
             {job.name}
           </Text>
-          {/* The thing's name gives way when there is no room; the date or the reading never does. */}
-          <View style={styles.under}>
-            {showThing ? (
-              <Text style={[type.footnote, { color: c.ink2, flexShrink: 1 }]} numberOfLines={1}>
-                {thing.name}
-              </Text>
-            ) : null}
-            <Text testID={`where-${job.id}`} style={[type.footnote, { color: c.ink2, flexShrink: 0 }]} numberOfLines={1}>
-              {showThing ? `\u00A0· ${where}` : where}
-            </Text>
-          </View>
-          {ruled ? (
-            <View style={{ marginTop: 7, width: 128 }}>
-              <Gauge used={due.used} tone={tone} marks={22} height={7} />
-            </View>
-          ) : null}
+          {/* One line that may run to two. A long name is shortened here, so the date or reading after it never is. */}
+          <Text testID={`where-${job.id}`} style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={2}>
+            {showThing ? `${shortName(thing.name)} · ${solid(where)}` : where}
+          </Text>
         </View>
         {readout ? (
           <View style={styles.readout}>
@@ -108,10 +101,9 @@ export function JobRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.l, minHeight: 64 },
-  under: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: space.l, minHeight: 62 },
   punch: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.75, alignItems: 'center', justifyContent: 'center' },
   punchSpace: { width: 26, height: 26 },
-  body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.m, paddingLeft: space.m, paddingRight: space.m, paddingVertical: 11 },
-  readout: { alignItems: 'flex-end', minWidth: 54 },
+  body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.m, paddingRight: space.m, paddingVertical: 10 },
+  readout: { alignItems: 'flex-end', minWidth: 36, marginLeft: 2 },
 });

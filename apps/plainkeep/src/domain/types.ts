@@ -99,6 +99,8 @@ export interface Settings {
   remindMinute: number;
   /** The person asked for reminders. Whether the iPhone allows them is the iPhone's to say. */
   reminders: boolean;
+  /** The Due tab's offer of reminders has been answered (turned on, or "Not now"): it is not shown again. */
+  reminderHintSeen: boolean;
   onboarded: boolean;
 }
 
@@ -112,7 +114,7 @@ export interface Doc {
 }
 
 export const LIMITS = {
-  name: 60,
+  name: 80,
   detail: 120,
   note: 600,
   /** Cents: a hundred million in the main unit. */

@@ -3,7 +3,7 @@ import { BACKUP_KIND, backupName, makeBackup, readBackup } from '../backup';
 import { csvCell, logCsv } from '../csv';
 import { emptyDoc, parseDoc, parseDocText, serializeDoc } from '../doc';
 import { dueText, dueWhere, groupDigits, intervalText, leadText, repeatText, span } from '../labels';
-import { centsToInput, currencyForLocale, formatMoney, parseMoney } from '../money';
+import { centsToInput, currencyForLocale, currencySymbol, formatMoney, parseMoney } from '../money';
 import { reportBaseName, serviceRecordHtml } from '../report';
 import { sampleDoc, SAMPLE_IDS } from '../sample';
 import { dueOf, groupJobs, listJobs } from '../schedule';
@@ -113,9 +113,9 @@ describe('the service record', () => {
     const html = serviceRecordHtml(doc, SAMPLE_IDS.car, NOW);
     expect(html).toContain('<h1 class="plate">Outback</h1>');
     expect(html).toContain('Maintenance schedule');
-    expect(html).toContain('<dt>Total spent</dt>');
+    expect(html).toContain('<dt>Kept since</dt>');
     expect(html).toContain('2019 Subaru Outback 2.5i');
-    expect(html).toContain('<dt>Odometer</dt><dd>62,418 mi');
+    expect(html).toContain('<dt>Odometer</dt><dd><span class="nw">62,418 mi</span>');
     expect(html).toContain('New front brake pads and rotors');
     expect(html).toContain('$412.00');
     expect(html).toContain('Every 5,000 mi or 6 months');
@@ -203,6 +203,8 @@ describe('words', () => {
     expect(formatMoney(120000, 'USD', { whole: true })).toBe('$1,200');
     expect(currencyForLocale('en-GB')).toBe('GBP');
     expect(currencyForLocale(undefined)).toBe('USD');
+    expect(currencySymbol('USD')).toBe('$');
+    expect(currencySymbol('GBP')).toBe('£');
   });
 });
 

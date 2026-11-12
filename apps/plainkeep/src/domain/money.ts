@@ -121,3 +121,13 @@ export function currencyForLocale(locale: string | undefined): string {
   const region = /[-_]([A-Za-z]{2})\b/.exec(locale ?? '')?.[1]?.toUpperCase();
   return (region && REGION_CURRENCY[region]) || 'USD';
 }
+
+/** The currency's own symbol ("$", "£"), or its code where there is none: for the label of a cost field. */
+export function currencySymbol(currency: string): string {
+  try {
+    const part = new Intl.NumberFormat('en-US', { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).formatToParts(1).find((p) => p.type === 'currency');
+    return part?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}

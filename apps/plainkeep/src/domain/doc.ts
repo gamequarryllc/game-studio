@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   remindHour: 9,
   remindMinute: 0,
   reminders: false,
+  reminderHintSeen: false,
   onboarded: false,
 };
 
@@ -115,6 +116,7 @@ function parseSettings(v: unknown): Settings {
     remindHour: whole(s.remindHour, 0, 23) ?? DEFAULT_SETTINGS.remindHour,
     remindMinute: whole(s.remindMinute, 0, 59) ?? DEFAULT_SETTINGS.remindMinute,
     reminders: s.reminders === true,
+    reminderHintSeen: s.reminderHintSeen === true,
     onboarded: s.onboarded === true,
   };
 }

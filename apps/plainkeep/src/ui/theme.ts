@@ -36,6 +36,8 @@ export interface Colors {
   plateRule: string;
   scrim: string;
   bar: string;
+  /** The chosen segment of a segmented control: lighter than its track in both modes. */
+  raised: string;
 }
 
 export const LIGHT: Colors = {
@@ -59,7 +61,8 @@ export const LIGHT: Colors = {
   onPlate: '#F3F5F4',
   plateRule: '#343B43',
   scrim: 'rgba(22,26,30,0.42)',
-  bar: 'rgba(245,247,246,0.97)',
+  bar: '#F5F7F6',
+  raised: '#FFFFFF',
 };
 
 export const DARK: Colors = {
@@ -83,7 +86,8 @@ export const DARK: Colors = {
   onPlate: '#F3F5F4',
   plateRule: '#454D56',
   scrim: 'rgba(0,0,0,0.6)',
-  bar: 'rgba(20,24,27,0.97)',
+  bar: '#14181B',
+  raised: '#3B434B',
 };
 
 export interface Theme {
@@ -107,12 +111,12 @@ const tabular: TextStyle = { fontVariant: ['tabular-nums'] };
 
 /** Body sizes follow the iOS text styles so Dynamic Type scales them as people expect. */
 export const type = {
-  largeTitle: { fontFamily: plate.semibold, fontSize: 40, lineHeight: 42, letterSpacing: 0.2 },
-  title: { fontFamily: plate.semibold, fontSize: 28, lineHeight: 31, letterSpacing: 0.2 },
+  largeTitle: { fontFamily: plate.semibold, fontSize: 40, lineHeight: 48, letterSpacing: 0.2 },
+  title: { fontFamily: plate.semibold, fontSize: 28, lineHeight: 34, letterSpacing: 0.2 },
   /** A figure that is the point of the screen: days left, an odometer. */
-  figure: { fontFamily: plate.semibold, fontSize: 56, lineHeight: 56, letterSpacing: 0 },
+  figure: { fontFamily: plate.semibold, fontSize: 56, lineHeight: 64, letterSpacing: 0 },
   /** A figure on a line of a list. */
-  readout: { fontFamily: plate.semibold, fontSize: 26, lineHeight: 28 },
+  readout: { fontFamily: plate.semibold, fontSize: 26, lineHeight: 31 },
   /** Small condensed lettering under a figure. */
   unit: { fontFamily: plate.medium, fontSize: 14, lineHeight: 16, letterSpacing: 0.4 },
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' },

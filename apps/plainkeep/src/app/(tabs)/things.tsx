@@ -13,8 +13,9 @@ import { useDoc } from '@/state/store';
 import { standing } from '@/ui/due';
 import { Icon, thingIconName } from '@/ui/Icon';
 import { Button, EmptyState, Footnote, IconPlate, LinkText, RoundButton, TabScreen } from '@/ui/kit';
+import { SmallTag } from '@/ui/TagArt';
 import { Odometer } from '@/ui/Odometer';
-import { HAIRLINE, NO_ORPHAN, plate, radius, space, toneColor, type, useTheme } from '@/ui/theme';
+import { HAIRLINE, NO_ORPHAN, plate, radius, space, type, useTheme } from '@/ui/theme';
 
 function ThingTag({ thing, jobs, onPress }: { thing: Thing; jobs: Listed[]; onPress: () => void }) {
   const { c } = useTheme();
@@ -28,23 +29,22 @@ function ThingTag({ thing, jobs, onPress }: { thing: Thing; jobs: Listed[]; onPr
   const overdue = live.filter((j) => j.due.state === 'overdue').length;
   const coming = live.filter((j) => j.due.state === 'today' || j.due.state === 'soon').length;
   const unlogged = live.filter((j) => j.due.state === 'unlogged').length;
-  const counts = [overdue > 0 ? `${overdue} overdue` : null, coming > 0 ? `${coming} coming up` : null].filter(Boolean);
-  const headline =
-    jobs.length === 0 ? 'No jobs yet' : live.length === 0 ? 'Everything is paused' : counts.length > 0 ? counts.join(' · ') : unlogged === live.length ? `${unlogged} not logged yet` : 'All in good time';
+  const quiet = jobs.length === 0 ? 'No jobs yet' : live.length === 0 ? 'Everything is paused' : overdue + coming > 0 ? null : unlogged === live.length ? `${unlogged} not logged yet` : 'All in good time';
   const under = next ? (next.due.state === 'unlogged' ? `${next.job.name} and the rest need a first date` : `${next.job.name}: ${dueText(next.due, unit, today).replace(/^Due /, '')}`) : jobs.length === 0 ? 'Add the jobs that come round' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'}`;
+  const spoken = quiet ?? [overdue > 0 ? `${overdue} overdue` : null, coming > 0 ? `${coming} coming up` : null].filter(Boolean).join(', ');
   const reading = thing.kind === 'vehicle' ? currentReading(thing) : null;
   return (
     <Pressable
       testID={`thing-${thing.id}`}
       accessibilityRole="button"
-      accessibilityLabel={`${thing.name}, ${under}, ${headline}`}
+      accessibilityLabel={`${thing.name}, ${spoken}, ${under}`}
       onPress={() => {
         tap();
         onPress();
       }}
       style={({ pressed }) => [styles.tag, { backgroundColor: c.card, opacity: pressed ? 0.7 : 1 }]}>
       <View style={styles.head}>
-        <IconPlate name={thingIconName(thing.icon)} size={40} tone={tone === 'muted' ? 'blue' : tone} />
+        <IconPlate name={thingIconName(thing.icon)} size={40} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={[styles.name, NO_ORPHAN, { color: c.ink }]} numberOfLines={1}>
             {thing.name}
@@ -55,18 +55,23 @@ function ThingTag({ thing, jobs, onPress }: { thing: Thing; jobs: Listed[]; onPr
             </Text>
           ) : null}
         </View>
+        {thing.kind === 'vehicle' && reading ? <Odometer value={reading.value} unit={unit} size="s" /> : null}
         <Icon name="chevron" size={14} color={c.ink3} />
       </View>
       <View style={[styles.foot, { borderTopColor: c.rule }]}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text testID={`thing-status-${thing.id}`} style={[type.subhead, { color: tone === 'muted' ? c.ink2 : toneColor(c, tone), fontWeight: '600' }]} numberOfLines={1}>
-            {headline}
-          </Text>
-          <Text style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={2}>
-            {under}
-          </Text>
-        </View>
-        {thing.kind === 'vehicle' ? <Odometer value={reading?.value ?? null} unit={unit} size="s" /> : null}
+        {/* Each count in its own colour: red is only ever what is overdue. */}
+        <Text testID={`thing-status-${thing.id}`} style={[type.subhead, { fontWeight: '600', color: tone === 'blue' ? c.blue : c.ink2 }]} numberOfLines={1}>
+          {quiet ?? (
+            <>
+              {overdue > 0 ? <Text style={{ color: c.red }}>{overdue} overdue</Text> : null}
+              {overdue > 0 && coming > 0 ? <Text style={{ color: c.ink3 }}> · </Text> : null}
+              {coming > 0 ? <Text style={{ color: c.amber }}>{coming} coming up</Text> : null}
+            </>
+          )}
+        </Text>
+        <Text style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={2}>
+          {under}
+        </Text>
       </View>
     </Pressable>
   );
@@ -81,9 +86,10 @@ export default function ThingsTab() {
   const full = !isPro && doc.things.length >= FREE_THING_LIMIT;
 
   return (
-    <TabScreen testID="things-screen" title="Things" action={<RoundButton testID="add-thing" icon="add" label="Add something to look after" onPress={() => openNewThing(router)} />}>
+    <TabScreen testID="things-screen" title="Things" action={doc.things.length === 0 ? undefined : <RoundButton testID="add-thing" icon="add" label="Add something to look after" onPress={() => openNewThing(router)} />}>
       {doc.things.length === 0 ? (
         <EmptyState
+          art={<SmallTag />}
           title="What do you look after?"
           body="A home, a car, a mower, a boat. Each gets its own jobs and its own log."
           action={<Button testID="things-empty-add" label="Add the first one" onPress={() => openNewThing(router)} />}
@@ -108,6 +114,6 @@ export default function ThingsTab() {
 const styles = StyleSheet.create({
   tag: { borderRadius: radius.m, overflow: 'hidden' },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingTop: space.l, paddingBottom: space.m, paddingRight: space.l + 4 },
-  name: { fontFamily: plate.semibold, fontSize: 26, lineHeight: 28, letterSpacing: 0.2 },
-  foot: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m, borderTopWidth: HAIRLINE },
+  name: { fontFamily: plate.semibold, fontSize: 26, lineHeight: 31, letterSpacing: 0.2 },
+  foot: { paddingHorizontal: space.l, paddingVertical: space.m, borderTopWidth: HAIRLINE },
 });

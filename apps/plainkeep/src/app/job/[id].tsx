@@ -11,7 +11,7 @@ import { success } from '@/platform/haptics';
 import { DELIVERS } from '@/platform/notify';
 import { useToday } from '@/state/clock';
 import { goBack } from '@/state/nav';
-import { useReminderPermission } from '@/state/reminders';
+import { reminders, useReminderPermission } from '@/state/reminders';
 import { store, useDoc } from '@/state/store';
 import { confirm } from '@/ui/dialogs';
 import { dueTone, readoutOf } from '@/ui/due';
@@ -55,7 +55,7 @@ export default function JobScreen() {
   const due = dueOf(job, doc, today);
   const tone = dueTone(due);
   const color = toneColor(c, tone);
-  const readout = readoutOf(due, unit);
+  const readout = readoutOf(due, unit, true);
   const history = entriesOf(job.id, doc.entries).reverse();
   const last = lastDone(job.id, doc.entries);
   const lead = job.leadDays ?? doc.settings.leadDays;
@@ -80,7 +80,7 @@ export default function JobScreen() {
       <Stack.Screen options={{ title: '', headerRight: () => <BarButton testID="job-edit" label="Edit" onPress={() => router.push({ pathname: '/job-form', params: { id: job.id } })} /> }} />
       <View style={{ paddingHorizontal: space.xl, paddingTop: space.s }}>
         <Text style={[type.subhead, { color: c.ink2 }]}>{thing.name}</Text>
-        <Text testID="job-name" accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, fontSize: 36, lineHeight: 38, marginTop: 2 }]}>
+        <Text testID="job-name" accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, fontSize: 36, lineHeight: 43, marginTop: 2 }]}>
           {job.name}
         </Text>
       </View>
@@ -144,7 +144,11 @@ export default function JobScreen() {
       <Card>
         <Stacked testID="job-repeat" label="Comes round" value={repeatText(job, unit)} />
         <Divider />
-        <Stacked testID="job-reminder" label="Reminder" value={reminderText} />
+        {doc.settings.reminders ? (
+          <Stacked testID="job-reminder" label="Reminder" value={reminderText} />
+        ) : (
+          <Row testID="job-reminder-on" title="Reminder" value="Off" chevron={false} onPress={() => void reminders.turnOn()} subtitle="Tap to turn reminders on" />
+        )}
         {job.note ? (
           <>
             <Divider />

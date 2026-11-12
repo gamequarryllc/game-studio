@@ -276,7 +276,7 @@ export function EmptyState({ title, body, action, art }: { title: string; body: 
   return (
     <View style={styles.empty}>
       {art}
-      <Text style={[type.title, NO_ORPHAN, { color: c.ink, marginTop: art ? space.xl : 0 }]}>{title}</Text>
+      <Text style={[type.title, NO_ORPHAN, { color: c.ink, marginTop: art ? space.l : 0 }]}>{title}</Text>
       <Text style={[type.callout, { color: c.ink2, marginTop: space.s }]}>{body}</Text>
       {action ? <View style={{ marginTop: space.xl, alignSelf: 'stretch' }}>{action}</View> : null}
     </View>
@@ -312,12 +312,12 @@ export function LinkText({ label, onPress, testID }: { label: string; onPress: (
 const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xl, marginBottom: space.m },
   sectionLabel: { flexDirection: 'row', alignItems: 'baseline', marginHorizontal: space.xl + 2, marginTop: space.xxl, marginBottom: space.s },
-  sectionText: { fontFamily: plate.semibold, fontSize: 21, lineHeight: 24, letterSpacing: 0.3 },
+  sectionText: { fontFamily: plate.semibold, fontSize: 21, lineHeight: 26, letterSpacing: 0.3 },
   card: { marginHorizontal: space.xl, borderRadius: radius.m, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: 11, minHeight: 48 },
   button: { minHeight: 50, borderRadius: radius.m, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.s, paddingHorizontal: space.xl },
   round: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, height: 38, borderRadius: 19, maxWidth: 200 },
-  empty: { paddingHorizontal: space.xl + 2, paddingTop: space.xl, paddingBottom: space.xl },
+  empty: { paddingHorizontal: space.xl + 2, paddingTop: space.huge, paddingBottom: space.xl },
   notice: { flexDirection: 'row', gap: space.s, marginHorizontal: space.xl, marginTop: space.m, padding: space.m, borderRadius: radius.m },
 });

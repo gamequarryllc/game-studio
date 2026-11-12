@@ -32,18 +32,21 @@ export function leadsByDistance(due: Due): boolean {
   return due.distanceLeft !== null && (due.daysLeft === null || (distOver && !dateOver) || (!dateOver && due.by === 'distance'));
 }
 
-/** The figure for a job's line: what is left of whichever limit comes first. */
-export function readoutOf(due: Due, unit: DistanceUnit): Readout | null {
+/**
+ * The figure for a job: what is left of whichever limit comes first. On a list the unit is bare ("days"):
+ * the group it is in and its colour already say which way. On the job's own card it says so ("days left").
+ */
+export function readoutOf(due: Due, unit: DistanceUnit, direction = false): Readout | null {
   if (due.state === 'paused' || due.state === 'finished' || due.state === 'unlogged') return null;
   const useDistance = leadsByDistance(due);
   if (useDistance && due.distanceLeft !== null) {
     if (due.distanceLeft === 0) return { figure: 'Now', unit: 'due' };
-    return { figure: groupDigits(Math.abs(due.distanceLeft)), unit: due.distanceLeft < 0 ? `${unit} overdue` : unit };
+    return { figure: groupDigits(Math.abs(due.distanceLeft)), unit: direction ? (due.distanceLeft < 0 ? `${unit} overdue` : `${unit} left`) : unit };
   }
   if (due.daysLeft !== null) {
     if (due.daysLeft === 0) return { figure: 'Today', unit: 'due' };
     const parts = spanParts(due.daysLeft);
-    return { figure: parts.figure, unit: due.daysLeft < 0 ? `${parts.unit} overdue` : parts.unit };
+    return { figure: parts.figure, unit: direction ? (due.daysLeft < 0 ? `${parts.unit} overdue` : `${parts.unit} left`) : parts.unit };
   }
   return null;
 }

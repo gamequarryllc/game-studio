@@ -10,6 +10,7 @@ import type { Entry } from '@/domain/types';
 import { tap } from '@/platform/haptics';
 import { useDoc } from '@/state/store';
 import { choose } from '@/ui/dialogs';
+import { SmallTag } from '@/ui/TagArt';
 import { Icon } from '@/ui/Icon';
 import { Button, Card, Chip, Divider, EmptyState, Footnote, RoundButton, SectionLabel, TabScreen } from '@/ui/kit';
 import { NO_ORPHAN, NO_OUTLINE, plate, radius, space, type, useTheme } from '@/ui/theme';
@@ -96,11 +97,12 @@ export default function LogTab() {
 
   if (doc.entries.length === 0) {
     return (
-      <TabScreen testID="log-screen" title="Log" action={action}>
+      <TabScreen testID="log-screen" title="Log">
         <EmptyState
+          art={<SmallTag />}
           title="Nothing logged yet"
           body="Each job you mark done lands here, with its date, cost and reading. Repairs and one-offs can be logged too."
-          action={<Button testID="log-empty-add" label={doc.things.length > 0 ? 'Log something' : 'Add something to look after'} onPress={add} />}
+          action={doc.things.length > 0 ? <Button testID="log-empty-add" label="Log something" onPress={add} /> : undefined}
         />
       </TabScreen>
     );
@@ -168,5 +170,5 @@ const styles = StyleSheet.create({
   search: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginHorizontal: space.xl, borderRadius: radius.m, paddingHorizontal: space.m, minHeight: 38 },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: 10, minHeight: 64 },
   stamp: { width: 34, alignItems: 'center', justifyContent: 'center' },
-  stampDay: { fontFamily: plate.semibold, fontSize: 24, lineHeight: 25 },
+  stampDay: { fontFamily: plate.semibold, fontSize: 24, lineHeight: 29 },
 });

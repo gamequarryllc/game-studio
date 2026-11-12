@@ -20,10 +20,10 @@ import { BarButton, Card, Divider, Footnote, Row, SectionLabel } from '@/ui/kit'
 import { NO_OUTLINE, radius, space, type, useTheme } from '@/ui/theme';
 
 const UNITS: { key: IntervalUnit; one: string; many: string }[] = [
-  { key: 'day', one: 'Day', many: 'Days' },
-  { key: 'week', one: 'Week', many: 'Weeks' },
-  { key: 'month', one: 'Month', many: 'Months' },
-  { key: 'year', one: 'Year', many: 'Years' },
+  { key: 'day', one: 'day', many: 'days' },
+  { key: 'week', one: 'week', many: 'weeks' },
+  { key: 'month', one: 'month', many: 'months' },
+  { key: 'year', one: 'year', many: 'years' },
 ];
 
 const digits = (s: string) => s.replace(/[^\d]/g, '');
@@ -80,7 +80,7 @@ export default function JobForm() {
     if (picked) setEveryUnit(picked);
   };
 
-  const unitWord = (n === 1 ? UNITS.find((u) => u.key === everyUnit)?.one : UNITS.find((u) => u.key === everyUnit)?.many) ?? 'Months';
+  const unitWord = (n === 1 ? UNITS.find((u) => u.key === everyUnit)?.one : UNITS.find((u) => u.key === everyUnit)?.many) ?? 'months';
 
   const pickLead = async () => {
     const picked = await choose({

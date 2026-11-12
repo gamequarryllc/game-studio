@@ -8,16 +8,16 @@ Three things from the real world, none of them apps: the oil-change sticker in t
 
 - **Palette** (light / dark), each with one role. Wall `#ECEEEC` / `#0F1215` (the page: a cool workshop white, not paper). Tag `#FFFFFF` / `#191D21` (cards). Ink `#161A1E` / `#ECEFF0`. Enamel blue `#1D4F7C` / `#8ABBE8`: actions, and anything in good time. Amber `#9A5A06` / `#E6AC53`: coming up. Red `#B3331B` / `#F27A61`: past due. Plate `#1B2026` / `#07090B`: the dark cells an odometer's figures sit on. Blue, amber and red mean those three states and nothing else.
 - **Type.** Barlow Condensed (open licence, `@expo-google-fonts/barlow-condensed`) for titles and every figure: the lettering of equipment plates and road signs. The system font for everything that is read as a sentence.
-- **Motif.** *The rule*: a row of marks like the edge of a steel rule. Marks to the left of today are inked; the last, taller mark is the day the job falls due. It is on every job's line, large on a job's own screen, and on the icon. *The ring*: the hole a tag hangs by, which is also how a job is marked done. *The odometer*: figures in cells on a dark plate. *The stamp*: a date in a small bordered square in the log.
+- **Motif.** *The rule*: a row of marks like the edge of a steel rule. Marks to the left of today are inked; the last, taller mark is the day the job falls due. It is the centre of a job's own screen and the face of the icon. It was on every line of the lists too, until two reviews running called it decoration there: on a list the figure and its colour say enough. *The ring*: the hole a tag hangs by, which is also how a job is marked done. *The odometer*: figures in cells on a dark plate. *The stamp*: a date in a small bordered square in the log.
 - **Shape.** Cards are plain white on the wall with the iPhone's own corner (12) and no outline; only the small instrument pieces (an odometer, a symbol's plate) are cut square. Hairlines only between rows.
-- **The icon** is one tag on enamel blue: seven thick marks of its rule, the tall red due mark, and the punched ring. The welcome picture is the same tag with a second behind it.
+- **The icon** is one tag on enamel blue whose face is a rule: marks on one baseline, every fourth taller, inked up to today, and the tall red mark of the day a job falls due. One idea, no badge. The welcome picture and the small picture on an empty screen are the same tag with a second behind it.
 
 **House rules that keep it from looking generated:**
 
 - A figure and the sentence beside it never say the same thing twice. A job's line shows what is left ("19 days") as the figure and where the limit lies ("Dec 1") as the words.
 - No uppercase labels, no eyebrows above headlines, no rows of three icons in tinted squares. Empty screens are a title, a sentence and one button, left-aligned.
 - Sentence case, no exclamation marks, and the same word for the same thing everywhere: a *thing* is looked after, a *job* comes round, the *log* holds what was done, a job is *paused*, a turn is *skipped*, late is *overdue* (never "over"), money is *spent*.
-- Colour is never decoration. A card or symbol is blue, amber or red only because of when its most pressing job is due.
+- Colour is never decoration. Red is only ever something overdue and amber something coming up: on a thing's card each count has its own colour, and the symbol stays neutral so one late job does not paint the whole card.
 - The add button beside a large title is a quiet toolbar circle, not a filled floating button.
 
 ## How it works
@@ -31,7 +31,7 @@ Three things from the real world, none of them apps: the oil-change sticker in t
 - **A date in another year always shows its year.** "Done Jan 1 ... Due Jan 9" on a yearly job read as eight days.
 - **Deleting** a thing or a job is in its Edit form, with what goes with it spelled out, not on the screen you read.
 - **Reminders** are local notifications the iPhone delivers itself (`expo-notifications` with remote notifications switched off, so there is no push entitlement and no server). For each job: the lead time before (the app's setting or the job's own), the day itself, and 3 and 10 days after if it has not been done; then silence. Jobs falling at the same minute arrive as one reminder that names each job and whose it is. A vehicle with distance jobs gets one "what does the odometer say?" a month after its last reading. At most 48 are planned, nearest first (the iPhone holds 64). The plan is worked out again whenever the log changes or the app comes to the front, and Settings > Upcoming reminders shows exactly what is waiting, marking the ones that only come "if it isn't done".
-- **The permission question** is only asked when the person turns reminders on (the Due tab's notice or Settings). If the iPhone says no, the app says where to change it and keeps the setting, so reminders start the moment they are allowed.
+- **The permission question** is only asked when the person turns reminders on (the Due tab's offer, a job's Reminder row, or Settings). The Due tab's offer is answered once, "Turn on reminders" or "Not now", and never shown again. If the iPhone says no, the app says where to change it and keeps the setting, so reminders start the moment they are allowed.
 - **Storage:** one JSON document (`upkeep.json` in the app's documents folder, written beside the old copy and swapped in). A line that cannot be read is dropped and the rest kept. A backup is that document in one file; it holds nothing about Pro, and whether reminders are on stays this phone's choice after a restore.
 
 ## Money
@@ -86,5 +86,5 @@ What the other apps offer and what their reviewers ask for (store pages, 2026-11
 
 ## Owner actions
 
-1. **Create the app record** (once, about two minutes). WHAT: a new app named `Plainkeep: Home & Car Upkeep`, iOS, English (U.S.), bundle id `com.gamequarry.plainkeep`, SKU `plainkeep`. WHERE: App Store Connect > Apps > + > New App (register the bundle id first at developer.apple.com > Identifiers if it is not offered). WHEN: before the first TestFlight upload; the build signs and archives without it and only the upload fails.
+1. **Create the app record** (once, about two minutes). WHAT: a new app named `Plainkeep: Home & Car Upkeep`, iOS, English (U.S.), bundle id `com.gamequarry.plainkeep`, SKU `plainkeep`. WHERE: App Store Connect > Apps > + > New App (register the bundle id first at developer.apple.com > Identifiers if it is not offered). WHEN: before the next TestFlight build. The first one was tried on 2026-11-12 (Actions run 43236481244): the app compiled and archived, and the export stopped at "Error Downloading App Information", which is Apple saying there is no app with this bundle id yet. Nothing else is in the way; once the record exists, Claude starts the build again.
 2. **The purchase** (before release, not needed to try the app): Actions > "Store listing" > `plainkeep`, `apply` creates "Plainkeep Pro" at $6.99 from `store/plainkeep/listing.json` once the app record exists. Until then the Pro screen says Pro can't be bought, and Settings > Developer > "Pretend Pro is bought" shows the app with it.

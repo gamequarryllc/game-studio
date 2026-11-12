@@ -63,7 +63,7 @@ export const reminders = {
     let now = await permission();
     if (now === 'undetermined') now = await askPermission();
     setAllowed(now);
-    store.update((d, t) => (d.settings.reminders ? d : setSettings(d, { reminders: true }, t)));
+    store.update((d, t) => (d.settings.reminders ? d : setSettings(d, { reminders: true, reminderHintSeen: true }, t)));
     soon();
     return now;
   },

@@ -29,7 +29,7 @@ export default function Welcome() {
         <View style={{ marginLeft: -18 }}>
           <TagArt width={250} />
         </View>
-        <Text accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, marginTop: space.xl, fontSize: 44, lineHeight: 44 }]}>
+        <Text accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, marginTop: space.xl, fontSize: 44, lineHeight: 50 }]}>
           Know what’s due on the house and the car.
         </Text>
         <Text style={[type.body, { color: c.ink2, marginTop: space.m }]}>

@@ -2,16 +2,18 @@ import { useRouter } from 'expo-router';
 import { Fragment } from 'react';
 import { View } from 'react-native';
 
+import { setSettings } from '@/domain/actions';
 import { dueText } from '@/domain/labels';
 import { groupJobs, listJobs, type Listed } from '@/domain/schedule';
 import { DELIVERS, openSystemSettings } from '@/platform/notify';
 import { useToday } from '@/state/clock';
 import { openNewThing } from '@/state/nav';
 import { reminders, useReminderPermission } from '@/state/reminders';
-import { useDoc } from '@/state/store';
+import { store, useDoc } from '@/state/store';
 import { notify } from '@/ui/dialogs';
 import { JobRow } from '@/ui/JobRow';
 import { Button, Card, Divider, EmptyState, Footnote, LinkText, Notice, RoundButton, SectionLabel, TabScreen } from '@/ui/kit';
+import { SmallTag } from '@/ui/TagArt';
 import { space, type Tone } from '@/ui/theme';
 
 export default function DueTab() {
@@ -61,8 +63,9 @@ export default function DueTab() {
 
   if (doc.things.length === 0) {
     return (
-      <TabScreen testID="due-screen" title="Due" action={action}>
+      <TabScreen testID="due-screen" title="Due">
         <EmptyState
+          art={<SmallTag />}
           title="Nothing to keep up yet"
           body="Add your home or a car, then the jobs that come round: a filter, a battery, an oil change."
           action={<Button testID="empty-add-thing" label="Add something to look after" onPress={() => openNewThing(router)} />}
@@ -92,9 +95,18 @@ export default function DueTab() {
   const next = groups.later[0];
   return (
     <TabScreen testID="due-screen" title="Due" action={action}>
-      {!doc.settings.reminders ? (
-        <Notice testID="reminders-off" icon="bell" tone="blue" action={<LinkText testID="reminders-turn-on" label="Turn on reminders" onPress={turnOn} />}>
-          Reminders are off. Turn them on to hear about a job before it falls due.
+      {!doc.settings.reminders && !doc.settings.reminderHintSeen ? (
+        <Notice
+          testID="reminders-off"
+          icon="bell"
+          tone="blue"
+          action={
+            <View style={{ flexDirection: 'row', gap: space.xl }}>
+              <LinkText testID="reminders-turn-on" label="Turn on reminders" onPress={turnOn} />
+              <LinkText testID="reminders-not-now" label="Not now" onPress={() => store.update((d, now) => setSettings(d, { reminderHintSeen: true }, now))} />
+            </View>
+          }>
+          Want to hear about a job before it falls due? Reminders can be changed any time in Settings.
         </Notice>
       ) : DELIVERS && allowed === 'denied' ? (
         <Notice testID="reminders-blocked" icon="bellOff" tone="amber" action={<LinkText label="Open Settings" onPress={openSystemSettings} />}>
@@ -113,7 +125,7 @@ export default function DueTab() {
       {section('Not logged yet', groups.unlogged, undefined, 'section-unlogged')}
       {groups.unlogged.length > 0 ? (
         <Footnote>
-          When you do one of these, tap its ring. If you know when it was last done, tap the ring and set that day. From then on it counts down by itself.
+          Tap a ring when you do the job, or now to enter the day it was last done. From then on it counts down by itself.
         </Footnote>
       ) : null}
       {section('Later', groups.later, undefined, 'section-later')}

@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { deleteEntry, logEntry, markDone, updateEntry } from '@/domain/actions';
 import { groupDigits } from '@/domain/labels';
-import { centsToInput, parseMoney } from '@/domain/money';
+import { centsToInput, currencySymbol, parseMoney } from '@/domain/money';
 import { currentReading } from '@/domain/schedule';
 import { LIMITS } from '@/domain/types';
 import { success, warning } from '@/platform/haptics';
@@ -15,7 +15,7 @@ import { store, useDoc } from '@/state/store';
 import { DateField } from '@/ui/DateField';
 import { choose, confirm } from '@/ui/dialogs';
 import { FormRow, PickRow, TextRow } from '@/ui/form';
-import { BarButton, Card, Divider, Footnote, Row } from '@/ui/kit';
+import { BarButton, Card, Divider, Footnote, Row, SectionLabel } from '@/ui/kit';
 import { NO_OUTLINE, space, type, useTheme } from '@/ui/theme';
 
 const digits = (s: string) => s.replace(/[^\d]/g, '');
@@ -163,12 +163,11 @@ export default function DoneForm() {
               <Divider />
               <TextRow
                 testID="field-cost"
-                label="Cost"
+                label={`Cost (${currencySymbol(doc.settings.currency)})`}
                 value={costText}
                 onChangeText={setCostText}
                 placeholder="Optional"
                 keyboardType="decimal-pad"
-                suffix={doc.settings.currency}
                 error={showErrors && !cost.ok ? (cost.reason === 'too-large' ? 'That is more than the app can hold.' : 'Enter an amount, like 74.95') : null}
               />
             </>
@@ -176,7 +175,8 @@ export default function DoneForm() {
         </Card>
         {vehicle && mode !== 'edit' ? <Footnote>The reading also updates the odometer, so distance jobs stay in step.</Footnote> : null}
 
-        <Card style={{ marginTop: space.xl }}>
+        <SectionLabel>Note</SectionLabel>
+        <Card>
           <TextInput
             testID="field-note"
             accessibilityLabel="Note"

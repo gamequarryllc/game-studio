@@ -1,21 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- Plainkeep's icon: one service tag on enamel blue. Its marks are the rule
-       every job has in the app: inked up to today, and the tall red one is the
-       day the job falls due. The ring is the hole a tag hangs by, punched: done. -->
-  <rect width="1024" height="1024" fill="#1D4F7C"/>
-  <g transform="translate(512 512) scale(0.9) rotate(-8) translate(-512 -512)">
-    <path d="M356 96 H668 L800 254 V928 H224 V254 Z" fill="#FBFCFB"/>
-    <circle cx="512" cy="232" r="50" fill="#1D4F7C"/>
+  <!-- Plainkeep's icon: a service tag whose face is a steel rule. The marks
+       stand on one baseline, every fourth one taller, as on a rule; they are
+       inked up to today, and the tall red mark is the day the job falls due. -->
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A6397"/>
+      <stop offset="1" stop-color="#173F65"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9EDEB"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#wall)"/>
+  <g transform="translate(512 520) scale(0.92) rotate(-8) translate(-512 -512)">
+    <path d="M356 100 H668 L800 258 V924 H224 V258 Z" fill="#0E2E4B" opacity="0.35" transform="translate(14 26)"/>
+    <path d="M356 100 H668 L800 258 V924 H224 V258 Z" fill="url(#card)"/>
+    <circle cx="512" cy="238" r="52" fill="#1D4F7C"/>
     <g>
-      <rect x="298" y="470" width="36" height="170" rx="18" fill="#1D4F7C"/>
-      <rect x="364" y="530" width="36" height="110" rx="18" fill="#1D4F7C"/>
-      <rect x="430" y="530" width="36" height="110" rx="18" fill="#1D4F7C"/>
-      <rect x="496" y="470" width="36" height="170" rx="18" fill="#1D4F7C"/>
-      <rect x="562" y="530" width="36" height="110" rx="18" fill="#C4CBC8"/>
-      <rect x="628" y="530" width="36" height="110" rx="18" fill="#C4CBC8"/>
-      <rect x="694" y="400" width="36" height="240" rx="18" fill="#C8401F"/>
+      <rect x="282" y="560" width="30" height="230" rx="15" fill="#1D4F7C"/>
+      <rect x="340" y="660" width="30" height="130" rx="15" fill="#1D4F7C"/>
+      <rect x="398" y="660" width="30" height="130" rx="15" fill="#1D4F7C"/>
+      <rect x="456" y="660" width="30" height="130" rx="15" fill="#1D4F7C"/>
+      <rect x="514" y="560" width="30" height="230" rx="15" fill="#1D4F7C"/>
+      <rect x="572" y="660" width="30" height="130" rx="15" fill="#B9C1BD"/>
+      <rect x="630" y="660" width="30" height="130" rx="15" fill="#B9C1BD"/>
     </g>
-    <circle cx="646" cy="786" r="84" fill="#1D4F7C"/>
-    <path d="M606 788 L636 818 L690 756" fill="none" stroke="#FBFCFB" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="688" y="440" width="34" height="350" rx="17" fill="#C8401F"/>
+    <rect x="282" y="818" width="440" height="14" rx="7" fill="#1D4F7C" opacity="0.18"/>
   </g>
 </svg>

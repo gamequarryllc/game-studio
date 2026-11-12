@@ -14,7 +14,6 @@ import { goBack } from '@/state/nav';
 import { makeServiceRecord } from '@/state/operations';
 import { useDoc } from '@/state/store';
 import { notify } from '@/ui/dialogs';
-import { standing } from '@/ui/due';
 import { thingIconName } from '@/ui/Icon';
 import { JobRow } from '@/ui/JobRow';
 import { BarButton, Button, Card, Divider, EmptyState, Footnote, IconPlate, PushedScreen, Row, SectionLabel } from '@/ui/kit';
@@ -48,7 +47,6 @@ export default function ThingScreen() {
   const vehicle = thing.kind === 'vehicle';
   const reading = vehicle ? currentReading(thing) : null;
   const pace = vehicle ? distancePerDay(thing) : null;
-  const tone = standing(jobs);
 
   const record = async () => {
     if (!isPro) {
@@ -70,9 +68,9 @@ export default function ThingScreen() {
     <PushedScreen testID="thing-screen">
       <Stack.Screen options={{ title: '', headerRight: () => <BarButton testID="thing-edit" label="Edit" onPress={() => router.push({ pathname: '/thing-form', params: { id: thing.id } })} /> }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xl, paddingTop: space.s }}>
-        <IconPlate name={thingIconName(thing.icon)} size={48} tone={tone === 'muted' ? 'blue' : tone} />
+        <IconPlate name={thingIconName(thing.icon)} size={48} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text testID="thing-name" accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, fontSize: 36, lineHeight: 38 }]} numberOfLines={2}>
+          <Text testID="thing-name" accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, fontSize: 36, lineHeight: 43 }]} numberOfLines={2}>
             {thing.name}
           </Text>
           {thing.detail ? <Text style={[type.subhead, { color: c.ink2 }]}>{thing.detail}</Text> : null}

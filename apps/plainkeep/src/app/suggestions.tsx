@@ -122,7 +122,7 @@ export default function Suggestions() {
             );
           })}
         </Card>
-        <Footnote>Not sure when one was last done? Leave that for now. Each new job comes up within a month, and you can set its last date when you check it.</Footnote>
+        <Footnote>New jobs wait under “Not logged yet” until you first mark them done, on the day you do them or the day you last did.</Footnote>
       </ScrollView>
       <View style={{ paddingHorizontal: space.xl, paddingTop: space.m, paddingBottom: insets.bottom + space.m, borderTopWidth: HAIRLINE, borderTopColor: c.rule, backgroundColor: c.page }}>
         <Button testID="suggest-add" label={count === 0 ? 'Add none for now' : `Add ${count} ${count === 1 ? 'job' : 'jobs'}`} onPress={add} />

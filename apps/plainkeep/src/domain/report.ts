@@ -49,7 +49,7 @@ export function serviceRecordHtml(doc: Doc, thingId: string, now: number): strin
       return `<tr>
   <td><div class="what">${esc(j.name)}</div>${j.note ? `<div class="note">${esc(j.note).replace(/\n/g, '<br>')}</div>` : ''}</td>
   <td>${esc(repeatText(j, unit))}</td>
-  <td>${last ? esc(displayYmd(last.ymd)) : 'Not logged'}</td>
+  <td class="nw">${last ? esc(displayYmd(last.ymd)) : 'Not logged'}</td>
   <td>${esc(dueText(due, unit, today))}</td>
 </tr>`;
     })
@@ -58,10 +58,9 @@ export function serviceRecordHtml(doc: Doc, thingId: string, now: number): strin
   const first = done.length > 0 ? done[done.length - 1].ymd : null;
   const facts: [string, string][] = [];
   if (thing.detail) facts.push(['Details', esc(thing.detail)]);
-  if (reading) facts.push(['Odometer', `${esc(distanceText(reading.value, unit))} <span class="soft">on ${esc(displayYmd(reading.ymd))}</span>`]);
-  facts.push(['Period', first ? `${esc(displayYmd(first))} to ${esc(displayYmd(today))}` : `To ${esc(displayYmd(today))}`]);
+  if (reading) facts.push(['Odometer', `<span class="nw">${esc(distanceText(reading.value, unit))}</span> <span class="soft nw">on ${esc(displayYmd(reading.ymd))}</span>`]);
+  if (first) facts.push(['Kept since', esc(displayYmd(first))]);
   facts.push(['Entries', String(done.length)]);
-  if (total !== null) facts.push(['Total spent', esc(formatMoney(total, currency))]);
 
   return `<!doctype html>
 <html lang="en">
@@ -84,6 +83,7 @@ export function serviceRecordHtml(doc: Doc, thingId: string, now: number): strin
   dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(1.5in, 1fr)); gap: 9pt 18pt; margin: 12pt 0 0; padding: 0; }
   dt { font-size: 8pt; color: #57616a; margin: 0; }
   dd { margin: 1pt 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .nw { white-space: nowrap; }
   .soft { font-weight: 400; color: #57616a; }
   h2 { font-size: 15pt; margin: 22pt 0 4pt; }
   table { width: 100%; border-collapse: collapse; }
@@ -130,6 +130,7 @@ ${
     ? ''
     : `<h2 class="plate">Maintenance schedule</h2>
 <table>
+<colgroup><col style="width:34%"><col style="width:26%"><col style="width:16%"><col style="width:24%"></colgroup>
 <thead><tr><th>Job</th><th>How often</th><th>Last done</th><th>Next</th></tr></thead>
 <tbody>
 ${jobRows}

@@ -4,7 +4,7 @@ import { Platform, Pressable, StyleSheet, Switch, Text, TextInput, View, type Te
 import { tap } from '@/platform/haptics';
 
 import { Icon } from './Icon';
-import { HAIRLINE, NO_OUTLINE, radius, space, type, useTheme } from './theme';
+import { NO_OUTLINE, radius, space, type, useTheme } from './theme';
 
 // The pieces of a form: a label on the left, what you type on the right.
 
@@ -122,7 +122,7 @@ export function Segmented<T extends string>({ options, value, onChange, testID }
               if (!on) tap();
               onChange(o.key);
             }}
-            style={[styles.segment, on ? { backgroundColor: c.card, borderColor: c.rule, borderWidth: HAIRLINE } : null]}>
+            style={[styles.segment, on ? { backgroundColor: c.raised } : null]}>
             <Text style={[type.subhead, { color: c.ink, fontWeight: on ? '600' : '400' }]} numberOfLines={1}>
               {o.label}
             </Text>
