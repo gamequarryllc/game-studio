@@ -76,7 +76,7 @@ The day's plan:
 | Goal reached (`empty`) | Covers the counted apps with the empty screen for the chosen level |
 | A minute before the recharge time | Takes every covering screen away |
 
-What the empty screen's second button does: Warn takes the screen away for the rest of the day; Work for it sends a notification that opens the sums (a covering screen cannot open an app directly); Locked has no second button. After the sums are solved the app uncovers the apps and asks the phone to cover them again after that many more minutes of use.
+What the empty screen's second button does: Warn takes the screen away for the rest of the day; Work for it sends a notification that opens the sums (a covering screen cannot open an app directly); Locked has no second button. After the sums are solved the app uncovers the apps until a time on the clock ("Your apps open until 7:33 PM") and asks the phone to cover them again at that moment, used or not. (The first test builds re-covered after that many minutes of *use*, which did not match what the screen promised; the owner asked for the clock.) If the app is open when the time passes, it covers them itself as well.
 
 Decisions made while writing it, each of which the owner can change:
 
@@ -109,6 +109,18 @@ Found on that first run and fixed: `plugins/withTargets.js` used to wipe and re-
 - **Counting "everything" rests on an assumption:** that a checkpoint registered with no apps, categories or sites counts all use of the phone. If it does not, "Everything" has to become "tick every category in Apple's picker".
 - **Changing a setting re-registers the day.** The phone is asked to keep the day's count when that happens (iOS 17.4 and later can), and checkpoints already passed should simply be reported again. Unverified.
 
+## What the owner's first evening on a real iPhone showed (2026-11-11, build 15)
+
+Worked: Screen Time permission; the picker; counting (the app's "at least 0:10" matched Apple's own 10 minutes for the ticked category); cells draining in the app; the widget following on its own, including to red and "Empty"; the empty screen, its notification, the sums, and the apps uncovering.
+
+Found:
+- The widget can run a couple of minutes behind the app. The app now asks for a redraw whenever it is opened or learns of a change, and the widget's own fallback look is every quarter of an hour.
+- Earned time did not end when the screen said it would (above).
+- "0.5 HOUR DAY" on Today for a 30-minute goal; now "30 MINUTE DAY".
+- Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
+
+Not yet seen by anyone: the "Last cell" screen and its buttons, Warn and Locked levels, the recharge at 6:00 AM, changing the goal mid-day, and whether the covers come back on time after earned time.
+
 ## To check on the phone (nothing here has been tried)
 
 In order; each one that fails changes the code, not just a setting.
@@ -119,7 +131,7 @@ In order; each one that fails changes the code, not just a setting.
 4. With a 30-minute goal (the smallest), use the phone: a cell goes dark about every five minutes, on the widget without opening the app, and in the app.
 5. On the last cell the "Last cell" screen covers apps; "Keep going" removes it.
 6. At the goal the empty screen appears with the right buttons for the level. Phone and Messages (ticked under Always allowed) still open.
-7. Work for it: "I need more time" sends a notification; tapping it opens the sums; solving them uncovers the apps; they are covered again after the earned minutes.
+7. Work for it: "I need more time" sends a notification; tapping it opens the sums; solving them uncovers the apps; they are covered again at the time the screen named, and again after a 10-minute and a 5-minute top-up.
 8. At the recharge time everything uncovers and the widget is full, without the app being opened.
 9. Changing the goal mid-day keeps the day's use.
 10. Time-wasters: ticking a few apps in Apple's picker makes only those drain the battery and only those get covered.

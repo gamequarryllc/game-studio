@@ -50,8 +50,9 @@ export function durationLabel(minutes: number): string {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
-/** A goal in words: "3 hour day", "2.5 hour day". */
+/** A goal in words: "3 hour day", "2.5 hour day", "30 minute day". */
 export function goalLabel(goalMinutes: number): string {
+  if (goalMinutes < 60) return `${String(Math.round(goalMinutes))} minute day`;
   const hours = Math.round((goalMinutes / 60) * 100) / 100;
   return `${String(hours)} hour day`;
 }

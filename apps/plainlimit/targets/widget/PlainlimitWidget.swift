@@ -146,6 +146,11 @@ struct BatteryProvider: TimelineProvider {
   func getTimeline(in context: Context, completion: @escaping (Timeline<BatteryEntry>) -> Void) {
     let now = Date()
     let state = readState(now: now)
+    // For the test build's Settings: when the widget last drew, and what it drew.
+    if let shared = UserDefaults(suiteName: appGroup) {
+      shared.set((now.timeIntervalSince1970 * 1000).rounded(), forKey: "plainlimit_widget_drew")
+      shared.set(state.isSetUp ? state.cells : -1, forKey: "plainlimit_widget_cells")
+    }
     var entries = [BatteryEntry(date: now, state: state)]
     guard state.isSetUp else {
       // Not set up yet: look again in a while in case the app has been opened since.
@@ -158,9 +163,10 @@ struct BatteryProvider: TimelineProvider {
       BatteryEntry(
         date: recharge,
         state: BatteryState(isSetUp: true, cells: cellCount, rechargeMinute: state.rechargeMinute)))
-    // The monitor extension asks for a redraw at every checkpoint. This is the fallback
-    // for when that does not happen: an hourly look, well inside the widget's daily allowance.
-    let fallback = min(recharge.addingTimeInterval(60), now.addingTimeInterval(60 * 60))
+    // The monitor extension asks for a redraw at every checkpoint, and the app does whenever
+    // it is opened. This is the fallback for when neither happens: a look every quarter of an
+    // hour. iOS grants a widget only so many of these a day, so some will come later than asked.
+    let fallback = min(recharge.addingTimeInterval(60), now.addingTimeInterval(15 * 60))
     completion(Timeline(entries: entries, policy: .after(fallback)))
   }
 }

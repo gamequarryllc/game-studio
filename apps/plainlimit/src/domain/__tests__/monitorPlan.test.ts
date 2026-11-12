@@ -4,8 +4,8 @@ import {
   ACTIVITY,
   ALLOWED_ID,
   COUNTED_ID,
+  SHORTEST_WATCH_MINUTES,
   TOPUP_ACTIVITY,
-  TOPUP_EVENT,
   WIDGET_PLAN_KEY,
   clockOf,
   countStart,
@@ -14,6 +14,7 @@ import {
   puzzleNotice,
   rgbOf,
   spanOf,
+  topUpWindow,
 } from '../monitorPlan';
 import { DEFAULT_SETTINGS } from '../settings';
 import { toneForCells } from '../tone';
@@ -50,7 +51,7 @@ describe('the plan handed to the phone', () => {
 
   test('names are safe for the library, which splits its records on "_"', () => {
     const plan = monitorPlan(settings());
-    for (const name of [ACTIVITY, TOPUP_ACTIVITY, TOPUP_EVENT, COUNTED_ID, ALLOWED_ID, ...plan.events.map((e) => e.name)]) expect(name).not.toContain('_');
+    for (const name of [ACTIVITY, TOPUP_ACTIVITY, COUNTED_ID, ALLOWED_ID, ...plan.events.map((e) => e.name)]) expect(name).not.toContain('_');
   });
 
   test('the last cell brings the warning screen, the end brings the empty one, nothing else covers', () => {
@@ -104,6 +105,28 @@ describe('the plan handed to the phone', () => {
     expect(countStart(recharge, null).getTime()).toBe(recharge.getTime());
     expect(monitorPlan(settings(), 0, turnedOn).widget.countFrom).toBe(turnedOn);
     expect(monitorPlan(settings()).widget.countFrom).toBe(0);
+  });
+
+  test('earned time ends at a time on the clock, and the phone is given a stretch it will accept', () => {
+    const solved = new Date(2026, 10, 11, 19, 18, 20);
+    const minutesBetween = (w: ReturnType<typeof topUpWindow>) => {
+      const s = w.start.hour * 3600 + w.start.minute * 60 + w.start.second;
+      const e = w.end.hour * 3600 + w.end.minute * 60 + w.end.second;
+      return (((e - s) % 86400) + 86400) % 86400 / 60;
+    };
+    // Fifteen minutes: the stretch ends exactly when the earned time does.
+    const first = topUpWindow(solved, new Date(solved.getTime() + 15 * 60_000));
+    expect(first.end).toEqual({ hour: 19, minute: 33, second: 20 });
+    expect(minutesBetween(first)).toBeGreaterThanOrEqual(SHORTEST_WATCH_MINUTES);
+    // Ten and five minutes: same exact end, with the start pushed into the past.
+    for (const earned of [10, 5]) {
+      const w = topUpWindow(solved, new Date(solved.getTime() + earned * 60_000));
+      expect(w.end).toEqual({ hour: 19, minute: 18 + earned, second: 20 });
+      expect(minutesBetween(w)).toBeGreaterThanOrEqual(SHORTEST_WATCH_MINUTES);
+    }
+    // Across midnight.
+    const late = new Date(2026, 10, 11, 23, 55, 0);
+    expect(topUpWindow(late, new Date(late.getTime() + 10 * 60_000)).end).toEqual({ hour: 0, minute: 5, second: 0 });
   });
 
   test('colours are whole numbers from 0 to 255', () => {

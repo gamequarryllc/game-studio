@@ -14,8 +14,8 @@ import type { Settings } from './types';
 export const ACTIVITY = 'plday';
 /** The monitoring that covers earned extra time. */
 export const TOPUP_ACTIVITY = 'pltop';
-/** The one checkpoint inside earned extra time. */
-export const TOPUP_EVENT = 'again';
+/** The shortest stretch of time the phone will agree to watch. */
+export const SHORTEST_WATCH_MINUTES = 15;
 /** Apple's picker stores the person's picks under these names; the app never sees the apps themselves. */
 export const COUNTED_ID = 'counted';
 export const ALLOWED_ID = 'allowed';
@@ -77,6 +77,29 @@ export interface MonitorPlan {
   coverEverything: boolean;
   /** For the widget. */
   widget: { goalMinutes: number; rechargeMinute: number; countFrom: number };
+}
+
+export interface ClockToTheSecond {
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function toTheSecond(at: Date): ClockToTheSecond {
+  return { hour: at.getHours(), minute: at.getMinutes(), second: at.getSeconds() };
+}
+
+/**
+ * Earned time runs to a time on the clock, and the apps are covered again at
+ * that moment whether or not they were used. The phone is asked to watch a
+ * stretch that ends exactly then. It refuses stretches shorter than a quarter
+ * of an hour, so for ten or five earned minutes the stretch is given a start
+ * in the past; only its end matters.
+ */
+export function topUpWindow(now: Date, until: Date): { start: ClockToTheSecond; end: ClockToTheSecond } {
+  const shortest = SHORTEST_WATCH_MINUTES * 60_000 + 30_000;
+  const start = new Date(Math.min(now.getTime(), until.getTime() - shortest));
+  return { start: toTheSecond(start), end: toTheSecond(until) };
 }
 
 export function clockOf(minuteOfDay: number): Clock {

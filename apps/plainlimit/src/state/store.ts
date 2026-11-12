@@ -1,8 +1,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { AppState } from 'react-native';
 
 import { cellsLeft } from '@/domain/battery';
-import { freshDoc, grantTopUp, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
-import { topUpPlan } from '@/domain/puzzle';
+import { freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
 import { stepGoal, stepRecharge, withAllowed, withoutAllowed } from '@/domain/settings';
 import type { CountMode, Doc, EmptyLevel, Settings } from '@/domain/types';
 import * as screenTime from '@/platform/screenTime';
@@ -52,6 +52,19 @@ function withRealUse(doc: Doc, day: Doc['day']): Doc['day'] {
   return { ...day, usedMinutes: used };
 }
 
+// Earned time ends at a time on the clock. The phone is asked to cover the apps
+// again at that moment; if the app is open and sees the moment has passed, it
+// does so itself, once, in case the phone's timer did not fire.
+let coveredAfter: string | null = null;
+function coverWhenEarnedTimeIsUp(doc: Doc, now: Date) {
+  const { day, settings } = doc;
+  if (!screenTime.isOn() || settings.emptyLevel !== 'work' || day.unlockedUntil === null) return;
+  if (isUnlocked(day, now) || coveredAfter === day.unlockedUntil) return;
+  if (cellsLeft(day.usedMinutes, settings.goalMinutes) !== 0) return;
+  coveredAfter = day.unlockedUntil;
+  screenTime.coverEmptyNow(settings, day.topUps);
+}
+
 function withSettings(change: (s: Settings) => Settings) {
   if (settingsLocked()) return;
   const settings = change(snapshot.doc.settings);
@@ -76,12 +89,22 @@ export const store = {
     const doc = repairDoc(await readSaved(), new Date());
     set({ ...doc, day: withRealUse(doc, doc.day) }, false);
     screenTime.onCheckpoint(() => store.tick(new Date()));
+    // Coming back to the app is a free moment to bring the battery and the widget up to date.
+    AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      store.tick(new Date());
+      if (screenTime.isOn()) screenTime.reloadWidget();
+    });
   },
   /** Called as time passes: starts a fresh battery once the recharge time has gone by. */
   tick(now: Date) {
     if (snapshot.state !== 'ready') return;
+    coverWhenEarnedTimeIsUp(snapshot.doc, now);
     const day = withRealUse(snapshot.doc, rollOver(snapshot.doc.day, now, snapshot.doc.settings.rechargeMinute));
-    if (day !== snapshot.doc.day) set({ ...snapshot.doc, day });
+    if (day === snapshot.doc.day) return;
+    set({ ...snapshot.doc, day });
+    // The app has just learned something the widget may not have drawn yet.
+    if (screenTime.isOn()) screenTime.reloadWidget();
   },
   /**
    * Asks for Screen Time access and, once given, registers the day with the
@@ -146,10 +169,9 @@ export const store = {
   /** The puzzle was solved: start (or extend) the earned time. */
   earnTopUp() {
     const now = new Date();
-    const earned = topUpPlan(snapshot.doc.day.topUps);
     const day = grantTopUp(snapshot.doc.day, now, snapshot.doc.settings.rechargeMinute);
     set({ ...snapshot.doc, day });
-    void screenTime.grantExtraTime(earned.minutes, snapshot.doc.settings, day.topUps, now);
+    if (day.unlockedUntil) void screenTime.grantExtraTime(new Date(day.unlockedUntil), snapshot.doc.settings, day.topUps, now);
   },
 };
 

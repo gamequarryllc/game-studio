@@ -3,8 +3,8 @@ import { Text } from 'react-native';
 
 import { clockLabel } from '@/domain/day';
 import { askToNotify } from '@/platform/notices';
-import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, permission } from '@/platform/screenTime';
-import { settingsLocked, store, useDoc } from '@/state/store';
+import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, diagnostics, isOn, permission } from '@/platform/screenTime';
+import { settingsLocked, store, useDoc, useNow } from '@/state/store';
 import { BigButton, Card, Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
@@ -15,6 +15,8 @@ import { c } from '@/ui/theme';
  */
 export function ScreenTimeCard() {
   const { settings } = useDoc();
+  // Keeps the test build's readout fresh.
+  useNow();
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (!SCREEN_TIME_AVAILABLE) return null;
@@ -48,6 +50,9 @@ export function ScreenTimeCard() {
             <Text style={[body, { color: c.ink3, marginTop: 6 }]}>Test build only: these two are not in the App Store version.</Text>
             <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
             {settingsLocked() ? <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} /> : null}
+            <Text selectable style={{ fontSize: 12, lineHeight: 17, color: c.ink3, marginTop: 4 }}>
+              {diagnostics().join('\n')}
+            </Text>
           </>
         ) : null}
       </Card>

@@ -10,13 +10,12 @@ import {
   ALLOWED_ID,
   COUNTED_ID,
   TOPUP_ACTIVITY,
-  TOPUP_EVENT,
   WIDGET_PLAN_KEY,
   countStart,
   includesEarlierUse,
   monitorPlan,
   puzzleNotice,
-  spanOf,
+  topUpWindow,
   type ButtonEffect,
   type PlanAction,
   type PlanShield,
@@ -131,7 +130,7 @@ function buttonAction(effect: ButtonEffect, topUpsSoFar: number): ShieldAction {
   return { behavior: 'close', actions: [] };
 }
 
-function writeShield(shield: PlanShield, topUpsSoFar: number) {
+function shieldParts(shield: PlanShield, topUpsSoFar: number): { look: ShieldConfiguration; buttons: ShieldActions } {
   const look: ShieldConfiguration = {
     title: shield.copy.title,
     subtitle: shield.copy.line,
@@ -148,6 +147,11 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
   if (shield.copy.secondary && shield.secondary) look.secondaryButtonLabel = shield.copy.secondary;
   const buttons: ShieldActions = { primary: buttonAction(shield.primary, topUpsSoFar) };
   if (shield.copy.secondary && shield.secondary) buttons.secondary = buttonAction(shield.secondary, topUpsSoFar);
+  return { look, buttons };
+}
+
+function writeShield(shield: PlanShield, topUpsSoFar: number) {
+  const { look, buttons } = shieldParts(shield, topUpsSoFar);
   DeviceActivity.updateShieldWithId(look, buttons, shield.id);
 }
 
@@ -247,6 +251,37 @@ export function usedSoFar(goalMinutes: number, periodStart: Date): number | null
   }
 }
 
+function timeOf(ms: unknown): string {
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return 'never';
+  const at = new Date(ms);
+  return `${at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`;
+}
+
+/**
+ * Test builds only: what the phone, the monitor extension and the widget have
+ * each recorded, as plain lines for Settings. It is how a screenshot from a
+ * real phone says which link in the chain is not working.
+ */
+export function diagnostics(): string[] {
+  if (!SCREEN_TIME_AVAILABLE) return [];
+  try {
+    const lines: string[] = [];
+    lines.push(`Counting since: ${timeOf(countingSince())}`);
+    lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
+    const reported = DeviceActivity.getEvents()
+      .filter((e) => e.activityName === ACTIVITY || e.activityName === TOPUP_ACTIVITY)
+      .map((e) => `${e.eventName ?? e.callbackName}: ${timeOf(e.lastCalledAt.getTime())}`);
+    lines.push(reported.length ? `Reported by the phone:\n  ${reported.join('\n  ')}` : 'Reported by the phone: nothing yet');
+    lines.push(`Monitor asked for a widget redraw: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_reload_asked'))}`);
+    const cells = DeviceActivity.userDefaultsGet<number>('plainlimit_widget_cells');
+    lines.push(`Widget last drew: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_widget_drew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
+    lines.push(`Picked: ${pickCount(COUNTED_ID)} counted, ${pickCount(ALLOWED_ID)} always allowed`);
+    return lines;
+  } catch (error) {
+    return [`Could not read: ${String(error)}`];
+  }
+}
+
 /** Calls back whenever the phone reports a checkpoint while the app is open. */
 export function onCheckpoint(listener: () => void): () => void {
   if (!SCREEN_TIME_AVAILABLE) return () => {};
@@ -255,12 +290,12 @@ export function onCheckpoint(listener: () => void): () => void {
 }
 
 /**
- * The sums were solved: uncover the apps, and ask the phone to cover them
- * again after this many more minutes of use. Close to the recharge time the
- * phone cannot schedule that (it needs at least a quarter of an hour), so the
- * apps simply stay open until the battery is full again.
+ * The sums were solved: uncover the apps now, and have the phone cover them
+ * again at `until`, by the clock, however much or little they are used in
+ * between. If that is at or past the recharge, the day's own ending takes
+ * over and nothing more is scheduled.
  */
-export async function grantExtraTime(minutes: number, settings: Settings, topUpsAfter: number, now: Date): Promise<void> {
+export async function grantExtraTime(until: Date, settings: Settings, topUpsAfter: number, now: Date): Promise<void> {
   if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return;
   try {
     DeviceActivity.disableBlockAllMode('plainlimit');
@@ -270,22 +305,36 @@ export async function grantExtraTime(minutes: number, settings: Settings, topUps
     const empty = plan.shields.find((s) => s.id === 'empty');
     if (empty) writeShield(empty, topUpsAfter);
 
-    const end = new Date(nextRecharge(now, settings.rechargeMinute).getTime() - 60_000);
-    if (end.getTime() - now.getTime() < 16 * 60_000) return;
+    DeviceActivity.stopMonitoring([TOPUP_ACTIVITY]);
+    const dayEnds = nextRecharge(now, settings.rechargeMinute).getTime() - 60_000;
+    if (until.getTime() >= dayEnds || until.getTime() <= now.getTime()) return;
 
-    DeviceActivity.configureActions({
-      activityName: TOPUP_ACTIVITY,
-      callbackName: 'eventDidReachThreshold',
-      eventName: TOPUP_EVENT,
-      actions: [coverAction('empty', plan.coverEverything)],
-    });
-    await DeviceActivity.startMonitoring(
-      TOPUP_ACTIVITY,
-      { intervalStart: { hour: now.getHours(), minute: now.getMinutes(), second: now.getSeconds() }, intervalEnd: { hour: end.getHours(), minute: end.getMinutes() }, repeats: false },
-      [{ eventName: TOPUP_EVENT, familyActivitySelection: countedToken(settings), threshold: spanOf(minutes) }],
-    );
+    DeviceActivity.configureActions({ activityName: TOPUP_ACTIVITY, callbackName: 'intervalDidEnd', actions: [coverAction('empty', plan.coverEverything)] });
+    const window = topUpWindow(now, until);
+    await DeviceActivity.startMonitoring(TOPUP_ACTIVITY, { intervalStart: window.start, intervalEnd: window.end, repeats: false }, []);
   } catch {
-    // The apps are uncovered; the worst case is that they stay so until the recharge.
+    // The apps are uncovered; the app covers them again itself the next time it is opened after `until`.
+  }
+}
+
+/**
+ * Covers the counted apps with the empty screen, now. The app calls this when
+ * it is open and sees that earned time has run out, in case the phone's own
+ * timer for it did not fire.
+ */
+export function coverEmptyNow(settings: Settings, topUpsSoFar: number) {
+  if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return;
+  try {
+    const plan = monitorPlan(settings, topUpsSoFar, countingSince());
+    const empty = plan.shields.find((s) => s.id === 'empty');
+    if (!empty) return;
+    const { look, buttons } = shieldParts(empty, topUpsSoFar);
+    DeviceActivity.updateShieldWithId(look, buttons, empty.id);
+    DeviceActivity.updateShield(look, buttons, 'plainlimit');
+    if (plan.coverEverything) DeviceActivity.enableBlockAllMode('plainlimit');
+    else DeviceActivity.blockSelection({ activitySelectionId: COUNTED_ID }, 'plainlimit');
+  } catch {
+    // Nothing more to do.
   }
 }
 
