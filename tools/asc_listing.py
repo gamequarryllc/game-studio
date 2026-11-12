@@ -354,7 +354,8 @@ class Run:
 
     def version(self):
         versions = self.c.get(f"/v1/apps/{self.app}/appStoreVersions", **{"filter[platform]": "IOS", "limit": 20})["data"]
-        open_states = ("PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY")
+        # READY_FOR_REVIEW: added to a draft submission that has not been sent; still the owner's to change.
+        open_states = ("PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY")
         ver = next(v for v in versions if (v["attributes"].get("appVersionState") or v["attributes"].get("appStoreState")) in open_states)
         self.ver = ver["id"]
         a = ver["attributes"]
