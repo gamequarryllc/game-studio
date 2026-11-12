@@ -1,0 +1,53 @@
+name: Request a TestFlight build
+
+# Starts "iOS app build" in testflight mode for an app when its request file
+# (apps/<app>/testflight-request.json) is added or changed on main. This is the
+# same build the "Run workflow" button starts; it exists so that a build can be
+# asked for with a commit, when nobody is at a browser to press the button.
+#
+# The request file says which version and flavor to build:
+#   { "version": "1.0.0", "flavor": "playtest", "request": 1 }
+# Change "request" (any new number) to ask again with the same settings.
+#
+# Like the button, this only uploads to TestFlight. Nothing here submits an app
+# for review. Only people who can push to main can change a request file.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/*/testflight-request.json"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Start a build for each request that changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then BEFORE="$(git rev-parse HEAD~1)"; fi
+          changed="$(git diff --name-only --diff-filter=AM "$BEFORE" "$GITHUB_SHA" -- 'apps/*/testflight-request.json')"
+          [ -n "$changed" ] || { echo "No request file changed."; exit 0; }
+          for file in $changed; do
+            app="$(echo "$file" | cut -d/ -f2)"
+            case "$app" in *[!a-z0-9-]*|"") echo "::error::Bad app name in $file"; exit 1;; esac
+            [ -f "apps/$app/app.json" ] || { echo "::error::No app at apps/$app"; exit 1; }
+            version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("version", "1.0.0"))' "$file")"
+            flavor="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("flavor", "playtest"))' "$file")"
+            echo "$version" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$' || { echo "::error::Version must look like 1.0.0"; exit 1; }
+            case "$flavor" in playtest|release) ;; *) echo "::error::Flavor must be playtest or release"; exit 1;; esac
+            echo "Asking for a TestFlight build of $app $version ($flavor)"
+            gh workflow run ios-app.yml --repo "$GITHUB_REPOSITORY" --ref main -f app="$app" -f mode=testflight -f flavor="$flavor" -f version="$version"
+          done

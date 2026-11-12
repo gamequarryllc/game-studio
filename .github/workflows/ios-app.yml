@@ -6,7 +6,8 @@ name: iOS app build
 #               packages for iPhone. Runs for every app when the pipeline or an app's
 #               native settings change, and on request for one app.
 #   testflight  Signs with the owner's App Store Connect API key and uploads the build
-#               to TestFlight. Only ever started by hand (Actions > iOS app build > Run workflow).
+#               to TestFlight. Started by hand (Actions > iOS app build > Run workflow), or by
+#               changing an app's testflight-request.json (see testflight-request.yml).
 #
 # The Xcode project is written fresh each time by `expo prebuild` (tools/ios_app_build.sh);
 # nothing native is kept in the repo.
