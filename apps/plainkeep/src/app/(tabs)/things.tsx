@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { dueText } from '@/domain/labels';
 import { FREE_THING_LIMIT } from '@/domain/limits';
@@ -29,9 +29,11 @@ function ThingTag({ thing, jobs, onPress }: { thing: Thing; jobs: Listed[]; onPr
   const coming = live.filter((j) => j.due.state === 'today' || j.due.state === 'soon').length;
   const unlogged = live.filter((j) => j.due.state === 'unlogged').length;
   const quiet = jobs.length === 0 ? 'No jobs yet' : live.length === 0 ? 'Everything is paused' : overdue + coming > 0 ? null : unlogged === live.length ? `${unlogged} not logged yet` : 'Nothing due soon';
-  const under = next ? (next.due.state === 'unlogged' ? `${next.job.name} and the rest need a first date` : `${next.job.name}: ${dueText(next.due, unit, today).replace(/^Due /, '')}`) : jobs.length === 0 ? 'Add the jobs that repeat' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'}`;
+  const under = next ? (next.due.state === 'unlogged' ? (unlogged > 1 ? `${next.job.name} and ${unlogged - 1} more: when were they last done?` : `${next.job.name}: when was it last done?`) : `${next.job.name}: ${dueText(next.due, unit, today).replace(/^Due /, '')}`) : jobs.length === 0 ? 'Add the jobs that repeat' : `${jobs.length} ${jobs.length === 1 ? 'job' : 'jobs'}`;
   const spoken = quiet ?? [overdue > 0 ? `${overdue} overdue` : null, coming > 0 ? `${coming} coming up` : null].filter(Boolean).join(', ');
   const reading = thing.kind === 'vehicle' ? currentReading(thing) : null;
+  // On a narrow phone the odometer goes under the words, so "overdue" is never the word that is cut.
+  const narrow = useWindowDimensions().width < 360;
   return (
     <Pressable
       testID={`thing-${thing.id}`}
@@ -56,10 +58,10 @@ function ThingTag({ thing, jobs, onPress }: { thing: Thing; jobs: Listed[]; onPr
         </View>
         <Icon name="chevron" size={14} color={c.ink3} />
       </View>
-      <View style={[styles.foot, { borderTopColor: c.rule }]}>
-        <View style={{ flex: 1, minWidth: 0 }}>
+      <View style={[styles.foot, narrow ? styles.footNarrow : null, { borderTopColor: c.rule }]}>
+        <View style={narrow ? null : { flex: 1, minWidth: 0 }}>
         {/* Each count in its own colour: red is only ever what is overdue. */}
-        <Text testID={`thing-status-${thing.id}`} style={[type.subhead, { fontWeight: '600', color: tone === 'blue' ? c.blue : c.ink2 }]} numberOfLines={1}>
+        <Text testID={`thing-status-${thing.id}`} style={[type.subhead, { fontWeight: '600', color: tone === 'blue' ? c.blue : c.ink2 }]} numberOfLines={2}>
           {quiet ?? (
             <>
               {overdue > 0 ? <Text style={{ color: c.red }}>{overdue} overdue</Text> : null}
@@ -116,4 +118,5 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingTop: space.l, paddingBottom: space.m, paddingRight: space.l + 4 },
   name: { fontFamily: plate.semibold, fontSize: 26, lineHeight: 31, letterSpacing: 0.2 },
   foot: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: space.m, borderTopWidth: HAIRLINE },
+  footNarrow: { flexDirection: 'column', alignItems: 'flex-start', gap: space.s },
 });

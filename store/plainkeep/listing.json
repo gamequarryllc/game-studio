@@ -22,7 +22,7 @@
       },
       {
         "q": "Why am I not getting reminders?",
-        "a": "Open the Settings tab and check that Remind me is on. If the app says notifications are switched off, allow them in the iPhone's Settings app, under Plainkeep. Upcoming reminders, in the same group, lists exactly what the iPhone has waiting."
+        "a": "Open the Settings tab and check that Reminders is on. If the app says notifications are switched off, allow them in the iPhone's Settings app, under Plainkeep. Upcoming reminders, in the same group, lists exactly what the iPhone has waiting."
       },
       {
         "q": "How does a mileage job know when it is due?",
@@ -71,5 +71,5 @@
   "screenshot_display_type": "APP_IPHONE_67",
   "leave_out_eu": true,
   "leave_out_eu_note": "The owner left the EU out for the studio's first game and for Plainproof instead of declaring trader status under the Digital Services Act; the same choice is made here until he says otherwise.",
-  "review_notes": "Plainkeep is a maintenance log for a home and a car. There is no account and no sign-in, and the app makes no network calls of its own: everything a person enters stays on the iPhone.\n\nReminders are local notifications scheduled on the device; the app does not use push notifications. The notification permission is asked for only when a person turns reminders on (the Due tab's notice, or Settings > Remind me).\n\nThe one in-app purchase is Plainkeep Pro (non-consumable, com.gamequarry.plainkeep.pro). To see it: open the Settings tab and tap Plainkeep Pro. It also opens when the + button on the Things tab is tapped with two things already added, or when the service record is tapped on a thing's screen. Pro allows more than two things and makes a PDF service record. Restore purchase is on the Pro screen and in Settings.\n\nThe PDF, the spreadsheet and the backup file are made on the device and handed to the share sheet."
+  "review_notes": "Plainkeep is a maintenance log for a home and a car. There is no account and no sign-in, and the app makes no network calls of its own: everything a person enters stays on the iPhone.\n\nReminders are local notifications scheduled on the device; the app does not use push notifications. The notification permission is asked for only when a person turns reminders on (the Due tab's notice, or Settings > Reminders).\n\nThe one in-app purchase is Plainkeep Pro (non-consumable, com.gamequarry.plainkeep.pro). To see it: open the Settings tab and tap Plainkeep Pro. It also opens when the + button on the Things tab is tapped with two things already added, or when the service record is tapped on a thing's screen. Pro allows more than two things and makes a PDF service record. Restore purchase is on the Pro screen and in Settings.\n\nThe PDF, the spreadsheet and the backup file are made on the device and handed to the share sheet."
 }

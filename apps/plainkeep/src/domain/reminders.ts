@@ -29,11 +29,15 @@ export interface Planned {
   jobId: string | null;
   /** The thing to open (for an odometer nudge). */
   thingId: string | null;
+  /** For several jobs in one reminder: which jobs. */
+  jobIds?: string[];
 }
 
 interface Single extends Planned {
   what: string;
   where: string;
+  /** How the job stands, in a few words, for when it shares a reminder. */
+  when: string;
 }
 
 function whenWords(dueYmd: Ymd, onYmd: Ymd, today: Ymd): string {
@@ -55,7 +59,7 @@ export function planReminders(doc: Doc, now: number): Planned[] {
   for (const { job, thing, due } of listJobs(doc, today)) {
     if (due.state === 'paused' || due.state === 'finished' || due.whenYmd === null) continue;
     const dueYmd = due.whenYmd;
-    const common = { title: job.name, jobId: job.id, thingId: thing.id, what: job.name, where: thing.name };
+    const common = { title: job.name, jobId: job.id, thingId: thing.id, what: job.name, where: thing.name, when: 'not logged yet' };
     if (due.state === 'unlogged') {
       // Nobody knows when it was last done: one nudge to look, one more, and no countdown.
       for (const day of [dueYmd, addDays(dueYmd, FOLLOW_UP_DAYS[1])]) {
@@ -80,7 +84,8 @@ export function planReminders(doc: Doc, now: number): Planned[] {
         : kind === 'day'
           ? `${thing.name} · should be due about now. What does the odometer say?`
           : `${thing.name} · should be due around ${shortYmd(dueYmd, today)}, going by the odometer`;
-      singles.push({ ...common, kind, key: `job:${job.id}:${day}`, fireAt, body });
+      const when = estimated ? (kind === 'day' ? 'due about now' : `due around ${shortYmd(dueYmd, today)}`) : whenWords(dueYmd, day, today).replace(/, on .*$/, '');
+      singles.push({ ...common, kind, key: `job:${job.id}:${day}`, fireAt, body, when });
     }
   }
 
@@ -101,6 +106,7 @@ export function planReminders(doc: Doc, now: number): Planned[] {
       thingId: thing.id,
       what: '',
       where: thing.name,
+      when: '',
     });
   }
 
@@ -112,25 +118,29 @@ export function planReminders(doc: Doc, now: number): Planned[] {
     list.push(s);
     byTime.set(s.fireAt, list);
   }
-  const planned: Planned[] = singles.filter((s) => !s.key.startsWith('job:')).map(({ what: _w, where: _p, ...rest }) => rest);
+  const planned: Planned[] = singles.filter((s) => !s.key.startsWith('job:')).map(({ what: _w, where: _p, when: _n, ...rest }) => rest);
   for (const [fireAt, list] of byTime) {
     if (list.length === 1) {
-      const { what: _w, where: _p, ...rest } = list[0];
+      const { what: _w, where: _p, when: _n, ...rest } = list[0];
       planned.push(rest);
       continue;
     }
-    // Two things can have a job of the same name: say whose each is.
-    const names = list.map((s) => `${s.what} (${s.where})`);
+    // Two things can have a job of the same name: say whose each is. When they all stand the same the title says
+    // how; otherwise each says how it stands, since one may be overdue and the next a month off.
+    const unlogged = list.every((s) => s.kind === 'check');
+    const alike = list.every((s) => s.when === list[0].when);
+    const names = list.map((s) => (alike ? `${s.what} (${s.where})` : `${s.what} (${s.where}, ${s.when})`));
     const shown = names.slice(0, 3).join(', ');
     planned.push({
       kind: 'several',
       key: `group:${fireAt}`,
       fireAt,
       // A batch of jobs nobody has logged (a home just set up) asks its own question.
-      title: list.every((s) => s.kind === 'check') ? `${list.length} jobs aren’t logged yet` : `${list.length} jobs need a look`,
+      title: unlogged ? `${list.length} jobs aren’t logged yet` : alike ? `${list.length} jobs ${list[0].when}` : `${list.length} jobs need a look`,
       body: names.length > 3 ? `${shown} and ${names.length - 3} more` : shown,
       jobId: null,
       thingId: null,
+      jobIds: list.map((s) => s.jobId).filter((id): id is string => id !== null),
     });
   }
 

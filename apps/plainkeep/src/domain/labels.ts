@@ -107,7 +107,11 @@ export function intervalText(every: Interval): string {
 export function repeatText(job: Job, unit: DistanceUnit): string {
   const time = job.every ? intervalText(job.every) : null;
   const dist = job.everyDistance !== null ? `Every ${distanceText(job.everyDistance, unit)}` : null;
-  if (time && dist) return `${dist} or ${time.replace(/^Every /, '')}`;
+  if (time && dist) {
+    // "Every 15,000 mi or 1 year", not "or year".
+    const rest = time.replace(/^Every /, '');
+    return `${dist} or ${/^\d/.test(rest) ? rest : `1 ${rest}`}`;
+  }
   if (time) {
     if (job.anchor === 'fixed' && job.startYmd && job.every && job.every.unit === 'year' && job.every.n === 1) {
       return `Every year on ${monthName(job.startYmd)} ${dayOfMonth(job.startYmd)}`;

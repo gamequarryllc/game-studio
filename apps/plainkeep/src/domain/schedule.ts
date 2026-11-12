@@ -261,7 +261,7 @@ export function listJobs(doc: Pick<Doc, 'things' | 'jobs' | 'entries'>, today: Y
     if (s !== 0) return s;
     const u = urgency(a.due, today) - urgency(b.due, today);
     if (u !== 0) return u;
-    return a.job.name.localeCompare(b.job.name);
+    return a.job.name.localeCompare(b.job.name, undefined, { numeric: true });
   });
 }
 

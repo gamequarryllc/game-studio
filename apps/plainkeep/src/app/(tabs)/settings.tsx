@@ -133,7 +133,7 @@ export default function SettingsTab() {
           testID="pro-row"
           leading={<IconPlate name="key" size={36} />}
           title="Plainkeep Pro"
-          subtitle={proState.isPro ? 'Unlocked. Look after as many things as you have.' : `${Math.min(count, FREE_THING_LIMIT)} of ${FREE_THING_LIMIT} free things used`}
+          subtitle={proState.isPro ? 'Unlocked. Look after as many things as you have.' : count > FREE_THING_LIMIT ? `${count} things. Free covers ${FREE_THING_LIMIT}; all of them keep working.` : `${count} of ${FREE_THING_LIMIT} free things used`}
           chevron
           onPress={() => router.push('/pro')}
         />

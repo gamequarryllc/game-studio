@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { setSettings } from '@/domain/actions';
@@ -12,6 +12,8 @@ import { NO_ORPHAN, space, type, useTheme } from '@/ui/theme';
 export default function Welcome() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
+  // On a short phone the picture goes, so the three buttons are on the first screen.
+  const short = useWindowDimensions().height < 620;
   const router = useRouter();
 
   const begin = (kind: ThingKind | null) => {
@@ -25,18 +27,20 @@ export default function Welcome() {
       testID="welcome-screen"
       style={{ flex: 1, backgroundColor: c.page }}
       contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + space.xxl, paddingBottom: insets.bottom + space.xl, paddingHorizontal: space.xxl }}>
-      <View style={{ flex: 1, justifyContent: 'center', minHeight: 420 }}>
-        <View style={{ marginLeft: -66 }}>
-          <TagArt width={250} />
-        </View>
-        <Text accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, marginTop: space.xl, fontSize: 44, lineHeight: 50 }]}>
+      <View style={{ flex: 1, justifyContent: 'center', minHeight: short ? 0 : 420 }}>
+        {short ? null : (
+          <View style={{ marginLeft: -66 }}>
+            <TagArt width={250} />
+          </View>
+        )}
+        <Text accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, marginTop: space.xl, fontSize: short ? 36 : 44, lineHeight: short ? 41 : 50 }]}>
           Know what’s due on the house and the car.
         </Text>
         <Text style={[type.body, { color: c.ink2, marginTop: space.m }]}>
           Filters, batteries, oil changes, registrations. Plainkeep remembers when each was last done and reminds you before it’s due again.
         </Text>
       </View>
-      <View style={{ gap: space.s, marginTop: space.xxl }}>
+      <View style={{ gap: space.s, marginTop: short ? space.l : space.xxl }}>
         <Button testID="welcome-home" label="Start with a home" onPress={() => begin('home')} />
         <Button testID="welcome-car" label="Start with a car" kind="soft" onPress={() => begin('vehicle')} />
         <Button testID="welcome-skip" label="Look around first" kind="plain" onPress={() => begin(null)} />

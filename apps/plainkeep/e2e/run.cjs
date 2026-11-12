@@ -20,7 +20,7 @@ const { chromium } = require('playwright');
 
 const { listen } = require('./serve.cjs');
 
-const SHOTS = process.env.SHOTS_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'plainkeep-shots-'));
+const SHOTS = process.env.SHOTS_DIR || path.join(os.tmpdir(), 'plainkeep-shots');
 fs.mkdirSync(SHOTS, { recursive: true });
 const PHONE = { width: 393, height: 852 };
 const SMALL = { width: 320, height: 568 };
@@ -41,7 +41,7 @@ function watch(page, label) {
 async function newPhone(browser, opts = {}) {
   const context = await browser.newContext({
     viewport: opts.viewport || PHONE,
-    deviceScaleFactor: 2,
+    deviceScaleFactor: opts.scale || 2,
     isMobile: true,
     hasTouch: true,
     userAgent: UA,
@@ -216,7 +216,7 @@ async function main() {
       await h.t('section-unlogged').waitFor();
       assert.strictEqual(await h.t('section-soon').count(), 0);
       const alarms = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Test smoke and CO alarms' }).first();
-      assert.match(await alarms.innerText(), /Home ·\sEvery\smonth/);
+      assert.match(await alarms.innerText(), /Home\s+· Every\smonth/);
       assert.doesNotMatch(await alarms.innerText(), /weeks|days/);
       await h.shot('06-due-new-home', { tall: 1300 });
     });
@@ -394,7 +394,7 @@ async function main() {
       await h.tap('coming');
       await h.t('coming-screen').waitFor();
       await h.t('coming-web-note').waitFor();
-      await h.sees('The next reminder for each job. Each arrives at 9:00 AM');
+      await h.sees('What arrives next, at 9:00 AM.');
       // One line a job: the follow-ups are not listed one by one.
       const titles = await h.rows('planned-').evaluateAll((els) => els.map((e) => e.innerText.split('\n')[1]));
       assert.strictEqual(new Set(titles).size, titles.length, `a job is listed twice: ${titles.join(' | ')}`);
@@ -406,7 +406,7 @@ async function main() {
       await h.choice('14');
       await h.fill('remind-time', '18:30');
       await h.tap('coming');
-      await h.sees('Each arrives at 6:30 PM');
+      await h.sees('What arrives next, at 6:30 PM.');
       await h.back();
       await h.tap('reminders-switch');
       await h.tap('reminders-switch');
@@ -796,8 +796,12 @@ async function main() {
   console.log(`\nAll ${stepCount} steps passed with no console errors. Screenshots: ${SHOTS}`);
 }
 
-main().catch((e) => {
-  if (problems.length > 0) console.log(`\n${problems.length} problem(s):\n  ${problems.join('\n  ')}`);
-  else console.error(e);
-  process.exit(1);
-});
+module.exports = { helpers, newPhone, start, problems, UA, NOW };
+
+if (require.main === module) {
+  main().catch((e) => {
+    if (problems.length > 0) console.log(`\n${problems.length} problem(s):\n  ${problems.join('\n  ')}`);
+    else console.error(e);
+    process.exit(1);
+  });
+}

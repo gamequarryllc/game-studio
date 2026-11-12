@@ -24,12 +24,13 @@ export default function Coming() {
   }, [doc, allowed]);
 
   const blocked = DELIVERS && doc.settings.reminders && allowed === 'denied';
-  // One line for each job: its next reminder. The ones after it follow by themselves.
+  // The next reminder for each job. The ones after it follow by themselves.
   const seen = new Set<string>();
   const next = plan.filter((p) => {
-    const who = p.jobId ?? p.title;
-    if (seen.has(who)) return false;
-    seen.add(who);
+    // A shared reminder is listed when it brings at least one job not already above it.
+    const who = p.jobIds ?? [p.jobId ?? p.title];
+    if (who.every((id) => seen.has(id))) return false;
+    for (const id of who) seen.add(id);
     return true;
   });
   const clock = displayClock(doc.settings.remindHour, doc.settings.remindMinute);
@@ -46,7 +47,7 @@ export default function Coming() {
         blocked ? null : <EmptyState title="Nothing is waiting" body={doc.settings.reminders ? 'Reminders appear here as jobs get near their dates.' : 'Reminders are off. Turn them on in Settings.'} />
       ) : (
         <>
-          <Footnote style={{ marginTop: space.l }}>The next reminder for each job. Each arrives at {clock}; a job gets another on the day it is due, and two more if it slips.</Footnote>
+          <Footnote style={{ marginTop: space.l }}>What arrives next, at {clock}. Jobs due at the same time share one reminder. A job gets another on the day it is due, and two more if it slips.</Footnote>
           <Card style={{ marginTop: space.m }}>
             {next.map((p, i) => {
               const ymd = toYmd(new Date(p.fireAt));

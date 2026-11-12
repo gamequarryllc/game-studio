@@ -36,11 +36,11 @@ function EntryRow({ entry, thingName, showThing, onPress }: { entry: Entry; thin
         <Text style={[type.caption, { color: c.ink2 }]}>{monthAbbr(entry.ymd)}</Text>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[type.body, NO_ORPHAN, { color: entry.skipped ? c.ink2 : c.ink }]} numberOfLines={2} lineBreakStrategyIOS="push-out">
+        <Text style={[type.body, NO_ORPHAN, { color: entry.skipped ? c.ink2 : c.ink }]} numberOfLines={3} lineBreakStrategyIOS="push-out">
           {entry.title}
         </Text>
         {under ? (
-          <Text style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={1}>
+          <Text style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={2}>
             {under}
           </Text>
         ) : null}
@@ -50,7 +50,7 @@ function EntryRow({ entry, thingName, showThing, onPress }: { entry: Entry; thin
           </Text>
         ) : null}
       </View>
-      {entry.cost !== null ? <Text style={[type.body, type.tabular, { color: c.ink2 }]}>{formatMoney(entry.cost, doc.settings.currency)}</Text> : null}
+      {entry.cost !== null ? <Text style={[type.subhead, type.tabular, { color: c.ink2 }]}>{formatMoney(entry.cost, doc.settings.currency)}</Text> : null}
       <Icon name="chevron" size={13} color={c.ink3} />
     </Pressable>
   );

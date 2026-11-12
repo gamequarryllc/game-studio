@@ -30,15 +30,7 @@ export function Punch({ onPress, color, label, testID }: { onPress: () => void; 
   );
 }
 
-/** A thing's name, short enough to share a line with a date. */
-function shortName(name: string): string {
-  return name.length > 30 ? `${name.slice(0, 29).trimEnd()}…` : name;
-}
-
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
-
-/** Joined with non-breaking spaces, so a date or a reading wraps whole or not at all. */
-const solid = (text: string) => text.replace(/ /g, '\u00A0');
 
 export function JobRow({
   item,
@@ -81,10 +73,22 @@ export function JobRow({
           <Text style={[type.body, NO_ORPHAN, { color: quiet ? c.ink2 : c.ink }]} numberOfLines={3} lineBreakStrategyIOS="push-out">
             {job.name}
           </Text>
-          {/* One line that may run to two. A long name is shortened here, so the date or reading after it never is. */}
-          <Text testID={`where-${job.id}`} style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={2}>
-            {showThing ? `${shortName(thing.name)} ·\u00A0${solid(where)}` : capital(where)}
-          </Text>
+          {/* One line. A long name gives way, so the date or reading after it never does. */}
+          {showThing ? (
+            <View testID={`where-${job.id}`} style={styles.where}>
+              <Text style={[type.footnote, { color: c.ink2, flexShrink: 1 }]} numberOfLines={1}>
+                {thing.name}
+              </Text>
+              <Text style={[type.footnote, { color: c.ink2, flexShrink: 0, maxWidth: '86%' }]} numberOfLines={1}>
+                {'\u00A0· '}
+                {where}
+              </Text>
+            </View>
+          ) : (
+            <Text testID={`where-${job.id}`} style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={2}>
+              {capital(where)}
+            </Text>
+          )}
         </View>
         {readout ? (
           <View style={styles.readout}>
@@ -108,4 +112,5 @@ const styles = StyleSheet.create({
   punchSpace: { width: 26, height: 26 },
   body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.m, paddingRight: space.m, paddingVertical: 10 },
   readout: { alignItems: 'flex-end', marginLeft: 2 },
+  where: { flexDirection: 'row', alignItems: 'baseline', marginTop: 1 },
 });

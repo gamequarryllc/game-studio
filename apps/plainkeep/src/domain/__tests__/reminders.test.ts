@@ -120,7 +120,18 @@ describe('planning reminders', () => {
     }
     const plan = planReminders(doc, NOW);
     expect(plan).toHaveLength(4);
-    expect(plan[1]).toMatchObject({ title: '4 jobs need a look', body: 'Furnace filter (Home), Pest control (Home), Range hood filter (Home) and 1 more', jobId: null, kind: 'several' });
+    expect(plan[1]).toMatchObject({ title: '4 jobs due today', body: 'Furnace filter (Home), Pest control (Home), Range hood filter (Home) and 1 more', jobId: null, kind: 'several' });
+    expect(plan[1].jobIds).toHaveLength(4);
+  });
+
+  it('says how each job stands when the jobs in one reminder stand differently', () => {
+    let doc = base();
+    // One a week ahead of its date, one on its date: both arrive on the same morning.
+    doc = withJob(doc, { thingId: HOME, name: 'Furnace filter', lastDoneYmd: '2026-08-20' }, nextId('job'));
+    doc = withJob(doc, { thingId: HOME, name: 'Pest control', lastDoneYmd: '2026-08-27' }, nextId('job'));
+    const shared = planReminders(doc, NOW).filter((p) => p.kind === 'several');
+    expect(shared[0]).toMatchObject({ title: '2 jobs need a look' });
+    expect(shared[0].body).toMatch(/^Furnace filter \(Home, due [^)]+\), Pest control \(Home, due [^)]+\)$/);
   });
 
   it('keeps within what the iPhone will hold, nearest first', () => {

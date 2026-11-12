@@ -262,7 +262,7 @@ export default function JobForm() {
         {mode === 'both' && vehicle ? <Footnote>Whichever comes first decides.</Footnote> : null}
         {once ? <Footnote>It happens once: give it a date below, and it is finished when you mark it done.</Footnote> : null}
 
-        <SectionLabel>{once ? 'When' : 'Last done and next due'}</SectionLabel>
+        <SectionLabel>{once ? 'When' : editing && logged && !showFirstDue ? 'Last done' : 'Last done and next due'}</SectionLabel>
         <Card>
           {editing ? (
             logged ? (
