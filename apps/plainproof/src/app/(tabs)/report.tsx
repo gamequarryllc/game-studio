@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
@@ -11,7 +11,7 @@ import { LIMITS, type Profile } from '@/domain/types';
 import { success } from '@/platform/haptics';
 import { MAKES_PDF } from '@/platform/exporter';
 import { backUp, exportSpreadsheet, makeReport, restoreFromBackup } from '@/state/operations';
-import { totalItems } from '@/domain/library';
+import { currentPlace, placeName, totalItems } from '@/domain/library';
 import { store, useDoc, useLibrary } from '@/state/store';
 import { confirm, notify } from '@/ui/dialogs';
 import { FormRow, TextRow } from '@/ui/form';
@@ -81,7 +81,9 @@ export default function ReportTab() {
   const [now] = useState(() => Date.now());
   const count = doc.items.length;
   // A restore replaces every place, so it is weighed against everything held, not only this place.
-  const held = totalItems(useLibrary());
+  const library = useLibrary();
+  const router = useRouter();
+  const held = totalItems(library);
 
   const setProfile = (patch: Partial<Profile>) => store.update((d) => updateProfile(d, patch));
 
@@ -157,6 +159,15 @@ export default function ReportTab() {
   return (
     <TabScreen testID="report-screen" title="Report" scroller={scroller}>
       <Sheet />
+      {library.places.length > 1 ? (
+        // An insurer covers one address on one policy, so each place makes its own report. Say which one this is.
+        <Text testID="report-place" style={[type.footnote, { color: c.ink2, textAlign: 'center', marginHorizontal: space.xxl, marginTop: space.m }]}>
+          {`This report is for ${placeName(currentPlace(library))} only. Each place has its own. `}
+          <Text testID="report-change-place" accessibilityRole="link" style={{ color: c.green, fontWeight: '600' }} onPress={() => router.push('/places')}>
+            Change place
+          </Text>
+        </Text>
+      ) : null}
       <View style={{ marginHorizontal: space.xl, marginTop: space.xl, gap: space.s }}>
         <Button testID="make-report" label={MAKES_PDF ? 'Create the PDF report' : 'Open the report'} icon="report" busy={busy === 'report'} onPress={report} />
         <Button testID="make-csv" label="Export a spreadsheet" icon="table" kind="soft" busy={busy === 'csv'} onPress={csv} />

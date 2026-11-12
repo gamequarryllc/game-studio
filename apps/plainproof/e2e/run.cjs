@@ -968,6 +968,21 @@ async function main() {
       await h.visible('rooms-screen');
       await h.expectText('home-total', '$900');
       await h.expectText('home-count', '1 item in 4 rooms');
+      // The report is this place's own, and with more than one place the Report tab says which.
+      await h.tab('Report');
+      await h.expectText('report-place', /This report is for Lake cabin only\. Each place has its own\./);
+      await h.tap('report-change-place');
+      await h.visible('places-screen');
+      await h.tap('places-close');
+      await h.gone('places-screen');
+      const [cabinReport] = await Promise.all([context.waitForEvent('page'), h.tap('make-report')]);
+      watch(cabinReport, 'report-second-place');
+      await cabinReport.waitForFunction(() => document.body && document.body.innerText.includes('Summary by room'), null, { timeout: 20000 });
+      const cabinText = await cabinReport.evaluate(() => document.body.innerText);
+      assert.ok(cabinText.includes('Lake cabin') && cabinText.includes('Canoe'), 'the second place’s report is missing its own things');
+      assert.ok(!cabinText.includes('television') && !cabinText.includes('14 Alder Lane'), 'the second place’s report shows the first place');
+      await cabinReport.close();
+      await h.tab('Rooms');
       // Its things are its own: the Items tab and the search see the canoe and nothing from the first place.
       await h.tab('Items');
       await h.expectText('items-count', '1 item');
@@ -1006,6 +1021,9 @@ async function main() {
       await h.cancel();
       await h.tap('places-close');
       await h.gone('places-screen');
+      // One place again: the Report tab has nothing to tell apart.
+      await h.tab('Report');
+      assert.strictEqual(await t('report-place').count(), 0, 'the Report tab still names a place when there is only one');
       await h.tab('Settings');
       await h.tap('dev-pretend-pro');
       await h.tab('Rooms');

@@ -86,6 +86,8 @@ What the app needs from App Store Connect, and who does it. The Paid Apps agreem
 
 ## How places are kept
 
+**The report with more than one place (the owner asked before release, 2026-11-12):** the report, the spreadsheet and the Report tab are always the open place's, and each place keeps its own name, address, insurer and policy number (the owner's name is carried to a new place). That is deliberate: an insurer covers one address on one policy, and a claim is for one of them. With more than one place the Report tab says so under the page preview ("This report is for Lake cabin only. Each place has its own.") with a way to change place. A backup is the one thing that holds every place. There is no single report across places; if the owner wants one it is a new feature, not a setting.
+
 Everything the app keeps is a **library** (`src/domain/library.ts`): a list of places, each with a kind and a document, and the id of the place being looked at. A place's document is exactly what the app kept when there was only one home (rooms, items, the name and address, the currency), so the screens, the report, the spreadsheet and every action still work on one document: the current place's (`useDoc()`, `store.update()`). Only a few things look across places: the free limits, backups (a backup holds every place; format 2, and format 1 from before places still restores as one home), photo clean-up, the currency (one for every place) and the cabinets screen (`useLibrary()`, `store.updateLibrary()`). The saved file is still `inventory.json`; one written before places existed is read as a library with a single home, so nothing on a phone that ran an earlier build is lost.
 
 ## What needs a phone, and what needs more than Expo Go
