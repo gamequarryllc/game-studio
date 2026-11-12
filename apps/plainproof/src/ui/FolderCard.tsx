@@ -45,6 +45,8 @@ export function FolderCard({
   currency,
   sample,
   plate,
+  compact,
+  footer,
   whenEmpty,
 }: {
   label: string;
@@ -56,6 +58,10 @@ export function FolderCard({
   sample?: boolean;
   /** The drawer's label plate on the Rooms screen: a plain card with the name inside, no tab. */
   plate?: boolean;
+  /** On a short screen: no meters, so the drawer under the plate has room. */
+  compact?: boolean;
+  /** Under the meters, once there is something to add up: the gaps worth filling in. */
+  footer?: ReactNode;
 }) {
   const { c } = useTheme();
   const inks: Inks = plate ? { ink: c.ink, ink2: c.ink2, edge: c.rule } : { ink: c.manilaInk, ink2: c.manilaInk2, edge: c.manilaEdge };
@@ -126,12 +132,13 @@ export function FolderCard({
             : `${plural(summary.count, 'item')} in ${plural(summary.rooms, 'room')}`}
         </Text>
         {empty && whenEmpty ? <View style={{ marginTop: space.l }}>{whenEmpty}</View> : null}
-        {empty ? null : (
+        {empty || compact ? null : (
           <View style={[styles.meters, sideBySide ? styles.metersRow : styles.metersStack, { borderTopColor: inks.edge }]}>
             <Meter testID={id('meter-photo')} label="Photographed" done={summary.withPhoto} total={summary.count} stacked={!sideBySide} inks={inks} />
             <Meter testID={id('meter-value')} label="Valued" done={summary.withValue} total={summary.count} stacked={!sideBySide} inks={inks} />
           </View>
         )}
+        {empty || !footer ? null : footer}
       </View>
     </View>
   );

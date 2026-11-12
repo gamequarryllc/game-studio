@@ -10,6 +10,11 @@ export function tap(): void {
   if (on) Haptics.selectionAsync().catch(() => {});
 }
 
+/** One notch passing under the finger, as on a picker wheel: a folder going by in the drawer. */
+export function tick(): void {
+  if (on) Haptics.selectionAsync().catch(() => {});
+}
+
 export function thump(): void {
   if (on) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 }

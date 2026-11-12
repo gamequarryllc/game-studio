@@ -1,8 +1,7 @@
 import { Image } from 'expo-image';
-import { useMemo, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -30,28 +29,19 @@ export function TabScreen({
   action,
   children,
   testID,
-  scrollY,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
   testID?: string;
-  /** Kept up to date with how far the screen is scrolled, for pieces that move with it (the room folders). */
-  scrollY?: Animated.Value;
 }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const onScroll = useMemo(
-    () => (scrollY ? Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: Platform.OS !== 'web' }) : undefined),
-    [scrollY],
-  );
   return (
-    <Animated.ScrollView
+    <ScrollView
       testID={testID}
       style={{ flex: 1, backgroundColor: c.paper }}
       contentContainerStyle={{ paddingTop: insets.top + (Platform.OS === 'web' ? 22 : 10), paddingBottom: TAB_BAR_SPACE }}
-      onScroll={onScroll}
-      scrollEventThrottle={16}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag">
       <View style={styles.titleRow}>
@@ -61,7 +51,7 @@ export function TabScreen({
         {action}
       </View>
       {children}
-    </Animated.ScrollView>
+    </ScrollView>
   );
 }
 
