@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Plainkeep's icon: one service tag on enamel blue. The marks are the rule
+       every job has in the app; the tall red one is the day it falls due. -->
+  <rect width="1024" height="1024" fill="#1D4F7C"/>
+  <rect y="760" width="1024" height="264" fill="#18446C"/>
+  <g transform="rotate(-7 512 300)">
+    <path d="M338 172 H686 L776 282 V872 H248 V282 Z" fill="#12314F" opacity="0.55" transform="translate(18 22)"/>
+    <path d="M338 172 H686 L776 282 V872 H248 V282 Z" fill="#FBFCFB"/>
+    <circle cx="512" cy="282" r="38" fill="#1D4F7C"/>
+    <rect x="322" y="404" width="318" height="38" rx="19" fill="#161A1E"/>
+    <rect x="322" y="470" width="196" height="28" rx="14" fill="#A9B1B7"/>
+    <g>
+      <rect x="322" y="578" width="15" height="92" rx="7.5" fill="#1D4F7C"/>
+      <rect x="357" y="608" width="15" height="62" rx="7.5" fill="#1D4F7C"/>
+      <rect x="392" y="608" width="15" height="62" rx="7.5" fill="#1D4F7C"/>
+      <rect x="427" y="578" width="15" height="92" rx="7.5" fill="#1D4F7C"/>
+      <rect x="462" y="608" width="15" height="62" rx="7.5" fill="#1D4F7C"/>
+      <rect x="497" y="608" width="15" height="62" rx="7.5" fill="#1D4F7C"/>
+      <rect x="532" y="578" width="15" height="92" rx="7.5" fill="#1D4F7C"/>
+      <rect x="567" y="608" width="15" height="62" rx="7.5" fill="#1D4F7C"/>
+      <rect x="602" y="608" width="15" height="62" rx="7.5" fill="#C9CFCC"/>
+      <rect x="637" y="578" width="15" height="92" rx="7.5" fill="#C9CFCC"/>
+      <rect x="672" y="608" width="15" height="62" rx="7.5" fill="#C9CFCC"/>
+      <rect x="707" y="548" width="15" height="122" rx="7.5" fill="#C8401F"/>
+    </g>
+    <rect x="322" y="752" width="170" height="28" rx="14" fill="#C9CFCC"/>
+    <circle cx="664" cy="772" r="62" fill="#1D4F7C"/>
+    <path d="M634 774 L656 796 L696 750" fill="none" stroke="#FBFCFB" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

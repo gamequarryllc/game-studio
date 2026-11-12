@@ -18,12 +18,12 @@
       "note": ""
     },
     {
-      "slug": "upkeep-log",
-      "title": "Home and car maintenance log",
-      "color": "#3d5a80",
-      "tagline": "Furnace filters, smoke detector batteries, oil changes and the like, each with a repeating reminder.",
-      "status": "queued",
-      "note": ""
+      "slug": "plainkeep",
+      "title": "Plainkeep",
+      "color": "#1d4f7c",
+      "tagline": "Furnace filters, smoke alarm batteries, oil changes and registrations: when each was last done, and a reminder before it comes round again.",
+      "status": "building",
+      "note": "The home and car maintenance log (working slug was upkeep-log; named Plainkeep on 2026-11-12 so its folder, bundle id and store name agree from the first build). Moved ahead of the receipt vault by the owner on 2026-11-12 and built in the owner's Plainkeep conversation. Progress: apps/plainkeep/PROGRESS.md"
     },
     {
       "slug": "clean-photo",

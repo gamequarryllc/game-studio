@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="384" height="384" viewBox="0 0 384 384">
+  <!-- The launch mark: the tag alone, in the app's blue. -->
+  <g transform="rotate(-7 192 100)">
+    <path d="M128 52 H256 L290 94 V330 H94 V94 Z" fill="#8ABBE8"/>
+    <circle cx="192" cy="96" r="15" fill="#0F1215"/>
+    <rect x="124" y="150" width="112" height="14" rx="7" fill="#0F1215"/>
+    <g fill="#0F1215">
+      <rect x="124" y="212" width="6" height="36" rx="3"/><rect x="138" y="224" width="6" height="24" rx="3"/><rect x="152" y="224" width="6" height="24" rx="3"/>
+      <rect x="166" y="212" width="6" height="36" rx="3"/><rect x="180" y="224" width="6" height="24" rx="3"/><rect x="194" y="224" width="6" height="24" rx="3"/>
+      <rect x="208" y="212" width="6" height="36" rx="3" opacity="0.45"/><rect x="222" y="224" width="6" height="24" rx="3" opacity="0.45"/><rect x="236" y="224" width="6" height="24" rx="3" opacity="0.45"/>
+      <rect x="250" y="200" width="6" height="48" rx="3"/>
+    </g>
+  </g>
+</svg>
