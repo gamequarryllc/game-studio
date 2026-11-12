@@ -30,11 +30,14 @@ const STATUS = 54;
 const SCREEN = { width: 393, height: 852 };
 const APP = { width: SCREEN.width, height: SCREEN.height - STATUS };
 const PAPER = '#F5F1E8';
+// The report sheet is 1180 pixels wide on the page. It is laid out narrower than the printed page so the words are
+// large enough to read at App Store size.
+const REPORT_W = 606;
 
 const SHOTS = [
   { file: '01-rooms', kind: 'phone', caption: 'Know what you own,\nbefore you need to.' },
-  { file: '02-report', kind: 'sheet', caption: 'A clean report,\nready for your insurer.' },
-  { file: '03-item', kind: 'phone', caption: 'A photo, a value,\na serial number.' },
+  { file: '02-item', kind: 'phone', caption: 'A photo, a value,\na serial number.' },
+  { file: '03-report', kind: 'sheet', caption: 'A clean report,\nready for your insurer.' },
   { file: '04-items', kind: 'phone', caption: 'Everything in one list,\nmost valuable first.' },
   { file: '05-places', kind: 'phone', caption: 'Every place you insure,\neach with its own report.' },
 ];
@@ -42,7 +45,7 @@ const SHOTS = [
 // name, room, category, value, brand, model, serial, photo
 const THINGS = [
   ['65-inch OLED television', 'Living room', 'Electronics', '1899', 'Norvik', 'OL65-A2', 'NV65A2X0418K', 'television.jpg'],
-  ['Three-seat sofa, oatmeal linen', 'Living room', 'Furniture', '1150', 'Fieldhouse', 'Marlow', '', 'sofa.jpg'],
+  ['Three-seat linen sofa', 'Living room', 'Furniture', '1150', 'Fieldhouse', 'Marlow', '', 'sofa.jpg'],
   ['Brass floor lamp', 'Living room', 'Furniture', '129', 'Lumen & Co', '', '', 'lamp.jpg'],
   ['Stand mixer, 5 qt', 'Kitchen', 'Appliances', '379', 'Carrow', 'Artisan 5', 'CW5Q-2207-1184', 'mixer.jpg'],
   ['Espresso machine', 'Kitchen', 'Appliances', '499', 'Brevia', 'Barista 870', 'BV870-449120', ''],
@@ -75,7 +78,6 @@ async function addThing(h, t, [name, room, category, value, brand, model, serial
     await h.fill('field-date', '2021-03-04');
     await h.fill('field-shop', 'Brightway Electronics');
     await h.fill('field-paid', '1899.00');
-    await h.fill('field-notes', 'Wall bracket and care plan on the same receipt.');
     await h.upload('receipts-add', path.join(FIXTURES, 'receipt.jpg'));
     await h.visible('receipts-remove-0', 15000);
   }
@@ -183,10 +185,17 @@ async function main() {
     // The report itself: the top of its first page, as the PDF lays it out.
     const [report] = await Promise.all([context.waitForEvent('page'), h.tap('make-report')]);
     await report.waitForFunction(() => document.body && document.body.innerText.includes('Summary by room'), null, { timeout: 20000 });
-    await report.setViewportSize({ width: 816, height: 1720 });
-    await report.addStyleTag({ content: 'html { background: #fff; } body { padding: 58px 54px 0 !important; }' });
+    // A narrower sheet than the printed page, so the words are large enough to read at App Store size; the report's own
+    // layout, type and figures, only the top of it: the heading, the totals, the rooms and the first room's things.
+    await report.setViewportSize({ width: REPORT_W, height: 1600 });
+    await report.addStyleTag({ content: 'html { background: #fff; } body { padding: 40px 32px 0 !important; }' });
     await report.waitForTimeout(400);
-    await report.screenshot({ path: path.join(RAW, '02-report.png'), clip: { x: 0, y: 0, width: 816, height: 1720 } });
+    // The sheet stops where the second room begins: the heading, the totals, the rooms, and the first room's things.
+    const cut = await report.evaluate(() => {
+      const rooms = Array.from(document.querySelectorAll('h2')).filter((h) => h.textContent.trim() === 'Kitchen');
+      return Math.floor(rooms[0].getBoundingClientRect().top + window.scrollY) - 14;
+    });
+    await report.screenshot({ path: path.join(RAW, '03-report.png'), clip: { x: 0, y: 0, width: REPORT_W, height: cut } });
     await report.close();
 
     // 1. The drawer.
@@ -194,11 +203,11 @@ async function main() {
     await h.bringToFront('Living room');
     await raw('01-rooms');
 
-    // 3. One item, with its photo and its numbers.
+    // 2. One item, with its photo and its numbers.
     await h.openRoom('Living room');
     await h.tap('item-65-inch OLED television');
     await h.visible('item-screen');
-    await raw('03-item');
+    await raw('02-item');
     await h.back();
     await h.back();
 
@@ -246,7 +255,7 @@ async function main() {
                  box-shadow: 0 0 0 4px #3B3B3F, 0 0 0 6px #18181A, 0 50px 110px rgba(52, 40, 18, 0.26); background: #111112; }
         .btn { position: absolute; width: 9px; border-radius: 4px; background: #2A2A2D; }
         .screen { position: absolute; inset: 0; overflow: hidden; }
-        .sheet { position: absolute; top: 430px; left: 50%; width: 1180px; margin-left: -590px; background: #fff; border-radius: 10px 10px 0 0; overflow: hidden;
+        .sheet { position: absolute; top: 430px; left: 50%; width: 1180px; margin-left: -590px; background: #fff; border-radius: 10px; overflow: hidden;
                  box-shadow: 0 0 0 2px #E2DBCB, 0 30px 90px rgba(52, 40, 18, 0.22); }
         .sheet img { width: 100%; display: block; }
       </style></head><body><div class="caption">${lines}</div>${shot.kind === 'sheet' ? sheetHtml(img) : phoneHtml(img, tops[shot.file] || PAPER)}</body></html>`);
