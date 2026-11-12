@@ -29,7 +29,11 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
   return (
     <View style={{ gap: 10 }}>
       <Label>What used it</Label>
-      <NativeReport fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ height: 300, alignSelf: 'stretch' }} />
+      <View style={{ height: 300, alignSelf: 'stretch' }}>
+        {/* Shows through only until the phone has drawn the list over it. */}
+        <Text style={{ position: 'absolute', top: 14, left: 0, right: 0, fontSize: 16, lineHeight: 22, color: c.ink3 }}>Waiting for the phone&apos;s Screen Time to draw the list…</Text>
+        <NativeReport fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
+      </View>
       <Text style={{ fontSize: 13, lineHeight: 18, color: c.ink3 }}>Drawn by the phone&apos;s Screen Time. Plainlimit never sees this list, and it can be a little behind.</Text>
     </View>
   );

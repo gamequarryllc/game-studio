@@ -52,6 +52,36 @@ class UsageReportView: ExpoView {
     host?.view.frame = bounds
   }
 
+  // The report is drawn by another process and shown through the hosting
+  // controller. That only works when the controller is part of the screen's
+  // own chain of view controllers; a bare view on its own stays blank.
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    attach()
+  }
+
+  private func attach() {
+    guard let host else { return }
+    if window != nil {
+      if host.parent == nil, let parent = nearestViewController {
+        parent.addChild(host)
+        host.didMove(toParent: parent)
+      }
+    } else if host.parent != nil {
+      host.willMove(toParent: nil)
+      host.removeFromParent()
+    }
+  }
+
+  private var nearestViewController: UIViewController? {
+    var responder: UIResponder? = self
+    while let next = responder?.next {
+      if let controller = next as? UIViewController { return controller }
+      responder = next
+    }
+    return nil
+  }
+
   private func refresh() {
     guard fromMs > 0, toMs > fromMs else { return }
     let interval = DateInterval(
@@ -79,6 +109,7 @@ class UsageReportView: ExpoView {
       created.view.frame = bounds
       addSubview(created.view)
       host = created
+      attach()
     }
   }
 }
