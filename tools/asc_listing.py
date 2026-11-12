@@ -46,7 +46,7 @@ AGE_ENUMS = (
 ).split()
 AGE_FLAGS = (
     "gambling unrestrictedWebAccess lootBox advertising healthOrWellnessTopics messagingAndChat parentalControls "
-    "ageAssurance userGeneratedContent"
+    "ageAssurance userGeneratedContent socialMedia socialMediaAgeRestricted"
 ).split()
 
 
