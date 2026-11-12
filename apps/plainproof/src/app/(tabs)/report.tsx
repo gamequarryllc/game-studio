@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useRef, useState, type ComponentProps, type ComponentRef } from 'react';
 import { Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { updateProfile } from '@/domain/actions';
@@ -11,7 +11,7 @@ import { LIMITS, type Profile } from '@/domain/types';
 import { success } from '@/platform/haptics';
 import { MAKES_PDF } from '@/platform/exporter';
 import { backUp, exportSpreadsheet, makeReport, restoreFromBackup } from '@/state/operations';
-import { currentPlace, placeName, totalItems } from '@/domain/library';
+import { PLACE_KIND_LABELS, currentPlace, mapDocs, placeName, totalItems } from '@/domain/library';
 import { store, useDoc, useLibrary } from '@/state/store';
 import { confirm, notify } from '@/ui/dialogs';
 import { FormRow, TextRow } from '@/ui/form';
@@ -72,6 +72,30 @@ function Sheet() {
   );
 }
 
+/**
+ * A line of the report's heading. What is typed is kept here as typed; the saved copy is tidied (trimmed) on every
+ * key, and showing that copy back would swallow each space the moment it was typed.
+ */
+function HeadingRow({ stored, onType, ...row }: { stored: string; onType: (text: string) => void } & Omit<ComponentProps<typeof TextRow>, 'value' | 'onChangeText'>) {
+  const [typed, setTyped] = useState(stored);
+  const [seen, setSeen] = useState(stored);
+  // The saved value changed from outside (another place was opened, a backup was restored): show that instead.
+  if (stored !== seen) {
+    setSeen(stored);
+    if (stored !== typed.trim()) setTyped(stored);
+  }
+  return (
+    <TextRow
+      {...row}
+      value={typed}
+      onChangeText={(text) => {
+        setTyped(text);
+        onType(text);
+      }}
+    />
+  );
+}
+
 export default function ReportTab() {
   const { c } = useTheme();
   const doc = useDoc();
@@ -85,7 +109,11 @@ export default function ReportTab() {
   const router = useRouter();
   const held = totalItems(library);
 
+  const place = currentPlace(library);
+  const several = library.places.length > 1;
+  // The name, address, insurer and policy belong to the open place. The owner's name is the same on every place's report.
   const setProfile = (patch: Partial<Profile>) => store.update((d) => updateProfile(d, patch));
+  const setOwner = (ownerName: string) => store.updateLibrary((lib) => mapDocs(lib, (d) => updateProfile(d, { ownerName })));
 
   const run = async (kind: NonNullable<typeof busy>, job: () => Promise<void>, failTitle: string, failBody: string) => {
     if (busy) return;
@@ -189,17 +217,23 @@ export default function ReportTab() {
         </FormRow>
       </Card>
 
-      <SectionLabel>On the first page</SectionLabel>
+      <SectionLabel>{place.kind === 'home' ? 'This home' : 'This place'}</SectionLabel>
       <Card>
-        <TextRow testID="profile-home" label="Home" value={doc.profile.homeName} onChangeText={(t) => setProfile({ homeName: t })} placeholder="12 Mill Lane" maxLength={LIMITS.short} autoCapitalize="words" />
+        <HeadingRow key={`name-${place.id}`} testID="profile-home" label="Name" stored={doc.profile.homeName} onType={(t) => setProfile({ homeName: t })} placeholder={PLACE_KIND_LABELS[place.kind]} maxLength={LIMITS.short} autoCapitalize="words" />
         <Divider />
-        <TextRow testID="profile-owner" label="Your name" value={doc.profile.ownerName} onChangeText={(t) => setProfile({ ownerName: t })} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="words" textContentType="name" />
+        <HeadingRow key={`address-${place.id}`} testID="profile-address" label="Address" stored={doc.profile.address} onType={(t) => setProfile({ address: t })} placeholder="Optional" maxLength={LIMITS.address} autoCapitalize="words" textContentType="fullStreetAddress" />
         <Divider />
-        <TextRow testID="profile-insurer" label="Insurer" value={doc.profile.insurer} onChangeText={(t) => setProfile({ insurer: t })} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="words" />
+        <HeadingRow key={`insurer-${place.id}`} testID="profile-insurer" label="Insurer" stored={doc.profile.insurer} onType={(t) => setProfile({ insurer: t })} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="words" />
         <Divider />
-        <TextRow testID="profile-policy" label="Policy number" value={doc.profile.policyNumber} onChangeText={(t) => setProfile({ policyNumber: t })} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="characters" autoCorrect={false} />
+        <HeadingRow key={`policy-${place.id}`} testID="profile-policy" label="Policy number" stored={doc.profile.policyNumber} onType={(t) => setProfile({ policyNumber: t })} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="characters" autoCorrect={false} />
       </Card>
-      <Footnote>Printed at the top of the report. Like everything else, it is kept only on this iPhone.</Footnote>
+      <Footnote>{several ? `Printed at the top of the report for ${placeName(place)}. Each place keeps its own.` : 'Printed at the top of the report.'}</Footnote>
+
+      <SectionLabel>You</SectionLabel>
+      <Card>
+        <HeadingRow testID="profile-owner" label="Your name" stored={doc.profile.ownerName} onType={setOwner} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="words" textContentType="name" />
+      </Card>
+      <Footnote>{several ? 'Printed on every place’s report. Like everything else, it is kept only on this iPhone.' : 'Printed on the report. Like everything else, it is kept only on this iPhone.'}</Footnote>
 
       <SectionLabel>Backup</SectionLabel>
       <Card style={{ padding: space.l }}>

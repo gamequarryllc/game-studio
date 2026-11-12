@@ -572,7 +572,15 @@ async function main() {
     await step('report: opens with every item, photo and receipt; the spreadsheet matches', async () => {
       await h.tab('Report');
       await h.fill('profile-home', 'Fern Cottage');
-      await h.fill('profile-owner', 'Sample household');
+      // Typed a key at a time, as on a phone: the saved copy is trimmed on every key, and the field must not lose the spaces.
+      // (Brought into view and left to settle first: in a browser, the page scrolling under a field takes the keyboard away.)
+      await t('profile-owner').first().scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+      await t('profile-owner').first().click();
+      await page.waitForTimeout(300);
+      await t('profile-owner').first().pressSequentially('Sample household', { delay: 20 });
+      assert.strictEqual(await t('profile-owner').first().inputValue(), 'Sample household', 'a space typed into the name was swallowed');
+      await h.fill('profile-address', '3 Fern Road, Elm Hill');
       await h.fill('profile-insurer', 'Example Mutual');
       await h.fill('profile-policy', 'HO-0000000');
       await h.shot('26-report');
@@ -581,7 +589,7 @@ async function main() {
       watch(reportPage, 'report');
       await reportPage.waitForFunction(() => document.body && document.body.innerText.includes('Summary by room'), null, { timeout: 20000 });
       const text = await reportPage.evaluate(() => document.body.innerText);
-      for (const s of ['Fern Cottage', 'Sample household', 'Example Mutual', 'HO-0000000', '$6,648.00', '65-inch OLED television', 'NV65A2X0418K', 'Three-seat sofa', 'No value', 'Receipts', 'Paid $1,799.99']) {
+      for (const s of ['Fern Cottage', 'Sample household', '3 Fern Road, Elm Hill', 'Example Mutual', 'HO-0000000', '$6,648.00', '65-inch OLED television', 'NV65A2X0418K', 'Three-seat sofa', 'No value', 'Receipts', 'Paid $1,799.99']) {
         assert.ok(text.includes(s), `the report is missing "${s}"`);
       }
       const images = await reportPage.evaluate(() => Array.from(document.images).map((i) => ({ ok: i.complete && i.naturalWidth > 0, data: i.src.startsWith('data:image/jpeg') })));
@@ -971,6 +979,12 @@ async function main() {
       // The report is this place's own, and with more than one place the Report tab says which.
       await h.tab('Report');
       await h.expectText('report-place', /This report is for Lake cabin only\. Each place has its own\./);
+      // The name, address, insurer and policy are this place's own; the owner's name is the same everywhere.
+      assert.strictEqual(await t('profile-home').first().inputValue(), 'Lake cabin');
+      assert.strictEqual(await t('profile-insurer').first().inputValue(), '', 'the second place took the first place’s insurer');
+      assert.strictEqual(await t('profile-owner').first().inputValue(), 'Sample household');
+      await h.fill('profile-owner', 'The Marlows');
+      await h.fill('profile-insurer', 'Lakeside Mutual');
       await h.tap('report-change-place');
       await h.visible('places-screen');
       await h.tap('places-close');
@@ -1008,6 +1022,11 @@ async function main() {
       await h.gone('places-screen');
       await h.expectText('folder-label', /^14 alder lane$/i);
       await h.expectText('home-count', /^4\d items in 8 rooms$/);
+      await h.tab('Report');
+      assert.strictEqual(await t('profile-home').first().inputValue(), '14 Alder Lane');
+      assert.strictEqual(await t('profile-insurer').first().inputValue(), 'Example Mutual', 'the first place lost its own insurer');
+      assert.strictEqual(await t('profile-owner').first().inputValue(), 'The Marlows', 'the owner’s name did not follow to the other place');
+      await h.tab('Rooms');
       await h.visible('room-Garage');
       // Remove the second place. The last one can't be removed: its menu has no such choice.
       await h.tap('places');
