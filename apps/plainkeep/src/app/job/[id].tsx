@@ -78,6 +78,8 @@ export default function JobScreen() {
     store.update((d, now) => deleteJob(d, job.id, now));
   };
 
+  // For a mileage job: the day the odometer should get there, from the person's own driving.
+  const pace = due.by === 'distance' && due.whenYmd !== null && due.distanceLeft !== null && due.distanceLeft > 0 ? `At the pace you drive, that is about ${shortYmd(due.whenYmd, today)}.` : null;
   const ends: string[] = [];
   if (due.ymd) ends.push(shortYmd(due.ymd, today));
   if (due.distance !== null) ends.push(distanceText(due.distance, unit));
@@ -121,6 +123,11 @@ export default function JobScreen() {
                   Due {ends.join(' or ')}
                 </Text>
               </View>
+              {pace ? (
+                <Text testID="job-pace" style={[type.caption, { color: c.ink2, marginTop: 4 }]}>
+                  {pace}
+                </Text>
+              ) : null}
             </View>
           ) : null}
         </View>

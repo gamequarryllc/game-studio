@@ -1,0 +1,75 @@
+{
+  "_status": "draft 2026-11-12. The name was only checked with a web search; Apple decides when the app record is created.",
+  "kind": "app",
+  "bundle_id": "com.gamequarry.plainkeep",
+  "name": "Plainkeep: Home & Car Upkeep",
+  "subtitle": "Maintenance log and reminders",
+  "keywords": "furnace,filter,oil,change,vehicle,service,history,tracker,schedule,house,mileage,odometer,repair",
+  "promotional_text": "When was the furnace filter last changed? When is the oil due? Plainkeep remembers, and tells you before each job comes round. No account, no subscription.",
+  "description": "A house and a car both run on small jobs that are easy to forget: a furnace filter, smoke alarm batteries, an oil change, a registration. Plainkeep keeps the list, remembers when each was last done, and reminds you before it comes round again.\n\nAdd your home or a car and tick the usual jobs, or write your own. Each one shows how much of its interval is gone, so a glance tells you what is overdue, what is coming up and what can wait.\n\n- Jobs by the calendar, by the odometer, or both: \"every 5,000 miles or 6 months, whichever comes first\"\n- Jobs that stay on their date however early you do them, like a registration or an inspection\n- Reminders ahead of time, on the day, and twice more if a job slips, at the hour you choose\n- Mileage jobs timed from your own driving: enter the odometer now and then and the app works out when each will fall due\n- A log of everything done, with the date, the reading, what it cost and a note for next time (a filter size, a part number, who to call)\n- One-off repairs logged alongside the regular jobs, and what each year cost\n- Put a job away out of season, or skip a turn, without losing its history\n- A spreadsheet of the whole log, and a backup you control: one file, saved wherever you choose\n- Miles or kilometres, dark mode, and text that follows your iPhone's text size\n\nNothing leaves your iPhone. There is no account to create and no server: the log is stored in the app, reminders are scheduled by the phone itself, and you decide where a backup goes.\n\nFree for two things, a home and a car say, with every job, reminder and log entry they need. Plainkeep Pro adds as many things as you have (a second car, a rental, a cabin, the mower) and a service record for each as a PDF, for a buyer, a landlord or a warranty claim. It is one payment, not a subscription, and nothing you have added is ever locked.\n\nThe suggested intervals are the usual ones. Your owner's manual has the last word, and every interval can be changed.",
+  "primary_category": "Productivity",
+  "secondary_category": "Lifestyle",
+  "support_url": "https://gamequarryllc.github.io/game-studio/apps/support/#plainkeep",
+  "privacy_url": "https://gamequarryllc.github.io/game-studio/apps/privacy/",
+  "support": {
+    "_about": "This app's section on the apps' support page (tools/site_pages.py). Every answer must match what the app shows.",
+    "restore": "Open the Settings tab: Restore purchase is in the first group, under Plainkeep Pro. It is also at the bottom of the Pro screen.",
+    "backup": "Open the Settings tab and find Your data. Back up makes one file with everything: save it to iCloud Drive or a computer, or email it to yourself. On the new iPhone, open Settings and tap Restore from a backup.",
+    "more": [
+      {
+        "q": "What does the free version include?",
+        "a": "Every feature for two things, a home and a car say: as many jobs, reminders and log entries as they need, the spreadsheet and backups. Plainkeep Pro adds more things and a PDF service record for each, with one payment. Nothing you have added is ever locked."
+      },
+      {
+        "q": "Why am I not getting reminders?",
+        "a": "Open the Settings tab and check that Remind me is on. If the app says notifications are switched off, allow them in the iPhone's Settings app, under Plainkeep. Coming reminders, in the same group, lists exactly what the iPhone has waiting."
+      },
+      {
+        "q": "How does a mileage job know when it is due?",
+        "a": "From the odometer readings you enter. Open the vehicle and tap Update, or enter the reading when you mark a job done. After two readings a couple of weeks apart, the app works out how far you drive and when each mileage job should fall due. It asks for a new reading about once a month."
+      },
+      {
+        "q": "Where do the suggested intervals come from?",
+        "a": "They are the intervals most manuals give. Your own manual has the last word: open a job and tap Edit to change how often it comes round."
+      }
+    ]
+  },
+  "age_rating": {
+    "note": "Draft answers for the age-rating questions; the owner confirms them in App Store Connect.",
+    "everything": "none",
+    "advertising": false,
+    "in_app_purchases": true,
+    "kids_category": false
+  },
+  "privacy_label": {
+    "note": "For App Store Connect > App Privacy: 'Data Not Collected'. The app has no server, no account, no analytics and no ads. Reminders are local notifications scheduled by the iPhone itself (no push service), and Pro is bought straight from the App Store (StoreKit) with no purchase service in between, so nothing is collected by the developer or by any third party the app brings in.",
+    "data_used_to_track_you": [],
+    "data_linked_to_you": [],
+    "data_not_linked_to_you": [],
+    "everything_else": "Not collected. Things, jobs, readings, costs and notes never leave the device."
+  },
+  "products": [
+    {
+      "key": "pro",
+      "type": "non-consumable",
+      "price_usd": 6.99,
+      "display_name": "Plainkeep Pro",
+      "description": "More things and PDF service records. Pay once.",
+      "product_id": "com.gamequarry.plainkeep.pro",
+      "review_note": "Unlocks more than two things and the PDF service record. Open the Settings tab and tap Plainkeep Pro to see the purchase screen. Restore purchase is on the same screen.",
+      "review_screenshot": "iap-review-pro-screen.png"
+    }
+  ],
+  "product_id_note": "Store product id = bundle id + '.pro'. The app uses exactly this id (apps/plainkeep/src/pro/config.ts) and reads the product, its local price and whether it is owned straight from the App Store on the iPhone. The price is the owner's (2026-11-12).",
+  "name_alternatives": [
+    "Plainkeep: Home & Car Log",
+    "Plainkeep: Upkeep Reminders",
+    "Plainkeep Maintenance Log"
+  ],
+  "version": "1.0.0",
+  "copyright": "2026 Game Quarry LLC",
+  "screenshot_display_type": "APP_IPHONE_67",
+  "leave_out_eu": true,
+  "leave_out_eu_note": "The owner left the EU out for the studio's first game and for Plainproof instead of declaring trader status under the Digital Services Act; the same choice is made here until he says otherwise.",
+  "review_notes": "Plainkeep is a maintenance log for a home and a car. There is no account and no sign-in, and the app makes no network calls of its own: everything a person enters stays on the iPhone.\n\nReminders are local notifications scheduled on the device; the app does not use push notifications. The notification permission is asked for only when a person turns reminders on (the Due tab's notice, or Settings > Remind me).\n\nThe one in-app purchase is Plainkeep Pro (non-consumable, com.gamequarry.plainkeep.pro). To see it: open the Settings tab and tap Plainkeep Pro. It also opens when the + button on the Things tab is tapped with two things already added, or when the service record is tapped on a thing's screen. Pro allows more than two things and makes a PDF service record. Restore purchase is on the Pro screen and in Settings.\n\nThe PDF, the spreadsheet and the backup file are made on the device and handed to the share sheet."
+}

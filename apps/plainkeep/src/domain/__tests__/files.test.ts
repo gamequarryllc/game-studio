@@ -2,7 +2,7 @@ import { logEntry } from '../actions';
 import { BACKUP_KIND, backupName, makeBackup, readBackup } from '../backup';
 import { csvCell, logCsv } from '../csv';
 import { emptyDoc, parseDoc, parseDocText, serializeDoc } from '../doc';
-import { dueText, groupDigits, intervalText, leadText, repeatText, span } from '../labels';
+import { dueText, dueWhere, groupDigits, intervalText, leadText, repeatText, span } from '../labels';
 import { centsToInput, currencyForLocale, formatMoney, parseMoney } from '../money';
 import { reportBaseName, serviceRecordHtml } from '../report';
 import { sampleDoc, SAMPLE_IDS } from '../sample';
@@ -163,6 +163,17 @@ describe('words', () => {
     expect(dueText(dueOf(j(home, 'filter0001'), home, '2026-12-01'), 'mi', '2026-12-01')).toBe('Due today');
     expect(dueText(dueOf(j(home, 'filter0001'), home, '2026-11-30'), 'mi', '2026-11-30')).toBe('Due tomorrow');
     expect(dueText(dueOf(j(home, 'filter0001'), home, '2026-12-09'), 'mi', '2026-12-09')).toBe('8 days overdue');
+  });
+
+  it('says where a job’s limit lies, without repeating how long is left', () => {
+    const doc = withJob(base(), { thingId: CAR, every: { n: 6, unit: 'month' }, everyDistance: 5000, lastDoneYmd: '2026-08-01', lastDoneDistance: 57000 }, 'oil0000001');
+    const due = dueOf(j(doc, 'oil0000001'), doc, TODAY);
+    expect(dueWhere(due, 'mi', TODAY)).toBe('at 62,000 mi or Feb 1');
+    expect(dueWhere(due, 'mi', TODAY, 'distance')).toBe('at 62,000 mi');
+    expect(dueWhere(due, 'mi', TODAY, 'date')).toBe('Feb 1');
+    const home = withJob(base(), { thingId: HOME, lastDoneYmd: '2026-09-01' }, 'filter0001');
+    expect(dueWhere(dueOf(j(home, 'filter0001'), home, TODAY), 'mi', TODAY, 'distance')).toBe('Dec 1');
+    expect(dueWhere({ ...due, state: 'paused' }, 'mi', TODAY)).toBe('Put away');
   });
 
   it('says how often a job comes round', () => {

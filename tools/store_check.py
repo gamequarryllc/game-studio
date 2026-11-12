@@ -19,6 +19,7 @@ Pro unlock, a non-consumable priced from 2.99 to 9.99), their own privacy and
 support pages, and ids that match what the app itself ships with.
 """
 import glob
+import html
 import json
 import os
 import re
@@ -203,7 +204,8 @@ def check_site_pages(root, listings, problems, apps=None):
                 if not env and "mailto:" in app_pages[key]:
                     bad(f"{label}: apps/{key} page has an address nobody gave it")
             for slug, d in apps.items():
-                if "privacy" in app_pages and d.get("name", "") not in app_pages["privacy"]:
+                # The page writes names HTML-escaped ("Home &amp; Car").
+                if "privacy" in app_pages and html.escape(d.get("name", "")) not in app_pages["privacy"]:
                     bad(f"{label}: the apps' privacy policy does not name {d.get('name')}")
                 if "support" in app_pages and f'id="{slug}"' not in app_pages["support"]:
                     bad(f"{label}: the apps' support page has no section for {slug}")

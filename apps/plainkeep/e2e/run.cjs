@@ -277,7 +277,9 @@ async function main() {
       assert.match(await h.text('thing-reading-note'), /Read Nov 12/);
       // Oil: every 5,000 mi or 6 months; never done, so 5,000 from today's reading or within a month.
       const oil = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Oil and filter change' }).first();
-      assert.match(await oil.innerText(), /at 67,418 mi or Dec 12/);
+      // The line has room for one limit, the one its figure counts: the date, which comes first here.
+      assert.match(await oil.innerText(), /Outback|Dec 12/);
+      assert.match(await oil.innerText(), /Dec 12/);
       await h.shot('10-thing-car', { tall: 1300 });
     });
 
@@ -289,7 +291,10 @@ async function main() {
       await h.fill('field-cost', '74,95');
       await h.save();
       const oil = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Oil and filter change' }).first();
-      assert.match(await oil.innerText(), /at 67,500 mi or May 12/);
+      assert.match(await oil.innerText(), /May 12/);
+      await h.openJob('Oil and filter change');
+      assert.match(await h.text('job-ends'), /Due May 12 or 67,500 mi/);
+      await h.back();
       assert.match(await h.t('thing-odometer').getAttribute('aria-label'), /62500/);
     });
 

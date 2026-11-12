@@ -5,7 +5,7 @@ import type { Listed } from '@/domain/schedule';
 import type { DistanceUnit, Ymd } from '@/domain/types';
 import { tap } from '@/platform/haptics';
 
-import { dueTone, readoutOf } from './due';
+import { dueTone, leadsByDistance, readoutOf } from './due';
 import { Gauge } from './Gauge';
 import { Icon } from './Icon';
 import { NO_ORPHAN, space, toneColor, type, useTheme } from './theme';
@@ -54,7 +54,7 @@ export function JobRow({
   const readout = readoutOf(due, unit);
   const quiet = due.state === 'paused' || due.state === 'finished';
   const line = dueText(due, unit, today);
-  const where = dueWhere(due, unit, today);
+  const where = dueWhere(due, unit, today, leadsByDistance(due) ? 'distance' : 'date');
   return (
     <View style={styles.row}>
       {quiet ? <View style={styles.punchSpace} /> : <Punch testID={`punch-${job.id}`} color={color} label={`Mark ${job.name} done`} onPress={onDone} />}

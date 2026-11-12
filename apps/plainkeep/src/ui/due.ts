@@ -25,12 +25,17 @@ export interface Readout {
   unit: string;
 }
 
+/** Whether the odometer, rather than the calendar, is the limit to show: it is past, or it will be reached first. */
+export function leadsByDistance(due: Due): boolean {
+  const dateOver = due.daysLeft !== null && due.daysLeft < 0;
+  const distOver = due.distanceLeft !== null && due.distanceLeft < 0;
+  return due.distanceLeft !== null && (due.daysLeft === null || (distOver && !dateOver) || (!dateOver && due.by === 'distance'));
+}
+
 /** The figure for a job's line: what is left of whichever limit comes first. */
 export function readoutOf(due: Due, unit: DistanceUnit): Readout | null {
   if (due.state === 'paused' || due.state === 'finished') return null;
-  const dateOver = due.daysLeft !== null && due.daysLeft < 0;
-  const distOver = due.distanceLeft !== null && due.distanceLeft < 0;
-  const useDistance = due.distanceLeft !== null && (due.daysLeft === null || (distOver && !dateOver) || (!dateOver && due.by === 'distance'));
+  const useDistance = leadsByDistance(due);
   if (useDistance && due.distanceLeft !== null) {
     if (due.distanceLeft === 0) return { figure: 'Now', unit: 'due' };
     return { figure: groupDigits(Math.abs(due.distanceLeft)), unit: due.distanceLeft < 0 ? `${unit} over` : unit };

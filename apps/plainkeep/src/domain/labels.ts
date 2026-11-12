@@ -80,11 +80,13 @@ export function dueText(due: Due, unit: DistanceUnit, today: Ymd): string {
  * Where a job's limit lies: the date, the odometer reading, or both. It sits beside the figure on a job's line,
  * which already says how long is left, so it never repeats it.
  */
-export function dueWhere(due: Due, unit: DistanceUnit, today: Ymd): string {
+export function dueWhere(due: Due, unit: DistanceUnit, today: Ymd, only?: 'date' | 'distance'): string {
   if (due.state === 'paused') return 'Put away';
   if (due.state === 'finished') return 'Done';
   const date = due.ymd !== null ? shortYmd(due.ymd, today) : null;
   const dist = due.distance !== null ? `at ${distanceText(due.distance, unit)}` : null;
+  // On a narrow line there is room for one of the two: the one the figure beside it is counting.
+  if (date && dist && only) return only === 'date' ? date : dist;
   if (date && dist) return `${dist} or ${date}`;
   if (date) return date;
   if (dist) return due.state === 'unknown' ? `${dist} · needs a reading` : dist;
