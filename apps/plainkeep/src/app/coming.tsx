@@ -24,6 +24,14 @@ export default function Coming() {
   }, [doc, allowed]);
 
   const blocked = DELIVERS && doc.settings.reminders && allowed === 'denied';
+  // One line for each job: its next reminder. The ones after it follow by themselves.
+  const seen = new Set<string>();
+  const next = plan.filter((p) => {
+    const who = p.jobId ?? p.title;
+    if (seen.has(who)) return false;
+    seen.add(who);
+    return true;
+  });
   const clock = displayClock(doc.settings.remindHour, doc.settings.remindMinute);
 
   return (
@@ -34,13 +42,13 @@ export default function Coming() {
           Notifications are off for Plainkeep in the iPhone’s Settings, so nothing can arrive. Allow them there and the reminders appear here.
         </Notice>
       ) : null}
-      {plan.length === 0 ? (
+      {next.length === 0 ? (
         blocked ? null : <EmptyState title="Nothing is waiting" body={doc.settings.reminders ? 'Reminders appear here as jobs get near their dates.' : 'Reminders are off. Turn them on in Settings.'} />
       ) : (
         <>
-          <Footnote style={{ marginTop: space.l }}>Each arrives at {clock}. The ones marked “if it isn’t done” go away when you mark the job done.</Footnote>
+          <Footnote style={{ marginTop: space.l }}>The next reminder for each job. Each arrives at {clock}; a job gets another on the day it is due, and two more if it slips.</Footnote>
           <Card style={{ marginTop: space.m }}>
-            {plan.map((p, i) => {
+            {next.map((p, i) => {
               const ymd = toYmd(new Date(p.fireAt));
               return (
                 <Fragment key={p.key}>

@@ -84,7 +84,7 @@ export default function JobForm() {
 
   const pickLead = async () => {
     const picked = await choose({
-      title: 'When to remind you',
+      title: 'First reminder',
       choices: [{ key: 'default', label: `The usual: ${leadText(doc.settings.leadDays).toLowerCase()}` }, ...LEAD_CHOICES.map((d) => ({ key: String(d), label: leadText(d) }))],
     });
     if (picked) setLead(picked === 'default' ? null : Number(picked));
@@ -296,7 +296,7 @@ export default function JobForm() {
 
         <SectionLabel>Reminder</SectionLabel>
         <Card>
-          <PickRow testID="field-lead" label="Remind me" value={leadText(lead ?? doc.settings.leadDays)} placeholder="" onPress={pickLead} />
+          <PickRow testID="field-lead" label="First reminder" value={leadText(lead ?? doc.settings.leadDays)} placeholder="" onPress={pickLead} />
         </Card>
 
         <SectionLabel>For next time</SectionLabel>

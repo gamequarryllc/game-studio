@@ -13,7 +13,6 @@ import { store, useDoc } from '@/state/store';
 import { notify } from '@/ui/dialogs';
 import { JobRow } from '@/ui/JobRow';
 import { Button, Card, Divider, EmptyState, Footnote, LinkText, Notice, RoundButton, SectionLabel, TabScreen } from '@/ui/kit';
-import { SmallTag } from '@/ui/TagArt';
 import { space, type Tone } from '@/ui/theme';
 
 export default function DueTab() {
@@ -65,9 +64,8 @@ export default function DueTab() {
     return (
       <TabScreen testID="due-screen" title="Due">
         <EmptyState
-          art={<SmallTag />}
           title="Nothing to keep up yet"
-          body="Add your home or a car, then the jobs that come round: a filter, a battery, an oil change."
+          body="Add your home or a car, then the jobs that repeat: a filter, a battery, an oil change."
           action={<Button testID="empty-add-thing" label="Add something to look after" onPress={() => openNewThing(router)} />}
         />
       </TabScreen>
@@ -106,7 +104,7 @@ export default function DueTab() {
               <LinkText testID="reminders-not-now" label="Not now" onPress={() => store.update((d, now) => setSettings(d, { reminderHintSeen: true }, now))} />
             </View>
           }>
-          Want to hear about a job before it falls due? Reminders can be changed any time in Settings.
+          Want a reminder before a job is due? You can change this any time in Settings.
         </Notice>
       ) : DELIVERS && allowed === 'denied' ? (
         <Notice testID="reminders-blocked" icon="bellOff" tone="amber" action={<LinkText label="Open Settings" onPress={openSystemSettings} />}>
@@ -125,7 +123,7 @@ export default function DueTab() {
       {section('Not logged yet', groups.unlogged, undefined, 'section-unlogged')}
       {groups.unlogged.length > 0 ? (
         <Footnote>
-          Tap a ring when you do the job, or now to enter the day it was last done. From then on it counts down by itself.
+          Tap a ring when you do a job. Already done it? Tap now and enter the date. After that it counts down by itself.
         </Footnote>
       ) : null}
       {section('Later', groups.later, undefined, 'section-later')}

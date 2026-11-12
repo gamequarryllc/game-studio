@@ -1,6 +1,6 @@
 # Plainkeep: a maintenance log for the home and the car
 
-Furnace filters, smoke alarm batteries, oil changes, registrations: Plainkeep remembers when each was last done and reminds you before it comes round again. No account and no server: everything stays on the phone.
+Furnace filters, smoke alarm batteries, oil changes, registrations: Plainkeep remembers when each was last done and reminds you before it is due again. No account and no server: everything stays on the phone.
 
 It was the list's `upkeep-log`; it is named Plainkeep so the folder, the bundle id (`com.gamequarry.plainkeep`) and the store name agree from the first build. The draft store listing is in [`store/plainkeep/`](../../store/plainkeep/listing.json); the design, the money rules, the feature pass and QA are in [NOTES.md](NOTES.md), and where the work stands is in [PROGRESS.md](PROGRESS.md).
 

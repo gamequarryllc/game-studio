@@ -60,7 +60,6 @@ export function serviceRecordHtml(doc: Doc, thingId: string, now: number): strin
   if (thing.detail) facts.push(['Details', esc(thing.detail)]);
   if (reading) facts.push(['Odometer', `<span class="nw">${esc(distanceText(reading.value, unit))}</span> <span class="soft nw">on ${esc(displayYmd(reading.ymd))}</span>`]);
   if (first) facts.push(['Kept since', esc(displayYmd(first))]);
-  facts.push(['Entries', String(done.length)]);
 
   return `<!doctype html>
 <html lang="en">
@@ -97,7 +96,9 @@ export function serviceRecordHtml(doc: Doc, thingId: string, now: number): strin
   .note { color: #57616a; font-size: 9.5pt; }
   tfoot td { border-bottom: 0; border-top: 0.75pt solid #161a1e; font-weight: 700; }
   .empty { color: #57616a; padding: 8pt 0; }
-  footer { margin-top: 24pt; padding-top: 8pt; border-top: 0.5pt solid #d5dad8; font-size: 8.5pt; color: #57616a; }
+  footer { margin-top: 22pt; font-size: 8.5pt; color: #57616a; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .count { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 9pt; letter-spacing: 0; margin-left: 4pt; }
 </style>
 </head>
 <body>
@@ -112,7 +113,7 @@ export function serviceRecordHtml(doc: Doc, thingId: string, now: number): strin
 ${facts.map(([k, v]) => `  <div><dt>${k}</dt><dd>${v}</dd></div>`).join('\n')}
 </dl>
 
-<h2 class="plate">Work done</h2>
+<h2 class="plate">Work done${done.length > 1 ? ` <span class="soft count">${done.length} entries</span>` : ''}</h2>
 ${
   done.length === 0
     ? '<div class="empty">Nothing has been logged yet.</div>'

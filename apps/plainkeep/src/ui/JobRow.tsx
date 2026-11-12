@@ -32,8 +32,10 @@ export function Punch({ onPress, color, label, testID }: { onPress: () => void; 
 
 /** A thing's name, short enough to share a line with a date. */
 function shortName(name: string): string {
-  return name.length > 22 ? `${name.slice(0, 21).trimEnd()}…` : name;
+  return name.length > 30 ? `${name.slice(0, 29).trimEnd()}…` : name;
 }
+
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** Joined with non-breaking spaces, so a date or a reading wraps whole or not at all. */
 const solid = (text: string) => text.replace(/ /g, '\u00A0');
@@ -81,7 +83,7 @@ export function JobRow({
           </Text>
           {/* One line that may run to two. A long name is shortened here, so the date or reading after it never is. */}
           <Text testID={`where-${job.id}`} style={[type.footnote, { color: c.ink2, marginTop: 1 }]} numberOfLines={2}>
-            {showThing ? `${shortName(thing.name)} · ${solid(where)}` : where}
+            {showThing ? `${shortName(thing.name)} ·\u00A0${solid(where)}` : capital(where)}
           </Text>
         </View>
         {readout ? (
@@ -89,7 +91,7 @@ export function JobRow({
             <Text style={[type.readout, { color }]} numberOfLines={1}>
               {readout.figure}
             </Text>
-            <Text style={[type.caption, { color: c.ink2 }]} numberOfLines={1}>
+            <Text style={[type.caption, { color: c.ink2, marginTop: -3 }]} numberOfLines={1}>
               {readout.unit}
             </Text>
           </View>
@@ -105,5 +107,5 @@ const styles = StyleSheet.create({
   punch: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.75, alignItems: 'center', justifyContent: 'center' },
   punchSpace: { width: 26, height: 26 },
   body: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.s, paddingLeft: space.m, paddingRight: space.m, paddingVertical: 10 },
-  readout: { alignItems: 'flex-end', minWidth: 36, marginLeft: 2 },
+  readout: { alignItems: 'flex-end', marginLeft: 2 },
 });

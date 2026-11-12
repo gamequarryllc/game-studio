@@ -10,7 +10,6 @@ import type { Entry } from '@/domain/types';
 import { tap } from '@/platform/haptics';
 import { useDoc } from '@/state/store';
 import { choose } from '@/ui/dialogs';
-import { SmallTag } from '@/ui/TagArt';
 import { Icon } from '@/ui/Icon';
 import { Button, Card, Chip, Divider, EmptyState, Footnote, RoundButton, SectionLabel, TabScreen } from '@/ui/kit';
 import { NO_ORPHAN, NO_OUTLINE, plate, radius, space, type, useTheme } from '@/ui/theme';
@@ -99,7 +98,6 @@ export default function LogTab() {
     return (
       <TabScreen testID="log-screen" title="Log">
         <EmptyState
-          art={<SmallTag />}
           title="Nothing logged yet"
           body="Each job you mark done lands here, with its date, cost and reading. Repairs and one-offs can be logged too."
           action={doc.things.length > 0 ? <Button testID="log-empty-add" label="Log something" onPress={add} /> : undefined}

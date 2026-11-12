@@ -142,7 +142,7 @@ export default function JobScreen() {
 
       <SectionLabel>Schedule</SectionLabel>
       <Card>
-        <Stacked testID="job-repeat" label="Comes round" value={repeatText(job, unit)} />
+        <Stacked testID="job-repeat" label="Repeats" value={repeatText(job, unit)} />
         <Divider />
         {doc.settings.reminders ? (
           <Stacked testID="job-reminder" label="Reminder" value={reminderText} />

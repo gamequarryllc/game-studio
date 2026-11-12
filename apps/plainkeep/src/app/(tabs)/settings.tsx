@@ -43,7 +43,7 @@ export default function SettingsTab() {
   };
 
   const pickLead = async () => {
-    const picked = await choose({ title: 'When to remind you', choices: LEAD_CHOICES.map((d) => ({ key: String(d), label: leadText(d) })) });
+    const picked = await choose({ title: 'First reminder', choices: LEAD_CHOICES.map((d) => ({ key: String(d), label: leadText(d) })) });
     if (picked) store.update((d, now) => setSettings(d, { leadDays: Number(picked) }, now));
   };
 
@@ -143,7 +143,7 @@ export default function SettingsTab() {
 
       <SectionLabel>Reminders</SectionLabel>
       <Card>
-        <SwitchRow testID="reminders-switch" label="Remind me" value={s.reminders} onChange={toggleReminders} />
+        <SwitchRow testID="reminders-switch" label="Reminders" value={s.reminders} onChange={toggleReminders} />
         {s.reminders ? (
           <>
             <Divider />
@@ -165,8 +165,8 @@ export default function SettingsTab() {
       </Card>
       <Footnote>
         {s.reminders
-          ? `You hear ${leadText(s.leadDays).toLowerCase()}, again on the day at ${displayClock(s.remindHour, s.remindMinute)}, and twice more if it slips. A job can have its own timing.`
-          : 'With reminders on, you hear about a job before it is due and on the day.'}
+          ? `You get a reminder ${leadText(s.leadDays).toLowerCase()}, again on the day at ${displayClock(s.remindHour, s.remindMinute)}, and twice more if the job slips. A job can have its own timing.`
+          : 'With reminders on, you get one before a job is due and one on the day.'}
       </Footnote>
 
       <SectionLabel>Units</SectionLabel>

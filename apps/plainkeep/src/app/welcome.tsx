@@ -26,14 +26,14 @@ export default function Welcome() {
       style={{ flex: 1, backgroundColor: c.page }}
       contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + space.xxl, paddingBottom: insets.bottom + space.xl, paddingHorizontal: space.xxl }}>
       <View style={{ flex: 1, justifyContent: 'center', minHeight: 420 }}>
-        <View style={{ marginLeft: -18 }}>
+        <View style={{ marginLeft: -66 }}>
           <TagArt width={250} />
         </View>
         <Text accessibilityRole="header" style={[type.largeTitle, NO_ORPHAN, { color: c.ink, marginTop: space.xl, fontSize: 44, lineHeight: 50 }]}>
           Know what’s due on the house and the car.
         </Text>
         <Text style={[type.body, { color: c.ink2, marginTop: space.m }]}>
-          Filters, batteries, oil changes, registrations. Plainkeep remembers when each was last done and tells you before it comes round again.
+          Filters, batteries, oil changes, registrations. Plainkeep remembers when each was last done and reminds you before it’s due again.
         </Text>
       </View>
       <View style={{ gap: space.s, marginTop: space.xxl }}>

@@ -311,7 +311,7 @@ export function LinkText({ label, onPress, testID }: { label: string; onPress: (
 
 const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.xl, marginBottom: space.m },
-  sectionLabel: { flexDirection: 'row', alignItems: 'baseline', marginHorizontal: space.xl + 2, marginTop: space.xxl, marginBottom: space.s },
+  sectionLabel: { flexDirection: 'row', alignItems: 'center', marginHorizontal: space.xl + 2, marginTop: space.xxl, marginBottom: space.s },
   sectionText: { fontFamily: plate.semibold, fontSize: 21, lineHeight: 26, letterSpacing: 0.3 },
   card: { marginHorizontal: space.xl, borderRadius: radius.m, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.m, paddingHorizontal: space.l, paddingVertical: 11, minHeight: 48 },

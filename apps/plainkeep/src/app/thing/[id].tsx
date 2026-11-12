@@ -1,6 +1,6 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Fragment, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { displayYmd, shortYmd } from '@/domain/dates';
 import { distanceText } from '@/domain/labels';
@@ -8,19 +8,39 @@ import { formatMoney } from '@/domain/money';
 import { currentReading, distancePerDay, listJobs } from '@/domain/schedule';
 import { logNewestFirst, sumCost } from '@/domain/selectors';
 import { MAKES_PDF } from '@/platform/exporter';
+import { tap } from '@/platform/haptics';
 import { usePro } from '@/pro/pro';
 import { useToday } from '@/state/clock';
 import { goBack } from '@/state/nav';
 import { makeServiceRecord } from '@/state/operations';
 import { useDoc } from '@/state/store';
-import { notify } from '@/ui/dialogs';
-import { thingIconName } from '@/ui/Icon';
+import { choose, notify } from '@/ui/dialogs';
+import { Icon, thingIconName } from '@/ui/Icon';
 import { JobRow } from '@/ui/JobRow';
 import { BarButton, Button, Card, Divider, EmptyState, Footnote, IconPlate, PushedScreen, Row, SectionLabel } from '@/ui/kit';
 import { Odometer } from '@/ui/Odometer';
 import { NO_ORPHAN, space, type, useTheme } from '@/ui/theme';
 
 const RECENT = 5;
+
+/** The small plus at the end of a section's heading. */
+function HeaderAdd({ onPress, label, testID }: { onPress: () => void; label: string; testID: string }) {
+  const { c } = useTheme();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={10}
+      onPress={() => {
+        tap();
+        onPress();
+      }}
+      style={({ pressed }) => ({ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? c.sunk : c.card })}>
+      <Icon name="add" size={17} color={c.blue} />
+    </Pressable>
+  );
+}
 
 export default function ThingScreen() {
   const { c } = useTheme();
@@ -47,6 +67,12 @@ export default function ThingScreen() {
   const vehicle = thing.kind === 'vehicle';
   const reading = vehicle ? currentReading(thing) : null;
   const pace = vehicle ? distancePerDay(thing) : null;
+
+  const addJob = async () => {
+    const picked = await choose({ choices: [{ key: 'new', label: 'New job' }, { key: 'suggest', label: 'Suggested jobs' }] });
+    if (picked === 'new') router.push({ pathname: '/job-form', params: { thingId: thing.id } });
+    else if (picked === 'suggest') router.push({ pathname: '/suggestions', params: { thingId: thing.id } });
+  };
 
   const record = async () => {
     if (!isPro) {
@@ -92,7 +118,7 @@ export default function ThingScreen() {
         </Card>
       ) : null}
 
-      <SectionLabel>Jobs</SectionLabel>
+      <SectionLabel trailing={<HeaderAdd testID="thing-add-job" label="Add a job" onPress={addJob} />}>Jobs</SectionLabel>
       <Card>
         {jobs.map((item, i) => (
           <Fragment key={item.job.id}>
@@ -107,16 +133,23 @@ export default function ThingScreen() {
             />
           </Fragment>
         ))}
-        {jobs.length > 0 ? <Divider inset={0} /> : null}
-        <Row testID="thing-add-job" title="Add a job" tint onPress={() => router.push({ pathname: '/job-form', params: { thingId: thing.id } })} />
-        <Divider />
-        <Row testID="thing-suggest" title="Suggested jobs" tint onPress={() => router.push({ pathname: '/suggestions', params: { thingId: thing.id } })} />
+        {jobs.length === 0 ? <Row testID="thing-suggest" title="See suggested jobs" subtitle="The usual ones, with their usual intervals" tint chevron onPress={() => router.push({ pathname: '/suggestions', params: { thingId: thing.id } })} /> : null}
       </Card>
 
-      <SectionLabel trailing={spent !== null ? <Text style={[type.subhead, type.tabular, { color: c.ink2 }]}>{formatMoney(spent, doc.settings.currency)} spent</Text> : undefined}>Log</SectionLabel>
+      <SectionLabel
+        trailing={
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
+            {spent !== null ? <Text style={[type.subhead, type.tabular, { color: c.ink2 }]}>{formatMoney(spent, doc.settings.currency)} spent</Text> : null}
+            <HeaderAdd testID="thing-log-other" label="Log something that was done" onPress={() => router.push({ pathname: '/done', params: { thingId: thing.id } })} />
+          </View>
+        }>
+        Log
+      </SectionLabel>
+      {log.length === 0 ? <Footnote style={{ marginTop: 0 }}>Nothing logged yet. Jobs you mark done land here; repairs and one-offs can be added with the plus.</Footnote> : null}
       <Card>
-        {log.slice(0, RECENT).map((e) => (
+        {log.slice(0, RECENT).map((e, i) => (
           <Fragment key={e.id}>
+            {i > 0 ? <Divider /> : null}
             <Row
               testID={`entry-${e.id}`}
               title={e.title}
@@ -125,16 +158,14 @@ export default function ThingScreen() {
               chevron
               onPress={() => router.push({ pathname: '/done', params: { entryId: e.id } })}
             />
-            <Divider />
           </Fragment>
         ))}
         {log.length > RECENT ? (
           <>
-            <Row testID="thing-all-log" title={`All ${log.length} entries`} tint chevron onPress={() => router.push({ pathname: '/log', params: { thingId: thing.id } })} />
             <Divider />
+            <Row testID="thing-all-log" title={`All ${log.length} entries`} tint chevron onPress={() => router.push({ pathname: '/log', params: { thingId: thing.id } })} />
           </>
         ) : null}
-        <Row testID="thing-log-other" title="Log something else" subtitle={log.length === 0 ? 'A repair or a one-off that isn’t on a schedule' : undefined} tint onPress={() => router.push({ pathname: '/done', params: { thingId: thing.id } })} />
       </Card>
 
       <SectionLabel>Service record</SectionLabel>

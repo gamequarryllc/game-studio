@@ -99,7 +99,7 @@ export default function OdometerForm() {
             <DateField testID="field-date" label="Read on" value={ymd} onChange={(v) => setYmd(v ?? today)} clearable={false} max={today} />
           </FormRow>
         </Card>
-        <Footnote>A reading every month or so is plenty. From two of them the app works out how far you drive, and when distance jobs will fall due.</Footnote>
+        <Footnote>A reading every month or so is plenty. From two of them the app works out how far you drive, and when mileage jobs will be due.</Footnote>
 
         {past.length > 0 ? (
           <>

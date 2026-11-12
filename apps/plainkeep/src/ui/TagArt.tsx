@@ -43,8 +43,3 @@ export function TagArt({ width = 260 }: { width?: number }) {
     </Svg>
   );
 }
-
-/** The same picture, small: what an empty screen shows above its sentence. */
-export function SmallTag() {
-  return <TagArt width={132} />;
-}

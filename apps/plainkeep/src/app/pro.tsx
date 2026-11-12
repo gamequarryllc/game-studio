@@ -51,7 +51,7 @@ const NO_STORE_BODY = DEV_TOOLS ? 'Nothing can be bought here. To try Pro, turn 
 export default function ProScreen() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const router = useRouter();
   const held = useDoc().things.length;
   const state = usePro();
@@ -124,9 +124,11 @@ export default function ProScreen() {
             </View>
           ))}
         </View>
-        <View style={{ alignItems: 'center', marginTop: space.xl }}>
-          <RecordArt />
-        </View>
+        {height >= 700 ? (
+          <View style={{ alignItems: 'center', marginTop: space.xl }}>
+            <RecordArt />
+          </View>
+        ) : null}
 
       </ScrollView>
       {state.isPro ? null : (

@@ -89,8 +89,11 @@ describe('planning reminders', () => {
     doc = withJob(doc, { thingId: CAR, name: 'Oil change', every: null, everyDistance: 5000, lastDoneYmd: '2026-08-01', lastDoneDistance: 57000 }, 'oil0000001');
     const plan = planReminders(doc, NOW);
     const oil = plan.filter((p) => p.jobId === 'oil0000001');
-    // 2,000 to go at 29 a day: January 20.
-    expect(oil.map((p) => toYmd(new Date(p.fireAt)))).toEqual(['2027-01-13', '2027-01-20', '2027-01-23', '2027-01-30']);
+    // 2,000 to go at 29 a day: January 20. That day is an estimate: it is worded as one, and not chased afterwards.
+    expect(oil.map((p) => [toYmd(new Date(p.fireAt)), p.body])).toEqual([
+      ['2027-01-13', 'Wagon · should be due around Jan 20, 2027, going by the odometer'],
+      ['2027-01-20', 'Wagon · should be due about now. What does the odometer say?'],
+    ]);
     const odo = plan.filter((p) => p.key.startsWith('odo:'));
     expect(odo).toHaveLength(1);
     expect(odo[0]).toMatchObject({ fireAt: at('2026-12-12'), thingId: CAR, jobId: null, title: 'Wagon: what does the odometer say?', kind: 'odometer' });

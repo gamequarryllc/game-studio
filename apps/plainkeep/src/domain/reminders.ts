@@ -65,14 +65,22 @@ export function planReminders(doc: Doc, now: number): Planned[] {
       continue;
     }
     const lead = job.leadDays ?? doc.settings.leadDays;
+    // Going by the odometer, the day is the app's estimate from how the vehicle is driven: say so, and do not
+    // chase a date that was only ever a guess.
+    const estimated = due.by === 'distance';
     const days = new Map<Ymd, PlannedKind>();
-    for (const after of FOLLOW_UP_DAYS) days.set(addDays(dueYmd, after), 'after');
+    if (!estimated) for (const after of FOLLOW_UP_DAYS) days.set(addDays(dueYmd, after), 'after');
     if (lead > 0) days.set(addDays(dueYmd, -lead), 'ahead');
     days.set(dueYmd, 'day');
     for (const [day, kind] of days) {
       const fireAt = atTime(day, hour, minute);
       if (fireAt <= now) continue;
-      singles.push({ ...common, kind, key: `job:${job.id}:${day}`, fireAt, body: `${thing.name} · ${whenWords(dueYmd, day, today)}` });
+      const body = !estimated
+        ? `${thing.name} · ${whenWords(dueYmd, day, today)}`
+        : kind === 'day'
+          ? `${thing.name} · should be due about now. What does the odometer say?`
+          : `${thing.name} · should be due around ${shortYmd(dueYmd, today)}, going by the odometer`;
+      singles.push({ ...common, kind, key: `job:${job.id}:${day}`, fireAt, body });
     }
   }
 

@@ -216,7 +216,7 @@ async function main() {
       await h.t('section-unlogged').waitFor();
       assert.strictEqual(await h.t('section-soon').count(), 0);
       const alarms = page.locator('[data-testid^="job-"]').filter({ visible: true }).filter({ hasText: 'Test smoke and CO alarms' }).first();
-      assert.match(await alarms.innerText(), /Home · Every\smonth/);
+      assert.match(await alarms.innerText(), /Home ·\sEvery\smonth/);
       assert.doesNotMatch(await alarms.innerText(), /weeks|days/);
       await h.shot('06-due-new-home', { tall: 1300 });
     });
@@ -394,17 +394,19 @@ async function main() {
       await h.tap('coming');
       await h.t('coming-screen').waitFor();
       await h.t('coming-web-note').waitFor();
-      await h.sees('Each arrives at 9:00 AM.');
-      await h.sees('if it isn’t done');
+      await h.sees('The next reminder for each job. Each arrives at 9:00 AM');
+      // One line a job: the follow-ups are not listed one by one.
+      const titles = await h.rows('planned-').evaluateAll((els) => els.map((e) => e.innerText.split('\n')[1]));
+      assert.strictEqual(new Set(titles).size, titles.length, `a job is listed twice: ${titles.join(' | ')}`);
       await h.sees('jobs aren’t logged yet');
-      assert.ok((await h.rows('planned-').count()) >= 10, 'expected a list of reminders');
+      assert.ok((await h.rows('planned-').count()) >= 5, 'expected a list of reminders');
       await h.shot('15-coming', { tall: 1500 });
       await h.back();
       await h.tap('lead');
       await h.choice('14');
       await h.fill('remind-time', '18:30');
       await h.tap('coming');
-      await h.sees('Each arrives at 6:30 PM.');
+      await h.sees('Each arrives at 6:30 PM');
       await h.back();
       await h.tap('reminders-switch');
       await h.tap('reminders-switch');
@@ -427,6 +429,7 @@ async function main() {
       // Everything else still works at the limit: a new job, a log entry, the service record's door.
       await h.openThing('Home');
       await h.tap('thing-add-job');
+      await h.choice('new');
       await h.fill('field-name', 'Check sump pump');
       await h.save();
       await h.sees('Check sump pump');
@@ -548,6 +551,7 @@ async function main() {
       assert.strictEqual(await h.rows('thing-status-').count(), 3);
       await h.openThing('Mower');
       await h.tap('thing-add-job');
+      await h.choice('new');
       await h.fill('field-name', 'Sharpen blade');
       await h.save();
       await h.sees('Sharpen blade');
@@ -574,6 +578,7 @@ async function main() {
       // Names stop at 80 characters; this one is shorter, so all of it is kept.
       assert.strictEqual(await h.text('thing-name'), long);
       await h.tap('thing-add-job');
+      await h.choice('new');
       await h.fill('field-name', 'Replace the left-hand rear suspension bush and check the other side too');
       await h.fill('field-every-n', '0');
       await h.save();
@@ -642,6 +647,8 @@ async function main() {
       await h2.shot('37-coming', { tall: 2100 });
       await h2.back();
       await h2.tap('pro-row');
+      await h2.t('pro-screen').waitFor();
+      await h2.sees('Free looks after 2 things');
       await h2.shot('38-pro-free');
       await h2.tap('pro-close');
     });
@@ -724,6 +731,7 @@ async function main() {
       const logMs = Date.now() - started;
       await h3.shot('41-heavy-log');
       await h3.tab('Things');
+      await h3.rows('thing-status-').first().waitFor();
       assert.strictEqual(await h3.rows('thing-status-').count(), 40);
       await h3.tab('Settings');
       // Whether reminders are on is this phone's choice, not the backup's: still off after the restore.

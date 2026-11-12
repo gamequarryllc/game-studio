@@ -79,7 +79,7 @@ export default function Suggestions() {
       <Stack.Screen options={{ title: `Jobs for ${thing.name}`, headerLeft: () => <BarButton testID="suggest-skip" label={fresh ? 'Skip' : 'Cancel'} onPress={leave} /> }} />
       <ScrollView testID="suggestions" contentContainerStyle={{ paddingTop: space.m, paddingBottom: space.xl }}>
         <Footnote style={{ marginTop: 0, marginBottom: space.m }}>
-          Tick the ones that apply. The intervals are the usual ones; your manual has the last word, and each can be changed later.
+          Check the ones that apply. The intervals are the usual ones; your manual has the last word, and each can be changed later.
         </Footnote>
         <Card>
           {templates.map((t, i) => {
@@ -122,7 +122,7 @@ export default function Suggestions() {
             );
           })}
         </Card>
-        <Footnote>New jobs wait under “Not logged yet” until you first mark them done, on the day you do them or the day you last did.</Footnote>
+        <Footnote>New jobs wait under “Not logged yet”. Tap a job’s ring when you do it. Already done it? Tap now and enter the date.</Footnote>
       </ScrollView>
       <View style={{ paddingHorizontal: space.xl, paddingTop: space.m, paddingBottom: insets.bottom + space.m, borderTopWidth: HAIRLINE, borderTopColor: c.rule, backgroundColor: c.page }}>
         <Button testID="suggest-add" label={count === 0 ? 'Add none for now' : `Add ${count} ${count === 1 ? 'job' : 'jobs'}`} onPress={add} />

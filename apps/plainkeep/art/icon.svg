@@ -1,32 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <!-- Plainkeep's icon: a service tag whose face is a steel rule. The marks
-       stand on one baseline, every fourth one taller, as on a rule; they are
-       inked up to today, and the tall red mark is the day the job falls due. -->
-  <defs>
-    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2A6397"/>
-      <stop offset="1" stop-color="#173F65"/>
-    </linearGradient>
-    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E9EDEB"/>
-    </linearGradient>
-  </defs>
-  <rect width="1024" height="1024" fill="url(#wall)"/>
-  <g transform="translate(512 520) scale(0.92) rotate(-8) translate(-512 -512)">
-    <path d="M356 100 H668 L800 258 V924 H224 V258 Z" fill="#0E2E4B" opacity="0.35" transform="translate(14 26)"/>
-    <path d="M356 100 H668 L800 258 V924 H224 V258 Z" fill="url(#card)"/>
-    <circle cx="512" cy="238" r="52" fill="#1D4F7C"/>
-    <g>
-      <rect x="282" y="560" width="30" height="230" rx="15" fill="#1D4F7C"/>
-      <rect x="340" y="660" width="30" height="130" rx="15" fill="#1D4F7C"/>
-      <rect x="398" y="660" width="30" height="130" rx="15" fill="#1D4F7C"/>
-      <rect x="456" y="660" width="30" height="130" rx="15" fill="#1D4F7C"/>
-      <rect x="514" y="560" width="30" height="230" rx="15" fill="#1D4F7C"/>
-      <rect x="572" y="660" width="30" height="130" rx="15" fill="#B9C1BD"/>
-      <rect x="630" y="660" width="30" height="130" rx="15" fill="#B9C1BD"/>
-    </g>
-    <rect x="688" y="440" width="34" height="350" rx="17" fill="#C8401F"/>
-    <rect x="282" y="818" width="440" height="14" rx="7" fill="#1D4F7C" opacity="0.18"/>
+       stand on one baseline, evenly spaced, every fourth one taller, as on a
+       rule; they are inked up to today, and the red mark is the day the job
+       is due. Flat colour: no gradient, no shadow. -->
+  <rect width="1024" height="1024" fill="#1D4F7C"/>
+  <g transform="translate(512 518) scale(0.93) rotate(-7) translate(-512 -512)">
+    <path d="M352 96 H672 L808 258 V928 H216 V258 Z" fill="#F7F8F7"/>
+    <circle cx="512" cy="236" r="50" fill="#1D4F7C"/>
+    <rect x="286.0" y="540" width="28" height="260" fill="#1D4F7C"/>
+    <rect x="339.0" y="650" width="28" height="150" fill="#1D4F7C"/>
+    <rect x="392.0" y="650" width="28" height="150" fill="#1D4F7C"/>
+    <rect x="445.0" y="650" width="28" height="150" fill="#1D4F7C"/>
+    <rect x="498.0" y="540" width="28" height="260" fill="#1D4F7C"/>
+    <rect x="551.0" y="650" width="28" height="150" fill="#1D4F7C"/>
+    <rect x="604.0" y="650" width="28" height="150" fill="#B4BDB9"/>
+    <rect x="657.0" y="650" width="28" height="150" fill="#B4BDB9"/>
+    <rect x="710.0" y="400" width="28" height="400" fill="#C8401F"/>
+    <rect x="286" y="800" width="452" height="14" fill="#1D4F7C"/>
   </g>
 </svg>

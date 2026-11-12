@@ -12,7 +12,7 @@ export function Odometer({ value, unit, size = 'm', testID }: { value: number | 
   const digits = value === null ? ['–', '–', '–', '–', '–', '–'] : String(Math.round(value)).padStart(6, '0').split('');
   return (
     <View testID={testID} accessible accessibilityLabel={value === null ? 'No odometer reading' : `Odometer ${value} ${unit}`} style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
-      <View style={{ flexDirection: 'row', backgroundColor: c.plate, borderRadius: radius.s, padding: 2, gap: 1 }}>
+      <View style={{ flexDirection: 'row', backgroundColor: c.plate, borderRadius: radius.s, padding: 2, gap: 1, borderWidth: 1, borderColor: c.plateRule }}>
         {digits.map((d, i) => (
           <View key={i} style={{ width: cell.w, height: cell.h, alignItems: 'center', justifyContent: 'center', borderLeftWidth: i === 0 ? 0 : 1, borderLeftColor: c.plateRule }}>
             <Text style={{ fontFamily: plate.semibold, fontSize: cell.f, lineHeight: cell.f + 2, color: c.onPlate, fontVariant: ['tabular-nums'] }}>{d}</Text>

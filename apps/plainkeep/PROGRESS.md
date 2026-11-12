@@ -9,6 +9,7 @@ Kept current after every finished item, so a run that is cut off can be picked u
 - Every screen; icon and launch mark (`art/`).
 - The end-to-end browser run (`e2e/run.cjs`, 24 steps, no console errors).
 - The feature pass (NOTES.md, "Use cases and feature ideas"); its "build now" items are built.
+- Critic review 3 (verdict: almost, "nothing looks broken") and its fixes: American wording throughout; "days over" under a late figure; odometers moved to the foot of a thing's card; one line a job in Upcoming reminders, and mileage reminders worded as the estimates they are; a plus in the Jobs and Log headings instead of blue rows; a flat icon with an even rule; the empty tabs without the small picture; the service record without the orphan "Entries" fact.
 - Critic review 2 (verdict: almost) and its fixes: job lines that hold up at 320 points (no rule on lists, short units, a name that shortens before a date does); large titles no longer clip their descenders; a thing's counts each in their own colour; a reminders offer that can be put away; "weeks left" on a job's card; a Pro screen with a picture of the record and two reasons; the service record without repeats; an icon with one idea.
 - Critic review 1 (verdict: almost) and its fixes: one 30-day "Coming up" window so the list is always in order; "Not logged yet" instead of made-up first dates; dates never cut off by a long name; years on dates in another year; counts on a thing's card; deletes moved into Edit; a clearer schedule choice in the job form; the service record restyled; Pro's button pinned; a bolder icon; dark-mode contrast; one word for each idea.
 - Store listing draft (`store/plainkeep/listing.json`), README, NOTES.
@@ -16,11 +17,10 @@ Kept current after every finished item, so a run that is cut off can be picked u
 
 ## In progress
 
-- Critic review 3.
+- Critic review 4 (the last look).
 - The first TestFlight upload (see NOTES.md, "Owner actions": it needs the app record).
 
 ## Next
 
-1. Fix what critic 2 finds; re-shoot.
-2. Store screenshots (`store/plainkeep/screenshots/`) once the look is settled.
-3. On a phone: reminders arriving, the permission question, the PDF, a sandbox purchase.
+1. Store screenshots (`store/plainkeep/screenshots/`) once the look is settled.
+2. On a phone: reminders arriving, the permission question, the PDF, a sandbox purchase.

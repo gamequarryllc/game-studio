@@ -10,13 +10,13 @@ Three things from the real world, none of them apps: the oil-change sticker in t
 - **Type.** Barlow Condensed (open licence, `@expo-google-fonts/barlow-condensed`) for titles and every figure: the lettering of equipment plates and road signs. The system font for everything that is read as a sentence.
 - **Motif.** *The rule*: a row of marks like the edge of a steel rule. Marks to the left of today are inked; the last, taller mark is the day the job falls due. It is the centre of a job's own screen and the face of the icon. It was on every line of the lists too, until two reviews running called it decoration there: on a list the figure and its colour say enough. *The ring*: the hole a tag hangs by, which is also how a job is marked done. *The odometer*: figures in cells on a dark plate. *The stamp*: a date in a small bordered square in the log.
 - **Shape.** Cards are plain white on the wall with the iPhone's own corner (12) and no outline; only the small instrument pieces (an odometer, a symbol's plate) are cut square. Hairlines only between rows.
-- **The icon** is one tag on enamel blue whose face is a rule: marks on one baseline, every fourth taller, inked up to today, and the tall red mark of the day a job falls due. One idea, no badge. The welcome picture and the small picture on an empty screen are the same tag with a second behind it.
+- **The icon** is one tag on flat enamel blue whose face is a rule: nine square marks, evenly spaced on one baseline, every fourth taller, inked up to today, and the tall red mark of the day a job is due. One idea, no badge, no gradient, no shadow (review 3 read the rounded marks as a bar chart). The welcome picture is the same tag with a second behind it; the empty tabs carry no picture, just a title, a sentence and a button.
 
 **House rules that keep it from looking generated:**
 
 - A figure and the sentence beside it never say the same thing twice. A job's line shows what is left ("19 days") as the figure and where the limit lies ("Dec 1") as the words.
 - No uppercase labels, no eyebrows above headlines, no rows of three icons in tinted squares. Empty screens are a title, a sentence and one button, left-aligned.
-- Sentence case, no exclamation marks, and the same word for the same thing everywhere: a *thing* is looked after, a *job* comes round, the *log* holds what was done, a job is *paused*, a turn is *skipped*, late is *overdue* (never "over"), money is *spent*.
+- Sentence case, no exclamation marks, and the same word for the same thing everywhere: a *thing* is looked after, a *job* comes round, the *log* holds what was done, a job is *paused*, a turn is *skipped*, late is *overdue* (the short unit under a list figure says "days over" or "mi over", so a late job is told apart without colour), money is *spent*. American spelling and wording throughout: check, not tick; repeats, not comes round.
 - Colour is never decoration. Red is only ever something overdue and amber something coming up: on a thing's card each count has its own colour, and the symbol stays neutral so one late job does not paint the whole card.
 - The add button beside a large title is a quiet toolbar circle, not a filled floating button.
 
@@ -77,6 +77,10 @@ What the other apps offer and what their reviewers ask for (store pages, 2026-11
 | Sync between two phones | Couples | High | Needs a server or iCloud; breaks "nothing leaves the phone" | No |
 | Fuel and mileage economy | Car enthusiasts | Medium | It is another app | No |
 | Reading receipts with the camera | — | Low here | The receipt vault on the list does this | No |
+
+- **A mileage job's reminder is an estimate and says so.** Its day comes from the pace of the odometer readings, so the reminder reads "should be due around Jan 20, going by the odometer" and, on the day, asks what the odometer says. It gets no follow-ups: there is no real date to have slipped past, and the monthly odometer nudge already asks for a reading.
+- **Upcoming reminders** lists the next reminder for each job, not every one planned (review 3: the same job four times read as noise). The footnote says what follows.
+- **Adding from a thing's page** is the plus at the end of the Jobs and Log headings (Jobs offers "New job" or "Suggested jobs"), so the lists end with their last line and not with three blue rows.
 
 ## QA
 
