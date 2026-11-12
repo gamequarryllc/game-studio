@@ -1,25 +1,37 @@
 // Run before any App Store build: `npm run check:release`.
-// A store build must be able to sell and restore Pro. Without the RevenueCat
-// key the Pro screen only explains that purchases are off, which is right for
-// Expo Go and the web preview and wrong for a build that goes to App Review.
+// A store build must be able to sell and restore Pro, and must carry nothing
+// that only a test build should have.
 
 const fs = require('fs');
 const path = require('path');
 
-const config = fs.readFileSync(path.join(__dirname, '..', 'src', 'pro', 'config.ts'), 'utf8');
-const app = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'app.json'), 'utf8')).expo;
+const root = path.join(__dirname, '..');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+const config = read('src/pro/config.ts');
+const app = JSON.parse(read('app.json')).expo;
+const pkg = JSON.parse(read('package.json'));
 const problems = [];
 
-const key = /REVENUECAT_IOS_API_KEY = '([^']*)'/.exec(config);
-if (!key) problems.push('src/pro/config.ts: REVENUECAT_IOS_API_KEY was not found.');
-else if (key[1].trim() === '') problems.push('src/pro/config.ts: REVENUECAT_IOS_API_KEY is empty. Add the public App Store key from RevenueCat (it starts with "appl_").');
-else if (!key[1].startsWith('appl_')) problems.push('src/pro/config.ts: REVENUECAT_IOS_API_KEY should be the public App Store key, which starts with "appl_". Never put a secret key here.');
-
 const bundle = app.ios && app.ios.bundleIdentifier;
-if (!config.includes(`'${bundle}.pro'`)) problems.push(`src/pro/config.ts: PRODUCT_ID should be ${bundle}.pro, to match app.json.`);
+if (!config.includes(`PRODUCT_ID = '${bundle}.pro'`)) problems.push(`src/pro/config.ts: PRODUCT_ID should be ${bundle}.pro, to match app.json and the product in App Store Connect.`);
+
+if (!pkg.dependencies['expo-iap']) problems.push('package.json: expo-iap is missing, so nothing can be bought.');
+const plugins = (app.plugins || []).map((p) => (Array.isArray(p) ? p[0] : p));
+if (!plugins.includes('expo-iap')) problems.push('app.json: "expo-iap" is missing from plugins, so the iPhone build would leave the store out.');
+
+// The app's promise is that nothing leaves the phone. A purchase service that keeps its own records would break it.
+for (const name of ['react-native-purchases']) {
+  if (pkg.dependencies[name]) problems.push(`package.json: ${name} sends purchase records to its own servers; Plainproof buys straight from the App Store.`);
+}
+
+const listingPath = path.join(root, '..', '..', 'store', 'plainproof', 'listing.json');
+if (fs.existsSync(listingPath)) {
+  const listing = JSON.parse(fs.readFileSync(listingPath, 'utf8'));
+  if (listing.bundle_id !== bundle) problems.push(`store/plainproof/listing.json: bundle_id is ${listing.bundle_id}, app.json has ${bundle}.`);
+}
 
 if (problems.length > 0) {
   console.error('Not ready for an App Store build:\n  ' + problems.join('\n  '));
   process.exit(1);
 }
-console.log('Ready: the store key is set and the product id matches the bundle id.');
+console.log('Ready: the product id matches the bundle id and the store is built in.');

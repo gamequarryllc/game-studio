@@ -62,7 +62,9 @@ def check_app(slug, d, root, bad):
             bad(f"Pro costs {price}; the studio's range is 2.99 to 9.99")
         if p.get("product_id") != bundle + ".pro":
             bad(f"product_id must be {bundle}.pro")
-        if p.get("revenuecat_entitlement") != entitlement:
+        # An app that buys straight from the App Store (StoreKit) has no entitlement to name;
+        # one that goes through RevenueCat must name it, and the app must use the same one.
+        if "revenuecat_entitlement" in p and p.get("revenuecat_entitlement") != entitlement:
             bad(f"revenuecat_entitlement must be {entitlement}")
 
     support = d.get("support") or {}
@@ -100,7 +102,12 @@ def check_app(slug, d, root, bad):
             code = f.read()
         if f"'{bundle}.pro'" not in code:
             bad(f"src/pro/config.ts does not use the product id {bundle}.pro")
-        if f"'{entitlement}'" not in code:
+        uses_revenuecat = "REVENUECAT" in code
+        listed = len(products) == 1 and "revenuecat_entitlement" in products[0]
+        if uses_revenuecat != listed:
+            bad("the listing and src/pro/config.ts disagree on whether Pro goes through RevenueCat "
+                "(the product's revenuecat_entitlement is there for one that does, absent for one that buys straight from the App Store)")
+        if uses_revenuecat and f"'{entitlement}'" not in code:
             bad(f"src/pro/config.ts does not use the entitlement {entitlement}")
         if price is not None and f"'${price:.2f}'" not in code:
             bad(f"src/pro/config.ts does not show the listing's price ${price:.2f}")

@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 import { readText, writeText } from '@/platform/files';
 
-import { buy, restore, startStore, storeAvailable, type BuyResult, type RestoreResult } from './revenuecat';
+import { buy, readPrice, restore, startStore, storeAvailable, type BuyResult, type RestoreResult } from './appstore';
 
 // Whether this phone has Pro. Kept in its own small file, apart from the
 // inventory, so a backup never carries a purchase and a restore never loses one.
@@ -68,7 +68,8 @@ export const pro = {
         try {
           const result = await startStore(setOwned);
           if (storeAvailable()) {
-            setOwned(result.owned);
+            // null means the iPhone could not say: keep the saved answer.
+            if (result.owned !== null) setOwned(result.owned);
             set({ price: result.price });
           }
         } catch {
@@ -95,6 +96,13 @@ export const pro = {
     if (result === 'restored') setOwned(true);
     set({ busy: false });
     return result;
+  },
+
+  /** Reads the price again when it wasn't there at the start (the phone was offline). */
+  async refreshPrice(): Promise<void> {
+    if (!state.storeOpen || state.price !== null) return;
+    const price = await readPrice();
+    if (price !== null) set({ price });
   },
 
   setPretend(pretend: boolean): void {

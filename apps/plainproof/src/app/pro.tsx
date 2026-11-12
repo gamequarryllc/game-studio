@@ -1,4 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,7 +21,7 @@ const POINTS = [
   'Still no account, and nothing leaves your iPhone',
 ];
 
-/** A build with no store key (Expo Go, the web preview) says so when asked, rather than showing a dead button. */
+/** Where there is no store (Expo Go, the web preview) the button says so when asked, rather than doing nothing. */
 const NO_STORE_TITLE = 'Purchases aren’t switched on in this build';
 const NO_STORE_BODY = DEV_TOOLS
   ? 'Nothing can be bought here. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.'
@@ -35,6 +36,12 @@ export default function ProScreen() {
   const used = Math.min(held, FREE_ITEM_LIMIT);
   const full = held >= FREE_ITEM_LIMIT;
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  // The price comes from the App Store. If the phone was offline when the app started, ask again now.
+  useEffect(() => {
+    void pro.refreshPrice();
+  }, []);
+  // Where there is a store, only its own price is ever shown: the draft price would be wrong in another country.
+  const price = state.price ?? (state.storeOpen ? null : EXPECTED_PRICE);
 
   const buy = async () => {
     if (!state.storeOpen) {
@@ -45,6 +52,10 @@ export default function ProScreen() {
     if (result === 'purchased') {
       success();
       close();
+    } else if (result === 'pending') {
+      await notify('Waiting for approval', 'Pro unlocks on this iPhone as soon as the purchase is approved.');
+    } else if (result === 'unavailable') {
+      await notify('The App Store couldn’t be reached', 'Plainproof Pro can’t be bought right now. Check your connection and try again.');
     } else if (result === 'failed') {
       await notify('The purchase didn’t go through', 'You have not been charged. Try again in a moment.');
     }
@@ -94,7 +105,7 @@ export default function ProScreen() {
 
         {state.isPro ? null : (
           <View style={{ marginTop: space.xxl + space.xs, gap: space.xs }}>
-            <Button testID="pro-buy" label={`Unlock Pro · ${state.price ?? EXPECTED_PRICE}`} busy={state.busy} onPress={buy} />
+            <Button testID="pro-buy" label={price ? `Unlock Pro · ${price}` : 'Unlock Pro'} busy={state.busy} onPress={buy} />
             <Button testID="pro-restore" label="Restore purchase" kind="plain" disabled={state.busy} onPress={restore} />
             <Text style={[type.footnote, { color: c.ink2, textAlign: 'center' }]}>One payment through the App Store.</Text>
           </View>

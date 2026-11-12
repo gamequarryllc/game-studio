@@ -1,5 +1,5 @@
 {
-  "_status": "draft 2026-11-11. Apple accepted the name when the app record was created on 2026-11-11. Screenshots come from the app's browser run once the owner has tried it on a phone.",
+  "_status": "ready to enter 2026-11-12. Apple accepted the name when the app record was created on 2026-11-11.",
   "kind": "app",
   "bundle_id": "com.gamequarry.plainproof",
   "name": "Plainproof: Home Inventory",
@@ -38,18 +38,10 @@
     "kids_category": false
   },
   "privacy_label": {
-    "note": "Draft for App Store Connect > App Privacy. The apps were planned as 'Data Not Collected', but RevenueCat's own guide says an app that uses it must declare Purchase History, because RevenueCat keeps the purchase record on its servers (https://www.revenuecat.com/docs/platform-resources/apple-platform-resources/apple-app-privacy). With anonymous ids and no ads or analytics the honest label is the one below. The owner decides, and should give this app the same answers as the reference app's listing if that one already declares purchases.",
+    "note": "For App Store Connect > App Privacy: 'Data Not Collected'. The app has no server, no account, no analytics and no ads, and since 2026-11-12 it buys Pro straight from the App Store (StoreKit) with no purchase service in between, so nothing is collected by the developer or by any third party the app brings in. Apple's own handling of a purchase is Apple's, and is not declared here.",
     "data_used_to_track_you": [],
     "data_linked_to_you": [],
-    "data_not_linked_to_you": [
-      {
-        "type": "Purchases: Purchase History",
-        "purposes": [
-          "App Functionality",
-          "Analytics"
-        ]
-      }
-    ],
+    "data_not_linked_to_you": [],
     "everything_else": "Not collected. Items, photos, receipts, values and notes never leave the device."
   },
   "products": [
@@ -58,12 +50,11 @@
       "type": "non-consumable",
       "price_usd": 5.99,
       "display_name": "Plainproof Pro",
-      "description": "As many items as your home holds. Pay once.",
-      "product_id": "com.gamequarry.plainproof.pro",
-      "revenuecat_entitlement": "plainproof_pro"
+      "description": "Unlimited items and more places. Pay once.",
+      "product_id": "com.gamequarry.plainproof.pro"
     }
   ],
-  "product_id_note": "Store product id = bundle id + '.pro'. The app uses exactly this id and entitlement (apps/plainproof/src/pro/config.ts). In RevenueCat: attach the product to the entitlement, and put it in the current offering as the Lifetime package (the app reads the current offering to find the product and its local price). Price and free limit: research/market.md, 'Home inventory'.",
+  "product_id_note": "Store product id = bundle id + '.pro'. The app uses exactly this id (apps/plainproof/src/pro/config.ts) and reads the product, its local price and whether it is owned straight from the App Store on the iPhone. Price and free limit: research/market.md, 'Home inventory'.",
   "name_alternatives": [
     "Plainproof: Home Contents List",
     "Plainproof Home Inventory",

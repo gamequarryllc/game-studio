@@ -73,11 +73,11 @@ Add packages with `npx expo install <package>` so the version matches the SDK. R
 | `src/domain/` | The logic, with no React in it and unit tests beside it: the inventory document and its repair-on-load parser, totals and gaps, search and sort, money and dates, the report, the spreadsheet, the backup file, the free limit |
 | `src/state/` | The one in-memory copy of the inventory and the operations that save it |
 | `src/platform/` | Everything that touches the device (files, photos, the share sheet, haptics), each with a `.web.ts` twin for the preview |
-| `src/pro/` | The Pro unlock: RevenueCat behind a small adapter, kept in its own file apart from the inventory, so a backup never carries a purchase |
+| `src/pro/` | The Pro unlock: the App Store's own purchase (StoreKit, through `expo-iap`) behind a small adapter, with no service in between, kept in its own file apart from the inventory, so a backup never carries a purchase |
 | `src/ui/` | The theme and the handful of pieces every screen is built from |
 | `e2e/` | The end-to-end browser run and its fixture photos |
 | `art/` | The icon and splash mark as SVG (the PNGs in `assets/images/` are rendered from these) |
 
 ## Before it can go on the App Store
 
-The owner's steps (an app record, the in-app purchase, the RevenueCat key) are listed in [NOTES.md](NOTES.md) under "Going live". Nothing here submits anything.
+The owner's steps (the agreement that lets the account sell, and Submit for Review) are listed in [NOTES.md](NOTES.md) under "Going live". Nothing here submits anything.
