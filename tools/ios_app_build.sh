@@ -218,10 +218,12 @@ if [ -d "$app/targets" ]; then
     CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES \
     AD_HOC_CODE_SIGNING_ALLOWED=YES PROVISIONING_PROFILE_SPECIFIER= DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
   check_app "$archive/Products/Applications/$name.app"
-  for part in "$archive/Products/Applications/$name.app" "$archive/Products/Applications/$name.app"/PlugIns/*.appex; do
+  for part in "$archive/Products/Applications/$name.app" "$archive/Products/Applications/$name.app"/PlugIns/*.appex "$archive/Products/Applications/$name.app"/Extensions/*.appex; do
     [ -d "$part" ] || continue
     kept="$(codesign -d --entitlements - --xml "$part" 2>/dev/null | plutil -p - 2>/dev/null || true)"
     echo "$(basename "$part"): $(echo "$kept" | grep -oE '"[a-z.-]*(application-groups|family-controls)"' | tr -d '"' | sed 's/.*\.//' | sort -u | paste -sd, - || true)"
+    # Everything shares the App Group except a sealed report extension (in Extensions/), which may not.
+    case "$part" in */Extensions/*) continue;; esac
     echo "$kept" | grep -q "application-groups" || { echo "$(basename "$part") lost its App Group entitlement in the archive; an upload would not work on a phone" >&2; exit 1; }
   done
 else

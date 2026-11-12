@@ -45,7 +45,7 @@ The owner's note on the first build (2026-11-11): a good baseline, but dull. The
 | Goal, recharge time, levels | Real, saved on the phone | The same, and handed to the phone as the day's plan |
 | Battery cells, colour, words | Real logic, fed by pretend use | Fed by the checkpoints the phone reports |
 | Minutes used | Pretend: added by hand under Developer | A floor: the largest checkpoint reached ("At least 1h 30m") |
-| Per-app times on Today | Not built | Not built (needs Apple's report extension; not in version one) |
+| Per-app times on Today | Not there | "What used it": the top five apps since the recharge, drawn by Apple's report extension (`targets/report/`). The app never sees the list |
 | Always-allowed list | Names typed in | Apple's app picker; the app only learns how many are ticked |
 | What counts | Everything or the preset, saved | Everything, or whatever is ticked in Apple's picker |
 | Warning and empty screens | Previews opened from Developer | Drawn by the phone over other apps |
@@ -65,6 +65,8 @@ The Developer section (pretend use, recharge now, the two previews) shows in tes
 - **`targets/widget/`** is ours: the six-cell battery for the home screen (small, medium) and the lock screen. It reads the goal and recharge time the app left in the App Group (`plainlimit_plan`) and the times the monitor recorded for each checkpoint, and applies the same rules as the app: a checkpoint counts if it came after the last recharge and not impossibly early. A test (`monitorPlan.test.ts`) keeps its colours, words and names equal to the app's.
 - **`modules/plainlimit-widgets/`** is a ten-line native module so the app can ask for a widget redraw after a setting changes.
 - **`src/domain/monitorPlan.ts`** turns the settings into the day's plan as plain data. **`src/platform/screenTime.ts`** is the only file that hands it to the library.
+
+- **`targets/report/`** is ours: Apple's usage report extension, which draws the "What used it" list on Today. The phone runs it in a sealed box and shows its picture inside the app; `modules/plainlimit-widgets/` has the view that gives it a place on screen and tells it which hours and which apps. The owner asked to see it working (2026-11-11); it is meant to become the Pro feature later. The target plugin has no type for a report extension, so the target is declared as its nearest relative ("app-intent", also an ExtensionKit extension) with its own Info.plist.
 
 The day's plan:
 
@@ -156,6 +158,7 @@ Done in the owner's developer account on 2026-11-11, by the owner's conversation
 | `com.gamequarry.plainlimit.ShieldAction` | buttons on the screens over apps | App Groups, Family Controls (Development and Distribution) |
 | `com.gamequarry.plainlimit.ShieldConfiguration` | the look of the screens over apps | App Groups, Family Controls (Development and Distribution) |
 | `com.gamequarry.plainlimit.widget` | the home screen widget | App Groups |
+| `com.gamequarry.plainlimit.report` | the usage report on Today (added 2026-11-11) | Family Controls (Development and Distribution) |
 | `group.com.gamequarry.plainlimit` | the App Group all five share | (assigned to all five) |
 
 The app record "Plainlimit" (iOS, English (U.S.), SKU `plainlimit`) was created in App Store Connect the same day, which also holds the name.

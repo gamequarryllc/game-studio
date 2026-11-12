@@ -12,6 +12,7 @@ import { BigButton, Label } from '@/ui/kit';
 import { useEasedColor } from '@/ui/motion';
 import { Ruler } from '@/ui/Ruler';
 import { c, display } from '@/ui/theme';
+import { UsageReport } from '@/ui/UsageReport';
 import { useDay } from '@/ui/useDay';
 
 // Today: the top of the screen is the battery's colour, edge to edge, so the
@@ -78,6 +79,8 @@ export default function Today() {
           </Text>
           <Ruler fraction={fraction} color={accent} />
         </View>
+
+        {counting ? <UsageReport settings={settings} now={now} /> : null}
 
         <View style={{ gap: 6 }}>
           <Text style={styles.body}>

@@ -13,9 +13,11 @@
 //      asked (the test build shows it). Without this the widget would only
 //      catch up when iOS next feels like refreshing it.
 //
-//   4. Removes the push-notification entitlement the notifications package adds.
+//   4. Writes targets/report/Info.plist (the usage report extension), with the
+//      app's version and build number.
+//   5. Removes the push-notification entitlement the notifications package adds.
 //
-// targets/widget/ is the app's own and is kept in git.
+// targets/widget/ and targets/report/ are the app's own and are kept in git.
 const fs = require('fs');
 const path = require('path');
 const { withEntitlementsPlist } = require('expo/config-plugins');
@@ -78,6 +80,33 @@ module.exports = function withTargets(config) {
     }
     fs.writeFileSync(marker, stamp);
   }
+  // The report extension's Info.plist: which kind of extension it is, and the
+  // same version and build number as the app (Apple compares them on upload).
+  const reportDir = path.join(targets, 'report');
+  if (fs.existsSync(reportDir)) {
+    const version = String(config.version ?? '1.0.0');
+    const build = String(config.ios?.buildNumber ?? '1');
+    fs.writeFileSync(
+      path.join(reportDir, 'Info.plist'),
+      `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundleShortVersionString</key>
+    <string>${version}</string>
+    <key>CFBundleVersion</key>
+    <string>${build}</string>
+    <key>EXAppExtensionAttributes</key>
+    <dict>
+      <key>EXExtensionPointIdentifier</key>
+      <string>com.apple.deviceactivityui.report-extension</string>
+    </dict>
+  </dict>
+</plist>
+`,
+    );
+  }
+
   // The app only ever shows notifications it makes on the phone itself. The
   // notifications package asks for Apple's push service by default, which would
   // need a capability the app does not use; take that back out.

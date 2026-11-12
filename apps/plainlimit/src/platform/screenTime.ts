@@ -282,6 +282,17 @@ export function diagnostics(): string[] {
   }
 }
 
+/**
+ * What Apple's usage report on Today should cover: from when today's count
+ * began to the next recharge, for the apps that count. The report is drawn by
+ * the phone; none of what it shows comes back to the app.
+ */
+export function reportWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
+  const from = countStart(periodStartOf(now, settings.rechargeMinute), countingSince());
+  const token = SCREEN_TIME_AVAILABLE && settings.countMode !== 'everything' ? (DeviceActivity.getFamilyActivitySelectionId(COUNTED_ID) ?? null) : null;
+  return { fromMs: from.getTime(), toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: token };
+}
+
 /** Calls back whenever the phone reports a checkpoint while the app is open. */
 export function onCheckpoint(listener: () => void): () => void {
   if (!SCREEN_TIME_AVAILABLE) return () => {};

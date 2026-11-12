@@ -49,3 +49,4 @@ example
 /targets/ShieldAction/
 /targets/ShieldConfiguration/
 /targets/*/generated.entitlements
+/targets/report/Info.plist
