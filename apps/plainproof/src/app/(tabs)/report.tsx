@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Platform, StyleSheet, Switch, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { updateProfile } from '@/domain/actions';
 import { displayTime, relativeDay } from '@/domain/dates';
@@ -143,10 +144,18 @@ export default function ReportTab() {
     );
 
   const lastBackup = doc.meta.lastBackupAt;
+  // Arriving from the "Not backed up" note on the Rooms tab brings the backup section into view.
+  const params = useLocalSearchParams<{ show?: string; at?: string }>();
+  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+  useEffect(() => {
+    if (params.show !== 'backup') return;
+    const timer = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 250);
+    return () => clearTimeout(timer);
+  }, [params.show, params.at]);
   const switchColors = { trackColor: { true: c.green, false: c.sunk }, ...(Platform.OS === 'web' ? { activeThumbColor: '#fff' } : {}) };
 
   return (
-    <TabScreen testID="report-screen" title="Report">
+    <TabScreen testID="report-screen" title="Report" scroller={scroller}>
       <Sheet />
       <View style={{ marginHorizontal: space.xl, marginTop: space.xl, gap: space.s }}>
         <Button testID="make-report" label={MAKES_PDF ? 'Create the PDF report' : 'Open the report'} icon="report" busy={busy === 'report'} onPress={report} />

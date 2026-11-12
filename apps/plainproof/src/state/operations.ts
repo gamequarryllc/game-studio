@@ -98,7 +98,9 @@ export async function restoreFromBackup(
       return { kind: 'cancelled' };
     }
     await staging.commit();
-    await store.replace(library);
+    // What is on the phone now is exactly what the file holds, so it counts as backed up as of now.
+    const restoredAt = Date.now();
+    await store.replace(mapDocs(library, (d) => markBackup(d, restoredAt)));
     const inUse = libraryPhotoIds(library);
     await removeOrphanPhotos(inUse);
     return { kind: 'restored', ...found, photos: [...inUse].filter((id) => seen.has(id)).length };

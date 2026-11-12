@@ -78,6 +78,19 @@ export function homeSummary(doc: Doc): HomeSummary {
   return s;
 }
 
+/**
+ * Where the copy kept off the phone stands. 'never': there are things here and no backup has been made.
+ * 'behind': something was added or changed since the last one. 'none': nothing to back up yet.
+ */
+export type BackupState = 'none' | 'never' | 'behind' | 'current';
+
+export function backupState(doc: Doc): BackupState {
+  if (doc.items.length === 0) return 'none';
+  const at = doc.meta.lastBackupAt;
+  if (at === null) return 'never';
+  return doc.items.some((item) => item.updatedAt > at) ? 'behind' : 'current';
+}
+
 export type ItemFilter = 'all' | 'no-photo' | 'no-value' | 'no-serial';
 export type ItemSort = 'recent' | 'value' | 'name';
 

@@ -18,7 +18,7 @@ import {
 import { emptyDoc } from '../doc';
 import { FREE_ITEM_LIMIT, canAddItem, freeItemsLeft } from '../limits';
 import { heavyHome, sampleHome } from '../sample';
-import { findItems, homeSummary, itemSubtitle, itemTotalCents, needsSerial, plural, roomSummaries } from '../selectors';
+import { backupState, findItems, homeSummary, itemSubtitle, itemTotalCents, needsSerial, plural, roomSummaries } from '../selectors';
 import { LIMITS } from '../types';
 
 const NOW = 1_800_000_000_000;
@@ -208,6 +208,30 @@ describe('profile and settings', () => {
     expect(doc.settings.currency).toBe('GBP');
     expect(setCurrency(doc, 'pounds')).toBe(doc);
     expect(markBackup(doc, 77).meta.lastBackupAt).toBe(77);
+  });
+});
+
+describe('whether the backup is behind', () => {
+  it('has nothing to say about an empty inventory', () => {
+    expect(backupState(twoRooms())).toBe('none');
+    expect(backupState(markBackup(twoRooms(), NOW))).toBe('none');
+  });
+
+  it('says never until the first backup, and current right after one', () => {
+    const { doc } = withItem('Kettle');
+    expect(backupState(doc)).toBe('never');
+    expect(backupState(markBackup(doc, NOW))).toBe('current');
+  });
+
+  it('falls behind when something is added or changed, and not when something is deleted', () => {
+    const first = withItem('Kettle');
+    const kettle = first.doc.items[0];
+    const backed = markBackup(first.doc, NOW + 10);
+    const added = addItem(backed, { ...emptyDraft(backed.rooms[0].id), name: 'Toaster' }, NOW + 20);
+    expect(backupState(added.doc)).toBe('behind');
+    const edited = updateItem(backed, kettle.id, { ...draftFromItem(kettle), name: 'Electric kettle' }, NOW + 30);
+    expect(backupState(edited)).toBe('behind');
+    expect(backupState(deleteItem(markBackup(added.doc, NOW + 40), kettle.id))).toBe('current');
   });
 });
 

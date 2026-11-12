@@ -6,7 +6,7 @@ import { addRoom } from '@/domain/actions';
 import { currentPlace, placeName, totalItems } from '@/domain/library';
 import { FREE_ITEM_LIMIT, freeItemsLeft } from '@/domain/limits';
 import { formatMoney } from '@/domain/money';
-import { homeSummary, plural, roomSummaries } from '@/domain/selectors';
+import { backupState, homeSummary, plural, roomSummaries } from '@/domain/selectors';
 import { usePro } from '@/pro/pro';
 import { openNewItem } from '@/state/nav';
 import { store, useDoc, useLibrary } from '@/state/store';
@@ -62,6 +62,21 @@ export default function RoomsTab() {
     });
   }
 
+  // The one gap that can undo all the others: the only copy is on a phone that can be lost with the home.
+  const backup = backupState(doc);
+  const backupDue = backup === 'never' || backup === 'behind';
+  const chip = ({ pressed }: { pressed: boolean }) => ({
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    paddingVertical: 4,
+    paddingLeft: 9,
+    paddingRight: 6,
+    borderRadius: 999,
+    backgroundColor: c.amberSoft,
+    opacity: pressed ? 0.7 : 1,
+  });
+
   // Under the drawer: "Add a room", and the free-version line when there is one.
   const under = 44 + (left !== null ? 24 : 0);
 
@@ -82,9 +97,22 @@ export default function RoomsTab() {
         summary={summary}
         currency={currency}
         footer={
-          gaps.length > 0 ? (
+          gaps.length > 0 || backupDue ? (
             // One row, however narrow the phone: it slides sideways sooner than it wraps and pushes the drawer down.
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.m, marginHorizontal: -space.l }} contentContainerStyle={{ gap: 6, paddingHorizontal: space.l }}>
+              {backupDue ? (
+                <Pressable
+                  testID="gap-backup"
+                  accessibilityRole="button"
+                  accessibilityLabel={backup === 'never' ? 'This inventory has not been backed up' : 'There are changes since the last backup'}
+                  hitSlop={6}
+                  onPress={() => router.push({ pathname: '/report', params: { show: 'backup', at: String(Date.now()) } })}
+                  style={chip}>
+                  <Icon name="backup" size={11} color={c.amber} />
+                  <Text style={[type.caption, { color: c.amber, fontWeight: '600' }]}>{backup === 'never' ? 'Not backed up' : 'Backup out of date'}</Text>
+                  <Icon name="chevron" size={9} color={c.amber} />
+                </Pressable>
+              ) : null}
               {gaps.map((g) => (
                 <Pressable
                   key={g.key}
@@ -93,7 +121,7 @@ export default function RoomsTab() {
                   accessibilityLabel={g.said}
                   hitSlop={6}
                   onPress={() => router.push({ pathname: '/items', params: { filter: g.key } })}
-                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: 4, paddingLeft: 9, paddingRight: 6, borderRadius: 999, backgroundColor: c.amberSoft, opacity: pressed ? 0.7 : 1 })}>
+                  style={chip}>
                   <Text style={[type.caption, type.tabular, { color: c.amber, fontWeight: '600' }]}>{g.text}</Text>
                   <Icon name="chevron" size={9} color={c.amber} />
                 </Pressable>

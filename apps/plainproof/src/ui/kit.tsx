@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import type { ReactNode } from 'react';
+import type { ComponentRef, ReactNode, RefObject } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -29,16 +29,20 @@ export function TabScreen({
   action,
   children,
   testID,
+  scroller,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
   testID?: string;
+  /** For a screen that needs to bring one of its own sections into view. */
+  scroller?: RefObject<ComponentRef<typeof ScrollView> | null>;
 }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
+      ref={scroller}
       testID={testID}
       style={{ flex: 1, backgroundColor: c.paper }}
       contentContainerStyle={{ paddingTop: insets.top + (Platform.OS === 'web' ? 22 : 10), paddingBottom: TAB_BAR_SPACE }}

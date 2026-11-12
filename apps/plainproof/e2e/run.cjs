@@ -613,6 +613,15 @@ async function main() {
     });
 
     await step('backup: one file with the document and every photo', async () => {
+      // The Rooms tab says so too, and its note leads to the backup section.
+      await h.tab('Rooms');
+      await h.expectText('gap-backup', /Not backed up/);
+      await h.shot('27b-rooms-not-backed-up');
+      await h.tap('gap-backup');
+      await h.visible('report-screen');
+      await page.waitForTimeout(900);
+      const inView = await t('backup-now').first().evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight; });
+      assert.ok(inView, 'the note on the Rooms tab did not bring the backup section into view');
       await h.expectText('last-backup', 'Not backed up yet.');
       const [download] = await Promise.all([page.waitForEvent('download'), h.tap('backup-now')]);
       assert.match(download.suggestedFilename(), /^Plainproof-backup-\d{4}-\d{2}-\d{2}\.zip$/);
@@ -631,6 +640,9 @@ async function main() {
       assert.ok(!JSON.stringify(manifest).includes('pretend'), 'the backup carries Pro state');
       await h.expectText('last-backup', 'Last backed up today.');
       await h.shot('28-report-backed-up');
+      await h.tab('Rooms');
+      await h.gone('gap-backup');
+      await h.tab('Report');
     });
 
     await step('the inventory survives a reload, and deep links open', async () => {
@@ -738,6 +750,99 @@ async function main() {
       await h.tap('dev-pretend-pro');
       await h.tab('Rooms');
       await h.expectText('home-count', '21 items in 4 rooms');
+      await h.tap('add-item');
+      await h.visible('pro-screen');
+      await h.tap('pro-close');
+      await h.gone('pro-screen');
+    });
+
+    await step('free and full: everything but adding still works, deleting makes room, a bigger backup comes back whole', async () => {
+      // 21 items, Pro off. This is what a person who never pays is left with.
+      await h.expectText('home-count', '21 items in 4 rooms');
+      // The restore counted as a backup; the sixteen things added since have put it behind.
+      await h.expectText('gap-backup', /Backup out of date/);
+      // Editing, and adding a photo to something already there.
+      await h.openRoom('Living room');
+      await h.tap('item-65-inch OLED television');
+      await h.tap('item-edit');
+      await h.visible('item-form');
+      await h.fill('field-value', '2000');
+      await h.upload('photos-add', path.join(FIXTURES, 'lamp.jpg'));
+      await h.visible('photos-remove-1', 15000);
+      await h.tap('form-save');
+      await h.expectText('item-value', '$2,000');
+      await h.back();
+      await h.back();
+      // Rooms are never counted.
+      await h.tap('add-room');
+      await h.answer('Attic');
+      await h.visible('room-Attic');
+      await h.expectText('home-count', '21 items in 5 rooms');
+      // The report, the spreadsheet and the backup carry all of it.
+      await h.tab('Report');
+      const [fullReport] = await Promise.all([context.waitForEvent('page'), h.tap('make-report')]);
+      watch(fullReport, 'report-free-full');
+      await fullReport.waitForFunction(() => document.body && document.body.innerText.includes('Summary by room'), null, { timeout: 20000 });
+      const fullText = await fullReport.evaluate(() => document.body.innerText);
+      for (const s of ['The 21st thing', 'Box of books no. 20', '65-inch OLED television', '$2,000.00']) {
+        assert.ok(fullText.includes(s), `the free report is missing "${s}"`);
+      }
+      await fullReport.close();
+      const [sheet] = await Promise.all([page.waitForEvent('download'), h.tap('make-csv')]);
+      const sheetRows = fs.readFileSync(await sheet.path(), 'utf8').trimEnd().split('\r\n');
+      assert.strictEqual(sheetRows.length, 22, `expected a header and 21 items, got ${sheetRows.length} rows`);
+      const [fullDownload] = await Promise.all([page.waitForEvent('download'), h.tap('backup-now')]);
+      const fullZip = path.join(SHOTS, 'free-full-backup.zip');
+      await fullDownload.saveAs(fullZip);
+      const fullManifest = JSON.parse(strFromU8(unzipSync(new Uint8Array(fs.readFileSync(fullZip)))['plainproof.json']));
+      assert.strictEqual(fullManifest.library.places[0].doc.items.length, 21);
+      await h.tab('Rooms');
+      await h.gone('gap-backup');
+      // Deleting makes room: 21 down to 19, one more fits, then it is full again.
+      await h.tab('Items');
+      for (const name of ['The 21st thing', 'Box of books no. 20']) {
+        await h.fill('items-search', name);
+        await h.tap(`item-${name}`);
+        await h.tap('item-delete');
+        await h.confirm();
+        await h.visible('items-screen');
+      }
+      await h.fill('items-search', '');
+      await h.expectText('items-count', '19 items');
+      await h.tap('items-add');
+      await h.quickAdd('Back under the limit', '5');
+      await h.tap('form-save');
+      await h.visible('items-screen');
+      await h.expectText('items-count', '20 items');
+      await h.tap('items-add');
+      await h.visible('pro-screen');
+      await h.tap('pro-close');
+      await h.gone('pro-screen');
+      // A backup bigger than the free version restores whole on a phone that has not paid.
+      await h.tab('Settings');
+      await h.tap('erase-everything');
+      await h.confirm();
+      await h.onboard(['Kitchen']);
+      await h.tab('Report');
+      await h.upload('restore', fullZip);
+      assert.match(await h.dialogText(), /The backup holds 21 items in 5 rooms/);
+      await h.confirm();
+      assert.match(await h.dialogText(), /Backup restored 21 items in 5 rooms, with \d+ photos\./);
+      await h.confirm();
+      await h.tab('Rooms');
+      await h.expectText('home-count', '21 items in 5 rooms');
+      await h.expectText('free-note', /The free version is full at 20 items\./);
+      await h.gone('gap-backup'); // what was just restored is what the file holds
+      await h.shot('33b-free-full-restored');
+      await h.openRoom('Living room');
+      await h.tap('item-65-inch OLED television');
+      await h.expectText('item-value', '$2,000');
+      await h.tap('item-edit');
+      await h.visible('item-form');
+      await h.tap('form-cancel');
+      await h.visible('item-screen');
+      await h.back();
+      await h.back();
       await h.tap('add-item');
       await h.visible('pro-screen');
       await h.tap('pro-close');
