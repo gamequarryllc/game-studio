@@ -58,7 +58,7 @@ export function FolderCard({
   sample?: boolean;
   /** The drawer's label plate on the Rooms screen: a plain card with the name inside, no tab. */
   plate?: boolean;
-  /** On a short screen: no meters, so the drawer under the plate has room. */
+  /** A shorter plate: a smaller figure and no meters, so the drawer under it has room. */
   compact?: boolean;
   /** Under the meters, once there is something to add up: the gaps worth filling in. */
   footer?: ReactNode;
@@ -82,7 +82,8 @@ export function FolderCard({
     PixelRatio.getFontScale(),
   );
   const total = formatMoney(summary.totalCents, currency, { whole: true });
-  const size = figureSize(total, type.figure.fontSize);
+  // On the Rooms screen the plate is kept short, so the drawer under it has the room: a smaller figure, no meters.
+  const size = figureSize(total, compact ? 36 : type.figure.fontSize);
   return (
     <View
       style={styles.wrap}
@@ -115,7 +116,7 @@ export function FolderCard({
           </Text>
         ) : (
           <>
-            <Text style={[type.footnote, { color: inks.ink2 }]}>Everything adds up to</Text>
+            {compact ? null : <Text style={[type.footnote, { color: inks.ink2 }]}>Everything adds up to</Text>}
             <Text
               testID={id('home-total')}
               style={[type.figure, type.tabular, { color: inks.ink, fontSize: size, lineHeight: Math.round(size * 1.14) }]}

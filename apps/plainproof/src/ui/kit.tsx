@@ -55,6 +55,26 @@ export function TabScreen({
   );
 }
 
+/**
+ * A tab screen that does not scroll: its parts are laid out to fit one screen, and whichever of them has `flex: 1`
+ * takes the height that is left. The Rooms tab uses it, so the only thing that moves there is the drawer.
+ */
+export function FittedTabScreen({ title, action, children, testID }: { title: string; action?: ReactNode; children: ReactNode; testID?: string }) {
+  const { c } = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <View testID={testID} style={{ flex: 1, backgroundColor: c.paper, paddingTop: insets.top + (Platform.OS === 'web' ? 22 : 10), paddingBottom: TAB_BAR_SPACE }}>
+      <View style={styles.titleRow}>
+        <Text accessibilityRole="header" style={[type.largeTitle, { color: c.ink, flex: 1 }]} numberOfLines={1}>
+          {title}
+        </Text>
+        {action}
+      </View>
+      {children}
+    </View>
+  );
+}
+
 /** A scrolling screen that sits under a navigation bar. */
 export function PushedScreen({ children, testID, bottom }: { children: ReactNode; testID?: string; bottom?: ReactNode }) {
   const { c } = useTheme();

@@ -200,19 +200,27 @@ function helpers(page) {
         }
       }
     },
-    /** Flips the drawer until a room's folder is at the front. One folder is one DECK_STEP of scrolling. */
+    /** How far it is from one folder to the next in the drawer: one folder is one step of sliding. */
+    async deckStep() {
+      return Number(await t('room-deck').first().getAttribute('data-step'));
+    },
+    /** Whether a room's folder is the open one: what is written on it shows only then. */
+    async isOpen(name) {
+      return (await t(`room-writing-${name}`).first().evaluate((el) => Number(getComputedStyle(el).opacity))) > 0.99;
+    },
+    /** Slides the drawer until a room's folder is the open one. */
     async bringToFront(name) {
       await h.visible(`room-${name}`);
       const index = Number(await t(`room-${name}`).first().getAttribute('data-index'));
+      const step = await h.deckStep();
       await t('room-deck').first().evaluate((el, top) => {
         // scrollTop, not scrollTo: on this element scrollTo takes its arguments the React Native way round.
         el.scrollTop = top;
-      }, index * 84);
+      }, index * step);
       await page.waitForTimeout(250);
-      const shown = await t(`room-${name}`).first().evaluate((el) => Number(getComputedStyle(el.parentElement).opacity));
-      assert.ok(shown > 0.99, `${name} is not at the front of the drawer (opacity ${shown})`);
+      assert.ok(await h.isOpen(name), `${name} is not the open folder`);
     },
-    /** Opens a room the way a person would: flip to its folder, then tap it. */
+    /** Goes into a room the way a person would: bring its folder open, then tap it. */
     async openRoom(name) {
       await h.bringToFront(name);
       await h.tap(`room-${name}`);
@@ -323,34 +331,31 @@ async function main() {
       await h.visible('rooms-screen');
       await h.expectText('home-total', '$1,899');
       await h.expectText('home-count', '1 item in 5 rooms');
-      // The drawer: the first room's folder is in front, the others stand behind it, each higher, smaller and fainter.
-      const folder = async (room) => {
-        const el = t(`room-${room}`).first();
-        const box = await el.boundingBox();
-        const opacity = await el.evaluate((node) => Number(getComputedStyle(node.parentElement).opacity));
-        return { ...box, opacity };
-      };
-      const first = await folder('Living room');
-      const second = await folder('Kitchen');
-      const third = await folder('Bedroom');
-      assert.ok(first.opacity > 0.99, 'the first folder is not fully shown');
-      assert.ok(second.y < first.y - 20 && third.y < second.y - 20, `the folders behind are not stepped up (${first.y}, ${second.y}, ${third.y})`);
-      assert.ok(second.width < first.width && third.width < second.width, 'the folders behind are not smaller');
-      // Folders are solid: one that is shown is never see-through, so nothing behind it shows through.
-      assert.ok(second.opacity > 0.99 && third.opacity > 0.99, 'a folder standing behind is see-through');
+      // The drawer: every room's folder is on the screen at once, one under the other, and the first is the open one.
+      const five = ['Living room', 'Kitchen', 'Bedroom', 'Home office', 'Garage'];
+      const tops = [];
+      for (const room of five) tops.push((await t(`room-tab-${room}`).first().boundingBox()).y);
+      for (let i = 1; i < tops.length; i++) assert.ok(tops[i] > tops[i - 1] + 20, `folder ${i + 1} is not below folder ${i} (${tops.join(', ')})`);
+      const addRoom = await t('add-room').first().boundingBox();
+      assert.ok(tops[tops.length - 1] + 20 < addRoom.y, 'the last folder is not on the screen above the row under the drawer');
+      assert.ok(await h.isOpen('Living room'), 'the first folder is not open to begin with');
+      for (const room of five.slice(1)) assert.ok(!(await h.isOpen(room)), `${room} is open as well as the first folder`);
+      // The open folder shows more of itself: the gap under it is wider than the gap under a closed one.
+      assert.ok(tops[1] - tops[0] > tops[2] - tops[1] + 40, `the open folder is no taller than a closed one (${tops.join(', ')})`);
       // The name on a tab must stop short of the tab's slanted edge, and the tabs step across as cut tabs do.
-      for (const room of ['Living room', 'Kitchen', 'Bedroom']) {
+      for (const room of five) {
         const label = await t(`room-tab-${room}`).first().boundingBox();
         const slant = await t(`room-slant-${room}`).first().boundingBox();
-        assert.ok(label.x + label.width <= slant.x + 0.5, `${room}: the name runs under the tab's edge (${label.x + label.width} > ${slant.x})`);
         assert.ok(slant.x + slant.width <= page.viewportSize().width - 18, `${room}: the tab runs off the folder`);
+        assert.ok(label.x + label.width <= slant.x + 0.5, `${room}: the name runs under the tab's edge`);
       }
       const tabX = async (room) => (await t(`room-tab-${room}`).first().boundingBox()).x;
       assert.ok((await tabX('Kitchen')) > (await tabX('Living room')) + 40, 'the tabs are not staggered');
       assert.ok((await tabX('Bedroom')) > (await tabX('Kitchen')) + 40, 'the third tab is not further across than the second');
-      // The whole screen fits: the drawer, the row under it and the tab bar, with nothing to scroll.
+      assert.ok(Math.abs((await tabX('Home office')) - (await tabX('Living room'))) < 1, 'the fourth tab is not back in the first position');
+      // The whole screen fits: nothing on the Rooms tab scrolls but the drawer.
       const fits = await t('rooms-screen').first().evaluate((el) => el.scrollHeight - el.clientHeight);
-      assert.ok(fits <= 1, `the Rooms screen scrolls by ${fits}`);
+      assert.ok(fits <= 1, `the Rooms screen overflows by ${fits}`);
       await h.shot('10-rooms-one-item');
     });
 
@@ -757,52 +762,66 @@ async function main() {
       await h.expectText('home-total', /^\$[\d,]+$/);
       await h.shot('34-rooms-sample');
       await h.shot('34b-rooms-sample-full', { fullPage: true });
-      // Flipping through the drawer. One folder is 84 points of scrolling; the folder in front changes as it goes.
+      // Sliding through the drawer. All eight folders are in view; the opening moves down the column, one folder a step.
       const deck = t('room-deck').first();
-      const at = async (room) => {
-        const el = t(`room-${room}`).first();
-        const box = await el.boundingBox();
-        return { y: box.y, opacity: await el.evaluate((node) => Number(getComputedStyle(node.parentElement).opacity)) };
-      };
-      const flipTo = async (y) => {
+      const eight = ['Living room', 'Kitchen', 'Bedroom', 'Home office', 'Garage', 'Laundry', 'Dining room', 'Bathroom'];
+      const step = await h.deckStep();
+      const tabY = async (room) => (await t(`room-tab-${room}`).first().boundingBox()).y;
+      const slideTo = async (y) => {
         await deck.evaluate((el, top) => {
           el.scrollTop = top;
         }, y);
         await page.waitForTimeout(250);
       };
-      const start = await at('Living room');
-      assert.ok(start.opacity > 0.99, 'the first folder is not in front to begin with');
-      // Halfway past the first folder: it is on its way down and out, the second is on its way forward.
-      await flipTo(42);
-      const leaving = await at('Living room');
-      assert.ok(leaving.opacity > 0.1 && leaving.opacity < 0.8 && leaving.y > start.y + 20, `the front folder is not tipping away (${JSON.stringify(leaving)})`);
-      await h.shot('34c-rooms-flipping');
-      // Two folders on: the third is in front, exactly where the first one stood, and the first two are gone.
-      await flipTo(168);
-      const third = await at('Bedroom');
-      assert.ok(third.opacity > 0.99 && Math.abs(third.y - start.y) < 1.5, `the third folder did not come to the front (${JSON.stringify(third)} vs ${JSON.stringify(start)})`);
-      assert.ok((await at('Living room')).opacity < 0.01 && (await at('Kitchen')).opacity < 0.01, 'folders that have passed still show');
-      assert.match(await t('room-deck-place').first().getAttribute('aria-label'), /^Bedroom, 3 of 8$/);
-      await h.shot('34d-rooms-flipped');
-      // The folder in front opens its room; back on the Rooms tab the drawer is where it was left.
+      const window_ = await deck.boundingBox();
+      for (const room of eight) {
+        const y = await tabY(room);
+        assert.ok(y >= window_.y - 1 && y + 20 <= window_.y + window_.height, `${room} is not in view in the drawer`);
+      }
+      const rest = {};
+      for (const room of eight) rest[room] = await tabY(room);
+      assert.ok(await h.isOpen('Living room'), 'the first folder is not open to begin with');
+      // Halfway to the second folder: the first is closing, the second has come halfway up, the rest have not moved yet.
+      await slideTo(step / 2);
+      const mid = await tabY('Kitchen');
+      assert.ok(mid < rest['Kitchen'] - 20 && mid > rest['Living room'] + step - 1, `the second folder is not on its way up (${mid}, was ${rest['Kitchen']})`);
+      assert.ok(Math.abs((await tabY('Bedroom')) - rest['Bedroom']) < 1, 'a folder further down moved too soon');
+      await h.shot('34c-rooms-sliding');
+      // Two folders on: the third is open. The folders above it have closed up; the ones below are where they were.
+      await slideTo(2 * step);
+      assert.ok(await h.isOpen('Bedroom'), 'the third folder did not open');
+      assert.ok(!(await h.isOpen('Living room')) && !(await h.isOpen('Kitchen')), 'a folder that was passed is still open');
+      assert.ok(Math.abs((await tabY('Living room')) - rest['Living room']) < 1, 'the first folder moved');
+      assert.ok(Math.abs((await tabY('Bedroom')) - (rest['Living room'] + 2 * step)) < 1.5, 'the third folder is not two steps under the first');
+      assert.ok(Math.abs((await tabY('Home office')) - rest['Home office']) < 1, 'the folder under the open one moved');
+      await h.shot('34d-rooms-third-open');
+      // Tapping the open folder goes into its room; coming back, the drawer is as it was left.
       await h.tap('room-Bedroom');
       await h.visible('room-screen');
       await h.expectText('room-title', 'Bedroom');
       await h.back();
       await h.visible('rooms-screen');
-      assert.ok((await at('Bedroom')).opacity > 0.99, 'the drawer lost its place');
-      // A folder standing behind opens by its tab, without flipping to it first.
+      assert.ok(await h.isOpen('Bedroom'), 'the drawer lost its place');
+      // Tapping the tab of a closed folder brings the opening to it, and a second tap goes in.
       await t('room-tab-Garage').first().click();
+      const deadline = Date.now() + 4000;
+      while (!(await h.isOpen('Garage'))) {
+        assert.ok(Date.now() < deadline, 'tapping a closed folder did not open it');
+        await page.waitForTimeout(100);
+      }
+      assert.strictEqual(await t('room-screen').count(), 0, 'one tap on a closed folder went straight into the room');
+      await page.waitForTimeout(300);
+      await h.tap('room-Garage');
       await h.visible('room-screen');
       await h.expectText('room-title', 'Garage');
       await h.back();
       await h.visible('rooms-screen');
       // To the very last folder, and back to the start.
-      await flipTo(7 * 84);
-      assert.ok((await at('Bathroom')).opacity > 0.99, 'the last folder does not come to the front');
-      await flipTo(0);
-      const again = await at('Living room');
-      assert.ok(again.opacity > 0.99 && Math.abs(again.y - start.y) < 1.5, 'the folders did not go back where they were');
+      await slideTo(7 * step);
+      assert.ok(await h.isOpen('Bathroom'), 'the last folder does not open');
+      await slideTo(0);
+      assert.ok(await h.isOpen('Living room'), 'the first folder did not open again');
+      for (const room of eight) assert.ok(Math.abs((await tabY(room)) - rest[room]) < 1, `${room} did not go back where it was`);
     });
 
     await step('places: a second cabinet needs Pro, keeps to itself, and can be removed', async () => {
@@ -909,7 +928,6 @@ async function main() {
       await page.waitForTimeout(600);
       await h.shot('36-items-heavy-scrolled');
       await h.tab('Rooms');
-      await h.metersTidy(); // 587 of 645 is too long to share a row: the meters stack
       await h.shot('37-rooms-heavy');
       await h.tab('Report');
       t0 = Date.now();
@@ -951,15 +969,15 @@ async function main() {
         await k.confirm();
         await k.tab('Rooms');
         await k.expectText('home-total', '$6,648');
-        // A short phone leaves the meters off the plate so the drawer has room; everywhere else they must sit tidily.
-        if ((await k.t('meter-photo-label').count()) > 0) await k.metersTidy();
-        else assert.ok(p.viewportSize().height < 720, 'the meters are missing on a tall phone');
-        // On every size the whole Rooms screen fits, and the front folder is fully on it, above the tab bar.
+        // On every size the whole Rooms screen fits, and every folder of this small home is on it, above the row under the drawer.
         const roomsOverflow = await k.t('rooms-screen').first().evaluate((el) => el.scrollHeight - el.clientHeight);
-        assert.ok(roomsOverflow <= 1, `the Rooms screen scrolls by ${roomsOverflow} on the ${v.label} phone`);
-        const frontFolder = await k.t('room-Living room').first().boundingBox();
+        assert.ok(roomsOverflow <= 1, `the Rooms screen overflows by ${roomsOverflow} on the ${v.label} phone`);
         const note = await k.t('add-room').first().boundingBox();
-        assert.ok(frontFolder.y > 0 && frontFolder.y + frontFolder.height <= note.y + 1, `the front folder runs into the row under the drawer on the ${v.label} phone`);
+        for (const room of ['Living room', 'Kitchen', 'Bedroom', 'Home office']) {
+          const tab = await k.t(`room-tab-${room}`).first().boundingBox();
+          assert.ok(tab.y > 0 && tab.y + tab.height < note.y, `${room} is not on the screen on the ${v.label} phone`);
+        }
+        assert.ok(note.y + note.height <= p.viewportSize().height - 80, `the row under the drawer is under the tab bar on the ${v.label} phone`);
         await k.shot(`${v.label}-02-rooms`);
         await k.openRoom('Living room');
         await k.shot(`${v.label}-03-room`);
