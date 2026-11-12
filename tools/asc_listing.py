@@ -443,6 +443,14 @@ class Run:
         if not builds:
             recent = self.c.get("/v1/builds", **{"filter[app]": self.app, "sort": "-uploadedDate", "limit": 6})["data"]
             self.say("newest builds Apple lists: " + ", ".join(f"{r['attributes']['version']} ({r['attributes'].get('processingState')})" for r in recent))
+            # An upload Apple refused after it arrived never becomes a build; its reasons are kept with the upload.
+            try:
+                for u in self.c.get(f"/v1/apps/{self.app}/buildUploads", limit=20)["data"]:
+                    a = u["attributes"]
+                    if str(a.get("cfBundleVersion")) == self.build:
+                        self.say(f"upload {a.get('cfBundleShortVersionString')} ({a.get('cfBundleVersion')}): " + json.dumps(a.get("state"), sort_keys=True)[:3000])
+            except ApiError as e:
+                self.say(f"(the uploads list could not be read: {e})")
             raise ValueError(f"build {self.build} is not in App Store Connect yet (Apple may still be processing it)")
         b = builds[0]
         self.say(f"build {self.build}: processing {b['attributes'].get('processingState')}, expired {b['attributes'].get('expired')}")
