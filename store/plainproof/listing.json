@@ -51,7 +51,9 @@
       "price_usd": 5.99,
       "display_name": "Plainproof Pro",
       "description": "Unlimited items and more places. Pay once.",
-      "product_id": "com.gamequarry.plainproof.pro"
+      "product_id": "com.gamequarry.plainproof.pro",
+      "review_note": "Unlocks unlimited items and more than one place. Open the Settings tab and tap Plainproof Pro to see the purchase screen. Restore purchase is on the same screen.",
+      "review_screenshot": "iap-review-pro-screen.png"
     }
   ],
   "product_id_note": "Store product id = bundle id + '.pro'. The app uses exactly this id (apps/plainproof/src/pro/config.ts) and reads the product, its local price and whether it is owned straight from the App Store on the iPhone. Price and free limit: research/market.md, 'Home inventory'.",
@@ -59,5 +61,11 @@
     "Plainproof: Home Contents List",
     "Plainproof Home Inventory",
     "Plain Proof: Home Inventory"
-  ]
+  ],
+  "version": "1.0.0",
+  "copyright": "2026 Game Quarry LLC",
+  "screenshot_display_type": "APP_IPHONE_67",
+  "leave_out_eu": true,
+  "leave_out_eu_note": "The owner left the EU out for the studio's first game instead of declaring trader status under the Digital Services Act (2026-11); the same choice is made here until he says otherwise. Turn it off and the listing tool offers the app everywhere.",
+  "review_notes": "Plainproof is a home inventory for insurance claims. There is no account and no sign-in, and the app makes no network calls of its own: everything a person enters stays on the iPhone.\n\nThe one in-app purchase is Plainproof Pro (non-consumable, com.gamequarry.plainproof.pro). To see it: open the Settings tab and tap Plainproof Pro. It also opens by itself when the + button is tapped with 20 items already added, or when Add a place is tapped on the Places screen. Pro removes the 20-item limit and allows more than one place. Restore purchase is on the Pro screen and in Settings.\n\nThe camera and photo library are used only when a person adds a photo of an item or a receipt. The PDF report, the spreadsheet and the backup file are made on the device and handed to the share sheet."
 }

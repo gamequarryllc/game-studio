@@ -1120,7 +1120,10 @@ async function main() {
   console.log(`Base path: ${BASE}, total ${Math.round((Date.now() - started) / 1000)} s`);
 }
 
-main()
+// The store screenshots (e2e/store-shots.cjs) drive the app with the same hands.
+module.exports = { helpers, newPhone, FIXTURES, PHONE, UA };
+
+if (require.main === module) main()
   .catch(() => {})
   .finally(() => {
     if (problems.length > 0) {

@@ -1,0 +1,71 @@
+name: Store listing
+
+# Fills in an app's App Store Connect record from store/<app>/listing.json and its
+# screenshots: the in-app purchase and its price, the listing text, the pictures, the
+# notes for App Review, and (if asked) which build goes with the version.
+#
+#   plan    read-only: prints what is in App Store Connect now and what would change
+#   apply   makes the changes
+#
+# Only ever started by hand (Actions > Store listing > Run workflow). It uses the same
+# App Store Connect API key the builds sign with. Nothing here submits an app for review,
+# answers the App Privacy questions or enters the review contact: those stay with the owner.
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "App folder name in store/, e.g. plainproof"
+        required: true
+        type: string
+      mode:
+        description: "plan = look only; apply = write the listing"
+        required: true
+        type: choice
+        options: [plan, apply]
+        default: plan
+      build:
+        description: "Build number to attach to the version (apply only; leave empty to leave the build alone)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-listing-${{ inputs.app }}
+  cancel-in-progress: false
+
+jobs:
+  listing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Privacy check (no personal information in a public repo)
+        run: python3 tools/privacy_check.py
+
+      - name: The listing must pass the repo's own checks first
+        run: python3 tools/store_check.py
+
+      - name: Tools
+        run: python3 -m pip install --quiet --user "pyjwt[crypto]>=2.8"
+
+      - name: App Store Connect
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          IN_APP: ${{ inputs.app }}
+          IN_MODE: ${{ inputs.mode }}
+          IN_BUILD: ${{ inputs.build }}
+        run: |
+          set -euo pipefail
+          case "$IN_APP" in *[!a-z0-9-]*|"") echo "::error::Bad app name"; exit 1;; esac
+          [ -f "store/$IN_APP/listing.json" ] || { echo "::error::No listing at store/$IN_APP"; exit 1; }
+          case "$IN_MODE" in plan|apply) ;; *) echo "::error::Bad mode"; exit 1;; esac
+          case "$IN_BUILD" in *[!0-9]*) echo "::error::Build must be a number"; exit 1;; esac
+          python3 tools/asc_listing.py "$IN_APP" "$IN_MODE" "$IN_BUILD"
