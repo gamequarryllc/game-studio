@@ -55,9 +55,17 @@ export interface PlanShield {
   copy: ShieldCopy;
   primary: ButtonEffect;
   secondary: ButtonEffect | null;
-  /** Background and text colours as 0 to 255. */
+  /**
+   * Colours as 0 to 255. The phone lays the background over a dark, blurred
+   * view of the app beneath, so it comes out much darker than asked for; the
+   * words are therefore always light, and only the icon and the main button
+   * carry the bright colour.
+   */
   background: Rgb;
-  ink: Rgb;
+  text: Rgb;
+  accent: Rgb;
+  button: Rgb;
+  buttonText: Rgb;
   icon: string;
 }
 
@@ -79,27 +87,18 @@ export interface MonitorPlan {
   widget: { goalMinutes: number; rechargeMinute: number; countFrom: number };
 }
 
-export interface ClockToTheSecond {
-  hour: number;
-  minute: number;
-  second: number;
-}
-
-function toTheSecond(at: Date): ClockToTheSecond {
-  return { hour: at.getHours(), minute: at.getMinutes(), second: at.getSeconds() };
-}
-
 /**
  * Earned time runs to a time on the clock, and the apps are covered again at
- * that moment whether or not they were used. The phone is asked to watch a
- * stretch that ends exactly then. It refuses stretches shorter than a quarter
- * of an hour, so for ten or five earned minutes the stretch is given a start
- * in the past; only its end matters.
+ * that minute whether or not they were used. The phone is asked to watch a
+ * stretch of the day that ends then, in the same form as the day itself
+ * (hours and minutes, repeating), because that is the form known to work on a
+ * real phone. It refuses stretches shorter than a quarter of an hour, so the
+ * stretch always starts sixteen minutes before its end, often in the past;
+ * only its end matters. It is stopped again when it ends and when the day does.
  */
-export function topUpWindow(now: Date, until: Date): { start: ClockToTheSecond; end: ClockToTheSecond } {
-  const shortest = SHORTEST_WATCH_MINUTES * 60_000 + 30_000;
-  const start = new Date(Math.min(now.getTime(), until.getTime() - shortest));
-  return { start: toTheSecond(start), end: toTheSecond(until) };
+export function topUpWindow(until: Date): { start: Clock; end: Clock } {
+  const end = until.getHours() * 60 + until.getMinutes();
+  return { start: clockOf(end - (SHORTEST_WATCH_MINUTES + 1)), end: clockOf(end) };
 }
 
 export function clockOf(minuteOfDay: number): Clock {
@@ -117,15 +116,29 @@ export function rgbOf(hex: string): Rgb {
   return { red: (n >> 16) & 255, green: (n >> 8) & 255, blue: n & 255 };
 }
 
+/** The light ink the app uses on its dark ground. */
+const LIGHT: Rgb = { red: 244, green: 245, blue: 242 };
+
 function shieldFor(id: ShieldId, settings: Settings, topUpsSoFar: number): PlanShield {
   if (id === 'warning') {
     const tone = toneForCells(1);
     // "Keep going" takes the screen away; it comes back when the battery is empty.
-    return { id, copy: warningCopy(settings), primary: 'uncover', secondary: 'close', background: rgbOf(tone.bg), ink: rgbOf(tone.fg), icon: 'battery.25percent' };
+    return {
+      id,
+      copy: warningCopy(settings),
+      primary: 'uncover',
+      secondary: 'close',
+      background: rgbOf(tone.bg),
+      text: LIGHT,
+      accent: rgbOf(tone.bg),
+      button: rgbOf(tone.bg),
+      buttonText: rgbOf(tone.fg),
+      icon: 'battery.25percent',
+    };
   }
   const tone = toneForCells(0);
   const secondary: ButtonEffect | null = settings.emptyLevel === 'warn' ? 'uncover' : settings.emptyLevel === 'work' ? 'puzzle' : null;
-  return { id, copy: emptyCopy(settings, topUpsSoFar), primary: 'close', secondary, background: rgbOf(tone.bg), ink: rgbOf(tone.fg), icon: 'battery.0percent' };
+  return { id, copy: emptyCopy(settings, topUpsSoFar), primary: 'close', secondary, background: rgbOf(tone.bg), text: LIGHT, accent: LIGHT, button: LIGHT, buttonText: rgbOf(tone.bg), icon: 'battery.0percent' };
 }
 
 /** The notification that carries someone from the empty screen to the sums. */
@@ -155,10 +168,13 @@ export function includesEarlierUse(periodStart: Date, countingSince: number | nu
 }
 
 export function monitorPlan(settings: Settings, topUpsSoFar = 0, countingSince: number | null = null): MonitorPlan {
-  const events: PlanEvent[] = checkpointsFor(settings.goalMinutes).map((checkpoint) => {
+  const checkpoints = checkpointsFor(settings.goalMinutes);
+  const lastCellAt = Math.max(...checkpoints.filter((c) => c.id.startsWith('cell-')).map((c) => c.minutes));
+  const events: PlanEvent[] = checkpoints.map((checkpoint) => {
     const actions: PlanAction[] = [];
     if (checkpoint.effect === 'warning' && checkpoint.id.startsWith('cell-')) actions.push({ kind: 'cover', shield: 'warning' });
-    if (checkpoint.id === 'final-warning') {
+    // On a short day the last warning falls on the last cell, which already brings a screen; one is enough.
+    if (checkpoint.id === 'final-warning' && checkpoint.minutes > lastCellAt) {
       actions.push({ kind: 'notify', title: 'Nearly out', body: 'Your battery is about to run out for today.' });
     }
     if (checkpoint.effect === 'empty') actions.push({ kind: 'cover', shield: 'empty' });

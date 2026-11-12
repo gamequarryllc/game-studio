@@ -108,6 +108,18 @@ function countingSince(): number | null {
 }
 
 const UNCOVER: Action[] = [{ type: 'disableBlockAllMode' }, { type: 'resetBlocks' }];
+const STOP_EARNED_TIME: Action = { type: 'stopMonitoring', activityNames: [TOPUP_ACTIVITY] };
+
+/** The last thing the phone refused, for the test build's readout. */
+const PROBLEM_KEY = 'plainlimit_problem';
+function note(where: string, error: unknown) {
+  const at = new Date().toLocaleTimeString();
+  try {
+    DeviceActivity.userDefaultsSet(PROBLEM_KEY, `${where}, ${at}: ${error instanceof Error ? error.message : String(error)}`);
+  } catch {
+    // Nothing more to do; this is only for the readout.
+  }
+}
 
 function coverAction(shield: string, coverEverything: boolean): Action {
   return coverEverything ? { type: 'enableBlockAllMode', shieldId: shield } : { type: 'blockSelection', familyActivitySelectionId: COUNTED_ID, shieldId: shield };
@@ -136,13 +148,15 @@ function shieldParts(shield: PlanShield, topUpsSoFar: number): { look: ShieldCon
     subtitle: shield.copy.line,
     primaryButtonLabel: shield.copy.primary,
     backgroundColor: shield.background,
-    titleColor: shield.ink,
-    subtitleColor: shield.ink,
+    // A dark material in light mode too, so the light words always have a dark ground.
+    backgroundBlurStyle: DeviceActivity.UIBlurEffectStyle.systemMaterialDark,
+    titleColor: shield.text,
+    subtitleColor: shield.text,
     iconSystemName: shield.icon,
-    iconTint: shield.ink,
-    primaryButtonBackgroundColor: shield.ink,
-    primaryButtonLabelColor: shield.background,
-    secondaryButtonLabelColor: shield.ink,
+    iconTint: shield.accent,
+    primaryButtonBackgroundColor: shield.button,
+    primaryButtonLabelColor: shield.buttonText,
+    secondaryButtonLabelColor: shield.text,
   };
   if (shield.copy.secondary && shield.secondary) look.secondaryButtonLabel = shield.copy.secondary;
   const buttons: ShieldActions = { primary: buttonAction(shield.primary, topUpsSoFar) };
@@ -200,7 +214,7 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
       });
     }
     // The screens come off when the day ends, a minute before the next one starts.
-    DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'intervalDidEnd', actions: UNCOVER });
+    DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'intervalDidEnd', actions: [...UNCOVER, STOP_EARNED_TIME] });
 
     DeviceActivity.userDefaultsSet(WIDGET_PLAN_KEY, plan.widget);
 
@@ -212,7 +226,8 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
     );
     reloadWidget();
     return true;
-  } catch {
+  } catch (error) {
+    note('the day', error);
     return false;
   }
 }
@@ -276,6 +291,7 @@ export function diagnostics(): string[] {
     const cells = DeviceActivity.userDefaultsGet<number>('plainlimit_widget_cells');
     lines.push(`Widget last drew: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_widget_drew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
     lines.push(`Picked: ${pickCount(COUNTED_ID)} counted, ${pickCount(ALLOWED_ID)} always allowed`);
+    lines.push(`Last problem: ${(DeviceActivity.userDefaultsGet(PROBLEM_KEY) as string | undefined) ?? 'none'}`);
     return lines;
   } catch (error) {
     return [`Could not read: ${String(error)}`];
@@ -320,11 +336,13 @@ export async function grantExtraTime(until: Date, settings: Settings, topUpsAfte
     const dayEnds = nextRecharge(now, settings.rechargeMinute).getTime() - 60_000;
     if (until.getTime() >= dayEnds || until.getTime() <= now.getTime()) return;
 
-    DeviceActivity.configureActions({ activityName: TOPUP_ACTIVITY, callbackName: 'intervalDidEnd', actions: [coverAction('empty', plan.coverEverything)] });
-    const window = topUpWindow(now, until);
-    await DeviceActivity.startMonitoring(TOPUP_ACTIVITY, { intervalStart: window.start, intervalEnd: window.end, repeats: false }, []);
-  } catch {
+    DeviceActivity.configureActions({ activityName: TOPUP_ACTIVITY, callbackName: 'intervalDidEnd', actions: [coverAction('empty', plan.coverEverything), STOP_EARNED_TIME] });
+    const window = topUpWindow(until);
+    await DeviceActivity.startMonitoring(TOPUP_ACTIVITY, { intervalStart: window.start, intervalEnd: window.end, repeats: true }, []);
+    if (!DeviceActivity.getActivities().includes(TOPUP_ACTIVITY)) note('earned time', 'the phone did not keep the timer');
+  } catch (error) {
     // The apps are uncovered; the app covers them again itself the next time it is opened after `until`.
+    note('earned time', error);
   }
 }
 

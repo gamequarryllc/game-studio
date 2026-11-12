@@ -10,7 +10,8 @@
 //      in "ActivityMonitorExtension").
 //   3. Teaches the monitor extension to redraw the home screen widget when a
 //      checkpoint is reached or the day starts over, and to note the time it
-//      asked (the test build shows it). Without this the widget would only
+//      asked (the test build shows it), then to wait half a second so the
+//      request has left before iOS puts the extension to sleep. Without this the widget would only
 //      catch up when iOS next feels like refreshing it.
 //
 //   4. Writes targets/report/Info.plist (the usage report extension), with the
@@ -50,7 +51,7 @@ function patchMonitor(file) {
   for (const name of ['intervalDidStart', 'intervalDidEnd', 'eventDidReachThreshold']) {
     const call = `notifyAppWithName(name: "${name}")`;
     const asked = 'userDefaults?.set((Date().timeIntervalSince1970 * 1000).rounded(), forKey: "plainlimit_reload_asked")';
-    source = replaceOnce(source, call, `${call}\n    ${asked}\n    WidgetCenter.shared.reloadAllTimelines()`, call);
+    source = replaceOnce(source, call, `${call}\n    ${asked}\n    WidgetCenter.shared.reloadAllTimelines()\n    Thread.sleep(forTimeInterval: 0.5)`, call);
   }
   fs.writeFileSync(file, source);
 }
@@ -66,7 +67,7 @@ module.exports = function withTargets(config) {
   // leaves each target's entitlements file in it, and a build in progress is
   // reading these files.
   const version = require(path.join(library, 'package.json')).version;
-  const stamp = `react-native-device-activity ${version}, patch 2\n`;
+  const stamp = `react-native-device-activity ${version}, patch 3\n`;
   for (const name of EXTENSIONS) {
     const to = path.join(targets, name);
     const marker = path.join(to, '.prepared');

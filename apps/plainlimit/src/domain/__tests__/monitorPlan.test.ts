@@ -63,6 +63,10 @@ describe('the plan handed to the phone', () => {
     ]);
     const notices = plan.events.filter((e) => e.actions.some((a) => a.kind === 'notify')).map((e) => e.name);
     expect(notices).toEqual(['final-warning']);
+    // A 30-minute day: the last warning would land on the last cell, so it is left out.
+    const short = monitorPlan(settings({ goalMinutes: 30 }));
+    expect(short.events.filter((e) => e.actions.some((a) => a.kind === 'notify'))).toEqual([]);
+    expect(short.events.find((e) => e.name === 'cell-5')?.actions).toEqual([{ kind: 'cover', shield: 'warning' }]);
   });
 
   test('the warning screen lets you carry on; the empty one depends on the level', () => {
@@ -107,32 +111,31 @@ describe('the plan handed to the phone', () => {
     expect(monitorPlan(settings()).widget.countFrom).toBe(0);
   });
 
-  test('earned time ends at a time on the clock, and the phone is given a stretch it will accept', () => {
-    const solved = new Date(2026, 10, 11, 19, 18, 20);
-    const minutesBetween = (w: ReturnType<typeof topUpWindow>) => {
-      const s = w.start.hour * 3600 + w.start.minute * 60 + w.start.second;
-      const e = w.end.hour * 3600 + w.end.minute * 60 + w.end.second;
-      return (((e - s) % 86400) + 86400) % 86400 / 60;
-    };
-    // Fifteen minutes: the stretch ends exactly when the earned time does.
-    const first = topUpWindow(solved, new Date(solved.getTime() + 15 * 60_000));
-    expect(first.end).toEqual({ hour: 19, minute: 33, second: 20 });
-    expect(minutesBetween(first)).toBeGreaterThanOrEqual(SHORTEST_WATCH_MINUTES);
-    // Ten and five minutes: same exact end, with the start pushed into the past.
-    for (const earned of [10, 5]) {
-      const w = topUpWindow(solved, new Date(solved.getTime() + earned * 60_000));
-      expect(w.end).toEqual({ hour: 19, minute: 18 + earned, second: 20 });
-      expect(minutesBetween(w)).toBeGreaterThanOrEqual(SHORTEST_WATCH_MINUTES);
+  test('earned time ends at a minute on the clock, and the phone is given a stretch it will accept', () => {
+    const minutesBetween = (w: ReturnType<typeof topUpWindow>) => (((w.end.hour * 60 + w.end.minute - (w.start.hour * 60 + w.start.minute)) % 1440) + 1440) % 1440;
+    const until = new Date(2026, 10, 11, 22, 3, 20);
+    const window = topUpWindow(until);
+    expect(window.end).toEqual({ hour: 22, minute: 3 });
+    expect(minutesBetween(window)).toBeGreaterThan(SHORTEST_WATCH_MINUTES);
+    // Just after midnight the stretch starts the evening before.
+    const late = topUpWindow(new Date(2026, 10, 12, 0, 5, 0));
+    expect(late.end).toEqual({ hour: 0, minute: 5 });
+    expect(late.start).toEqual({ hour: 23, minute: 49 });
+    expect(minutesBetween(late)).toBeGreaterThan(SHORTEST_WATCH_MINUTES);
+  });
+
+  test('the words on a covering screen are light, because the phone darkens whatever is behind them', () => {
+    for (const shield of monitorPlan(settings()).shields) {
+      expect(shield.text).toEqual({ red: 244, green: 245, blue: 242 });
+      // The main button must be readable on its own: a bright fill with dark words, or a light fill with deep red ones.
+      expect(shield.button).not.toEqual(shield.buttonText);
     }
-    // Across midnight.
-    const late = new Date(2026, 10, 11, 23, 55, 0);
-    expect(topUpWindow(late, new Date(late.getTime() + 10 * 60_000)).end).toEqual({ hour: 0, minute: 5, second: 0 });
   });
 
   test('colours are whole numbers from 0 to 255', () => {
     expect(rgbOf('#FF8000')).toEqual({ red: 255, green: 128, blue: 0 });
     for (const shield of monitorPlan(settings()).shields) {
-      for (const v of [...Object.values(shield.background), ...Object.values(shield.ink)]) {
+      for (const v of [shield.background, shield.text, shield.accent, shield.button, shield.buttonText].flatMap((colour) => Object.values(colour))) {
         expect(Number.isInteger(v)).toBe(true);
         expect(v).toBeGreaterThanOrEqual(0);
         expect(v).toBeLessThanOrEqual(255);

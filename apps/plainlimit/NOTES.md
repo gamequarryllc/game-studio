@@ -119,6 +119,16 @@ Found:
 - The widget can run a couple of minutes behind the app. The app now asks for a redraw whenever it is opened or learns of a change, and the widget's own fallback look is every quarter of an hour.
 - Earned time did not end when the screen said it would (above).
 - "0.5 HOUR DAY" on Today for a 30-minute goal; now "30 MINUTE DAY".
+
+## What the second evening showed (2026-11-11, build 25, a 30-minute day)
+
+By the readout's own times: last cell reported 9:40:57 PM, empty 9:46:18 PM, sums solved about 9:48 PM.
+
+- **The timer that ends earned time was never registered.** After the sums the readout listed only `plday`. The request to the phone had failed and the failure was thrown away. The stretch is now asked for in the same form as the day itself (hours and minutes, repeating, sixteen minutes long, stopped again when it ends or the day does), and a refusal is kept and shown as "Last problem" in the readout.
+- **The widget fell five minutes behind** and caught up only when the app was opened. The monitor now waits half a second after asking for the redraw, in case iOS was putting it to sleep before the request left. Unproven; if it still lags, the next step is a timeline that guesses ahead.
+- **The "Last cell" screen was close to unreadable.** The phone darkens a covering screen's background a great deal, so dark words on orange became dark words on brown. Words on both screens are now light; the icon and the main button carry the colour.
+- **On a short day the "Nearly out" notification and the "Last cell" screen arrived together.** The notification is now sent only when it falls later than the last cell.
+- **"What used it" drew once (9:47 PM) and was blank before and after.** Build 27 attaches its view to the screen differently; whether that is the whole cause is not known.
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 
 Not yet seen by anyone: the "Last cell" screen and its buttons, Warn and Locked levels, the recharge at 6:00 AM, changing the goal mid-day, and whether the covers come back on time after earned time.
