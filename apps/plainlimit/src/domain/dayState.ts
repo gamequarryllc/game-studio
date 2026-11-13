@@ -9,6 +9,15 @@ export function freshDay(now: Date, rechargeMinute: number): DayState {
   return { periodStart: periodStart(now, rechargeMinute).toISOString(), usedMinutes: 0, topUps: 0, unlockedUntil: null, uncounted: false };
 }
 
+/**
+ * Whether turning counting on should keep what today has used. Only the very
+ * first time counting is turned on does the day start from zero. Otherwise
+ * turning counting off and on again would be a way to refill the battery.
+ */
+export function keepsTodaysCount(doc: Doc): boolean {
+  return doc.day.usedMinutes > 0 || doc.day.uncounted || doc.history.length > 0;
+}
+
 /** How many finished days are kept: eight weeks. */
 export const HISTORY_DAYS = 56;
 

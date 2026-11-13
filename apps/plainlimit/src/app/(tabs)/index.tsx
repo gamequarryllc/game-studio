@@ -27,6 +27,7 @@ export default function Today() {
   const insets = useSafeAreaInsets();
   const { now, settings, day, fraction, cells, tone, accent } = useDay();
   const { history, watching } = useDoc();
+  const problem = store.health();
   // Real screen time arrives a cell at a time, so the figure is a floor, not a running total.
   const counting = isOn();
   const field = useEasedColor(tone.bg);
@@ -61,7 +62,7 @@ export default function Today() {
       </Animated.View>
 
       <View style={styles.rest}>
-        <CountingProblem health={store.health()} />
+        <CountingProblem health={problem} />
         {unlocked ? (
           <View style={[styles.strip, { borderColor: accent }]}>
             <Text style={styles.body}>Earned time runs until {clockLabelOf(new Date(day.unlockedUntil as string))}.</Text>
@@ -93,9 +94,11 @@ export default function Today() {
         <View style={{ gap: 6 }}>
           <Text style={styles.body}>
             {counting
-              ? 'The phone tells Plainlimit when a cell is used up, not minute by minute, so this moves a cell at a time.'
+              ? 'The phone tells Plainlimit every few minutes, not minute by minute, so this moves in steps.'
               : SCREEN_TIME_AVAILABLE
-                ? 'Counting is off, so nothing drains the battery and nothing locks. Turn it on in Settings, under Screen Time.'
+                ? problem === 'fine'
+                  ? 'Counting is off, so nothing drains the battery and nothing locks. Turn it on in Settings, under Screen Time.'
+                  : 'Nothing is being counted until this is fixed.'
                 : 'On an iPhone, the battery follows your real screen time.'}
           </Text>
           {DEV_TOOLS && !SCREEN_TIME_AVAILABLE ? <Text style={styles.note}>This preview has no real screen time. Drain the battery from Settings, under Developer.</Text> : null}

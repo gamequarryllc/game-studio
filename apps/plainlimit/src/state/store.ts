@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 
 import { cellsLeft } from '@/domain/battery';
 import { nextRecharge } from '@/domain/day';
-import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
+import { advance, freshDoc, grantTopUp, isUnlocked, keepsTodaysCount, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
 import { stepGoal, stepRecharge, withAllowed, withoutAllowed } from '@/domain/settings';
 import type { CountMode, DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
 import * as screenTime from '@/platform/screenTime';
@@ -96,7 +96,13 @@ let reregistered = false;
  * puts back monitoring the phone has dropped.
  */
 function checkHealth(doc: Doc): Doc {
-  if (!screenTime.SCREEN_TIME_AVAILABLE || doc.watching !== true) return doc;
+  if (!screenTime.SCREEN_TIME_AVAILABLE) return doc;
+  // Counting the phone has registered is counting the person turned on. This is
+  // checked every time, not once: right after launch the phone may not yet
+  // have said that access is given, and a copy saved by an older build has no
+  // record of it. (Build 46 read "off" once at launch and kept it.)
+  if (doc.watching !== true && screenTime.isOn()) doc = { ...doc, watching: true };
+  if (doc.watching !== true) return doc;
   const state = screenTime.health(doc.settings, new Date(doc.day.periodStart), true);
   if (state === 'notRegistered' && !reregistered) {
     reregistered = true;
@@ -162,10 +168,12 @@ export const store = {
   async turnOnScreenTime(): Promise<'on' | 'denied' | 'failed'> {
     const answer = await screenTime.askPermission();
     if (answer !== 'approved') return 'denied';
-    // Counting starts now: the first day does not include what was used before this moment.
-    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, true);
+    // The first time ever, counting starts now, from zero. After that, turning
+    // counting on again keeps today's count, so off-and-on is no refill.
+    const keep = keepsTodaysCount(snapshot.doc);
+    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, !keep);
     // Start from what the phone says, not from any pretend use.
-    const day = { ...snapshot.doc.day, usedMinutes: 0 };
+    const day = keep ? snapshot.doc.day : { ...snapshot.doc.day, usedMinutes: 0 };
     set({ ...snapshot.doc, watching: ok, day: withRealUse(snapshot.doc, day) });
     return ok ? 'on' : 'failed';
   },
