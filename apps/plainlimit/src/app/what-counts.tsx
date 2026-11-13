@@ -12,7 +12,10 @@ export default function WhatCounts() {
   const { settings, accent } = useDay();
   const [picking, setPicking] = useState(false);
   const picked = pickCount(COUNTED_ID);
-  // On a real iPhone, "Time-wasters" is whatever is ticked in Apple's list.
+  // On a real iPhone the second choice is whatever is ticked in Apple's list.
+  // (There used to be a third, "Your own picks", held for Pro and never built:
+  // on a phone the ticking is the only way to choose at all, so it was the
+  // second choice under another name.)
   const choosing = SCREEN_TIME_AVAILABLE && settings.countMode !== 'everything';
   return (
     <Page top={8}>
@@ -21,19 +24,22 @@ export default function WhatCounts() {
       <View accessibilityRole="radiogroup" style={{ gap: 10 }}>
         <Choice
           title="Everything"
-          line="Every app drains it, always-allowed apps included."
+          line="Every app drains it. When it's empty, everything locks except your always-allowed apps."
           chosen={settings.countMode === 'everything'}
           accent={accent}
           onPress={() => store.setCountMode('everything')}
         />
         <Choice
-          title="Time-wasters"
-          line={SCREEN_TIME_AVAILABLE ? "Only the apps you tick. Work apps don't drain it." : "Social, Games and Entertainment. Work apps don't drain it."}
-          chosen={settings.countMode === 'timeWasters'}
+          title="Only what I tick"
+          line={
+            SCREEN_TIME_AVAILABLE
+              ? 'Only the apps and categories you tick drain it, and only they lock. Anything unticked, like Maps, is never counted.'
+              : 'Only the apps you tick drain it, and only they lock. On an iPhone you tick them in Apple\u2019s own list of your apps.'
+          }
+          chosen={settings.countMode !== 'everything'}
           accent={accent}
           onPress={() => store.setCountMode('timeWasters')}
         />
-        <Choice title="Your own picks" line="Tick the apps and categories yourself. Not built yet." chosen={settings.countMode === 'custom'} onPress={() => {}} tag="Pro" disabled />
       </View>
       {choosing ? (
         <View style={{ gap: 10, marginTop: 8 }}>
@@ -43,9 +49,7 @@ export default function WhatCounts() {
           <BigButton label={picked === 0 ? 'Choose apps' : 'Change the apps'} onPress={() => setPicking(true)} />
           <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>For the usual time-wasters, tick Social, Games and Entertainment.</Text>
         </View>
-      ) : SCREEN_TIME_AVAILABLE ? null : (
-        <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3, marginTop: 8 }}>On an iPhone, your own picks are made in Apple&apos;s own list of your apps.</Text>
-      )}
+      ) : null}
       <AppPicker
         id={COUNTED_ID}
         open={picking}

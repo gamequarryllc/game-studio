@@ -12,7 +12,7 @@ import { ScreenTimeCard } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
-const COUNT_NAMES: Record<CountMode, string> = { everything: 'Everything', timeWasters: 'Time-wasters', custom: 'Your own picks' };
+const COUNT_NAMES: Record<CountMode, string> = { everything: 'Everything', timeWasters: 'Only what I tick', custom: 'Only what I tick' };
 
 /** "30 minutes", "17 and a half minutes", "1 hour". */
 function cellWords(goalMinutes: number): string {

@@ -94,16 +94,16 @@ async function main() {
     await see('6:00 AM');
   });
 
-  await step('what counts can be changed, and custom picks wait for Pro', async () => {
+  await step('what counts can be changed between everything and your own ticks', async () => {
     await press('What counts, Everything');
     await see('Choose which apps drain your battery.');
     await shot('03-what-counts');
-    await page.getByRole('radio', { name: /Time-wasters/ }).click();
-    assert.strictEqual(await page.getByRole('radio', { name: /Time-wasters/ }).getAttribute('aria-checked'), 'true');
+    await page.getByRole('radio', { name: /Only what I tick/ }).click();
+    assert.strictEqual(await page.getByRole('radio', { name: /Only what I tick/ }).getAttribute('aria-checked'), 'true');
     assert.strictEqual(await page.getByRole('radio', { name: /Everything/ }).getAttribute('aria-checked'), 'false');
-    assert.ok(await page.getByRole('radio', { name: /Your own picks/ }).isDisabled());
+    assert.strictEqual(await page.getByRole('radio').count(), 2);
     await back();
-    await page.getByRole('button', { name: 'What counts, Time-wasters' }).waitFor();
+    await page.getByRole('button', { name: 'What counts, Only what I tick' }).waitFor();
   });
 
   await step('apps can be removed from and added to the always-allowed list', async () => {
@@ -242,7 +242,7 @@ async function main() {
     await see('3:00 of 3:00');
     await page.getByText(/^Earned time runs until/).waitFor();
     await tab('Settings');
-    await page.getByRole('button', { name: 'What counts, Time-wasters' }).waitFor();
+    await page.getByRole('button', { name: 'What counts, Only what I tick' }).waitFor();
     await page.getByRole('button', { name: 'Always allowed, 3 apps' }).waitFor();
   });
 

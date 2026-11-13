@@ -161,6 +161,11 @@ The guard against early checkpoints (build 42): every action a checkpoint carrie
 
 The widget's delay looks like the phone's own: with the monitor's half-second wait, the redraw came 54 and 84 seconds after it was asked for (it was five minutes before). Nothing more to try there for now.
 
+Two things the owner asked for on 2026-11-13 (build 43):
+
+- **The ruler under the minutes ran against the battery**: it filled from the left while the battery emptied from the right. It now fills from the right, each stretch under the cell it stands for.
+- **"What counts" had three choices and one of them was nothing.** "Time-wasters" already meant "whatever you tick" on a phone, and "Your own picks (Pro, not built yet)" was the same thing held back from the days of the web prototype. There are now two: "Everything" (every app drains it; when empty everything locks except the always-allowed apps) and "Only what I tick" (only ticked apps drain it and only they lock). The saved value keeps its old name inside.
+
 Still open: a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do).
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 
