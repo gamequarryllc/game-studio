@@ -1,5 +1,5 @@
 import { clockLabel, durationLabel, goalLabel, nextRecharge, periodStart, untilLabel, wrapMinute } from '../day';
-import { freshDay, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse } from '../dayState';
+import { HISTORY_DAYS, advance, freshDay, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse } from '../dayState';
 
 const SIX = 6 * 60;
 
@@ -110,7 +110,7 @@ describe('reading a saved copy', () => {
       now,
     );
     expect(doc.settings).toEqual({ goalMinutes: 90, rechargeMinute: 60, countMode: 'timeWasters', emptyLevel: 'work', allowed: ['Phone', 'Camera'] });
-    expect(doc.day).toEqual({ periodStart: new Date(2026, 10, 11, 1, 0).toISOString(), usedMinutes: 55, topUps: 2, unlockedUntil: null });
+    expect(doc.day).toEqual({ periodStart: new Date(2026, 10, 11, 1, 0).toISOString(), usedMinutes: 55, topUps: 2, unlockedUntil: null, uncounted: false });
   });
 
   it('drops a day that has already been recharged away', () => {
@@ -123,5 +123,63 @@ describe('reading a saved copy', () => {
     const a = freshDoc(now);
     a.settings.allowed.push('Camera');
     expect(freshDoc(now).settings.allowed).toEqual(['Phone', 'Messages', 'Maps']);
+  });
+});
+
+describe('setup and counting, for copies saved before they were kept', () => {
+  const now = new Date(2026, 10, 11, 9, 0);
+
+  it('sends a new install through setup, and not someone already using the app', () => {
+    expect(repairDoc(null, now).setupDone).toBe(false);
+    expect(repairDoc(null, now).watching).toBe(false);
+    const older = repairDoc({ settings: { goalMinutes: 120 }, day: {} }, now);
+    expect(older.setupDone).toBe(true);
+    // Whether counting is on is asked of the phone at start.
+    expect(older.watching).toBeNull();
+    expect(repairDoc({ settings: {}, setupDone: false, watching: true }, now)).toMatchObject({ setupDone: false, watching: true });
+  });
+});
+
+describe('the history of finished days', () => {
+  const day1 = new Date(2026, 10, 10, 6, 0);
+  const now = new Date(2026, 10, 11, 9, 0);
+  const doc = (extra: Partial<ReturnType<typeof freshDoc>> = {}) => ({
+    ...freshDoc(day1),
+    watching: true,
+    setupDone: true,
+    day: { periodStart: day1.toISOString(), usedMinutes: 120, topUps: 1, unlockedUntil: null, uncounted: false },
+    ...extra,
+  });
+
+  it('keeps nothing while the day is still the current one', () => {
+    const d = doc();
+    expect(advance(d, new Date(2026, 10, 10, 23, 0))).toBe(d);
+  });
+
+  it('closes the old day, taking the phone\'s last word when it is more', () => {
+    const next = advance(doc(), now, 150);
+    expect(next.day.usedMinutes).toBe(0);
+    expect(next.history).toEqual([{ start: day1.toISOString(), goalMinutes: 180, usedMinutes: 150, topUps: 1, state: 'counted' }]);
+    expect(advance(doc(), now, 30).history[0].usedMinutes).toBe(120);
+  });
+
+  it('marks a day not fully counted, or not counted at all', () => {
+    expect(advance(doc({ day: { ...doc().day, uncounted: true } }), now).history[0].state).toBe('partly');
+    expect(advance(doc(), now, null, false).history[0].state).toBe('off');
+  });
+
+  it('closes a day left behind in a saved copy, and mends a bad history', () => {
+    const saved = { settings: {}, watching: true, day: { periodStart: day1.toISOString(), usedMinutes: 90, topUps: 0 }, history: [5, { start: 'no' }, { start: new Date(2026, 10, 9, 6, 0).toISOString(), goalMinutes: 180, usedMinutes: 200, topUps: 2, state: 'counted' }] };
+    const repaired = repairDoc(saved, now, () => 100, true);
+    expect(repaired.history.map((h) => h.usedMinutes)).toEqual([200, 100]);
+  });
+
+  it('keeps eight weeks', () => {
+    let d = doc();
+    for (let i = 1; i <= HISTORY_DAYS + 10; i++) {
+      d = advance({ ...d, day: { ...d.day, usedMinutes: i } }, new Date(2026, 10, 10 + i, 7, 0));
+    }
+    expect(d.history).toHaveLength(HISTORY_DAYS);
+    expect(d.history[d.history.length - 1].usedMinutes).toBe(HISTORY_DAYS + 10);
   });
 });

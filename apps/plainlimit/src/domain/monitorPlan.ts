@@ -3,7 +3,7 @@
 // those screens do. Everything here is plain data; src/platform/screenTime.ts
 // hands it to Apple's Screen Time, and nothing else in the app talks to that.
 
-import { checkpointsFor } from './checkpoints';
+import { checkpointsFor, minuteTicksFor } from './checkpoints';
 import { wrapMinute } from './day';
 import { topUpPlan } from './puzzle';
 import { emptyCopy, warningCopy, type ShieldCopy } from './shield';
@@ -12,6 +12,8 @@ import type { Settings } from './types';
 
 /** The name the day's monitoring is registered under. Names must not contain "_". */
 export const ACTIVITY = 'plday';
+/** The minute checkpoints, registered apart from the day's own (see `minuteTicksFor`). */
+export const TICKS_ACTIVITY = 'plmin';
 /** The monitoring that covers earned extra time. */
 export const TOPUP_ACTIVITY = 'pltop';
 /** The shortest stretch of time the phone will agree to watch. */
@@ -80,6 +82,8 @@ export interface MonitorPlan {
   start: Clock;
   end: Clock;
   events: PlanEvent[];
+  /** The minute checkpoints, for TICKS_ACTIVITY over the same stretch of day. They carry no actions. */
+  ticks: PlanEvent[];
   shields: PlanShield[];
   /** True when every app is covered (except the always-allowed); false when only the person's picks are. */
   coverEverything: boolean;
@@ -210,6 +214,7 @@ export function monitorPlan(settings: Settings, topUpsSoFar = 0, countingSince: 
     // The day ends a minute before the next one starts, which is also when the screens come off.
     end: clockOf(settings.rechargeMinute - 1),
     events,
+    ticks: minuteTicksFor(settings.goalMinutes).map((t) => ({ name: t.id, after: spanOf(t.minutes), minutes: t.minutes, actions: [] })),
     shields: [shieldFor('warning', settings, topUpsSoFar), shieldFor('empty', settings, topUpsSoFar)],
     coverEverything: settings.countMode === 'everything',
     widget: { goalMinutes: settings.goalMinutes, rechargeMinute: settings.rechargeMinute, countFrom: countingSince ?? 0 },

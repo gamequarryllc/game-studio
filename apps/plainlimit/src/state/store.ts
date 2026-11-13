@@ -2,9 +2,10 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
 import { cellsLeft } from '@/domain/battery';
-import { freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
+import { nextRecharge } from '@/domain/day';
+import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
 import { stepGoal, stepRecharge, withAllowed, withoutAllowed } from '@/domain/settings';
-import type { CountMode, Doc, EmptyLevel, Settings } from '@/domain/types';
+import type { CountMode, DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
 
@@ -65,12 +66,51 @@ function coverWhenEarnedTimeIsUp(doc: Doc, now: Date) {
   screenTime.coverEmptyNow(settings, day.topUps);
 }
 
+/**
+ * Whether a day counts as counted: on a phone, only while counting is turned
+ * on; in the preview, always (its pretend use is the count).
+ */
+function counts(watching: boolean | null): boolean {
+  return !screenTime.SCREEN_TIME_AVAILABLE || watching === true;
+}
+
+/** The phone's own last word on a day that has just ended, if it has one. */
+function closingUsed(day: DayState, settings: Settings): number | null {
+  if (!screenTime.SCREEN_TIME_AVAILABLE) return null;
+  const start = new Date(day.periodStart);
+  return screenTime.usedSoFar(settings.goalMinutes, start, nextRecharge(start, settings.rechargeMinute));
+}
+
+/** Moves on to the current battery if a recharge has passed, closing the old day into the history. */
+function advanced(doc: Doc, now: Date, settings: Settings = doc.settings): Doc {
+  const moved = { ...doc, settings };
+  if (rollOver(doc.day, now, settings.rechargeMinute) === doc.day) return moved;
+  return advance(moved, now, closingUsed(doc.day, doc.settings), counts(doc.watching));
+}
+
+/** At most one attempt per launch to register a day the phone has forgotten. */
+let reregistered = false;
+
+/**
+ * Notes, on the day, anything that means it is not being fully counted, and
+ * puts back monitoring the phone has dropped.
+ */
+function checkHealth(doc: Doc): Doc {
+  if (!screenTime.SCREEN_TIME_AVAILABLE || doc.watching !== true) return doc;
+  const state = screenTime.health(doc.settings, new Date(doc.day.periodStart), true);
+  if (state === 'notRegistered' && !reregistered) {
+    reregistered = true;
+    void screenTime.applyPlan(doc.settings, doc.day.topUps).then(() => store.tick(new Date()));
+    return doc;
+  }
+  if (state === 'fine' || doc.day.uncounted) return doc;
+  return { ...doc, day: { ...doc.day, uncounted: true } };
+}
+
 function withSettings(change: (s: Settings) => Settings) {
   if (settingsLocked()) return;
-  const settings = change(snapshot.doc.settings);
   // A new recharge time can move the start of the current battery.
-  const day = rollOver(snapshot.doc.day, new Date(), settings.rechargeMinute);
-  set({ ...snapshot.doc, settings, day });
+  set(advanced(snapshot.doc, new Date(), change(snapshot.doc.settings)));
   planSoon();
 }
 
@@ -86,8 +126,14 @@ export const store = {
   },
   async start() {
     if (snapshot.state === 'ready') return;
-    const doc = repairDoc(await readSaved(), new Date());
-    set({ ...doc, day: withRealUse(doc, doc.day) }, false);
+    const raw = await readSaved();
+    const savedWatching = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).watching : undefined;
+    // A copy saved before the app kept this: counting is on if the phone has the day registered.
+    const watching = typeof savedWatching === 'boolean' ? savedWatching : screenTime.isOn();
+    let doc = repairDoc(raw, new Date(), closingUsed, counts(watching));
+    if (doc.watching === null) doc = { ...doc, watching };
+    doc = checkHealth({ ...doc, day: withRealUse(doc, doc.day) });
+    set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
     screenTime.onCheckpoint(() => store.tick(new Date()));
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
@@ -102,9 +148,10 @@ export const store = {
   tick(now: Date) {
     if (snapshot.state !== 'ready') return;
     coverWhenEarnedTimeIsUp(snapshot.doc, now);
-    const day = withRealUse(snapshot.doc, rollOver(snapshot.doc.day, now, snapshot.doc.settings.rechargeMinute));
-    if (day === snapshot.doc.day) return;
-    set({ ...snapshot.doc, day });
+    const moved = advanced(snapshot.doc, now);
+    const doc = checkHealth({ ...moved, day: withRealUse(moved, moved.day) });
+    if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history) return;
+    set(doc);
     // The app has just learned something the widget may not have drawn yet.
     if (screenTime.isOn()) screenTime.reloadWidget();
   },
@@ -119,8 +166,34 @@ export const store = {
     const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, true);
     // Start from what the phone says, not from any pretend use.
     const day = { ...snapshot.doc.day, usedMinutes: 0 };
-    set({ ...snapshot.doc, day: withRealUse(snapshot.doc, day) });
+    set({ ...snapshot.doc, watching: ok, day: withRealUse(snapshot.doc, day) });
     return ok ? 'on' : 'failed';
+  },
+  /** How the day's counting stands, for the warning on Today. */
+  health(): screenTime.Health {
+    const doc = snapshot.doc;
+    return screenTime.health(doc.settings, new Date(doc.day.periodStart), doc.watching === true);
+  },
+  /**
+   * Screen Time access came back, or the phone forgot the day: register it
+   * again, keeping the day's count. Asks for access first if it is missing.
+   */
+  async resumeCounting(): Promise<'on' | 'denied' | 'failed'> {
+    if (screenTime.permission() !== 'approved' && (await screenTime.askPermission()) !== 'approved') return 'denied';
+    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
+    store.tick(new Date());
+    return ok ? 'on' : 'failed';
+  },
+  /** The phone miscounted: forget its impossible reports and count the day again. */
+  async countAgain(): Promise<boolean> {
+    const doc = snapshot.doc;
+    const ok = await screenTime.countAgain(doc.settings, doc.day.topUps, new Date(doc.day.periodStart));
+    store.tick(new Date());
+    return ok;
+  },
+  /** The first-run setup is finished. */
+  finishSetup() {
+    set({ ...snapshot.doc, setupDone: true });
   },
   /**
    * Developer, on a real phone: a full battery and a count that starts again
@@ -137,7 +210,8 @@ export const store = {
   },
   turnOffScreenTime() {
     screenTime.turnOff();
-    set({ ...snapshot.doc });
+    // The rest of today is not counted, and the week view says so.
+    set({ ...snapshot.doc, watching: false, day: { ...snapshot.doc.day, uncounted: true } });
   },
   /** The person changed their picks in Apple's list: tell the phone, and redraw. */
   picksChanged() {

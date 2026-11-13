@@ -1,5 +1,5 @@
 import { CELLS, cellsLeft, fractionUsed, wordFor } from '../battery';
-import { checkpointsFor, finalWarningMinutes, isPlausible, usedFloor } from '../checkpoints';
+import { checkpointsFor, finalWarningMinutes, isPlausible, minuteTicksFor, miscounted, tickStepMinutes, usedFloor } from '../checkpoints';
 import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
 
 describe('cells', () => {
@@ -106,5 +106,48 @@ describe('checkpoints', () => {
     const list = checkpointsFor(180);
     expect(usedFloor([])).toBe(0);
     expect(usedFloor([list[0], list[2], list[1]])).toBe(90);
+  });
+});
+
+describe('minute checkpoints', () => {
+  it('are about eighteen to a day, in whole five minutes, and never on a cell', () => {
+    expect(tickStepMinutes(30)).toBe(5);
+    expect(tickStepMinutes(180)).toBe(10);
+    expect(tickStepMinutes(720)).toBe(40);
+    for (const goal of [30, 45, 60, 90, 180, 375, 720]) {
+      const ticks = minuteTicksFor(goal);
+      const cells = checkpointsFor(goal).map((c) => c.minutes);
+      expect(ticks.length).toBeLessThanOrEqual(18);
+      for (const t of ticks) {
+        expect(t.effect).toBe('tick');
+        expect(t.minutes).toBeLessThan(goal);
+        expect(cells.some((m) => Math.abs(m - t.minutes) < 0.5)).toBe(false);
+        // Names for the phone may not contain "_".
+        expect(t.id).not.toContain('_');
+      }
+    }
+    // A 3-hour day: every ten minutes, less the five that fall on a cell.
+    expect(minuteTicksFor(180).map((t) => t.minutes)).toEqual([10, 20, 40, 50, 70, 80, 100, 110, 130, 140, 160]);
+  });
+
+  it('let the minutes shown move between cells', () => {
+    const all = [...checkpointsFor(180), ...minuteTicksFor(180)];
+    expect(usedFloor(all.filter((c) => c.minutes <= 50))).toBe(50);
+  });
+});
+
+describe('a miscounted day', () => {
+  const from = new Date(2026, 10, 11, 6, 0);
+  const at = (minutes: number) => new Date(from.getTime() + minutes * 60000);
+
+  it('is one where a cell, the warning or empty arrived too soon to be true', () => {
+    expect(miscounted([{ id: 'cell-1', at: at(31) }, { id: 'cell-2', at: at(65) }], 180, from)).toBe(false);
+    expect(miscounted([{ id: 'empty', at: at(0.2) }], 180, from)).toBe(true);
+    expect(miscounted([{ id: 'cell-3', at: at(40) }], 180, from)).toBe(true);
+  });
+
+  it('is not judged on reports from before the count began, or on minute checkpoints', () => {
+    expect(miscounted([{ id: 'empty', at: at(-600) }], 180, from)).toBe(false);
+    expect(miscounted([{ id: 'm40', at: at(1) }], 180, from)).toBe(false);
   });
 });

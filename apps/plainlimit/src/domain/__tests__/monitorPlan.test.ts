@@ -136,6 +136,14 @@ describe('the plan handed to the phone', () => {
     }
   });
 
+  test('carries the minute checkpoints apart from the day\'s own, with nothing to do', () => {
+    const plan = monitorPlan(settings({ goalMinutes: 180 }));
+    expect(plan.ticks.length).toBe(11);
+    expect(plan.ticks.every((t) => t.actions.length === 0)).toBe(true);
+    const own = new Set(plan.events.map((e) => e.name));
+    expect(plan.ticks.some((t) => own.has(t.name))).toBe(false);
+  });
+
   test('a checkpoint may not act before it can be true', () => {
     const from = new Date(2026, 10, 13, 6, 0, 0);
     // Thirty minutes of use cannot be reported sooner than about thirty minutes in.

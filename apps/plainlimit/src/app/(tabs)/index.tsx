@@ -7,7 +7,9 @@ import { clockLabel, clockLabelOf, durationLabel, goalLabel, nextRecharge, until
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
 import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn } from '@/platform/screenTime';
+import { store } from '@/state/store';
 import { Battery } from '@/ui/Battery';
+import { CountingProblem } from '@/ui/CountingProblem';
 import { BigButton, Label } from '@/ui/kit';
 import { useEasedColor } from '@/ui/motion';
 import { Ruler } from '@/ui/Ruler';
@@ -56,6 +58,7 @@ export default function Today() {
       </Animated.View>
 
       <View style={styles.rest}>
+        <CountingProblem health={store.health()} />
         {unlocked ? (
           <View style={[styles.strip, { borderColor: accent }]}>
             <Text style={styles.body}>Earned time runs until {clockLabelOf(new Date(day.unlockedUntil as string))}.</Text>
@@ -87,7 +90,7 @@ export default function Today() {
             {counting
               ? 'The phone tells Plainlimit when a cell is used up, not minute by minute, so this moves a cell at a time.'
               : SCREEN_TIME_AVAILABLE
-                ? 'Turn on Screen Time in Settings to have the battery follow your real day.'
+                ? 'Counting is off, so nothing drains the battery and nothing locks. Turn it on in Settings, under Screen Time.'
                 : 'On an iPhone, the battery follows your real screen time.'}
           </Text>
           {DEV_TOOLS && !SCREEN_TIME_AVAILABLE ? <Text style={styles.note}>This preview has no real screen time. Drain the battery from Settings, under Developer.</Text> : null}

@@ -52,7 +52,9 @@ function patchMonitor(file) {
   for (const name of ['intervalDidStart', 'intervalDidEnd', 'eventDidReachThreshold']) {
     const call = `notifyAppWithName(name: "${name}")`;
     const asked = 'userDefaults?.set((Date().timeIntervalSince1970 * 1000).rounded(), forKey: "plainlimit_reload_asked")';
-    source = replaceOnce(source, call, `${call}\n    ${asked}\n    WidgetCenter.shared.reloadAllTimelines()\n    Thread.sleep(forTimeInterval: 0.5)`, call);
+    // The minute checkpoints ("plmin") change nothing the widget draws, so they do not spend its redraws.
+    const redraw = `if activity.rawValue != "plmin" {\n      ${asked}\n      WidgetCenter.shared.reloadAllTimelines()\n      Thread.sleep(forTimeInterval: 0.5)\n    }`;
+    source = replaceOnce(source, call, `${call}\n    ${redraw}`, call);
   }
   fs.writeFileSync(file, source);
 }
@@ -68,7 +70,7 @@ module.exports = function withTargets(config) {
   // leaves each target's entitlements file in it, and a build in progress is
   // reading these files.
   const version = require(path.join(library, 'package.json')).version;
-  const stamp = `react-native-device-activity ${version}, patch 3\n`;
+  const stamp = `react-native-device-activity ${version}, patch 4\n`;
   for (const name of EXTENSIONS) {
     const to = path.join(targets, name);
     const marker = path.join(to, '.prepared');

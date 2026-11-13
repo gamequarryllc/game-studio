@@ -3,12 +3,13 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { checkpointsFor, isPlausible, usedFloor } from '@/domain/checkpoints';
+import { checkpointsFor, isPlausible, minuteTicksFor, miscounted, usedFloor } from '@/domain/checkpoints';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
   ALLOWED_ID,
   COUNTED_ID,
+  TICKS_ACTIVITY,
   TOPUP_ACTIVITY,
   WIDGET_PLAN_KEY,
   countStart,
@@ -227,8 +228,9 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
     const now = new Date();
     if (fresh) {
       // Counting starts (or starts over) now: forget earlier checkpoints and take every cover away.
-      DeviceActivity.stopMonitoring([ACTIVITY, TOPUP_ACTIVITY]);
+      DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
       DeviceActivity.userDefaultsClearWithPrefix(`events_${ACTIVITY}`);
+      DeviceActivity.userDefaultsClearWithPrefix(`events_${TICKS_ACTIVITY}`);
       DeviceActivity.userDefaultsClearWithPrefix(`events_${TOPUP_ACTIVITY}`);
       DeviceActivity.disableBlockAllMode('plainlimit');
       DeviceActivity.resetBlocks('plainlimit');
@@ -254,6 +256,7 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
       { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
       plan.events.map((event) => ({ eventName: event.name, familyActivitySelection: token, threshold: event.after, includesPastActivity: earlier })),
     );
+    await registerTicks(plan, token, earlier);
     reloadWidget();
     return true;
   } catch (error) {
@@ -262,11 +265,83 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
   }
 }
 
+/**
+ * The minute checkpoints, on their own registration over the same stretch of
+ * day. A failure here is noted and otherwise ignored: the day still counts
+ * and locks, only in cell-sized steps.
+ */
+async function registerTicks(plan: ReturnType<typeof monitorPlan>, token: string, earlier: boolean) {
+  try {
+    if (plan.ticks.length === 0) {
+      DeviceActivity.stopMonitoring([TICKS_ACTIVITY]);
+      return;
+    }
+    await DeviceActivity.startMonitoring(
+      TICKS_ACTIVITY,
+      { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
+      plan.ticks.map((tick) => ({ eventName: tick.name, familyActivitySelection: token, threshold: tick.after, includesPastActivity: earlier })),
+    );
+  } catch (error) {
+    note('the minute checkpoints', error);
+  }
+}
+
+/** How the day's counting stands. Only ever not 'fine' when counting is meant to be on. */
+export type Health = 'fine' | 'accessOff' | 'notRegistered' | 'miscounted';
+
+/**
+ * Whether the day is really being counted. `watching` is whether the person
+ * has counting turned on; turning it off on purpose is not a fault.
+ * - accessOff: Screen Time access has been taken away in the Settings app.
+ * - notRegistered: the phone has forgotten the day's monitoring.
+ * - miscounted: the phone reported a checkpoint too soon to be true (see `miscounted`).
+ */
+export function health(settings: Settings, periodStart: Date, watching: boolean): Health {
+  if (!SCREEN_TIME_AVAILABLE || !watching) return 'fine';
+  if (permission() !== 'approved') return 'accessOff';
+  try {
+    if (!DeviceActivity.getActivities().includes(ACTIVITY)) return 'notRegistered';
+    const from = countStart(periodStart, countingSince());
+    return miscounted(ownReports(), settings.goalMinutes, from) ? 'miscounted' : 'fine';
+  } catch {
+    return 'fine';
+  }
+}
+
+function ownReports(): { id: string; at: Date }[] {
+  return DeviceActivity.getEvents(ACTIVITY)
+    .filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName)
+    .map((e) => ({ id: e.eventName as string, at: e.lastCalledAt }));
+}
+
+/**
+ * After a miscount: forgets the reports that could not be true, so the phone
+ * may make them again, and registers the day afresh. What was used before now
+ * still counts, except on the day counting was first turned on, when the
+ * phone only counts from the moment of registering.
+ */
+export async function countAgain(settings: Settings, topUpsSoFar: number, periodStart: Date): Promise<boolean> {
+  if (!SCREEN_TIME_AVAILABLE) return false;
+  try {
+    const from = countStart(periodStart, countingSince());
+    const own = new Map(checkpointsFor(settings.goalMinutes).map((c) => [c.id, c]));
+    for (const report of ownReports()) {
+      const checkpoint = own.get(report.id);
+      if (checkpoint && report.at.getTime() >= from.getTime() && !isPlausible(checkpoint, from, report.at)) {
+        DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.id}`);
+      }
+    }
+  } catch (error) {
+    note('counting again', error);
+  }
+  return applyPlan(settings, topUpsSoFar);
+}
+
 /** Stops counting and takes any covering screen away. */
 export function turnOff() {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
-    DeviceActivity.stopMonitoring([ACTIVITY, TOPUP_ACTIVITY]);
+    DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
     DeviceActivity.userDefaultsRemove(WIDGET_PLAN_KEY);
@@ -281,14 +356,18 @@ export function turnOff() {
  * The minutes known to be used since the last recharge, from the checkpoints
  * the phone has reported. Checkpoints that arrive impossibly early are ignored.
  */
-export function usedSoFar(goalMinutes: number, periodStart: Date): number | null {
+export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Date): number | null {
   if (!SCREEN_TIME_AVAILABLE) return null;
   try {
-    const reported = DeviceActivity.getEvents(ACTIVITY).filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName);
+    const reported = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)].filter(
+      (e) => e.callbackName === 'eventDidReachThreshold' && e.eventName,
+    );
     const from = countStart(periodStart, countingSince());
-    const arrived = checkpointsFor(goalMinutes).filter((checkpoint) => {
+    const to = periodEnd?.getTime() ?? Number.POSITIVE_INFINITY;
+    const arrived = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)].filter((checkpoint) => {
       const report = reported.find((e) => e.eventName === checkpoint.id);
-      return report !== undefined && report.lastCalledAt.getTime() >= from.getTime() && isPlausible(checkpoint, from, report.lastCalledAt);
+      const at = report?.lastCalledAt.getTime() ?? 0;
+      return report !== undefined && at >= from.getTime() && at < to && isPlausible(checkpoint, from, report.lastCalledAt);
     });
     return usedFloor(arrived);
   } catch {
@@ -314,6 +393,7 @@ export function diagnostics(settings: Settings): string[] {
     // So a screenshot shows how old the lines below are.
     lines.push(`Build: ${widgets?.build?.() ?? 'unknown'}. Read at: ${timeOf(Date.now())}`);
     lines.push(`Counting since: ${timeOf(countingSince())}`);
+    lines.push(`Health: ${health(settings, periodStartOf(new Date(), settings.rechargeMinute), true)}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
     const minutesOf = new Map(checkpointsFor(settings.goalMinutes).map((c) => [c.id as string, c]));
     const from = countStart(periodStartOf(new Date(), settings.rechargeMinute), countingSince());

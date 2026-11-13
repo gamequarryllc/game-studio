@@ -168,6 +168,17 @@ Two things the owner asked for on 2026-11-13 (build 43):
 
 Same day, build 44: the owner was not sure from the screen that always-allowed apps override the locks, nor that they still count. Each choice on What counts now spells out two lines, "Uses up the battery" and "Locks when empty", and a paragraph under them says how Always allowed fits, with a link to it. The Always allowed screen says the same for whichever choice is set. (Checked in the library: the always-allowed list is taken out of the locks in both choices; counting is separate.)
 
+## The owner's picks from the improvement list (2026-11-13)
+
+Asked for: first-run setup, a warning when the phone miscounts, finer minutes, a week view, and making quitting visible. Declined: other ways to earn time (the owner on the sums: three for fifteen minutes, then five for ten, is "the perfect type of friction", just enough to show you can get back on while making you ask whether it is worth it; keep it as it is), and weekend goals or a bedtime for now.
+
+Batch 1 (build 45):
+
+- **Finer minutes.** Checkpoints between the cells, about eighteen to a day in whole five minutes (every ten on a 3-hour day), named `m10`, `m20`... They are registered as their own activity, `plmin`, over the same stretch of day, with no actions: one developer runs thirty checkpoints at two-minute steps, but another reports the phone quietly stopping reports partway through a day with many, and if that happens it should be these that stop, not the ones that lock. The monitor does not ask the widget to redraw for them (patch 4). A failure to register them is noted in the readout and otherwise ignored.
+- **The miscount warning.** If any of the day's own checkpoints (a cell, the warning, empty) was reported in the current count too soon to be true, Today shows "Not counting" with "Count again", which forgets the impossible reports and registers the day again. That keeps the day's count except on the day counting was first turned on, when the phone only counts from registering.
+- **Quitting made visible.** The app now remembers whether counting is meant to be on (`watching`). If it is and Screen Time access has been taken away, Today says so with "Turn it back on"; if the phone has forgotten the day's monitoring, the app registers it again by itself once per launch, and says so if that fails. Turning counting off on purpose is not a fault; Today says counting is off. Any of these marks the day as not fully counted (`uncounted`), for the week view.
+- **The history behind the week view** is kept from this build on: each finished day's goal, minutes, top-ups and whether it was counted, eight weeks of them. Days the app never saw are not made up.
+
 Still open: a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do).
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 
