@@ -14,8 +14,7 @@ import {
   puzzleNotice,
   rgbOf,
   spanOf,
-  topUpWindow,
-} from '../monitorPlan';
+  topUpWindow, earliestTrue } from '../monitorPlan';
 import { DEFAULT_SETTINGS } from '../settings';
 import { toneForCells } from '../tone';
 import type { Settings } from '../types';
@@ -134,6 +133,19 @@ describe('the plan handed to the phone', () => {
         return 0.2126 * part(c.red) + 0.7152 * part(c.green) + 0.0722 * part(c.blue);
       };
       expect((light(shield.buttonText) + 0.05) / (light(shield.button) + 0.05)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test('a checkpoint may not act before it can be true', () => {
+    const from = new Date(2026, 10, 13, 6, 0, 0);
+    // Thirty minutes of use cannot be reported sooner than about thirty minutes in.
+    expect(earliestTrue(from, 30).getTime() - from.getTime()).toBe(28 * 60000);
+    // A checkpoint in the first couple of minutes is never held back to before the count began.
+    expect(earliestTrue(from, 1).getTime()).toBe(from.getTime());
+    // What the phone reports the moment a day is registered falls before every checkpoint's time.
+    const registered = new Date(from.getTime() + 5000);
+    for (const event of monitorPlan(settings({ goalMinutes: 30 })).events) {
+      expect(registered.getTime()).toBeLessThan(earliestTrue(from, event.minutes).getTime());
     }
   });
 

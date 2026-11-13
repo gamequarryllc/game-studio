@@ -169,6 +169,19 @@ export function countStart(periodStart: Date, countingSince: number | null): Dat
 }
 
 /**
+ * The earliest moment a checkpoint for `minutes` of use can be true: that many
+ * minutes after the count began, less a little slack for the two clocks. The
+ * phone is told never to act on the checkpoint before this. iOS 26 sometimes
+ * reports every checkpoint within seconds of a day being registered, and
+ * without this the covering screens went up over a full battery. With it, a
+ * checkpoint reported that early does nothing; it is not reported a second
+ * time, so the day it happens goes uncounted, which is the better way to fail.
+ */
+export function earliestTrue(countFrom: Date, minutes: number, slackMinutes = 2): Date {
+  return new Date(countFrom.getTime() + Math.max(0, minutes - slackMinutes) * 60000);
+}
+
+/**
  * Whether the phone should be asked to include use from before now. Yes on
  * any day that began with counting already on, so a change to the settings
  * keeps the day's use. No on the day counting is turned on (or started over):

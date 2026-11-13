@@ -62,7 +62,7 @@ export function ScreenTimeCard() {
             <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
             {settingsLocked() ? <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} /> : null}
             <Text selectable style={{ fontSize: 12, lineHeight: 17, color: c.ink3, marginTop: 4 }}>
-              {diagnostics().join('\n')}
+              {diagnostics(settings).join('\n')}
             </Text>
           </>
         ) : null}

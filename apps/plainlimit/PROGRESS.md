@@ -6,7 +6,9 @@ Kept current after every finished item, so a run that is cut off can be picked u
 
 Seen working on a real phone over three days of TestFlight builds (15 to 40), details in NOTES.md: counting against the phone's own Screen Time, cells draining, the "Last cell" screen, the empty screen, sums that earn time by the clock, the apps covered again on the minute by the phone itself, the recharge at the start of the next day, settings locked while empty, the widget, and the "What used it" list.
 
-Known faults: a finger on the "What used it" list cannot scroll Today (build 41 tries a clear sheet over it; if that fails the list gets a screen of its own); the widget runs about a minute behind; no guard yet against iOS 26 reporting every checkpoint at once (seen once, build 28); a video already playing keeps playing under a covering screen.
+Known faults: the widget runs about a minute behind (the phone's own scheduling, as far as can be told); a video already playing keeps playing under a covering screen; when iOS 26 reports checkpoints too early the app now refuses to lock (build 42) but does not yet tell the owner the day is going uncounted.
+
+Fixed since: the dead zone over "What used it" (build 41).
 
 Decided 2026-11-13: the notification stays as the way from the empty screen to the sums (Apple allows nothing more direct; answering sums on the covering screen itself was offered and declined for now).
 

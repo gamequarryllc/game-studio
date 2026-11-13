@@ -12,6 +12,7 @@ import {
   TOPUP_ACTIVITY,
   WIDGET_PLAN_KEY,
   countStart,
+  earliestTrue,
   includesEarlierUse,
   monitorPlan,
   puzzleNotice,
@@ -170,15 +171,36 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
 }
 
 /**
- * Writes the covering screens' look and words again, and nothing else. Called
- * when the app starts, so that an update which changes how the screens look
- * reaches the phone without the day having to be registered again (which on a
- * first day would restart the count).
+ * Tells the phone what to do at each checkpoint, and not to do it before the
+ * checkpoint can be true (see `earliestTrue`). This only writes settings; it
+ * registers nothing, so it is safe to repeat.
+ */
+function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: Settings, now: Date) {
+  const from = countStart(periodStartOf(now, settings.rechargeMinute), countingSince());
+  for (const event of plan.events) {
+    const notBefore = earliestTrue(from, event.minutes);
+    DeviceActivity.configureActions({
+      activityName: plan.activity,
+      callbackName: 'eventDidReachThreshold',
+      eventName: event.name,
+      actions: event.actions.map((a) => ({ ...toAction(a, plan.coverEverything), neverTriggerBefore: notBefore })),
+    });
+  }
+}
+
+/**
+ * Writes the covering screens' look and words, and what happens at each
+ * checkpoint, again, and nothing else. Called when the app starts or comes to
+ * the front, so that an update reaches the phone without the day having to be
+ * registered again (which on a first day would restart the count).
  */
 export function refreshScreens(settings: Settings, topUpsSoFar: number) {
   if (!SCREEN_TIME_AVAILABLE || !isOn()) return;
   try {
-    for (const shield of monitorPlan(settings, topUpsSoFar, countingSince()).shields) writeShield(shield, topUpsSoFar);
+    const plan = monitorPlan(settings, topUpsSoFar, countingSince());
+    for (const shield of plan.shields) writeShield(shield, topUpsSoFar);
+    // Today's "not before" times, so the guard against early checkpoints holds on each day the app is opened.
+    writeCheckpointActions(plan, settings, new Date());
   } catch (error) {
     note('the screens', error);
   }
@@ -220,14 +242,7 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
     DeviceActivity.clearWhitelist();
     if (pickCount(ALLOWED_ID) > 0) DeviceActivity.addSelectionToWhitelistAndUpdateBlock({ activitySelectionId: ALLOWED_ID }, 'plainlimit');
 
-    for (const event of plan.events) {
-      DeviceActivity.configureActions({
-        activityName: plan.activity,
-        callbackName: 'eventDidReachThreshold',
-        eventName: event.name,
-        actions: event.actions.map((a) => toAction(a, plan.coverEverything)),
-      });
-    }
+    writeCheckpointActions(plan, settings, now);
     // The screens come off when the day ends, a minute before the next one starts.
     DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'intervalDidEnd', actions: [...UNCOVER, STOP_EARNED_TIME] });
 
@@ -292,7 +307,7 @@ function timeOf(ms: unknown): string {
  * each recorded, as plain lines for Settings. It is how a screenshot from a
  * real phone says which link in the chain is not working.
  */
-export function diagnostics(): string[] {
+export function diagnostics(settings: Settings): string[] {
   if (!SCREEN_TIME_AVAILABLE) return [];
   try {
     const lines: string[] = [];
@@ -300,9 +315,15 @@ export function diagnostics(): string[] {
     lines.push(`Build: ${widgets?.build?.() ?? 'unknown'}. Read at: ${timeOf(Date.now())}`);
     lines.push(`Counting since: ${timeOf(countingSince())}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
+    const minutesOf = new Map(checkpointsFor(settings.goalMinutes).map((c) => [c.id as string, c]));
+    const from = countStart(periodStartOf(new Date(), settings.rechargeMinute), countingSince());
     const reported = DeviceActivity.getEvents()
       .filter((e) => e.activityName === ACTIVITY || e.activityName === TOPUP_ACTIVITY)
-      .map((e) => `${e.eventName ?? e.callbackName}: ${timeOf(e.lastCalledAt.getTime())}`);
+      .map((e) => {
+        const checkpoint = e.activityName === ACTIVITY && e.eventName ? minutesOf.get(e.eventName) : undefined;
+        const early = checkpoint !== undefined && e.lastCalledAt.getTime() >= from.getTime() && !isPlausible(checkpoint, from, e.lastCalledAt);
+        return `${e.eventName ?? e.callbackName}: ${timeOf(e.lastCalledAt.getTime())}${early ? ' (too early to be true, ignored)' : ''}`;
+      });
     lines.push(reported.length ? `Reported by the phone:\n  ${reported.join('\n  ')}` : 'Reported by the phone: nothing yet');
     lines.push(`Monitor asked for a widget redraw: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_reload_asked'))}`);
     const cells = DeviceActivity.userDefaultsGet<number>('plainlimit_widget_cells');

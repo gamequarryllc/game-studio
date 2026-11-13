@@ -94,6 +94,7 @@ export const store = {
     AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
       store.tick(new Date());
+      if (snapshot.state === 'ready') screenTime.refreshScreens(snapshot.doc.settings, snapshot.doc.day.topUps);
       if (screenTime.isOn()) screenTime.reloadWidget();
     });
   },
