@@ -3,9 +3,9 @@ import { AppState } from 'react-native';
 
 import { cellsLeft } from '@/domain/battery';
 import { nextRecharge } from '@/domain/day';
-import { advance, freshDoc, grantTopUp, isUnlocked, keepsTodaysCount, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
-import { stepGoal, stepRecharge, withAllowed, withoutAllowed } from '@/domain/settings';
-import type { CountMode, DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
+import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
+import { stepGoal, stepRecharge } from '@/domain/settings';
+import type { DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
 
@@ -109,7 +109,12 @@ function checkHealth(doc: Doc): Doc {
     void screenTime.applyPlan(doc.settings, doc.day.topUps).then(() => store.tick(new Date()));
     return doc;
   }
-  if (state === 'fine' || doc.day.uncounted) return doc;
+  // While counting works, the floor it has reached is something known for the guard.
+  if (state === 'fine') {
+    screenTime.noteKnown(doc.settings, doc.day.usedMinutes);
+    return doc;
+  }
+  if (doc.day.uncounted || state === 'nothingPicked') return doc;
   return { ...doc, day: { ...doc.day, uncounted: true } };
 }
 
@@ -168,13 +173,10 @@ export const store = {
   async turnOnScreenTime(): Promise<'on' | 'denied' | 'failed'> {
     const answer = await screenTime.askPermission();
     if (answer !== 'approved') return 'denied';
-    // The first time ever, counting starts now, from zero. After that, turning
-    // counting on again keeps today's count, so off-and-on is no refill.
-    const keep = keepsTodaysCount(snapshot.doc);
-    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, !keep);
-    // Start from what the phone says, not from any pretend use.
-    const day = keep ? snapshot.doc.day : { ...snapshot.doc.day, usedMinutes: 0 };
-    set({ ...snapshot.doc, watching: ok, day: withRealUse(snapshot.doc, day) });
+    // Counting always takes in the whole day since the recharge, so turning it
+    // on at any time picks up what was already used, and off-and-on is no refill.
+    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
+    set({ ...snapshot.doc, watching: ok, day: withRealUse(snapshot.doc, snapshot.doc.day) });
     return ok ? 'on' : 'failed';
   },
   /** How the day's counting stands, for the warning on Today. */
@@ -202,6 +204,29 @@ export const store = {
   /** The first-run setup is finished. */
   finishSetup() {
     set({ ...snapshot.doc, setupDone: true });
+  },
+  /**
+   * Setup's last screen: register the day, taking in everything since the
+   * recharge, with the locks held so nothing can lock before the person has
+   * seen the starting figure. The figure arrives as the phone reports.
+   */
+  async previewCounting(): Promise<boolean> {
+    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, false, true);
+    store.tick(new Date());
+    return ok;
+  },
+  /** The starting figure looked right: counting is on, and the locks act from now. */
+  startCounting() {
+    const doc = snapshot.doc;
+    screenTime.releaseLocks(doc.settings, doc.day.topUps, doc.day.usedMinutes);
+    set({ ...doc, watching: true, setupDone: true });
+  },
+  /** The starting figure looked wrong: count from this moment instead, from zero. */
+  async countFromNow(): Promise<boolean> {
+    const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, true);
+    set({ ...snapshot.doc, watching: ok, setupDone: true, day: { ...snapshot.doc.day, usedMinutes: 0 } });
+    store.tick(new Date());
+    return ok;
   },
   /**
    * Developer, on a real phone: a full battery and a count that starts again
@@ -232,17 +257,8 @@ export const store = {
   stepRecharge(direction: 1 | -1) {
     withSettings((s) => ({ ...s, rechargeMinute: stepRecharge(s.rechargeMinute, direction) }));
   },
-  setCountMode(countMode: CountMode) {
-    withSettings((s) => ({ ...s, countMode }));
-  },
   setEmptyLevel(emptyLevel: EmptyLevel) {
     withSettings((s) => ({ ...s, emptyLevel }));
-  },
-  addAllowed(name: string) {
-    withSettings((s) => ({ ...s, allowed: withAllowed(s.allowed, name) }));
-  },
-  removeAllowed(name: string) {
-    withSettings((s) => ({ ...s, allowed: withoutAllowed(s.allowed, name) }));
   },
   /** Developer: pretend this many more minutes were used. */
   pretendUse(minutes: number) {

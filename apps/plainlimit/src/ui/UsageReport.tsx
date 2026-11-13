@@ -1,4 +1,5 @@
 import { requireNativeView } from 'expo';
+import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { Text, View } from 'react-native';
 
@@ -11,6 +12,8 @@ interface NativeProps {
   fromMs: number;
   toMs: number;
   selection: string | null;
+  /** Which of the extension's reports: the list, or the day's total. */
+  context?: 'TopApps' | 'Total';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -38,6 +41,27 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
         <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
       </View>
       <Text style={{ fontSize: 13, lineHeight: 18, color: c.ink3 }}>Drawn by the phone&apos;s Screen Time. Plainlimit never sees this list, and it can be a little behind.</Text>
+    </View>
+  );
+}
+
+/**
+ * The day's figure, to the minute, as Apple's Screen Time counts it: every
+ * minute the counted apps have been used since the recharge. Plainlimit itself
+ * only hears of use in steps, so `fallback` (its own figure, in the same type)
+ * shows until the phone has drawn its number over it, and wherever the phone
+ * cannot draw at all. Plainlimit never learns the number it shows.
+ */
+export function TodayTotal({ settings, now, fallback, style }: { settings: Settings; now: Date; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const window = SCREEN_TIME_AVAILABLE && NativeReport ? reportWindow(settings, now) : null;
+  // Counting from a moment after the recharge (setup's "count from now"): the
+  // phone's report goes by whole hours and would take in use from before it.
+  if (!NativeReport || !window || !window.fromRecharge || !window.selection) return <View style={style}>{fallback}</View>;
+  return (
+    <View pointerEvents="none" style={[{ height: 52, alignSelf: 'stretch' }, style]}>
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>{fallback}</View>
+      <NativeReport context="Total" fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
+      <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,52 +7,86 @@ import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { toneAt } from '@/domain/tone';
 import { askToNotify } from '@/platform/notices';
-import { ALLOWED_ID, COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, permission, pickCount } from '@/platform/screenTime';
-import { store, useDoc } from '@/state/store';
+import { tickStepMinutes } from '@/domain/checkpoints';
+import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, permission, pickCount } from '@/platform/screenTime';
+import { store } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { Battery } from '@/ui/Battery';
-import { ALLOWED_EXPLAINED, EVERYTHING_ROWS, TICKED_ROWS } from '@/ui/countWords';
-import { BigButton, Card, Choice, StepButton } from '@/ui/kit';
+import { COUNTS_LEAD, COUNTS_NOTE, COUNTS_STEPS, pickedWords } from '@/ui/countWords';
+import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
+import { TodayTotal } from '@/ui/UsageReport';
 import { useDay } from '@/ui/useDay';
 
 // The first launch, one question at a time. On a phone, Screen Time access
 // comes before anything that opens Apple's list of apps, which needs it.
 // Everything here can be changed later in Settings.
+//
+// Counting always takes in the day since the recharge, so the app can be
+// installed at any time of day. The last screen registers the day with the
+// locks held, shows Plainlimit's starting figure beside the phone's own, and
+// only lets the locks act once the person has seen them agree. If they don't
+// (iOS sometimes misreports right after a day is registered), counting can
+// start from that moment instead.
 
 const FULL = toneAt(0);
 
-type Step = 'welcome' | 'goal' | 'recharge' | 'access' | 'notify' | 'counts' | 'allowed' | 'widget' | 'done';
+type Step = 'welcome' | 'goal' | 'recharge' | 'access' | 'notify' | 'counts' | 'widget' | 'done';
 
-const STEPS: Step[] = SCREEN_TIME_AVAILABLE
-  ? ['welcome', 'goal', 'recharge', 'access', 'notify', 'counts', 'allowed', 'widget', 'done']
-  : ['welcome', 'goal', 'recharge', 'counts', 'allowed', 'widget', 'done'];
+const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'goal', 'recharge', 'access', 'notify', 'counts', 'widget', 'done'] : ['welcome', 'goal', 'recharge', 'counts', 'widget', 'done'];
+
+/** How long the last screen waits for the phone to report the day so far before offering Start counting. */
+const SETTLE_MS = 10_000;
 
 export default function Setup() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { settings, accent } = useDay();
-  const { settings: saved } = useDoc();
+  const { now, settings, day, accent } = useDay();
   const [at, setAt] = useState(0);
   const [access, setAccess] = useState(() => (SCREEN_TIME_AVAILABLE ? permission() : 'unknown'));
   const [asked, setAsked] = useState(false);
-  const [picking, setPicking] = useState<typeof COUNTED_ID | typeof ALLOWED_ID | null>(null);
+  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [, redraw] = useState(0);
+  // The last screen on a phone: reading the day so far, then ready to start.
+  const [phase, setPhase] = useState<'reading' | 'ready' | 'failed'>('reading');
+  const previewed = useRef(false);
 
   const step = STEPS[at];
   const next = () => setAt((i) => Math.min(STEPS.length - 1, i + 1));
   const approved = access === 'approved';
   const canPick = SCREEN_TIME_AVAILABLE && approved;
-  const ticked = settings.countMode !== 'everything';
-  const countedPicks = pickCount(COUNTED_ID);
-  const allowedCount = SCREEN_TIME_AVAILABLE ? pickCount(ALLOWED_ID) : saved.allowed.length;
+  const picked = pickCount(COUNTED_ID);
+  // Only a phone with access and something ticked can count; anywhere else the last screen is a summary.
+  const checking = step === 'done' && canPick && picked > 0;
 
-  const finish = async () => {
+  useEffect(() => {
+    if (!checking || previewed.current) return;
+    previewed.current = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    void store.previewCounting().then((ok) => {
+      if (!ok) setPhase('failed');
+      else timer = setTimeout(() => setPhase('ready'), SETTLE_MS);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [checking]);
+
+  const finish = () => {
+    store.finishSetup();
+    router.replace('/');
+  };
+
+  const start = () => {
+    store.startCounting();
+    router.replace('/');
+  };
+
+  const fromNow = async () => {
     if (busy) return;
     setBusy(true);
-    if (approved) await store.turnOnScreenTime();
-    store.finishSetup();
+    await store.countFromNow();
     setBusy(false);
     router.replace('/');
   };
@@ -164,39 +198,31 @@ export default function Setup() {
     body = (
       <>
         <Heading>What counts?</Heading>
-        <Lead>Which apps use up the battery, and which lock when it&apos;s empty.</Lead>
-        <View accessibilityRole="radiogroup" style={{ gap: 10 }}>
-          <Choice title="Everything" rows={EVERYTHING_ROWS} chosen={!ticked} accent={accent} onPress={() => store.setCountMode('everything')} />
-          <Choice title="Only what I tick" rows={TICKED_ROWS} chosen={ticked} accent={accent} onPress={() => store.setCountMode('timeWasters')} />
-        </View>
-        {ticked && canPick ? (
-          <View style={{ gap: 10, marginTop: 4 }}>
-            <Text style={styles.body}>{countedPicks === 0 ? 'Nothing is ticked yet, so nothing would drain the battery.' : `${countedPicks} ticked.`}</Text>
-            <BigButton quiet label={countedPicks === 0 ? 'Choose apps' : 'Change the apps'} onPress={() => setPicking(COUNTED_ID)} />
-            <Text style={styles.note}>For the usual time-wasters, tick Social, Games and Entertainment.</Text>
-          </View>
-        ) : null}
-        {ticked && SCREEN_TIME_AVAILABLE && !approved ? <Text style={styles.note}>You can tick apps once Screen Time is allowed, in Settings.</Text> : null}
-      </>
-    );
-  }
-
-  if (step === 'allowed') {
-    body = (
-      <>
-        <Heading>What always opens?</Heading>
-        <Lead>Always-allowed apps never lock. Tick Phone, Messages and Maps at least, for calls, texts and directions.</Lead>
+        <Lead>{COUNTS_LEAD}</Lead>
         {canPick ? (
-          <View style={{ gap: 10 }}>
-            <Text style={styles.body}>{allowedCount === 0 ? 'Nothing is allowed through yet.' : allowedCount === 1 ? '1 app is allowed through.' : `${allowedCount} apps are allowed through.`}</Text>
-            <BigButton quiet label={allowedCount === 0 ? 'Choose apps' : 'Change the apps'} onPress={() => setPicking(ALLOWED_ID)} />
-          </View>
-        ) : !SCREEN_TIME_AVAILABLE ? (
-          <Text style={styles.body}>{saved.allowed.join(', ')} are allowed. You can change them in Settings.</Text>
-        ) : null}
-        <Text style={styles.note}>{ALLOWED_EXPLAINED}</Text>
+          <>
+            <Card style={{ paddingVertical: 14, gap: 8 }}>
+              {COUNTS_STEPS.map((line, i) => (
+                <Point key={line} n={String(i + 1)} small>
+                  {line}
+                </Point>
+              ))}
+            </Card>
+            <Text style={picked === 0 ? styles.ok : styles.body}>{pickedWords(picked)}</Text>
+            {picked > 0 ? <BigButton quiet label="Change the apps" onPress={() => setPicking(true)} /> : null}
+            <Text style={styles.note}>{COUNTS_NOTE}</Text>
+          </>
+        ) : SCREEN_TIME_AVAILABLE ? (
+          <Text style={styles.note}>You can tick apps once Screen Time is allowed, in Settings, under What counts.</Text>
+        ) : (
+          <Text style={styles.note}>On an iPhone you tick them in Apple&apos;s own list of your apps. This preview runs on pretend use.</Text>
+        )}
       </>
     );
+    if (canPick && picked === 0) {
+      primary = { label: 'Choose apps', onPress: () => setPicking(true) };
+      secondary = { label: 'Skip for now', onPress: next };
+    }
   }
 
   if (step === 'widget') {
@@ -211,26 +237,63 @@ export default function Setup() {
     );
   }
 
-  if (step === 'done') {
+  if (step === 'done' && checking) {
+    const stepMinutes = tickStepMinutes(settings.goalMinutes);
+    body = (
+      <>
+        <Heading>Check today so far</Heading>
+        <Lead>
+          Plainlimit counts from the recharge at {clockLabel(settings.rechargeMinute)}, so time already used today counts. Its figure should be the same as the phone&apos;s, or up to {stepMinutes} minutes
+          under.
+        </Lead>
+        {/* On the plain ground, not a card: the phone draws its figure on the ground's own colour. */}
+        <View style={styles.figureBox}>
+          <View style={styles.figures}>
+            <View style={styles.figure}>
+              <Text style={styles.figureLabel}>Screen Time</Text>
+              <TodayTotal settings={settings} now={now} fallback={<Text style={styles.figureValue}>…</Text>} />
+            </View>
+            <View style={styles.figure}>
+              <Text style={styles.figureLabel}>Plainlimit</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.figureValue, { color: accent }]}>
+                {phase === 'reading' && day.usedMinutes === 0 ? '…' : durationLabel(day.usedMinutes)}
+              </Text>
+            </View>
+          </View>
+        </View>
+        <Text style={styles.note}>
+          {phase === 'reading'
+            ? 'Reading today\u2019s Screen Time. Nothing locks until you start.'
+            : phase === 'failed'
+              ? 'The phone would not start counting. You can turn it on later in Settings, under Screen Time.'
+              : 'If Plainlimit\u2019s figure is well above the phone\u2019s, the phone misreported. Count from now starts at zero instead.'}
+        </Text>
+      </>
+    );
+    if (phase === 'failed') primary = { label: 'Go to Today', onPress: finish };
+    else {
+      primary = { label: phase === 'reading' ? 'One moment…' : 'Start counting', onPress: phase === 'reading' ? () => {} : start };
+      if (phase === 'ready') secondary = { label: busy ? 'One moment…' : 'Count from now instead', onPress: () => void fromNow() };
+    }
+  } else if (step === 'done') {
     body = (
       <>
         <Heading>You&apos;re set</Heading>
         <Card>
           <Row label="Daily goal" value={durationLabel(settings.goalMinutes)} />
           <Row label="Recharges at" value={clockLabel(settings.rechargeMinute)} />
-          <Row label="What counts" value={ticked ? 'Only what I tick' : 'Everything'} />
-          <Row label="Always allowed" value={allowedCount === 1 ? '1 app' : `${allowedCount} apps`} last />
+          <Row label="What counts" value={!SCREEN_TIME_AVAILABLE ? 'Your picks' : picked === 0 ? 'Nothing yet' : `${picked} ticked`} last />
         </Card>
         <Lead>
           {!SCREEN_TIME_AVAILABLE
             ? 'In this preview the battery runs on pretend use, from Settings.'
-            : approved
-              ? 'Counting starts now, from zero. Everything here can be changed in Settings.'
-              : 'Allow Screen Time in Settings when you are ready, and counting starts then.'}
+            : !approved
+              ? 'Allow Screen Time in Settings when you are ready, and counting starts then.'
+              : 'Tick what counts in Settings, under What counts, and counting starts then.'}
         </Lead>
       </>
     );
-    primary = { label: busy ? 'One moment…' : approved ? 'Start counting' : 'Go to Today', onPress: () => void finish() };
+    primary = { label: 'Go to Today', onPress: finish };
   }
 
   return (
@@ -258,11 +321,11 @@ export default function Setup() {
         {secondary ? <BigButton quiet label={secondary.label} onPress={secondary.onPress} /> : null}
       </View>
       <AppPicker
-        id={picking ?? COUNTED_ID}
-        open={picking !== null}
-        header={picking === ALLOWED_ID ? 'Tick what always opens' : 'Tick what drains your battery'}
+        id={COUNTED_ID}
+        open={picking}
+        header="Tick what uses up your battery"
         onClose={() => {
-          setPicking(null);
+          setPicking(false);
           store.picksChanged();
           redraw((n) => n + 1);
         }}
@@ -283,11 +346,11 @@ function Lead({ children }: { children: ReactNode }) {
   return <Text style={styles.lead}>{children}</Text>;
 }
 
-function Point({ n, children }: { n: string; children: string }) {
+function Point({ n, children, small = false }: { n: string; children: string; small?: boolean }) {
   return (
     <View style={styles.point}>
-      <Text style={styles.pointN}>{n}</Text>
-      <Text style={styles.pointText}>{children}</Text>
+      <Text style={[styles.pointN, small ? styles.pointNSmall : null]}>{n}</Text>
+      <Text style={[styles.pointText, small ? styles.pointTextSmall : null]}>{children}</Text>
     </View>
   );
 }
@@ -319,6 +382,13 @@ const styles = StyleSheet.create({
   point: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
   pointN: { fontFamily: display.bold, fontSize: 16, lineHeight: 23, color: c.ink3, width: 14 },
   pointText: { flex: 1, fontSize: 17, lineHeight: 24, color: c.ink },
+  pointNSmall: { fontSize: 15, lineHeight: 21 },
+  pointTextSmall: { fontSize: 15, lineHeight: 21 },
+  figureBox: { borderWidth: 1, borderColor: c.rule, borderRadius: 18, padding: 16 },
+  figures: { flexDirection: 'row', gap: 12 },
+  figure: { flex: 1, gap: 4 },
+  figureLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: c.ink3 },
+  figureValue: { fontFamily: display.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.6, color: c.ink },
   foot: { paddingHorizontal: 20, paddingTop: 10, gap: 10, borderTopWidth: 1, borderTopColor: c.rule, backgroundColor: c.ground },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },

@@ -193,6 +193,17 @@ Still open: a video already playing in a covered app, or in picture-in-picture, 
 
 Not yet seen by anyone: the "Last cell" screen and its buttons, Warn and Locked levels, the recharge at 6:00 AM, changing the goal mid-day, and whether the covers come back on time after earned time.
 
+## One list, counted from the recharge (2026-11-13, build 48)
+
+The owner asked for the battery to follow the phone's own Screen Time for the apps that count, to install at any time of day without starting at zero, and for apps he does not count (Maps) never to drain it. Agreed on, and built:
+
+- **One list.** What counts is whatever is ticked in Apple's picker: the usual way is to tick All Apps & Categories and untick what should not count. Ticked apps use up the battery and are the only ones covered when it is empty; unticked apps never count and never lock. The "Everything" choice and the always-allowed list are gone (they allowed apps that still counted, the thing the owner found unclear). With nothing ticked, nothing is registered, and Today says so with "Choose apps". Leaving out one app inside a ticked category means unticking the category and ticking its other apps; apps installed later in it are then not counted until ticked. Exclusion is by Apple's picker, not by counting twice and subtracting.
+- **Always from the recharge.** Every registration asks the phone for the day since the recharge, so installing at 4 PM starts with the day's real use, and turning counting off and on refills nothing. (Build 47's "keep today's count" rule is gone with it.)
+- **The last known figure.** The danger in counting from the recharge is iOS 26's false reports right after a day is registered. While counting works the app notes the most that can have been used by now (the next checkpoint not yet reported, plus five minutes; `plainlimit_known`). A report arriving later is judged as if the count had begun that many minutes before the note, and the phone is told never to act on a checkpoint before that. Re-registering mid-day after a settings change, access coming back, or a re-registration can then not lock on a false report. The widget applies the same rule.
+- **Setup checks the starting figure.** The last screen registers the day with the locks held (at most two hours, in case setup is left), waits ten seconds for the phone's reports, and shows Plainlimit's figure beside the phone's own (drawn by the report extension). "Start counting" lets the locks act; "Count from now instead" starts at zero from that moment, for when the phone misreported. This is the one registration with nothing known yet to guard it.
+- **Today's figure is the phone's own.** The report extension draws the day's total for the counted apps to the minute ("Total" report, in the app's display face, which the build copies into the extension). The app's stepped figure fills the battery and shows until the phone has drawn, or where it cannot (after "Count from now", whose report would go by whole hours).
+- **What counts can't change while the battery is empty**, like the goal: unticking an app would unlock it.
+
 ## To check on the phone (nothing here has been tried)
 
 In order; each one that fails changes the code, not just a setting.

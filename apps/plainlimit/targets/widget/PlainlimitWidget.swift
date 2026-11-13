@@ -7,6 +7,8 @@ import WidgetKit
 //   plainlimit_plan                              written by the app: the goal, the recharge time, and when counting began
 //   events_plday_eventDidReachThreshold_<name>   written by the monitor extension each time a
 //                                                checkpoint is reached (milliseconds since 1970)
+//   plainlimit_known                             written by the app while counting works: at most
+//                                                `most` minutes had been used by `at`
 // A checkpoint counts for today when it was reached after the last recharge.
 // The same rules live in the app's src/domain/ (battery.ts, day.ts, checkpoints.ts, tone.ts);
 // src/domain/__tests__/widget.test.ts checks the two stay in step.
@@ -96,11 +98,22 @@ func readState(now: Date) -> BatteryState {
   let countFrom = (plan["countFrom"] as? NSNumber)?.doubleValue ?? 0
   let start = max(periodStart(now: now, rechargeMinute: recharge).timeIntervalSince1970 * 1000, countFrom)
 
+  // Once the app has known that at most `most` minutes were used by `knownAt`, a
+  // checkpoint arriving after that is judged as if the count began `most`
+  // minutes before `knownAt` (checkpoints.ts, judgedFrom).
+  let known = defaults.dictionary(forKey: "plainlimit_known")
+  let knownAt = (known?["at"] as? NSNumber)?.doubleValue ?? 0
+  let knownMost = (known?["most"] as? NSNumber)?.doubleValue ?? 0
+  func judgedFrom(_ arrivedAt: Double) -> Double {
+    guard knownAt >= start, arrivedAt >= knownAt else { return start }
+    return max(start, knownAt - knownMost * 60_000)
+  }
+
   // A checkpoint for N minutes of use cannot honestly arrive sooner than N minutes
   // into the day. iOS has been seen to deliver them early; those are ignored.
   func reached(_ name: String, afterMinutes minutes: Double) -> Bool {
     let at = defaults.double(forKey: "events_\(activityName)_eventDidReachThreshold_\(name)")
-    return at >= start + max(0, minutes - slackMinutes) * 60_000
+    return at >= start && at >= judgedFrom(at) + max(0, minutes - slackMinutes) * 60_000
   }
 
   var cells = cellCount

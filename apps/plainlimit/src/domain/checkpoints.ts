@@ -70,17 +70,68 @@ export function isPlausible(checkpoint: Checkpoint, periodStart: Date, arrivedAt
 }
 
 /**
+ * The most that can have been used by `at`, in minutes: something the app
+ * learned while counting was working (see `mostByNow`). Kept on the phone, so
+ * it outlives counting being turned off, Screen Time access being taken away,
+ * or the day being registered again after a change to the settings.
+ */
+export interface Known {
+  at: number;
+  most: number;
+}
+
+/**
+ * Where a report that arrived at `arrivedAt` is judged from. Nobody uses more
+ * minutes than have passed, so a report for N minutes cannot come sooner than
+ * N minutes after the day's count began. And once the app has known that at
+ * most `most` minutes were used by `at`, a report arriving after `at` cannot be
+ * for more than `most` plus the time since: as if the count had begun `most`
+ * minutes before `at`. That is what keeps a false report from the phone (iOS
+ * 26 sends them right after counting is set up) from passing for real when
+ * counting is set up in the middle of a day: after a change to the settings,
+ * after counting is turned back on, after Screen Time access comes back.
+ */
+export function judgedFrom(dayStart: Date, known: Known | null, arrivedAt: Date): Date {
+  if (!known || known.at < dayStart.getTime() || arrivedAt.getTime() < known.at) return dayStart;
+  return new Date(Math.max(dayStart.getTime(), known.at - known.most * 60000));
+}
+
+/** Where every report from now on is judged from, for the phone's "never before" times. */
+export function guardFrom(dayStart: Date, known: Known | null): Date {
+  if (!known || known.at < dayStart.getTime()) return dayStart;
+  return new Date(Math.max(dayStart.getTime(), known.at - known.most * 60000));
+}
+
+/** A report from today's count that can be true. */
+export function believable(checkpoint: Checkpoint, dayStart: Date, known: Known | null, arrivedAt: Date): boolean {
+  return arrivedAt.getTime() >= dayStart.getTime() && isPlausible(checkpoint, judgedFrom(dayStart, known, arrivedAt), arrivedAt);
+}
+
+/**
+ * The most that can have been used right now, while counting works: less than
+ * the next checkpoint that has not been reported, since it would have been.
+ * Five minutes are added for the phone being slow to report. Nothing is known
+ * once the goal is passed, as there are no checkpoints beyond it.
+ */
+export function mostByNow(goalMinutes: number, usedFloorNow: number, slackMinutes = 5): number | null {
+  const next = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)]
+    .map((c) => c.minutes)
+    .filter((m) => m > usedFloorNow)
+    .sort((a, b) => a - b)[0];
+  return next === undefined ? null : next + slackMinutes;
+}
+
+/**
  * Whether the phone has miscounted the day: one of the day's own checkpoints
  * (a cell, the warning, empty) was reported in the current count, but too soon
  * to be true. It has then been thrown away and will not be reported again
- * today, so that part of the day cannot lock. The fix is to start counting
- * again.
+ * today, so that part of the day cannot lock. The fix is to count again.
  */
-export function miscounted(reports: readonly { id: string; at: Date }[], goalMinutes: number, countFrom: Date): boolean {
+export function miscounted(reports: readonly { id: string; at: Date }[], goalMinutes: number, dayStart: Date, known: Known | null = null): boolean {
   const own = new Map(checkpointsFor(goalMinutes).map((c) => [c.id, c]));
   return reports.some((r) => {
     const checkpoint = own.get(r.id);
-    return checkpoint !== undefined && r.at.getTime() >= countFrom.getTime() && !isPlausible(checkpoint, countFrom, r.at);
+    return checkpoint !== undefined && r.at.getTime() >= dayStart.getTime() && !believable(checkpoint, dayStart, known, r.at);
   });
 }
 

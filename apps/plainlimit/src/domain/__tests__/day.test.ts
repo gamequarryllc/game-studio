@@ -1,5 +1,5 @@
 import { clockLabel, durationLabel, goalLabel, nextRecharge, periodStart, untilLabel, wrapMinute } from '../day';
-import { HISTORY_DAYS, advance, freshDay, freshDoc, grantTopUp, isUnlocked, keepsTodaysCount, repairDoc, rollOver, withUse } from '../dayState';
+import { HISTORY_DAYS, advance, freshDay, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse } from '../dayState';
 
 const SIX = 6 * 60;
 
@@ -184,15 +184,3 @@ describe('the history of finished days', () => {
   });
 });
 
-describe('turning counting on again', () => {
-  const now = new Date(2026, 10, 13, 14, 0);
-
-  it('starts from zero only the very first time', () => {
-    const first = freshDoc(now);
-    expect(keepsTodaysCount(first)).toBe(false);
-    // Off and on again on a day with use: the battery is not refilled.
-    expect(keepsTodaysCount({ ...first, day: { ...first.day, usedMinutes: 60 } })).toBe(true);
-    expect(keepsTodaysCount({ ...first, day: { ...first.day, uncounted: true } })).toBe(true);
-    expect(keepsTodaysCount({ ...first, history: [{ start: new Date(2026, 10, 12, 6).toISOString(), goalMinutes: 180, usedMinutes: 0, topUps: 0, state: 'off' }] })).toBe(true);
-  });
-});

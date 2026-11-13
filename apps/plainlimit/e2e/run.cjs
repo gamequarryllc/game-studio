@@ -1,5 +1,5 @@
 // Uses the app from end to end in a headless browser, the way a person would
-// on a phone: a fresh start, every setting, the always-allowed list, draining
+// on a phone: a fresh start, every setting, the What counts screen, draining
 // the battery cell by cell, the warning and empty screens at each level, the
 // sums, a reload, and a recharge. It fails on any broken expectation and on
 // any console error.
@@ -54,7 +54,6 @@ async function main() {
     await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
   };
   const see = (text) => page.getByText(text, { exact: true }).first().waitFor({ state: 'visible', timeout: 8000 });
-  const gone = (text) => page.getByText(text, { exact: true }).first().waitFor({ state: 'hidden', timeout: 8000 });
   const press = (name) => page.getByRole('button', { name, exact: true }).first().click();
   const tab = (name) => page.getByRole('tab', { name, exact: true }).click();
   const back = async () => {
@@ -74,17 +73,16 @@ async function main() {
     await see('When does it recharge?');
     await press('Next');
     await see('What counts?');
+    await see("The apps you tick use up the battery and lock when it’s empty. Anything left unticked never counts and never locks.");
     await shot('00-setup-counts');
-    await press('Next');
-    await see('What always opens?');
-    await see('Phone, Messages, Maps are allowed. You can change them in Settings.');
     await press('Next');
     await see('Put it on your home screen');
     await press('Back');
-    await see('What always opens?');
+    await see('What counts?');
     await press('Next');
     await press('Next');
     await see("You're set");
+    await see('Your picks');
     await shot('00-setup-done');
     await press('Go to Today');
   });
@@ -120,38 +118,14 @@ async function main() {
     await see('6:00 AM');
   });
 
-  await step('what counts can be changed between everything and your own ticks', async () => {
-    await press('What counts, Everything');
-    await see('Two things in one choice: which apps use up the battery, and which lock when it\'s empty.');
+  await step('what counts is one list, and there is no always-allowed list', async () => {
+    assert.strictEqual(await page.getByRole('button', { name: /^Always allowed/ }).count(), 0, 'the always-allowed list is gone');
+    await press('What counts, Your picks');
+    await see("The apps you tick use up the battery and lock when it’s empty. Anything left unticked never counts and never locks.");
+    assert.strictEqual(await page.getByRole('radio').count(), 0, 'no Everything / Only what I tick choice');
     await shot('03-what-counts');
-    await page.getByRole('radio', { name: /Only what I tick/ }).click();
-    assert.strictEqual(await page.getByRole('radio', { name: /Only what I tick/ }).getAttribute('aria-checked'), 'true');
-    assert.strictEqual(await page.getByRole('radio', { name: /Everything/ }).getAttribute('aria-checked'), 'false');
-    assert.strictEqual(await page.getByRole('radio').count(), 2);
     await back();
-    await page.getByRole('button', { name: 'What counts, Only what I tick' }).waitFor();
-  });
-
-  await step('apps can be removed from and added to the always-allowed list', async () => {
-    await press('Always allowed, 3 apps');
-    await see('These never lock, even when the battery is empty.');
-    await shot('04-allowed');
-    await press('Remove Maps');
-    await gone('Maps');
-    await page.getByRole('textbox').fill('  Camera ');
-    await press('Add');
-    await see('Camera');
-    await page.getByRole('textbox').fill('camera');
-    await press('Add');
-    assert.strictEqual(await page.getByText('Camera', { exact: true }).count(), 1, 'a second "camera" must not be added');
-    await page.getByRole('textbox').fill('   ');
-    await press('Add');
-    await page.getByRole('textbox').fill('A very long app name that goes on and on past forty characters');
-    await press('Add');
-    await shot('05-allowed-edited');
-    await press('Remove A very long app name that goes on and on');
-    await back();
-    await page.getByRole('button', { name: 'Always allowed, 3 apps' }).waitFor();
+    await page.getByRole('button', { name: 'What counts, Your picks' }).waitFor();
   });
 
   await step('pretend use empties the battery a cell at a time', async () => {
@@ -202,12 +176,12 @@ async function main() {
     await press('Keep going anyway');
     await page.getByRole('radio', { name: /^Locked/ }).click();
     await press('See the empty screen');
-    await see('Locked until it recharges at 6:00 AM. Phone, Messages and Camera still open.');
+    await see("Locked until it recharges at 6:00 AM. Apps that don't count still open.");
     assert.strictEqual(await page.getByRole('button').count(), 1, 'a locked screen has one button');
     await shot('11-empty-locked');
     await press('Close this app');
     await tab('Today');
-    await see('Locked until 6:00 AM. Phone, Messages and Camera still open.');
+    await see("Locked until 6:00 AM. Apps that don't count still open.");
     assert.strictEqual(await page.getByRole('button', { name: /Solve/ }).count(), 0);
     await tab('Settings');
     await page.getByRole('radio', { name: /^Work for it/ }).click();
@@ -268,8 +242,7 @@ async function main() {
     await see('3:00 of 3:00');
     await page.getByText(/^Earned time runs until/).waitFor();
     await tab('Settings');
-    await page.getByRole('button', { name: 'What counts, Only what I tick' }).waitFor();
-    await page.getByRole('button', { name: 'Always allowed, 3 apps' }).waitFor();
+    await page.getByRole('button', { name: 'What counts, Your picks' }).waitFor();
   });
 
   await step('going far past the goal stays empty and tidy', async () => {

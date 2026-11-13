@@ -1,10 +1,15 @@
+import CoreText
 import DeviceActivity
 import FamilyControls
 import ManagedSettings
 import SwiftUI
 
-// The "what used it" list on Today: the apps that used the most time since the
-// battery last recharged, as Apple's Screen Time counts them.
+// Two pictures for Today, both as Apple's Screen Time counts:
+//   TopApps  the "what used it" list: the apps that used the most time since the
+//            battery last recharged.
+//   Total    the day's figure: every minute the counted apps have been used
+//            since the recharge, to the minute. The app itself only learns use
+//            in steps, so this is the exact number the person sees.
 //
 // The phone runs this in a sealed box: it may draw, and nothing else. The app
 // shows the picture and never learns what is in it.
@@ -23,6 +28,26 @@ struct UsageSummary {
 
 extension DeviceActivityReport.Context {
   static let topApps = Self("TopApps")
+  static let total = Self("Total")
+}
+
+private let ink = Color(red: 244 / 255, green: 245 / 255, blue: 242 / 255)
+private let quiet = Color(red: 169 / 255, green: 174 / 255, blue: 179 / 255)
+private let rule = Color(red: 37 / 255, green: 40 / 255, blue: 44 / 255)
+private let ground = Color(red: 14 / 255, green: 16 / 255, blue: 17 / 255)
+
+/// The app's display face, shipped inside this extension (the build copies it
+/// in). If it cannot be loaded the phone's own bold face is used instead.
+private let displayFace: String? = {
+  guard let url = Bundle.main.url(forResource: "SpaceGrotesk_700Bold", withExtension: "ttf") else { return nil }
+  CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+  return "SpaceGrotesk-Bold"
+}()
+
+/// "1:23", the way the app writes a length of time.
+func clockWords(_ seconds: TimeInterval) -> String {
+  let minutes = max(0, Int(seconds / 60))
+  return "\(minutes / 60):" + String(format: "%02d", minutes % 60)
 }
 
 func durationWords(_ seconds: TimeInterval) -> String {
@@ -71,11 +96,6 @@ struct TopAppsReport: DeviceActivityReportScene {
 struct TopAppsView: View {
   let summary: UsageSummary
 
-  private let ink = Color(red: 244 / 255, green: 245 / 255, blue: 242 / 255)
-  private let quiet = Color(red: 169 / 255, green: 174 / 255, blue: 179 / 255)
-  private let rule = Color(red: 37 / 255, green: 40 / 255, blue: 44 / 255)
-  private let ground = Color(red: 14 / 255, green: 16 / 255, blue: 17 / 255)
-
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       if summary.apps.isEmpty {
@@ -123,11 +143,49 @@ struct TopAppsView: View {
   }
 }
 
+struct TotalReport: DeviceActivityReportScene {
+  let context: DeviceActivityReport.Context = .total
+  let content: (TimeInterval) -> TotalView
+
+  func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
+    -> TimeInterval {
+    var seconds: TimeInterval = 0
+    for await device in data {
+      for await segment in device.activitySegments {
+        seconds += segment.totalActivityDuration
+      }
+    }
+    return seconds
+  }
+}
+
+struct TotalView: View {
+  let seconds: TimeInterval
+
+  var body: some View {
+    HStack(spacing: 0) {
+      Text(clockWords(seconds))
+        .font(displayFace.map { Font.custom($0, size: 48) } ?? .system(size: 48, weight: .bold))
+        .tracking(-1.6)
+        .foregroundStyle(ink)
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    .background(ground)
+  }
+}
+
 @main
 struct PlainlimitReport: DeviceActivityReportExtension {
   var body: some DeviceActivityReportScene {
     TopAppsReport { summary in
       TopAppsView(summary: summary)
+    }
+    TotalReport { seconds in
+      TotalView(seconds: seconds)
     }
   }
 }

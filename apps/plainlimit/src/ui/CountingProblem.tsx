@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
@@ -12,6 +13,7 @@ import { c } from './theme';
 // view marks those days instead.
 
 const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string }> = {
+  nothingPicked: { line: 'Nothing is ticked in What counts, so nothing is counted or locked.', button: 'Choose apps' },
   accessOff: {
     line: 'Screen Time access for Plainlimit was turned off in the Settings app, so nothing is being counted or locked.',
     button: 'Turn it back on',
@@ -21,6 +23,7 @@ const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string }> = 
 };
 
 export function CountingProblem({ health }: { health: Health }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   if (health === 'fine') return null;
@@ -28,6 +31,10 @@ export function CountingProblem({ health }: { health: Health }) {
 
   const fix = async () => {
     if (busy) return;
+    if (health === 'nothingPicked') {
+      router.push('/what-counts');
+      return;
+    }
     setBusy(true);
     setProblem(null);
     const result = health === 'miscounted' ? ((await store.countAgain()) ? 'on' : 'failed') : await store.resumeCounting();

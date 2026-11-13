@@ -4,8 +4,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { topUpPlan } from '@/domain/puzzle';
-import type { CountMode } from '@/domain/types';
-import { ALLOWED_ID, DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
+import { COUNTED_ID, DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
 import { Battery } from '@/ui/Battery';
@@ -13,15 +12,12 @@ import { ScreenTimeCard } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
-const COUNT_NAMES: Record<CountMode, string> = { everything: 'Everything', timeWasters: 'Only what I tick', custom: 'Only what I tick' };
-
 export default function Settings() {
   const router = useRouter();
   const { settings, day, cells, accent } = useDay();
   const first = topUpPlan(0);
-  // On a real iPhone the always-allowed apps are picked in Apple's list, and only their number is known.
-  const allowedCount = SCREEN_TIME_AVAILABLE ? pickCount(ALLOWED_ID) : settings.allowed.length;
-  const allowedValue = SCREEN_TIME_AVAILABLE ? (allowedCount === 0 ? 'None' : `${allowedCount} picked`) : allowedCount === 1 ? '1 app' : `${allowedCount} apps`;
+  const picked = SCREEN_TIME_AVAILABLE ? pickCount(COUNTED_ID) : -1;
+  const countedValue = picked < 0 ? 'Your picks' : picked === 0 ? 'Nothing yet' : `${picked} ticked`;
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
   const pretend = DEV_TOOLS && !isOn();
   // On a narrow phone the goal's figures give the two round buttons room.
@@ -62,15 +58,14 @@ export default function Settings() {
             <StepButton sign="+" label="Recharge later" size={40} onPress={() => store.stepRecharge(1)} />
           </View>
         </View>
-        <LinkRow label="What counts" value={COUNT_NAMES[settings.countMode]} onPress={() => router.push('/what-counts')} />
-        <LinkRow label="Always allowed" value={allowedValue} onPress={() => router.push('/allowed')} last />
+        <LinkRow label="What counts" value={countedValue} onPress={() => router.push('/what-counts')} last />
       </Card>
 
       <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>
         <Label>When the battery is empty</Label>
         <Choice title="Warn" line="Red screen, then tap through" chosen={settings.emptyLevel === 'warn'} accent={accent} onPress={() => store.setEmptyLevel('warn')} />
         <Choice title="Work for it" line={`Solve sums to get ${first.minutes} more minutes`} chosen={settings.emptyLevel === 'work'} accent={accent} onPress={() => store.setEmptyLevel('work')} />
-        <Choice title="Locked" line="Nothing opens until it recharges" chosen={settings.emptyLevel === 'locked'} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
+ <Choice title="Locked" line="Counted apps stay locked until it recharges" chosen={settings.emptyLevel === 'locked'} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
       </Card>
 
       {pretend ? (

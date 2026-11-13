@@ -11,9 +11,10 @@ export interface Settings {
   goalMinutes: number;
   /** When the battery refills, as minutes after midnight (360 = 6:00 AM). */
   rechargeMinute: number;
+  /** No longer used: what counts is the one list ticked in Apple's picker. Kept so older saved copies still read. */
   countMode: CountMode;
   emptyLevel: EmptyLevel;
-  /** Apps that still open when the battery is empty, by the name shown to the person. */
+  /** No longer used: there is no always-allowed list. Apps left unticked never lock. Kept so older saved copies still read. */
   allowed: string[];
 }
 

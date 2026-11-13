@@ -91,6 +91,10 @@ module.exports = function withTargets(config) {
   // Apple, who wrote to say it did not match the app's.)
   const reportDir = path.join(targets, 'report');
   if (fs.existsSync(reportDir)) {
+    // The day's total is drawn in the app's display face, so the extension
+    // carries its own copy of the font (every file in the folder is bundled).
+    const font = require.resolve('@expo-google-fonts/space-grotesk/700Bold/SpaceGrotesk_700Bold.ttf', { paths: [projectRoot] });
+    fs.copyFileSync(font, path.join(reportDir, 'SpaceGrotesk_700Bold.ttf'));
     fs.writeFileSync(
       path.join(reportDir, 'Info.plist'),
       `<?xml version="1.0" encoding="UTF-8"?>

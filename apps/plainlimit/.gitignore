@@ -50,3 +50,6 @@ example
 /targets/ShieldConfiguration/
 /targets/*/generated.entitlements
 /targets/report/Info.plist
+
+# Copied in by plugins/withTargets.js at build time
+targets/report/SpaceGrotesk_700Bold.ttf

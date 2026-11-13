@@ -18,9 +18,8 @@ export const TICKS_ACTIVITY = 'plmin';
 export const TOPUP_ACTIVITY = 'pltop';
 /** The shortest stretch of time the phone will agree to watch. */
 export const SHORTEST_WATCH_MINUTES = 15;
-/** Apple's picker stores the person's picks under these names; the app never sees the apps themselves. */
+/** Apple's picker stores the person's picks under this name; the app never sees the apps themselves. */
 export const COUNTED_ID = 'counted';
-export const ALLOWED_ID = 'allowed';
 /** Where the app leaves the goal and recharge time for the home screen widget. */
 export const WIDGET_PLAN_KEY = 'plainlimit_plan';
 
@@ -85,8 +84,6 @@ export interface MonitorPlan {
   /** The minute checkpoints, for TICKS_ACTIVITY over the same stretch of day. They carry no actions. */
   ticks: PlanEvent[];
   shields: PlanShield[];
-  /** True when every app is covered (except the always-allowed); false when only the person's picks are. */
-  coverEverything: boolean;
   /** For the widget. */
   widget: { goalMinutes: number; rechargeMinute: number; countFrom: number };
 }
@@ -163,9 +160,10 @@ export function puzzleNotice(topUpsSoFar: number): { title: string; body: string
 }
 
 /**
- * When today's count began: the last recharge, or the moment counting was
- * turned on (or started over) if that was later. A checkpoint for N minutes
- * cannot honestly arrive sooner than N minutes after this.
+ * When today's count began: the last recharge, or, after the test build's
+ * "Start the day over", that moment. Counting otherwise always takes in the
+ * whole day since the recharge, so turning it on at any time of day picks up
+ * what was already used.
  */
 export function countStart(periodStart: Date, countingSince: number | null): Date {
   if (countingSince !== null && countingSince > periodStart.getTime()) return new Date(countingSince);
@@ -186,10 +184,8 @@ export function earliestTrue(countFrom: Date, minutes: number, slackMinutes = 2)
 }
 
 /**
- * Whether the phone should be asked to include use from before now. Yes on
- * any day that began with counting already on, so a change to the settings
- * keeps the day's use. No on the day counting is turned on (or started over):
- * that day starts from zero, not from whatever was used since the recharge.
+ * Whether the phone should be asked to include use from before now: always,
+ * except on a day the test build started over, which counts from that moment.
  */
 export function includesEarlierUse(periodStart: Date, countingSince: number | null): boolean {
   return countingSince === null || countingSince <= periodStart.getTime();
@@ -216,7 +212,6 @@ export function monitorPlan(settings: Settings, topUpsSoFar = 0, countingSince: 
     events,
     ticks: minuteTicksFor(settings.goalMinutes).map((t) => ({ name: t.id, after: spanOf(t.minutes), minutes: t.minutes, actions: [] })),
     shields: [shieldFor('warning', settings, topUpsSoFar), shieldFor('empty', settings, topUpsSoFar)],
-    coverEverything: settings.countMode === 'everything',
     widget: { goalMinutes: settings.goalMinutes, rechargeMinute: settings.rechargeMinute, countFrom: countingSince ?? 0 },
   };
 }

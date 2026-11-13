@@ -38,10 +38,9 @@ describe('the screens that cover an app', () => {
   });
 
   it('offers no way through when locked, and says what still opens', () => {
+    // Only counted apps are ever covered.
     const copy = emptyCopy({ ...base, emptyLevel: 'locked' }, 0);
     expect(copy.secondary).toBeNull();
-    expect(copy.line).toBe('Locked until it recharges at 6:00 AM. Phone, Messages and Maps still open.');
-    expect(emptyCopy({ ...base, emptyLevel: 'locked', allowed: ['Phone'] }, 0).line).toBe('Locked until it recharges at 6:00 AM. Phone still opens.');
-    expect(emptyCopy({ ...base, emptyLevel: 'locked', allowed: [] }, 0).line).toBe('Locked until it recharges at 6:00 AM.');
+    expect(copy.line).toBe("Locked until it recharges at 6:00 AM. Apps that don't count still open.");
   });
 });

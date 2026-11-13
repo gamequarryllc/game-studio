@@ -8,9 +8,10 @@ import WidgetKit
 // Two small jobs the app cannot do from JavaScript:
 //   reload()          asks iOS to redraw the home screen widget after something it
 //                     draws from has changed.
-//   UsageReportView   a place on screen for Apple's usage report (the "what used it"
-//                     list). The list itself is drawn by the report extension in
-//                     targets/report/; this only says which hours and which apps.
+//   UsageReportView   a place on screen for one of Apple's usage reports: the "what
+//                     used it" list, or the day's total. Either is drawn by the
+//                     report extension in targets/report/; this only says which
+//                     report, which hours and which apps.
 public class PlainlimitWidgetsModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PlainlimitWidgets")
@@ -37,6 +38,9 @@ public class PlainlimitWidgetsModule: Module {
       Prop("selection") { (view: UsageReportView, value: String?) in
         view.selection = value
       }
+      Prop("context") { (view: UsageReportView, value: String?) in
+        view.context = value ?? "TopApps"
+      }
     }
   }
 }
@@ -46,6 +50,8 @@ class UsageReportView: ExpoView {
   var toMs: Double = 0 { didSet { if toMs != oldValue { refresh() } } }
   /// The person's picks, as Apple's picker handed them over; nil means every app.
   var selection: String? { didSet { if selection != oldValue { refresh() } } }
+  /// Which report: "TopApps" (the list) or "Total" (the day's figure).
+  var context: String = "TopApps" { didSet { if context != oldValue { refresh() } } }
 
   private var host: UIHostingController<AnyView>?
 
@@ -125,7 +131,7 @@ class UsageReportView: ExpoView {
       )
     }
 
-    let report = AnyView(DeviceActivityReport(DeviceActivityReport.Context("TopApps"), filter: filter).allowsHitTesting(false))
+    let report = AnyView(DeviceActivityReport(DeviceActivityReport.Context(context), filter: filter).allowsHitTesting(false))
     if let host {
       host.rootView = report
     } else {

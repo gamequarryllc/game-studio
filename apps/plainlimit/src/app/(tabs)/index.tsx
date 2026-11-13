@@ -15,7 +15,7 @@ import { BigButton, Label } from '@/ui/kit';
 import { useEasedColor } from '@/ui/motion';
 import { Ruler } from '@/ui/Ruler';
 import { c, display } from '@/ui/theme';
-import { UsageReport } from '@/ui/UsageReport';
+import { TodayTotal, UsageReport } from '@/ui/UsageReport';
 import { WeekView } from '@/ui/WeekView';
 import { useDay } from '@/ui/useDay';
 
@@ -28,7 +28,9 @@ export default function Today() {
   const { now, settings, day, fraction, cells, tone, accent } = useDay();
   const { history, watching } = useDoc();
   const problem = store.health();
-  // Real screen time arrives a cell at a time, so the figure is a floor, not a running total.
+  // The phone tells the app about use in steps. The figure on screen is drawn
+  // by the phone's Screen Time to the minute; the app's own stepped figure is
+  // what fills the battery, and stands in until the phone has drawn.
   const counting = isOn();
   const field = useEasedColor(tone.bg);
   // The word is as large as the phone allows without breaking onto a second line.
@@ -73,17 +75,22 @@ export default function Today() {
         ) : null}
         {empty && !unlocked && settings.emptyLevel === 'locked' ? (
           <View style={[styles.strip, { borderColor: accent }]}>
-            <Text style={styles.body}>
-              Locked until {recharge}. {allowedLine(settings.allowed)}
-            </Text>
+            <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>
           </View>
         ) : null}
 
         <View style={{ gap: 12 }}>
-          <Label>{counting ? 'At least' : 'Used so far'}</Label>
-          <Text style={styles.used}>
-            {durationLabel(day.usedMinutes)} <Text style={styles.usedOf}>of {durationLabel(settings.goalMinutes)}</Text>
-          </Text>
+          <Label>Used today</Label>
+          {counting ? (
+            <View style={{ gap: 2 }}>
+              <TodayTotal settings={settings} now={now} fallback={<Text style={styles.used}>{durationLabel(day.usedMinutes)}</Text>} />
+              <Text style={styles.usedOfLine}>of {durationLabel(settings.goalMinutes)}, in apps that count</Text>
+            </View>
+          ) : (
+            <Text style={styles.used}>
+              {durationLabel(day.usedMinutes)} <Text style={styles.usedOf}>of {durationLabel(settings.goalMinutes)}</Text>
+            </Text>
+          )}
           <Ruler fraction={fraction} color={accent} />
         </View>
 
@@ -94,7 +101,7 @@ export default function Today() {
         <View style={{ gap: 6 }}>
           <Text style={styles.body}>
             {counting
-              ? 'The phone tells Plainlimit every few minutes, not minute by minute, so this moves in steps.'
+              ? 'The figure is the phone\'s own Screen Time count. The battery hears of it every few minutes, so it moves in steps and can be a cell behind.'
               : SCREEN_TIME_AVAILABLE
                 ? problem === 'fine'
                   ? 'Counting is off, so nothing drains the battery and nothing locks. Turn it on in Settings, under Screen Time.'
@@ -106,13 +113,6 @@ export default function Today() {
       </View>
     </ScrollView>
   );
-}
-
-/** "Phone, Messages and Maps still open." */
-export function allowedLine(allowed: readonly string[]): string {
-  if (allowed.length === 0) return 'Nothing opens until then.';
-  if (allowed.length === 1) return `${allowed[0]} still opens.`;
-  return `${allowed.slice(0, -1).join(', ')} and ${allowed[allowed.length - 1]} still open.`;
 }
 
 const styles = StyleSheet.create({
@@ -128,6 +128,7 @@ const styles = StyleSheet.create({
   strip: { borderLeftWidth: 0, borderWidth: 1.5, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
   used: { fontFamily: display.bold, fontSize: 48, lineHeight: 50, letterSpacing: -1.6, color: c.ink },
   usedOf: { fontFamily: display.semi, fontSize: 22, letterSpacing: -0.3, color: c.ink3 },
+  usedOfLine: { fontFamily: display.semi, fontSize: 18, lineHeight: 22, letterSpacing: -0.2, color: c.ink3 },
   body: { fontSize: 15, lineHeight: 21, color: c.ink2 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
 });

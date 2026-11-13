@@ -3,11 +3,10 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { checkpointsFor, isPlausible, minuteTicksFor, miscounted, usedFloor } from '@/domain/checkpoints';
+import { believable, checkpointsFor, guardFrom, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known } from '@/domain/checkpoints';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
-  ALLOWED_ID,
   COUNTED_ID,
   TICKS_ACTIVITY,
   TOPUP_ACTIVITY,
@@ -87,7 +86,7 @@ export function isOn(): boolean {
 }
 
 /** How many apps, categories and sites are in one of the person's picks. The app never learns which. */
-export function pickCount(id: typeof COUNTED_ID | typeof ALLOWED_ID): number {
+export function pickCount(id: typeof COUNTED_ID): number {
   if (!SCREEN_TIME_AVAILABLE) return 0;
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });
@@ -109,6 +108,70 @@ function countingSince(): number | null {
   }
 }
 
+/** Where the last known figure is kept (see `Known` and `mostByNow`). */
+const KNOWN_KEY = 'plainlimit_known';
+
+function known(): Known | null {
+  try {
+    const value = DeviceActivity.userDefaultsGet<Known>(KNOWN_KEY);
+    return value && typeof value.at === 'number' && typeof value.most === 'number' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Notes, while counting works, the most that can have been used by now (see
+ * `mostByNow`). Nothing is noted once the goal is passed.
+ */
+export function noteKnown(settings: Settings, usedFloorNow: number, now = new Date()) {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  // Right after counting is set up the phone is still sending reports for time
+  // already used, so "not reported yet" does not yet mean "not reached yet".
+  if (now.getTime() - registeredAt() < SETTLE_MS) return;
+  const most = mostByNow(settings.goalMinutes, usedFloorNow);
+  if (most === null) return;
+  try {
+    DeviceActivity.userDefaultsSet(KNOWN_KEY, { at: now.getTime(), most } satisfies Known);
+  } catch {
+    // Without it the guard falls back to the time since the recharge.
+  }
+}
+
+/** When the day was last registered with the phone, and how long its first reports take to arrive. */
+const REGISTERED_KEY = 'plainlimit_registered_at';
+const SETTLE_MS = 3 * 60 * 1000;
+
+function registeredAt(): number {
+  try {
+    const value = DeviceActivity.userDefaultsGet<number>(REGISTERED_KEY);
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Locks held back until this time, in milliseconds: setup holds them while it
+ * shows the starting figure, so a false report from the phone at that moment
+ * cannot lock anything before the person has seen it.
+ */
+const HOLD_KEY = 'plainlimit_hold_until';
+
+function holdUntil(): number {
+  try {
+    const value = DeviceActivity.userDefaultsGet<number>(HOLD_KEY);
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** The start of today's count, for keeping reports to today's. */
+function dayStartOf(periodStart: Date): Date {
+  return countStart(periodStart, countingSince());
+}
+
 const UNCOVER: Action[] = [{ type: 'disableBlockAllMode' }, { type: 'resetBlocks' }];
 const STOP_EARNED_TIME: Action = { type: 'stopMonitoring', activityNames: [TOPUP_ACTIVITY] };
 
@@ -123,12 +186,13 @@ function note(where: string, error: unknown) {
   }
 }
 
-function coverAction(shield: string, coverEverything: boolean): Action {
-  return coverEverything ? { type: 'enableBlockAllMode', shieldId: shield } : { type: 'blockSelection', familyActivitySelectionId: COUNTED_ID, shieldId: shield };
+/** Only the apps that count are ever covered; whatever is left out of What counts stays open. */
+function coverAction(shield: string): Action {
+  return { type: 'blockSelection', familyActivitySelectionId: COUNTED_ID, shieldId: shield };
 }
 
-function toAction(action: PlanAction, coverEverything: boolean): Action {
-  if (action.kind === 'cover') return coverAction(action.shield, coverEverything);
+function toAction(action: PlanAction): Action {
+  if (action.kind === 'cover') return coverAction(action.shield);
   return { type: 'sendNotification', payload: { title: action.title, body: action.body, sound: 'default', userInfo: action.route ? { route: action.route } : {} } };
 }
 
@@ -173,18 +237,20 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
 
 /**
  * Tells the phone what to do at each checkpoint, and not to do it before the
- * checkpoint can be true (see `earliestTrue`). This only writes settings; it
- * registers nothing, so it is safe to repeat.
+ * checkpoint can be true (see `earliestTrue` and `guardFrom`), nor while setup
+ * holds the locks. This only writes settings; it registers nothing, so it is
+ * safe to repeat.
  */
 function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: Settings, now: Date) {
-  const from = countStart(periodStartOf(now, settings.rechargeMinute), countingSince());
+  const from = guardFrom(dayStartOf(periodStartOf(now, settings.rechargeMinute)), known());
+  const held = holdUntil();
   for (const event of plan.events) {
-    const notBefore = earliestTrue(from, event.minutes);
+    const notBefore = new Date(Math.max(earliestTrue(from, event.minutes).getTime(), held));
     DeviceActivity.configureActions({
       activityName: plan.activity,
       callbackName: 'eventDidReachThreshold',
       eventName: event.name,
-      actions: event.actions.map((a) => ({ ...toAction(a, plan.coverEverything), neverTriggerBefore: notBefore })),
+      actions: event.actions.map((a) => ({ ...toAction(a), neverTriggerBefore: notBefore })),
     });
   }
 }
@@ -208,13 +274,12 @@ export function refreshScreens(settings: Settings, topUpsSoFar: number) {
 }
 
 /**
- * The token for what counts. An empty one means "all use of the phone": the
- * phone is asked about every app, and the always-allowed ones are only spared
- * from being covered, not from counting.
+ * The token for what counts: the apps and categories ticked in Apple's list.
+ * None at all means nothing is counted, never "everything".
  */
-function countedToken(settings: Settings): string {
-  if (settings.countMode === 'everything') return '';
-  return DeviceActivity.getFamilyActivitySelectionId(COUNTED_ID) ?? '';
+function countedToken(): string | null {
+  if (pickCount(COUNTED_ID) === 0) return null;
+  return DeviceActivity.getFamilyActivitySelectionId(COUNTED_ID) ?? null;
 }
 
 /**
@@ -222,10 +287,21 @@ function countedToken(settings: Settings): string {
  * and what the widget needs. Safe to call again whenever a setting changes;
  * the phone keeps today's count.
  */
-export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh = false): Promise<boolean> {
+export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh = false, hold = false): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return false;
   try {
     const now = new Date();
+    const token = countedToken();
+    if (token === null) {
+      // Nothing is ticked, so nothing can count or lock.
+      DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY]);
+      note('the day', 'nothing is ticked in What counts');
+      return false;
+    }
+    // Held for two hours at most, in case setup is left half done.
+    if (hold) DeviceActivity.userDefaultsSet(HOLD_KEY, now.getTime() + 2 * 3600 * 1000);
+    else if (fresh) DeviceActivity.userDefaultsRemove(HOLD_KEY);
+    DeviceActivity.userDefaultsSet(REGISTERED_KEY, now.getTime());
     if (fresh) {
       // Counting starts (or starts over) now: forget earlier checkpoints and take every cover away.
       DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
@@ -241,8 +317,8 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
     const earlier = includesEarlierUse(periodStartOf(now, settings.rechargeMinute), since);
     for (const shield of plan.shields) writeShield(shield, topUpsSoFar);
 
+    // There is no always-allowed list any more: what is not ticked never locks.
     DeviceActivity.clearWhitelist();
-    if (pickCount(ALLOWED_ID) > 0) DeviceActivity.addSelectionToWhitelistAndUpdateBlock({ activitySelectionId: ALLOWED_ID }, 'plainlimit');
 
     writeCheckpointActions(plan, settings, now);
     // The screens come off when the day ends, a minute before the next one starts.
@@ -250,7 +326,6 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
 
     DeviceActivity.userDefaultsSet(WIDGET_PLAN_KEY, plan.widget);
 
-    const token = countedToken(settings);
     await DeviceActivity.startMonitoring(
       plan.activity,
       { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
@@ -287,11 +362,12 @@ async function registerTicks(plan: ReturnType<typeof monitorPlan>, token: string
 }
 
 /** How the day's counting stands. Only ever not 'fine' when counting is meant to be on. */
-export type Health = 'fine' | 'accessOff' | 'notRegistered' | 'miscounted';
+export type Health = 'fine' | 'nothingPicked' | 'accessOff' | 'notRegistered' | 'miscounted';
 
 /**
  * Whether the day is really being counted. `watching` is whether the person
  * has counting turned on; turning it off on purpose is not a fault.
+ * - nothingPicked: nothing is ticked in What counts, so nothing can count.
  * - accessOff: Screen Time access has been taken away in the Settings app.
  * - notRegistered: the phone has forgotten the day's monitoring.
  * - miscounted: the phone reported a checkpoint too soon to be true (see `miscounted`).
@@ -300,9 +376,9 @@ export function health(settings: Settings, periodStart: Date, watching: boolean)
   if (!SCREEN_TIME_AVAILABLE || !watching) return 'fine';
   if (permission() !== 'approved') return 'accessOff';
   try {
+    if (pickCount(COUNTED_ID) === 0) return 'nothingPicked';
     if (!DeviceActivity.getActivities().includes(ACTIVITY)) return 'notRegistered';
-    const from = countStart(periodStart, countingSince());
-    return miscounted(ownReports(), settings.goalMinutes, from) ? 'miscounted' : 'fine';
+    return miscounted(ownReports(), settings.goalMinutes, dayStartOf(periodStart), known()) ? 'miscounted' : 'fine';
   } catch {
     return 'fine';
   }
@@ -316,18 +392,18 @@ function ownReports(): { id: string; at: Date }[] {
 
 /**
  * After a miscount: forgets the reports that could not be true, so the phone
- * may make them again, and registers the day afresh. What was used before now
- * still counts, except on the day counting was first turned on, when the
- * phone only counts from the moment of registering.
+ * may make them again, and registers the day afresh. What was used since the
+ * recharge still counts.
  */
 export async function countAgain(settings: Settings, topUpsSoFar: number, periodStart: Date): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
-    const from = countStart(periodStart, countingSince());
+    const from = dayStartOf(periodStart);
+    const sure = known();
     const own = new Map(checkpointsFor(settings.goalMinutes).map((c) => [c.id, c]));
     for (const report of ownReports()) {
       const checkpoint = own.get(report.id);
-      if (checkpoint && report.at.getTime() >= from.getTime() && !isPlausible(checkpoint, from, report.at)) {
+      if (checkpoint && report.at.getTime() >= from.getTime() && !believable(checkpoint, from, sure, report.at)) {
         DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.id}`);
       }
     }
@@ -362,12 +438,13 @@ export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Da
     const reported = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)].filter(
       (e) => e.callbackName === 'eventDidReachThreshold' && e.eventName,
     );
-    const from = countStart(periodStart, countingSince());
+    const from = dayStartOf(periodStart);
+    const sure = known();
     const to = periodEnd?.getTime() ?? Number.POSITIVE_INFINITY;
     const arrived = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)].filter((checkpoint) => {
       const report = reported.find((e) => e.eventName === checkpoint.id);
-      const at = report?.lastCalledAt.getTime() ?? 0;
-      return report !== undefined && at >= from.getTime() && at < to && isPlausible(checkpoint, from, report.lastCalledAt);
+      if (!report) return false;
+      return report.lastCalledAt.getTime() < to && believable(checkpoint, from, sure, report.lastCalledAt);
     });
     return usedFloor(arrived);
   } catch {
@@ -392,23 +469,25 @@ export function diagnostics(settings: Settings): string[] {
     const lines: string[] = [];
     // So a screenshot shows how old the lines below are.
     lines.push(`Build: ${widgets?.build?.() ?? 'unknown'}. Read at: ${timeOf(Date.now())}`);
-    lines.push(`Counting since: ${timeOf(countingSince())}`);
+    const sureNow = known();
+    lines.push(`Counting since: ${countingSince() ? timeOf(countingSince()) : 'the recharge'}`);
+    lines.push(`Known: ${sureNow ? `at most ${Math.round(sureNow.most)} min at ${timeOf(sureNow.at)}` : 'nothing yet'}${holdUntil() > Date.now() ? ' (locks held for setup)' : ''}`);
     lines.push(`Health: ${health(settings, periodStartOf(new Date(), settings.rechargeMinute), true)}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
     const minutesOf = new Map(checkpointsFor(settings.goalMinutes).map((c) => [c.id as string, c]));
-    const from = countStart(periodStartOf(new Date(), settings.rechargeMinute), countingSince());
+    const from = dayStartOf(periodStartOf(new Date(), settings.rechargeMinute));
     const reported = DeviceActivity.getEvents()
       .filter((e) => e.activityName === ACTIVITY || e.activityName === TOPUP_ACTIVITY)
       .map((e) => {
         const checkpoint = e.activityName === ACTIVITY && e.eventName ? minutesOf.get(e.eventName) : undefined;
-        const early = checkpoint !== undefined && e.lastCalledAt.getTime() >= from.getTime() && !isPlausible(checkpoint, from, e.lastCalledAt);
+        const early = checkpoint !== undefined && e.lastCalledAt.getTime() >= from.getTime() && !believable(checkpoint, from, sureNow, e.lastCalledAt);
         return `${e.eventName ?? e.callbackName}: ${timeOf(e.lastCalledAt.getTime())}${early ? ' (too early to be true, ignored)' : ''}`;
       });
     lines.push(reported.length ? `Reported by the phone:\n  ${reported.join('\n  ')}` : 'Reported by the phone: nothing yet');
     lines.push(`Monitor asked for a widget redraw: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_reload_asked'))}`);
     const cells = DeviceActivity.userDefaultsGet<number>('plainlimit_widget_cells');
     lines.push(`Widget last drew: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_widget_drew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
-    lines.push(`Picked: ${pickCount(COUNTED_ID)} counted, ${pickCount(ALLOWED_ID)} always allowed`);
+    lines.push(`Picked: ${pickCount(COUNTED_ID)} counted`);
     // The library notes who last changed what is covered, and when.
     const last = DeviceActivity.userDefaultsGet<Record<string, unknown>>('lastBlockUpdate');
     if (last && typeof last === 'object') {
@@ -430,10 +509,11 @@ export function diagnostics(settings: Settings): string[] {
  * began to the next recharge, for the apps that count. The report is drawn by
  * the phone; none of what it shows comes back to the app.
  */
-export function reportWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
-  const from = countStart(periodStartOf(now, settings.rechargeMinute), countingSince());
-  const token = SCREEN_TIME_AVAILABLE && settings.countMode !== 'everything' ? (DeviceActivity.getFamilyActivitySelectionId(COUNTED_ID) ?? null) : null;
-  return { fromMs: from.getTime(), toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: token };
+export function reportWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null; fromRecharge: boolean } {
+  const periodStart = periodStartOf(now, settings.rechargeMinute);
+  const from = dayStartOf(periodStart);
+  const token = SCREEN_TIME_AVAILABLE ? countedToken() : null;
+  return { fromMs: from.getTime(), toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: token, fromRecharge: from.getTime() === periodStart.getTime() };
 }
 
 /** Calls back whenever the phone reports a checkpoint while the app is open. */
@@ -463,7 +543,7 @@ export async function grantExtraTime(until: Date, settings: Settings, topUpsAfte
     const dayEnds = nextRecharge(now, settings.rechargeMinute).getTime() - 60_000;
     if (until.getTime() >= dayEnds || until.getTime() <= now.getTime()) return;
 
-    DeviceActivity.configureActions({ activityName: TOPUP_ACTIVITY, callbackName: 'intervalDidEnd', actions: [coverAction('empty', plan.coverEverything), STOP_EARNED_TIME] });
+    DeviceActivity.configureActions({ activityName: TOPUP_ACTIVITY, callbackName: 'intervalDidEnd', actions: [coverAction('empty'), STOP_EARNED_TIME] });
     const window = topUpWindow(until);
     await DeviceActivity.startMonitoring(TOPUP_ACTIVITY, { intervalStart: window.start, intervalEnd: window.end, repeats: true }, []);
     if (!DeviceActivity.getActivities().includes(TOPUP_ACTIVITY)) note('earned time', 'the phone did not keep the timer');
@@ -487,11 +567,27 @@ export function coverEmptyNow(settings: Settings, topUpsSoFar: number) {
     const { look, buttons } = shieldParts(empty, topUpsSoFar);
     DeviceActivity.updateShieldWithId(look, buttons, empty.id);
     DeviceActivity.updateShield(look, buttons, 'plainlimit');
-    if (plan.coverEverything) DeviceActivity.enableBlockAllMode('plainlimit');
-    else DeviceActivity.blockSelection({ activitySelectionId: COUNTED_ID }, 'plainlimit');
+    DeviceActivity.blockSelection({ activitySelectionId: COUNTED_ID }, 'plainlimit');
   } catch {
     // Nothing more to do.
   }
 }
 
-export { ALLOWED_ID, COUNTED_ID };
+/**
+ * Setup is done and the person has seen the starting figure: let the locks act
+ * from now on and, if the battery was already empty before Plainlimit was
+ * installed, cover the counted apps now. (A checkpoint reported while the
+ * locks were held is not reported again.)
+ */
+export function releaseLocks(settings: Settings, topUpsSoFar: number, usedFloorNow: number) {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    DeviceActivity.userDefaultsRemove(HOLD_KEY);
+    writeCheckpointActions(monitorPlan(settings, topUpsSoFar, countingSince()), settings, new Date());
+    if (usedFloorNow >= settings.goalMinutes) coverEmptyNow(settings, topUpsSoFar);
+  } catch (error) {
+    note('starting', error);
+  }
+}
+
+export { COUNTED_ID };

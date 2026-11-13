@@ -1,5 +1,5 @@
 import { CELLS, cellsLeft, fractionUsed, wordFor } from '../battery';
-import { checkpointsFor, finalWarningMinutes, isPlausible, minuteTicksFor, miscounted, tickStepMinutes, usedFloor } from '../checkpoints';
+import { believable, checkpointsFor, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
 import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
 
 describe('cells', () => {
@@ -149,5 +149,39 @@ describe('a miscounted day', () => {
   it('is not judged on reports from before the count began, or on minute checkpoints', () => {
     expect(miscounted([{ id: 'empty', at: at(-600) }], 180, from)).toBe(false);
     expect(miscounted([{ id: 'm40', at: at(1) }], 180, from)).toBe(false);
+  });
+});
+
+describe('the last known figure', () => {
+  // Counting from the recharge at 6:00. At 14:00, while counting worked, at most 45 minutes had been used.
+  const dayStart = new Date(2026, 10, 11, 6, 0);
+  const clock = (h: number, m = 0) => new Date(2026, 10, 11, h, m);
+  const known = { at: clock(14).getTime(), most: 45 };
+  const cell2 = checkpointsFor(180).find((c) => c.id === 'cell-2');
+
+  it('judges later reports as if the count had begun that many minutes before', () => {
+    expect(judgedFrom(dayStart, known, clock(14, 1))).toEqual(clock(13, 15));
+    expect(guardFrom(dayStart, known)).toEqual(clock(13, 15));
+    // Reports from before it was known, and a figure from yesterday, are judged from the recharge.
+    expect(judgedFrom(dayStart, known, clock(13))).toEqual(dayStart);
+    expect(judgedFrom(dayStart, { at: clock(5).getTime(), most: 30 }, clock(14, 1))).toEqual(dayStart);
+    expect(guardFrom(dayStart, { at: clock(5).getTime(), most: 30 })).toEqual(dayStart);
+    // Never earlier than the recharge.
+    expect(guardFrom(dayStart, { at: clock(6, 10).getTime(), most: 45 })).toEqual(dayStart);
+  });
+
+  it('throws away a false report right after counting is set up again in the afternoon', () => {
+    if (!cell2) throw new Error('no second cell');
+    expect(believable(cell2, dayStart, null, clock(14, 1))).toBe(true);
+    expect(believable(cell2, dayStart, known, clock(14, 1))).toBe(false);
+    expect(believable(cell2, dayStart, known, clock(14, 20))).toBe(true);
+    expect(miscounted([{ id: 'cell-2', at: clock(14, 1) }], 180, dayStart, known)).toBe(true);
+    expect(miscounted([{ id: 'cell-2', at: clock(14, 1) }], 180, dayStart)).toBe(false);
+  });
+
+  it('is the next unreported checkpoint, with five minutes for the phone being slow', () => {
+    expect(mostByNow(180, 0)).toBe(15);
+    expect(mostByNow(180, 30)).toBe(45);
+    expect(mostByNow(180, 180)).toBeNull();
   });
 });

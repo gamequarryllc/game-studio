@@ -23,12 +23,6 @@ export function goalInWords(goalMinutes: number): string {
   return [hours, minutes].filter(Boolean).join(' ') || `${durationLabel(goalMinutes)}`;
 }
 
-function allowedTail(allowed: readonly string[]): string {
-  if (allowed.length === 0) return '';
-  if (allowed.length === 1) return ` ${allowed[0]} still opens.`;
-  return ` ${allowed.slice(0, -1).join(', ')} and ${allowed[allowed.length - 1]} still open.`;
-}
-
 /** Shown on the last cell, and again shortly before the end. */
 export function warningCopy(settings: Settings): ShieldCopy {
   return {
@@ -54,5 +48,5 @@ export function emptyCopy(settings: Settings, topUpsSoFar: number): ShieldCopy {
       secondary: 'I need more time',
     };
   }
-  return { title: "Battery's empty", line: `Locked until it recharges at ${at}.${allowedTail(settings.allowed)}`, primary: 'Close this app', secondary: null };
+  return { title: "Battery's empty", line: `Locked until it recharges at ${at}. Apps that don't count still open.`, primary: 'Close this app', secondary: null };
 }

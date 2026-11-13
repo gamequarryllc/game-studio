@@ -1,65 +1,60 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { ALLOWED_ID, COUNTED_ID, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenTime';
-import { store, useDoc } from '@/state/store';
+import { COUNTED_ID, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenTime';
+import { settingsLocked, store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
-import { ALLOWED_EXPLAINED, EVERYTHING_ROWS, TICKED_ROWS } from '@/ui/countWords';
-import { BigButton, Card, Choice, Label, Lead, LinkRow, Page, Title } from '@/ui/kit';
+import { COUNTS_LEAD, COUNTS_NOTE, COUNTS_STEPS, pickedWords } from '@/ui/countWords';
+import { BigButton, Card, Lead, Page, Title } from '@/ui/kit';
 import { c } from '@/ui/theme';
-import { useDay } from '@/ui/useDay';
 
-// The two ways to count. (There used to be a third, "Your own picks", held for
-// Pro and never built: on a phone the ticking is the only way to choose at
-// all, so it was the second choice under another name.)
+// One list. What is ticked in Apple's list of apps uses up the battery and is
+// covered when it is empty; what is not ticked does neither. (There used to be
+// an "Everything" choice and a separate always-allowed list, which left apps
+// that were allowed but still counted. They are gone.)
+//
+// Like the goal, the list can't change while the battery is empty: unticking
+// an app would be a way round its lock.
 
 export default function WhatCounts() {
-  const { settings, accent } = useDay();
-  const { settings: saved } = useDoc();
   const [picking, setPicking] = useState(false);
+  const [, redraw] = useState(0);
   const picked = pickCount(COUNTED_ID);
-  const allowed = SCREEN_TIME_AVAILABLE ? pickCount(ALLOWED_ID) : saved.allowed.length;
-  // On a real iPhone the second choice is whatever is ticked in Apple's list.
-  const choosing = SCREEN_TIME_AVAILABLE && settings.countMode !== 'everything';
+  useDoc();
+  const locked = settingsLocked();
   return (
     <Page top={8}>
       <Title>What counts</Title>
-      <Lead>Two things in one choice: which apps use up the battery, and which lock when it&apos;s empty.</Lead>
-      <View accessibilityRole="radiogroup" style={{ gap: 10 }}>
-        <Choice title="Everything" rows={EVERYTHING_ROWS} chosen={settings.countMode === 'everything'} accent={accent} onPress={() => store.setCountMode('everything')} />
-        <Choice
-          title="Only what I tick"
-          rows={TICKED_ROWS}
-          line={SCREEN_TIME_AVAILABLE ? undefined : 'On an iPhone you tick them in Apple’s own list of your apps.'}
-          chosen={settings.countMode !== 'everything'}
-          accent={accent}
-          onPress={() => store.setCountMode('timeWasters')}
-        />
-      </View>
-      {choosing ? (
-        <View style={{ gap: 10, marginTop: 8 }}>
-          <Text style={{ fontSize: 15, lineHeight: 21, color: picked === 0 ? c.ink : c.ink2 }}>
-            {picked === 0 ? 'Nothing is ticked yet, so nothing drains the battery.' : picked === 1 ? '1 app or category is ticked.' : `${picked} apps and categories are ticked.`}
-          </Text>
-          <BigButton label={picked === 0 ? 'Choose apps' : 'Change the apps'} onPress={() => setPicking(true)} />
-          <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>For the usual time-wasters, tick Social, Games and Entertainment.</Text>
-        </View>
-      ) : null}
-      <View style={{ marginTop: 18, gap: 8 }}>
-        <Label>Always allowed</Label>
-        <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink2 }}>{ALLOWED_EXPLAINED}</Text>
-        <Card>
-          <LinkRow label="Always allowed" value={allowed === 1 ? '1 app' : `${allowed} apps`} onPress={() => router.push('/allowed')} last />
-        </Card>
-      </View>
+      <Lead>{COUNTS_LEAD}</Lead>
+      {SCREEN_TIME_AVAILABLE ? (
+        <>
+          <Card style={{ paddingVertical: 14, gap: 8 }}>
+            {COUNTS_STEPS.map((line, i) => (
+              <View key={line} style={{ flexDirection: 'row', gap: 12 }}>
+                <Text style={{ fontSize: 15, lineHeight: 21, fontWeight: '700', color: c.ink3, width: 12 }}>{i + 1}</Text>
+                <Text style={{ flex: 1, fontSize: 15, lineHeight: 21, color: c.ink }}>{line}</Text>
+              </View>
+            ))}
+          </Card>
+          <Text style={{ fontSize: 15, lineHeight: 21, color: picked === 0 ? c.ink : c.ink2, marginTop: 4 }}>{pickedWords(picked)}</Text>
+          {locked ? (
+            <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>This can&apos;t change while the battery is empty. It opens again when it recharges.</Text>
+          ) : (
+            <BigButton label={picked === 0 ? 'Choose apps' : 'Change the apps'} onPress={() => setPicking(true)} />
+          )}
+          <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>{COUNTS_NOTE}</Text>
+        </>
+      ) : (
+        <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>On an iPhone you tick them in Apple&apos;s own list of your apps. This preview runs on pretend use.</Text>
+      )}
       <AppPicker
         id={COUNTED_ID}
         open={picking}
-        header="Tick what drains your battery"
+        header="Tick what uses up your battery"
         onClose={() => {
           setPicking(false);
           store.picksChanged();
+          redraw((n) => n + 1);
         }}
       />
     </Page>

@@ -2,7 +2,6 @@ import { wordFor } from '../battery';
 import { checkpointsFor } from '../checkpoints';
 import {
   ACTIVITY,
-  ALLOWED_ID,
   COUNTED_ID,
   SHORTEST_WATCH_MINUTES,
   TOPUP_ACTIVITY,
@@ -50,7 +49,7 @@ describe('the plan handed to the phone', () => {
 
   test('names are safe for the library, which splits its records on "_"', () => {
     const plan = monitorPlan(settings());
-    for (const name of [ACTIVITY, TOPUP_ACTIVITY, COUNTED_ID, ALLOWED_ID, ...plan.events.map((e) => e.name)]) expect(name).not.toContain('_');
+    for (const name of [ACTIVITY, TOPUP_ACTIVITY, COUNTED_ID, ...plan.events.map((e) => e.name)]) expect(name).not.toContain('_');
   });
 
   test('the last cell brings the warning screen, the end brings the empty one, nothing else covers', () => {
@@ -86,11 +85,6 @@ describe('the plan handed to the phone', () => {
     expect(second?.copy.line).toContain('10 more minutes');
     expect(puzzleNotice(1).body).toContain('5 sums');
     expect(puzzleNotice(0).route).toBe('/puzzle');
-  });
-
-  test('everything is covered only when everything counts', () => {
-    expect(monitorPlan(settings({ countMode: 'everything' })).coverEverything).toBe(true);
-    expect(monitorPlan(settings({ countMode: 'timeWasters' })).coverEverything).toBe(false);
   });
 
   test('the day counting is turned on starts from that moment; later days start at the recharge', () => {
@@ -196,5 +190,9 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain('plan["countFrom"]');
     expect(swift).toContain('plan["goalMinutes"]');
     expect(swift).toContain('plan["rechargeMinute"]');
+    // The last known figure, with the same key and fields as the app's guard.
+    expect(swift).toContain('"plainlimit_known"');
+    expect(swift).toContain('known?["at"]');
+    expect(swift).toContain('known?["most"]');
   });
 });
