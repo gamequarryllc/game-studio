@@ -96,7 +96,7 @@ async function main() {
 
   await step('what counts can be changed between everything and your own ticks', async () => {
     await press('What counts, Everything');
-    await see('Choose which apps drain your battery.');
+    await see('Two things in one choice: which apps use up the battery, and which lock when it\'s empty.');
     await shot('03-what-counts');
     await page.getByRole('radio', { name: /Only what I tick/ }).click();
     assert.strictEqual(await page.getByRole('radio', { name: /Only what I tick/ }).getAttribute('aria-checked'), 'true');
@@ -108,7 +108,7 @@ async function main() {
 
   await step('apps can be removed from and added to the always-allowed list', async () => {
     await press('Always allowed, 3 apps');
-    await see('These still open when the battery is empty.');
+    await see('These never lock, even when the battery is empty.');
     await shot('04-allowed');
     await press('Remove Maps');
     await gone('Maps');

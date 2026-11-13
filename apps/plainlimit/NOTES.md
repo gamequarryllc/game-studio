@@ -166,6 +166,8 @@ Two things the owner asked for on 2026-11-13 (build 43):
 - **The ruler under the minutes ran against the battery**: it filled from the left while the battery emptied from the right. It now fills from the right, each stretch under the cell it stands for.
 - **"What counts" had three choices and one of them was nothing.** "Time-wasters" already meant "whatever you tick" on a phone, and "Your own picks (Pro, not built yet)" was the same thing held back from the days of the web prototype. There are now two: "Everything" (every app drains it; when empty everything locks except the always-allowed apps) and "Only what I tick" (only ticked apps drain it and only they lock). The saved value keeps its old name inside.
 
+Same day, build 44: the owner was not sure from the screen that always-allowed apps override the locks, nor that they still count. Each choice on What counts now spells out two lines, "Uses up the battery" and "Locks when empty", and a paragraph under them says how Always allowed fits, with a link to it. The Always allowed screen says the same for whichever choice is set. (Checked in the library: the always-allowed list is taken out of the locks in both choices; counting is separate.)
+
 Still open: a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do).
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 
