@@ -2,9 +2,13 @@
 
 Kept current after every finished item, so a run that is cut off can be picked up from here.
 
-## Status: in TestFlight for the owner to try. None of the Screen Time code has run on a real iPhone before this build (2026-11-11)
+## Status: the daily loop works on the owner's iPhone (2026-11-13). Not yet ready for the App Store
 
-The web preview and Expo Go still run on pretend use and are unchanged.
+Seen working on a real phone over three days of TestFlight builds (15 to 40), details in NOTES.md: counting against the phone's own Screen Time, cells draining, the "Last cell" screen, the empty screen, sums that earn time by the clock, the apps covered again on the minute by the phone itself, the recharge at the start of the next day, settings locked while empty, the widget, and the "What used it" list.
+
+Known faults: a finger on the "What used it" list cannot scroll Today (build 41 tries a clear sheet over it; if that fails the list gets a screen of its own); the widget runs about a minute behind; no guard yet against iOS 26 reporting every checkpoint at once (seen once, build 28); a video already playing keeps playing under a covering screen.
+
+Decided 2026-11-13: the notification stays as the way from the empty screen to the sums (Apple allows nothing more direct; answering sums on the covering screen itself was offered and declined for now).
 
 ## Done
 
@@ -23,13 +27,9 @@ The web preview and Expo Go still run on pretend use and are unchanged.
 
 ## Next, in order
 
-1. **Done 2026-11-11: the first build, 1.0.0 (15), is in TestFlight.**
-2. **On the owner's phone:** the eleven checks in NOTES.md, "To check on the phone", and fixing what they find.
-3. First-run setup: pick a goal and a recharge time, then the Screen Time permission and the widget.
-4. A fresh-eyes critic on the screenshots, and its findings fixed.
-5. Pro: it needs a new hook now that "your own picks" cannot be held back on a phone (NOTES.md, decision 3), then RevenueCat and the store listing in `store/plainlimit/`.
-6. Privacy and support sections on the studio's app pages.
-
-## Not yet tried on a real iPhone
-
-Everything. The app's screens have only run in a browser. The Screen Time code and the widget compile on the studio's Mac runners and have never been run. NOTES.md, "To check on the phone", is the list.
+1. The known faults above.
+2. First-run setup: pick a goal and a recharge time, then the Screen Time permission and the widget.
+3. A fresh-eyes critic on the screenshots, and its findings fixed.
+4. Pro: the owner suggested "What used it" as the paid part; then RevenueCat and the store listing in `store/plainlimit/`.
+5. Privacy and support sections on the studio's app pages; the review notes Apple needs for a Screen Time app.
+6. A release build (no test tools) for the owner's last look, then he submits.
