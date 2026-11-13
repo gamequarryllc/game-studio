@@ -240,6 +240,21 @@ export const store = {
   pretendUse(minutes: number) {
     set({ ...snapshot.doc, day: withUse(snapshot.doc.day, minutes) });
   },
+  /** Developer, preview only: six made-up finished days, to see the week view. */
+  pretendWeek() {
+    const goal = snapshot.doc.settings.goalMinutes;
+    const today = new Date(snapshot.doc.day.periodStart);
+    const used = [0.55, 1.1, 0.8, 0.4, 0.95, 0.7];
+    const states = ['counted', 'counted', 'partly', 'counted', 'counted', 'counted'] as const;
+    const history = used.map((f, i) => ({
+      start: new Date(today.getFullYear(), today.getMonth(), today.getDate() - (6 - i), today.getHours(), today.getMinutes()).toISOString(),
+      goalMinutes: goal,
+      usedMinutes: Math.round(goal * f),
+      topUps: f > 1 ? 2 : 0,
+      state: states[i],
+    }));
+    set({ ...snapshot.doc, history });
+  },
   /** Developer: a full battery, as if the recharge time had just passed. */
   rechargeNow() {
     set({ ...snapshot.doc, day: freshDay(new Date(), snapshot.doc.settings.rechargeMinute) });

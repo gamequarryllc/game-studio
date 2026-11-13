@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
+import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { topUpPlan } from '@/domain/puzzle';
 import type { CountMode } from '@/domain/types';
@@ -13,16 +14,6 @@ import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
 const COUNT_NAMES: Record<CountMode, string> = { everything: 'Everything', timeWasters: 'Only what I tick', custom: 'Only what I tick' };
-
-/** "30 minutes", "17 and a half minutes", "1 hour". */
-function cellWords(goalMinutes: number): string {
-  const each = goalMinutes / 6;
-  if (each === 60) return '1 hour';
-  if (each > 60) return `${durationLabel(each)}`;
-  const whole = Math.floor(each);
-  if (each === whole) return `${whole} minutes`;
-  return `${whole} and a half minutes`;
-}
 
 export default function Settings() {
   const router = useRouter();
@@ -91,6 +82,7 @@ export default function Settings() {
           <BigButton quiet label="Use 10 more minutes" onPress={() => store.pretendUse(10)} />
           <BigButton quiet label="Use 30 more minutes" onPress={() => store.pretendUse(30)} />
           <BigButton quiet label="Recharge now" onPress={() => store.rechargeNow()} />
+          <BigButton quiet label="Fill the last week" onPress={() => store.pretendWeek()} />
           <BigButton quiet label="See the warning screen" onPress={() => router.push('/screens/warning')} />
           <BigButton quiet label="See the empty screen" onPress={() => router.push('/screens/empty')} />
         </View>

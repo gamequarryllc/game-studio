@@ -62,8 +62,34 @@ async function main() {
     await page.waitForTimeout(250);
   };
 
-  await step('a fresh start shows a full battery', async () => {
+  await step('a first launch goes through setup', async () => {
     await page.goto(url);
+    await see('Your screen time is a battery');
+    await shot('00-setup-welcome');
+    await press('Set it up');
+    await see('How much a day?');
+    await see('Six cells of 30 minutes each');
+    await shot('00-setup-goal');
+    await press('Next');
+    await see('When does it recharge?');
+    await press('Next');
+    await see('What counts?');
+    await shot('00-setup-counts');
+    await press('Next');
+    await see('What always opens?');
+    await see('Phone, Messages, Maps are allowed. You can change them in Settings.');
+    await press('Next');
+    await see('Put it on your home screen');
+    await press('Back');
+    await see('What always opens?');
+    await press('Next');
+    await press('Next');
+    await see("You're set");
+    await shot('00-setup-done');
+    await press('Go to Today');
+  });
+
+  await step('a fresh start shows a full battery', async () => {
     await see('Today');
     await see('Plenty left');
     await see('Recharges at 6:00 AM');
@@ -266,6 +292,20 @@ async function main() {
     await shot('18-puzzle-refused');
     await press('Back');
     await see('Today');
+  });
+
+  await step('the week view shows the last seven days and plain counts', async () => {
+    await see('Last 7 days');
+    await see('Your week fills in as the days go by.');
+    await tab('Settings');
+    await press('Fill the last week');
+    await tab('Today');
+    await see('Under your goal 4 of the last 5 days, 3 in a row.');
+    await see('Earned extra time 2 times this week.');
+    await see('A faded day was not fully counted, so it is not claimed as under the goal.');
+    await page.getByLabel(/^Today: at least 0:00 of 3:00, so far$/).waitFor();
+    await page.locator('text=Last 7 days').scrollIntoViewIfNeeded();
+    await shot('18b-week');
   });
 
   await step('a reloaded inner page and an unknown page both land somewhere sensible', async () => {

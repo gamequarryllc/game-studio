@@ -1,7 +1,7 @@
 import { SpaceGrotesk_600SemiBold } from '@expo-google-fonts/space-grotesk/600SemiBold';
 import { SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk/700Bold';
 import { useFonts } from 'expo-font';
-import { DarkTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider, usePathname, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -50,6 +50,12 @@ export default function RootLayout() {
     if (!ready) return;
     return onNoticeRoute((route) => router.push(route));
   }, [ready, router]);
+  // A first launch goes through setup before anything else.
+  const setupDone = useStore().doc.setupDone;
+  const pathname = usePathname();
+  useEffect(() => {
+    if (ready && !setupDone && pathname !== '/setup') router.replace('/setup');
+  }, [ready, setupDone, pathname, router]);
 
   if (!ready) return <View style={{ flex: 1, backgroundColor: c.ground }} />;
 
@@ -69,6 +75,7 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: c.ground },
             }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false, title: 'Today' }} />
+            <Stack.Screen name="setup" options={{ headerShown: false, gestureEnabled: false, animation: 'fade', title: 'Set up Plainlimit' }} />
             <Stack.Screen name="what-counts" options={{ title: '' }} />
             <Stack.Screen name="allowed" options={{ title: '' }} />
             <Stack.Screen name="puzzle" options={{ presentation: 'modal', headerShown: false, title: 'Earn more time' }} />

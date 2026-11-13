@@ -29,9 +29,8 @@ Decided 2026-11-13: the notification stays as the way from the empty screen to t
 
 ## Next, in order
 
-1. The known faults above.
-2. First-run setup: pick a goal and a recharge time, then the Screen Time permission and the widget.
-3. A fresh-eyes critic on the screenshots, and its findings fixed.
-4. Pro: the owner suggested "What used it" as the paid part; then RevenueCat and the store listing in `store/plainlimit/`.
-5. Privacy and support sections on the studio's app pages; the review notes Apple needs for a Screen Time app.
-6. A release build (no test tools) for the owner's last look, then he submits.
+1. **Done 2026-11-13:** finer minutes, the "Not counting" warning, quitting made visible (build 45); the week view and first-run setup (build 46). Setup can only be seen on a fresh install (or the second phone).
+2. A fresh-eyes critic on the screenshots, and its findings fixed.
+3. Pro: the owner suggested "What used it" as the paid part; the week view fits beside it. Then RevenueCat and the store listing in `store/plainlimit/`.
+4. Privacy and support sections on the studio's app pages; the review notes Apple needs for a Screen Time app.
+5. A release build (no test tools) for the owner's last look, then he submits.

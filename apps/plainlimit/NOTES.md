@@ -179,6 +179,11 @@ Batch 1 (build 45):
 - **Quitting made visible.** The app now remembers whether counting is meant to be on (`watching`). If it is and Screen Time access has been taken away, Today says so with "Turn it back on"; if the phone has forgotten the day's monitoring, the app registers it again by itself once per launch, and says so if that fails. Turning counting off on purpose is not a fault; Today says counting is off. Any of these marks the day as not fully counted (`uncounted`), for the week view.
 - **The history behind the week view** is kept from this build on: each finished day's goal, minutes, top-ups and whether it was counted, eight weeks of them. Days the app never saw are not made up.
 
+Batch 2 (build 46):
+
+- **The week view** on Today, under "What used it": the last seven batteries side by side, each filled as far as it was used in the colour the battery reached, today last. Days the app never saw are empty; a day not fully counted is faded and never claimed as under the goal; a day counting was off says "off". Under the bars: "Under your goal 4 of the last 5 days, 3 in a row" (a streak may run back past the seven, and is broken by a gap, a day over, or a day not fully counted) and how often extra time was earned. The preview's Settings has "Fill the last week" to see it.
+- **First-run setup**, one question to a screen: what the battery is, the goal, the recharge time, Screen Time access and the one notification that matters (on a phone, before anything that opens Apple's list of apps, which needs access), what counts (the same two choices and wording as What counts), what always opens, adding the widget, and a summary with "Start counting". Every answer can be changed later; Screen Time and notifications can be skipped. A copy saved before setup existed counts as having been through it, so the owner's phone goes straight to Today.
+
 Still open: a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do).
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 

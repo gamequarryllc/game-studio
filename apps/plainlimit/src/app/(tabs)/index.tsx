@@ -6,8 +6,9 @@ import { wordFor } from '@/domain/battery';
 import { clockLabel, clockLabelOf, durationLabel, goalLabel, nextRecharge, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
+import { weekView } from '@/domain/week';
 import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn } from '@/platform/screenTime';
-import { store } from '@/state/store';
+import { store, useDoc } from '@/state/store';
 import { Battery } from '@/ui/Battery';
 import { CountingProblem } from '@/ui/CountingProblem';
 import { BigButton, Label } from '@/ui/kit';
@@ -15,6 +16,7 @@ import { useEasedColor } from '@/ui/motion';
 import { Ruler } from '@/ui/Ruler';
 import { c, display } from '@/ui/theme';
 import { UsageReport } from '@/ui/UsageReport';
+import { WeekView } from '@/ui/WeekView';
 import { useDay } from '@/ui/useDay';
 
 // Today: the top of the screen is the battery's colour, edge to edge, so the
@@ -24,6 +26,7 @@ export default function Today() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { now, settings, day, fraction, cells, tone, accent } = useDay();
+  const { history, watching } = useDoc();
   // Real screen time arrives a cell at a time, so the figure is a floor, not a running total.
   const counting = isOn();
   const field = useEasedColor(tone.bg);
@@ -84,6 +87,8 @@ export default function Today() {
         </View>
 
         {counting ? <UsageReport settings={settings} now={now} /> : null}
+
+        <WeekView week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true)} />
 
         <View style={{ gap: 6 }}>
           <Text style={styles.body}>

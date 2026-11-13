@@ -1,5 +1,7 @@
 // The battery itself: six cells that empty as the day's screen time is used.
 
+import { durationLabel } from './day';
+
 export const CELLS = 6;
 
 /** How much of the goal is used, from 0 upward (1 = all of it, more = past it). */
@@ -30,4 +32,14 @@ export function wordFor(cells: number): string {
 /** Minutes of one cell. */
 export function cellMinutes(goalMinutes: number): number {
   return goalMinutes / CELLS;
+}
+
+/** "30 minutes", "17 and a half minutes", "1 hour". */
+export function cellWords(goalMinutes: number): string {
+  const each = goalMinutes / 6;
+  if (each === 60) return '1 hour';
+  if (each > 60) return `${durationLabel(each)}`;
+  const whole = Math.floor(each);
+  if (each === whole) return `${whole} minutes`;
+  return `${whole} and a half minutes`;
 }
