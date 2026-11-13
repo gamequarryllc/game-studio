@@ -148,6 +148,13 @@ The lock screens' main button: the phone draws its label much paler than asked (
 
 The next morning the battery had recharged by itself at the recharge time (the owner's report; day two then counted normally). And the "What used it" list turned out to swallow touches: a finger on it could not scroll Today. The list now lets every touch through.
 
+Build 40 did not cure the dead zone over "What used it": saying the list takes no touches changes nothing, because iOS hands a touch on a remotely drawn view to the process that drew it before this app is asked. Others report the same on Apple's forums (a report's rectangle swallows touches; a scroll view around it never sees them). The next build lays an almost clear sheet of the app's own over the list, which is unproven. If that fails too, the list moves to a screen of its own, where nothing needs to scroll.
+
+Two things looked up on Apple's developer forums the same day:
+
+- **A lock screen's button cannot open Plainlimit.** The only answers a button may give are close, wait, or nothing; requests for an "open the app" answer have been filed for years, and apps that used a private call to do it have been rejected in review (guideline 2.5.1). The notification is the route there is. The sums can also be reached by opening Plainlimit: Today has the same button whenever the battery is empty.
+- **iOS 26 sometimes reports every checkpoint the moment a day is registered**, a regression other screen time apps have reported since its first beta. That fits build 28's lockout with a full battery: the app throws away checkpoints that arrive impossibly early, but the phone has by then already put up the covering screens. Not yet guarded against.
+
 Still open: the widget runs about a minute behind (it was still orange when the battery was already empty); a video already playing in a covered app, or in picture-in-picture, keeps playing under the covering screen (the phone's behaviour; to confirm there is nothing an app can do).
 - Messages is in Apple's Social category, so ticking Social makes texting drain the battery. Nothing to fix; worth saying on the What counts screen.
 

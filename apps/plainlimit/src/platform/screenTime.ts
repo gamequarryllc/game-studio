@@ -44,7 +44,7 @@ export const DEV_TOOLS = __DEV__ || Platform.OS === 'web' || process.env.EXPO_PU
 
 export type Permission = 'unknown' | 'denied' | 'approved';
 
-const widgets = Platform.OS === 'ios' ? requireOptionalNativeModule<{ reload(): void }>('PlainlimitWidgets') : null;
+const widgets = Platform.OS === 'ios' ? requireOptionalNativeModule<{ reload(): void; build?(): string }>('PlainlimitWidgets') : null;
 
 /** Asks iOS to redraw the home screen widget now. */
 export function reloadWidget() {
@@ -297,7 +297,7 @@ export function diagnostics(): string[] {
   try {
     const lines: string[] = [];
     // So a screenshot shows how old the lines below are.
-    lines.push(`Read at: ${timeOf(Date.now())}`);
+    lines.push(`Build: ${widgets?.build?.() ?? 'unknown'}. Read at: ${timeOf(Date.now())}`);
     lines.push(`Counting since: ${timeOf(countingSince())}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
     const reported = DeviceActivity.getEvents()

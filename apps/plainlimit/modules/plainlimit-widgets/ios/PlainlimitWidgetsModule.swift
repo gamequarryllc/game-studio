@@ -19,6 +19,14 @@ public class PlainlimitWidgetsModule: Module {
       WidgetCenter.shared.reloadAllTimelines()
     }
 
+    // The installed app's own version and build number, for the test build's readout.
+    Function("build") { () -> String in
+      let info = Bundle.main.infoDictionary
+      let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+      let build = info?["CFBundleVersion"] as? String ?? "?"
+      return "\(version) (\(build))"
+    }
+
     View(UsageReportView.self) {
       Prop("fromMs") { (view: UsageReportView, value: Double) in
         view.fromMs = value
@@ -41,17 +49,23 @@ class UsageReportView: ExpoView {
 
   private var host: UIHostingController<AnyView>?
 
+  // The list is drawn by another process. A touch that lands on it is handed
+  // to that process by iOS before this app is asked anything, so a finger on
+  // the list could not scroll the screen it sits in, whatever this view said
+  // about touches. A sheet of this app's own, almost clear, lies over the list:
+  // the touch now lands on the sheet, comes to this app, and `hitTest` below
+  // passes it to the screen behind.
+  private let sheet = UIView()
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     clipsToBounds = true
     backgroundColor = .clear
-    isUserInteractionEnabled = false
+    sheet.backgroundColor = UIColor(white: 0, alpha: 0.02)
+    addSubview(sheet)
   }
 
-  // The list is a picture drawn by another process, with nothing in it to tap.
-  // Left alone it takes every touch that lands on it and passes none on, so a
-  // finger on the list could not scroll the screen it sits in. Touches go
-  // straight through to whatever is behind.
+  // Nothing in the list can be tapped; touches go to whatever is behind.
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     return nil
   }
@@ -59,6 +73,8 @@ class UsageReportView: ExpoView {
   override func layoutSubviews() {
     super.layoutSubviews()
     host?.view.frame = bounds
+    sheet.frame = bounds
+    bringSubviewToFront(sheet)
   }
 
   // The report is drawn by another process and shown through the hosting
@@ -109,14 +125,15 @@ class UsageReportView: ExpoView {
       )
     }
 
-    let report = AnyView(DeviceActivityReport(DeviceActivityReport.Context("TopApps"), filter: filter))
+    let report = AnyView(DeviceActivityReport(DeviceActivityReport.Context("TopApps"), filter: filter).allowsHitTesting(false))
     if let host {
       host.rootView = report
     } else {
       let created = UIHostingController(rootView: report)
       created.view.backgroundColor = .clear
+      created.view.isUserInteractionEnabled = false
       created.view.frame = bounds
-      addSubview(created.view)
+      insertSubview(created.view, belowSubview: sheet)
       host = created
       attach()
     }
