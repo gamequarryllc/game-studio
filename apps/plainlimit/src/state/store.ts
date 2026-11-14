@@ -108,6 +108,19 @@ function lookAgain() {
 }
 
 /**
+ * Redraws Today now and looks again shortly after. Used after counting is
+ * turned back on: the day itself may not change, so nothing else would redraw
+ * the warning away (build 54 kept "Not counting" up until the app was reopened).
+ */
+function redrawAndLookAgain() {
+  if (snapshot.state !== 'ready') return;
+  store.tick(new Date());
+  shownHealth = store.health();
+  set(snapshot.doc, false);
+  for (const wait of [1500, 5000]) setTimeout(lookAgain, wait);
+}
+
+/**
  * Notes, on the day, anything that means it is not being fully counted, and
  * puts back monitoring the phone has dropped.
  */
@@ -194,6 +207,7 @@ export const store = {
     // on at any time picks up what was already used, and off-and-on is no refill.
     const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
     set({ ...snapshot.doc, watching: ok, day: withRealUse(snapshot.doc, snapshot.doc.day) });
+    redrawAndLookAgain();
     return ok ? 'on' : 'failed';
   },
   /** How the day's counting stands, for the warning on Today. */
@@ -208,14 +222,14 @@ export const store = {
   async resumeCounting(): Promise<'on' | 'denied' | 'failed'> {
     if (screenTime.permission() !== 'approved' && (await screenTime.askPermission()) !== 'approved') return 'denied';
     const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
-    store.tick(new Date());
+    redrawAndLookAgain();
     return ok ? 'on' : 'failed';
   },
   /** The phone miscounted: forget its impossible reports and count the day again. */
   async countAgain(): Promise<boolean> {
     const doc = snapshot.doc;
     const ok = await screenTime.countAgain(doc.settings, doc.day.topUps, new Date(doc.day.periodStart));
-    store.tick(new Date());
+    redrawAndLookAgain();
     return ok;
   },
   /** The first-run setup is finished. */

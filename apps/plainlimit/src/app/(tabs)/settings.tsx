@@ -7,6 +7,7 @@ import { topUpPlan } from '@/domain/puzzle';
 import { COUNTED_ID, DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
+import { TIPS } from '@/ui/tips';
 import { Battery } from '@/ui/Battery';
 import { ScreenTimeCard } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
@@ -69,7 +70,7 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <LinkRow label="Use your phone less" value="10 tips" onPress={() => router.push('/tips')} last />
+        <LinkRow label="Use your phone less" value={`${TIPS.length} tips`} onPress={() => router.push('/tips')} last />
       </Card>
 
       {pretend ? (

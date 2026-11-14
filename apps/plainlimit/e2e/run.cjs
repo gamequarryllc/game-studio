@@ -129,12 +129,12 @@ async function main() {
   });
 
   await step('the tips page opens from Settings', async () => {
-    await press('Use your phone less, 10 tips');
+    await press('Use your phone less, 9 tips');
     await see('The battery sets the limit. These make it easier to stay under it.');
     await see('Turn the screen gray');
     await shot('03b-tips');
     await back();
-    await page.getByRole('button', { name: 'Use your phone less, 10 tips' }).waitFor();
+    await page.getByRole('button', { name: 'Use your phone less, 9 tips' }).waitFor();
   });
 
   await step('pretend use empties the battery a cell at a time', async () => {
