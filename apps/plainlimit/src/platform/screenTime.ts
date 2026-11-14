@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { believable, checkpointsFor, countsAfterPicks, guardFrom, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known } from '@/domain/checkpoints';
+import { believable, checkpointsFor, countsAfterPicks, guardFrom, picksSettled, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known } from '@/domain/checkpoints';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
@@ -487,7 +487,12 @@ export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Da
     );
     const from = dayStartOf(periodStart);
     const sure = known();
-    const picked = picksChangedAt();
+    let picked = picksChangedAt();
+    if (picked >= from.getTime() && periodEnd === undefined) {
+      // Keep the old figure until the phone has re-reported the day for the new list.
+      const since = reported.map((e) => e.lastCalledAt.getTime()).filter((at) => at >= picked);
+      if (!picksSettled(Date.now(), picked, since.length > 0 ? Math.max(...since) : null)) picked = 0;
+    }
     const to = periodEnd?.getTime() ?? Number.POSITIVE_INFINITY;
     const arrived = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)].filter((checkpoint) => {
       const report = reported.find((e) => e.eventName === checkpoint.id);

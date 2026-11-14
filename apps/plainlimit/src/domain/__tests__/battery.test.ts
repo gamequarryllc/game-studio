@@ -1,5 +1,5 @@
 import { CELLS, cellsLeft, fractionUsed, wordFor } from '../battery';
-import { believable, checkpointsFor, countsAfterPicks, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
+import { believable, checkpointsFor, countsAfterPicks, picksSettled, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
 import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
 
 describe('cells', () => {
@@ -200,5 +200,20 @@ describe('changing what counts', () => {
   it('ignores a change from before today', () => {
     expect(countsAfterPicks(clock(9), dayStart, new Date(2026, 10, 13, 20).getTime())).toBe(true);
     expect(countsAfterPicks(clock(9), dayStart, 0)).toBe(true);
+  });
+});
+
+describe('waiting for the phone after changing what counts', () => {
+  const changed = 1_000_000;
+
+  it('keeps the old figure while the phone is still re-reporting', () => {
+    expect(picksSettled(changed + 1000, changed, null)).toBe(false);
+    expect(picksSettled(changed + 3000, changed, changed + 2500)).toBe(false);
+  });
+
+  it('switches two seconds after the last report, or after fifteen seconds with none', () => {
+    expect(picksSettled(changed + 4600, changed, changed + 2500)).toBe(true);
+    expect(picksSettled(changed + 14_000, changed, null)).toBe(false);
+    expect(picksSettled(changed + 15_000, changed, null)).toBe(true);
   });
 });

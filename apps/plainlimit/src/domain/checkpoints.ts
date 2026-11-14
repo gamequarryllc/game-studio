@@ -86,6 +86,20 @@ export function countsAfterPicks(arrivedAt: Date, dayStart: Date, picksChangedAt
   return picksChangedAt < dayStart.getTime() || arrivedAt.getTime() >= picksChangedAt;
 }
 
+/**
+ * Whether the phone has finished re-reporting the day for a new list: two
+ * seconds after its last report since the change, or fifteen seconds after the
+ * change if it sends none (the new list may have no use yet). Until then the
+ * battery keeps its old figure, so it doesn't show full for a moment and then
+ * drop (build 52).
+ */
+export const PICKS_QUIET_MS = 2000;
+export const PICKS_WAIT_MS = 15000;
+export function picksSettled(nowMs: number, picksChangedAt: number, lastReportSince: number | null): boolean {
+  if (nowMs - picksChangedAt >= PICKS_WAIT_MS) return true;
+  return lastReportSince !== null && nowMs - lastReportSince >= PICKS_QUIET_MS;
+}
+
 export interface Known {
   at: number;
   most: number;

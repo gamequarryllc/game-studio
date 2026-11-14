@@ -266,7 +266,10 @@ export const store = {
   /** The person changed their picks in Apple's list: tell the phone, and redraw. */
   picksChanged() {
     // Before registering again: reports from before this moment were for the old list.
-    screenTime.picksAfter();
+    if (screenTime.picksAfter()) {
+      // Look again while the phone re-reports the day, so Today moves to the new figure once it has.
+      for (const wait of [3000, 6000, 10000, 16000]) setTimeout(() => store.tick(new Date()), wait);
+    }
     planSoon();
     set({ ...snapshot.doc }, false);
   },
