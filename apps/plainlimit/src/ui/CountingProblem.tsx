@@ -18,7 +18,7 @@ const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string }> = 
     line: 'Screen Time access for Plainlimit was turned off in the Settings app, so nothing is being counted or locked.',
     button: 'Turn it back on',
   },
-  notRegistered: { line: 'The phone stopped counting today, so nothing will lock.', button: 'Count again' },
+  notRegistered: { line: 'The phone stopped counting, so nothing will lock. This happens when Screen Time access is turned off in the Settings app.', button: 'Turn it back on' },
   miscounted: { line: "The phone miscounted today, so part of it can't lock. Counting again fixes it.", button: 'Count again' },
 };
 

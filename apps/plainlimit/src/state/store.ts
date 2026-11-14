@@ -180,7 +180,7 @@ export const store = {
     AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
       store.tick(new Date());
-      for (const wait of [1500, 5000]) setTimeout(lookAgain, wait);
+      for (const wait of [1500, 5000, 10000, 20000]) setTimeout(lookAgain, wait);
       if (snapshot.state === 'ready') screenTime.refreshScreens(snapshot.doc.settings, snapshot.doc.day.topUps);
       if (screenTime.isOn()) screenTime.reloadWidget();
     });
@@ -220,7 +220,9 @@ export const store = {
    * again, keeping the day's count. Asks for access first if it is missing.
    */
   async resumeCounting(): Promise<'on' | 'denied' | 'failed'> {
-    if (screenTime.permission() !== 'approved' && (await screenTime.askPermission()) !== 'approved') return 'denied';
+    // Always ask: iOS may still be saying "approved" after access was turned off
+    // in the Settings app. When access is really on, this shows nothing.
+    if ((await screenTime.askPermission()) !== 'approved') return 'denied';
     const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
     redrawAndLookAgain();
     return ok ? 'on' : 'failed';

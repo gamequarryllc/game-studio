@@ -56,8 +56,17 @@ export function reloadWidget() {
   }
 }
 
+/**
+ * What Apple's access sheet last answered in this run of the app. iOS does not
+ * update its own answer for a running app when access is turned off or on in
+ * the Settings app (Apple's forums; seen on build 55: "Not counting" only came
+ * and went when the app was reopened), so the sheet's answer wins until then.
+ */
+let sheetAnswer: Permission | null = null;
+
 export function permission(): Permission {
   if (!SCREEN_TIME_AVAILABLE) return 'unknown';
+  if (sheetAnswer) return sheetAnswer;
   const status = DeviceActivity.getAuthorizationStatus();
   if (status === DeviceActivity.AuthorizationStatus.approved) return 'approved';
   if (status === DeviceActivity.AuthorizationStatus.denied) return 'denied';
@@ -68,11 +77,14 @@ export function permission(): Permission {
 export async function askPermission(): Promise<Permission> {
   if (!SCREEN_TIME_AVAILABLE) return 'unknown';
   try {
+    // Shows nothing when access is already on; otherwise Apple's sheet.
     await DeviceActivity.requestAuthorization('individual');
+    sheetAnswer = 'approved';
   } catch {
     // Declined, or Screen Time is switched off on this phone.
+    sheetAnswer = 'denied';
   }
-  return permission();
+  return sheetAnswer;
 }
 
 /** Whether the day's monitoring is registered with the phone. */
