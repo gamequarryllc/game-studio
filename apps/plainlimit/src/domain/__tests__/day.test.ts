@@ -36,8 +36,9 @@ describe('the recharge clock', () => {
     expect(goalLabel(180)).toBe('3 hour day');
     expect(goalLabel(30)).toBe('30 minute day');
     expect(goalLabel(60)).toBe('1 hour day');
-    expect(goalLabel(150)).toBe('2.5 hour day');
-    expect(goalLabel(105)).toBe('1.75 hour day');
+    expect(goalLabel(150)).toBe('2 h 30 min day');
+    expect(goalLabel(105)).toBe('1 h 45 min day');
+    expect(goalLabel(285)).toBe('4 h 45 min day');
   });
 });
 

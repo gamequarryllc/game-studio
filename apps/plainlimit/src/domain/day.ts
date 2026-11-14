@@ -50,11 +50,13 @@ export function durationLabel(minutes: number): string {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
-/** A goal in words: "3 hour day", "2.5 hour day", "30 minute day". */
+/** A goal in words: "3 hour day", "4 h 45 min day", "30 minute day" (never "4.75 hour day"). */
 export function goalLabel(goalMinutes: number): string {
-  if (goalMinutes < 60) return `${String(Math.round(goalMinutes))} minute day`;
-  const hours = Math.round((goalMinutes / 60) * 100) / 100;
-  return `${String(hours)} hour day`;
+  const total = Math.round(goalMinutes);
+  if (total < 60) return `${String(total)} minute day`;
+  const hours = Math.floor(total / 60);
+  const minutes = total % 60;
+  return minutes === 0 ? `${String(hours)} hour day` : `${String(hours)} h ${String(minutes)} min day`;
 }
 
 /** How long until a moment, in the fewest words: "in 13 h 40 min", "in 40 min", "now". */

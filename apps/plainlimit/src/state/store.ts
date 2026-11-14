@@ -18,8 +18,15 @@ interface Snapshot {
 
 let snapshot: Snapshot = { state: 'loading', doc: freshDoc(new Date()) };
 const listeners = new Set<() => void>();
+/**
+ * Whether the saved copy has been read. Until then the store holds a blank
+ * placeholder, and saving it would wipe the history (build 57: Friday's column
+ * was gone by evening, cause not yet certain), so nothing is saved before.
+ */
+let loaded = false;
 
 function set(doc: Doc, save = true) {
+  if (!loaded) return;
   snapshot = { state: 'ready', doc };
   listeners.forEach((l) => l());
   if (save) void writeSaved(doc);
@@ -199,6 +206,7 @@ export const store = {
     let doc = repairDoc(raw, new Date(), closingUsed, counts(watching));
     if (doc.watching === null) doc = { ...doc, watching };
     doc = checkHealth({ ...doc, day: withRealUse(doc, doc.day) });
+    loaded = true;
     set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
     screenTime.onCheckpoint(() => store.tick(new Date()));

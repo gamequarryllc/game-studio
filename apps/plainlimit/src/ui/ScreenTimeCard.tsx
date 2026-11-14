@@ -62,7 +62,7 @@ export function ScreenTimeCard() {
             <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
             {settingsLocked() ? <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} /> : null}
             <Text selectable style={{ fontSize: 12, lineHeight: 17, color: c.ink3, marginTop: 4 }}>
-              {diagnostics(settings).join('\n')}
+              {[...diagnostics(settings), historyLine(store.get().doc.history)].join('\n')}
             </Text>
           </>
         ) : null}
@@ -85,3 +85,11 @@ export function ScreenTimeCard() {
 }
 
 const body = { fontSize: 15, lineHeight: 21, color: c.ink2 } as const;
+
+/** For the readout: how many finished days are kept, and the latest, so a lost day shows. */
+function historyLine(history: readonly { start: string; usedMinutes: number; state: string }[]): string {
+  if (history.length === 0) return 'Days kept: none';
+  const last = history[history.length - 1];
+  const day = new Date(last.start).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return `Days kept: ${history.length}, latest ${day} (${last.usedMinutes} min, ${last.state})`;
+}
