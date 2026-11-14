@@ -108,6 +108,32 @@ function lookAgain() {
 }
 
 /**
+ * Asks for Screen Time access again, as other Screen Time apps do each time
+ * they come to the front. iOS never tells a running app that access was turned
+ * off in the Settings app, but asking does: when access is on it shows nothing,
+ * and when it was turned off Apple's sheet comes up at once. Allowing it picks
+ * the day straight back up; declining leaves the "Not counting" warning. Only
+ * while counting is meant to be on: turning it off in the app is respected.
+ */
+let askingAgain = false;
+async function askAgain() {
+  if (askingAgain || snapshot.state !== 'ready' || !snapshot.doc.setupDone || snapshot.doc.watching !== true) return;
+  askingAgain = true;
+  try {
+    const asked = Date.now();
+    const answer = await screenTime.askPermission();
+    // A second or more means the sheet was on screen, so access had been off and
+    // the phone dropped the day; register it again (counted from the recharge).
+    if (answer === 'approved' && (Date.now() - asked > 1000 || !screenTime.isOn())) {
+      await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
+    }
+    redrawAndLookAgain();
+  } finally {
+    askingAgain = false;
+  }
+}
+
+/**
  * Redraws Today now and looks again shortly after. Used after counting is
  * turned back on: the day itself may not change, so nothing else would redraw
  * the warning away (build 54 kept "Not counting" up until the app was reopened).
@@ -176,10 +202,12 @@ export const store = {
     set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
     screenTime.onCheckpoint(() => store.tick(new Date()));
+    void askAgain();
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
     AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
       store.tick(new Date());
+      void askAgain();
       for (const wait of [1500, 5000, 10000, 20000]) setTimeout(lookAgain, wait);
       if (snapshot.state === 'ready') screenTime.refreshScreens(snapshot.doc.settings, snapshot.doc.day.topUps);
       if (screenTime.isOn()) screenTime.reloadWidget();
