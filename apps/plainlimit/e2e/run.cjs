@@ -73,7 +73,7 @@ async function main() {
     await see('When does it recharge?');
     await press('Next');
     await see('What counts?');
-    await see("The apps you tick use up the battery and lock when it’s empty. Anything left unticked never counts and never locks.");
+    await see("Count the time wasters, not what the phone is for. The apps you tick use up the battery and lock when it’s empty. Anything left unticked never counts and never locks.");
     await shot('00-setup-counts');
     await press('Next');
     await see('Put it on your home screen');
@@ -121,11 +121,20 @@ async function main() {
   await step('what counts is one list, and there is no always-allowed list', async () => {
     assert.strictEqual(await page.getByRole('button', { name: /^Always allowed/ }).count(), 0, 'the always-allowed list is gone');
     await press('What counts, Your picks');
-    await see("The apps you tick use up the battery and lock when it’s empty. Anything left unticked never counts and never locks.");
+    await see("Count the time wasters, not what the phone is for. The apps you tick use up the battery and lock when it’s empty. Anything left unticked never counts and never locks.");
     assert.strictEqual(await page.getByRole('radio').count(), 0, 'no Everything / Only what I tick choice');
     await shot('03-what-counts');
     await back();
     await page.getByRole('button', { name: 'What counts, Your picks' }).waitFor();
+  });
+
+  await step('the tips page opens from Settings', async () => {
+    await press('Use your phone less, 10 tips');
+    await see('The battery sets the limit. These make it easier to stay under it.');
+    await see('Turn the screen gray');
+    await shot('03b-tips');
+    await back();
+    await page.getByRole('button', { name: 'Use your phone less, 10 tips' }).waitFor();
   });
 
   await step('pretend use empties the battery a cell at a time', async () => {

@@ -65,7 +65,11 @@ export default function Settings() {
         <Label>When the battery is empty</Label>
         <Choice title="Warn" line="Red screen, then tap through" chosen={settings.emptyLevel === 'warn'} accent={accent} onPress={() => store.setEmptyLevel('warn')} />
         <Choice title="Work for it" line={`Solve sums to get ${first.minutes} more minutes`} chosen={settings.emptyLevel === 'work'} accent={accent} onPress={() => store.setEmptyLevel('work')} />
- <Choice title="Locked" line="Counted apps stay locked until it recharges" chosen={settings.emptyLevel === 'locked'} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
+        <Choice title="Locked" line="Counted apps stay locked until it recharges" chosen={settings.emptyLevel === 'locked'} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
+      </Card>
+
+      <Card>
+        <LinkRow label="Use your phone less" value="10 tips" onPress={() => router.push('/tips')} last />
       </Card>
 
       {pretend ? (
