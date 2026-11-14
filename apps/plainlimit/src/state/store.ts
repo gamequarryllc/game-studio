@@ -92,6 +92,22 @@ function advanced(doc: Doc, now: Date, settings: Settings = doc.settings): Doc {
 let reregistered = false;
 
 /**
+ * The counting state Today last showed. iOS can take a few seconds, after the
+ * app comes back, to say that access was taken away in the Settings app; the
+ * second look below redraws Today when the answer has changed. (Build 49 only
+ * showed "Not counting" after the app was closed and opened again.)
+ */
+let shownHealth: screenTime.Health | null = null;
+function lookAgain() {
+  if (snapshot.state !== 'ready') return;
+  store.tick(new Date());
+  const now = store.health();
+  if (now === shownHealth) return;
+  shownHealth = now;
+  set(snapshot.doc, false);
+}
+
+/**
  * Notes, on the day, anything that means it is not being fully counted, and
  * puts back monitoring the phone has dropped.
  */
@@ -151,6 +167,7 @@ export const store = {
     AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
       store.tick(new Date());
+      for (const wait of [1500, 5000]) setTimeout(lookAgain, wait);
       if (snapshot.state === 'ready') screenTime.refreshScreens(snapshot.doc.settings, snapshot.doc.day.topUps);
       if (screenTime.isOn()) screenTime.reloadWidget();
     });

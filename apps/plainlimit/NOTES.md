@@ -264,3 +264,5 @@ Draft for the store fields, not final:
 - "Drained" stays as the word for the empty battery in the app and in the screenshots.
 
 A web search on 2026-11-11 found no app called Plainlimit. Nearby names on the App Store: several apps called "Limit", and a screen-time app once called "Plain Mode". That was a search, not a trademark check.
+
+Build 49 on the phone (Nov 14, 11:54 AM): Today's figure 1:02 agreed with the battery (2 cells) and with Screen Time after 6 AM. Turning counting off and on kept the day (1:05 before and after); the guard took the re-reported cells (known: at most 75 min). Yesterday's column showed under Fri. Turning access off in the Settings app showed "Not counting" only after the app was closed and opened: iOS answers late when the app comes back. From build 50 the app looks again 1.5 and 5 seconds after coming back.

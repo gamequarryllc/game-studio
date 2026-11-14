@@ -41,6 +41,11 @@ describe('the week view', () => {
     expect(weekLine(week)).toBe('Under your goal 6 of the last 6 days, 10 in a row.');
   });
 
+  it('says it plainly when only one day has been counted', () => {
+    expect(weekLine(weekView([past(1, 100)], today, settings, now, true))).toBe('Under your goal on the one full day so far.');
+    expect(weekLine(weekView([past(1, 200)], today, settings, now, true))).toBe('Over your goal on the one full day so far.');
+  });
+
   it('adds up earned time, today included', () => {
     const week = weekView([past(1, 200, { topUps: 2 })], { ...today, topUps: 1 }, settings, now, true);
     expect(week.earned).toBe(3);
