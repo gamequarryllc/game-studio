@@ -204,6 +204,8 @@ The owner asked for the battery to follow the phone's own Screen Time for the ap
 - **Today's figure is the phone's own.** The report extension draws the day's total for the counted apps to the minute ("Total" report, in the app's display face, which the build copies into the extension). The app's stepped figure fills the battery and shows until the phone has drawn, or where it cannot (after "Count from now", whose report would go by whole hours).
 - **What counts can't change while the battery is empty**, like the goal: unticking an app would unlock it.
 
+Build 48 on the phone (7:27 PM, reinstalled, goal 3:00): setup showed the phone's figure 3:10 beside Plainlimit's 1:50. Plainlimit was right. The phone's figure was the report's per-hour total, which is all screen-on time whatever is ticked: the Settings app's day was 3h 29m, but its categories added up to only about 2h 04m, and about 1h 50m of that came after 6 AM. The checkpoints for the day so far arrived within three seconds of registering (cells 1 to 3, and the finer steps to 1:50), so counting from the recharge works. From build 49 the total is added up app by app, like the "What used it" list. The phone took a few seconds to draw the figure on Today (it showed Plainlimit's own 1:50 at first, then 3:18).
+
 ## To check on the phone (nothing here has been tried)
 
 In order; each one that fails changes the code, not just a setting.

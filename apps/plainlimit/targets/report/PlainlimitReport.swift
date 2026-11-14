@@ -8,8 +8,9 @@ import SwiftUI
 //   TopApps  the "what used it" list: the apps that used the most time since the
 //            battery last recharged.
 //   Total    the day's figure: every minute the counted apps have been used
-//            since the recharge, to the minute. The app itself only learns use
-//            in steps, so this is the exact number the person sees.
+//            since the recharge, to the minute, added up app by app. The app
+//            itself only learns use in steps, so this is the exact number the
+//            person sees.
 //
 // The phone runs this in a sealed box: it may draw, and nothing else. The app
 // shows the picture and never learns what is in it.
@@ -149,10 +150,18 @@ struct TotalReport: DeviceActivityReportScene {
 
   func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
     -> TimeInterval {
+    // Added up app by app, the same way as the list. A segment's own total is
+    // all screen-on time, including time in no app at all (build 48 showed it:
+    // 3:10 against 1:50 of app use), and it ignores which apps are ticked.
+    // Websites are left out: their time is already inside the browser's.
     var seconds: TimeInterval = 0
     for await device in data {
       for await segment in device.activitySegments {
-        seconds += segment.totalActivityDuration
+        for await category in segment.categories {
+          for await app in category.applications {
+            seconds += app.totalActivityDuration
+          }
+        }
       }
     }
     return seconds
