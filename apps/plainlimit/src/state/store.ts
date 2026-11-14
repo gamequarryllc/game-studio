@@ -18,6 +18,13 @@ interface Snapshot {
 
 let snapshot: Snapshot = { state: 'loading', doc: freshDoc(new Date()) };
 const listeners = new Set<() => void>();
+/** Records finished days leaving the history, with where the change came from (see screenTime.noteHistoryLoss). */
+function noteLoss(starts: string[], how: string) {
+  const days = starts.map((s) => new Date(s).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })).join(', ');
+  const from = (new Error().stack ?? '').split('\n').slice(2, 5).map((l) => l.trim().replace(/^at /, '').slice(0, 40)).join(' < ');
+  screenTime.noteHistoryLoss(`lost ${days} in ${how}${from ? ` (${from})` : ''}`);
+}
+
 /**
  * Whether the saved copy has been read. Until then the store holds a blank
  * placeholder, and saving it would wipe the history (build 57: Friday's column
@@ -27,6 +34,11 @@ let loaded = false;
 
 function set(doc: Doc, save = true) {
   if (!loaded) return;
+  if (doc.history !== snapshot.doc.history) {
+    const kept = new Set(doc.history.map((h) => h.start));
+    const lost = snapshot.doc.history.filter((h) => !kept.has(h.start));
+    if (lost.length > 0) noteLoss(lost.map((h) => h.start), 'a change');
+  }
   snapshot = { state: 'ready', doc };
   listeners.forEach((l) => l());
   if (save) void writeSaved(doc);
@@ -204,6 +216,15 @@ export const store = {
     // A copy saved before the app kept this: counting is on if the phone has the day registered.
     const watching = typeof savedWatching === 'boolean' ? savedWatching : screenTime.isOn();
     let doc = repairDoc(raw, new Date(), closingUsed, counts(watching));
+    // Whether reading the saved copy back lost any finished day.
+    const savedHistory = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).history : undefined;
+    if (Array.isArray(savedHistory)) {
+      const kept = new Set(doc.history.map((h) => h.start));
+      const lost = savedHistory.map((h) => (h && typeof h === 'object' ? (h as Record<string, unknown>).start : null)).filter((s): s is string => typeof s === 'string' && !kept.has(new Date(s).toISOString()));
+      if (lost.length > 0) noteLoss(lost, 'loading');
+    } else if (raw) {
+      screenTime.noteHistoryLoss('loaded a saved copy with no history in it');
+    }
     if (doc.watching === null) doc = { ...doc, watching };
     doc = checkHealth({ ...doc, day: withRealUse(doc, doc.day) });
     loaded = true;

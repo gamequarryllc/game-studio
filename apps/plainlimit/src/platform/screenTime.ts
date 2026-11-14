@@ -246,6 +246,34 @@ export function picksAfter(now = new Date()): boolean {
   }
 }
 
+/**
+ * A short record of finished days disappearing from the history, for the
+ * readout. Build 57 lost Friday between 11:57 AM and 5:57 PM with no code path
+ * found that removes a day; this says when it happens and what did it.
+ */
+const HISTORY_LOG_KEY = 'plainlimit_history_log';
+
+export function noteHistoryLoss(line: string): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    const before = DeviceActivity.userDefaultsGet<string[]>(HISTORY_LOG_KEY);
+    const kept = Array.isArray(before) ? before.filter((l) => typeof l === 'string') : [];
+    DeviceActivity.userDefaultsSet(HISTORY_LOG_KEY, [...kept, `${timeOf(Date.now())}: ${line}`].slice(-6));
+  } catch {
+    // Only a record; never in the way.
+  }
+}
+
+export function historyLog(): string[] {
+  if (!SCREEN_TIME_AVAILABLE) return [];
+  try {
+    const value = DeviceActivity.userDefaultsGet<string[]>(HISTORY_LOG_KEY);
+    return Array.isArray(value) ? value.filter((l) => typeof l === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 /** The start of today's count, for keeping reports to today's. */
 function dayStartOf(periodStart: Date): Date {
   return countStart(periodStart, countingSince());
