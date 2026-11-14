@@ -75,6 +75,17 @@ export function isPlausible(checkpoint: Checkpoint, periodStart: Date, arrivedAt
  * it outlives counting being turned off, Screen Time access being taken away,
  * or the day being registered again after a change to the settings.
  */
+/**
+ * Whether a report still counts after the ticked apps changed at
+ * `picksChangedAt` (milliseconds). The day is registered again for the new
+ * list and the phone re-reports the day so far for it, so a report from before
+ * the change, made for the old list, is set aside. A change before today's
+ * count began does not matter.
+ */
+export function countsAfterPicks(arrivedAt: Date, dayStart: Date, picksChangedAt: number): boolean {
+  return picksChangedAt < dayStart.getTime() || arrivedAt.getTime() >= picksChangedAt;
+}
+
 export interface Known {
   at: number;
   most: number;

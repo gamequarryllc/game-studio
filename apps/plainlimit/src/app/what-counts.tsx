@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { COUNTED_ID, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenTime';
+import { COUNTED_ID, SCREEN_TIME_AVAILABLE, pickCount, picksBefore } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { COUNTS_LEAD, COUNTS_NOTE, COUNTS_STEPS, pickedWords } from '@/ui/countWords';
@@ -40,7 +40,13 @@ export default function WhatCounts() {
           {locked ? (
             <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>This can&apos;t change while the battery is empty. It opens again when it recharges.</Text>
           ) : (
-            <BigButton label={picked === 0 ? 'Choose apps' : 'Change the apps'} onPress={() => setPicking(true)} />
+            <BigButton
+              label={picked === 0 ? 'Choose apps' : 'Change the apps'}
+              onPress={() => {
+                picksBefore();
+                setPicking(true);
+              }}
+            />
           )}
           <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>{COUNTS_NOTE}</Text>
         </>

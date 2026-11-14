@@ -265,6 +265,8 @@ export const store = {
   },
   /** The person changed their picks in Apple's list: tell the phone, and redraw. */
   picksChanged() {
+    // Before registering again: reports from before this moment were for the old list.
+    screenTime.picksAfter();
     planSoon();
     set({ ...snapshot.doc }, false);
   },

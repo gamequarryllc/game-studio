@@ -113,8 +113,26 @@ class UsageReportView: ExpoView {
     return nil
   }
 
+  /// Props arrive one at a time; build the report once they have all landed.
+  private var refreshQueued = false
+  /// Bumped on every rebuild. The phone's report does not redraw when only its
+  /// filter changes (build 51: unticking an app left it in the list until the
+  /// app was reopened), so each rebuild gets a new identity.
+  private var generation = 0
+
   private func refresh() {
+    guard !refreshQueued else { return }
+    refreshQueued = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.refreshQueued = false
+      self.rebuild()
+    }
+  }
+
+  private func rebuild() {
     guard fromMs > 0, toMs > fromMs else { return }
+    generation += 1
     let interval = DateInterval(
       start: Date(timeIntervalSince1970: fromMs / 1000),
       end: Date(timeIntervalSince1970: toMs / 1000)
@@ -131,7 +149,7 @@ class UsageReportView: ExpoView {
       )
     }
 
-    let report = AnyView(DeviceActivityReport(DeviceActivityReport.Context(context), filter: filter).allowsHitTesting(false))
+    let report = AnyView(DeviceActivityReport(DeviceActivityReport.Context(context), filter: filter).allowsHitTesting(false).id(generation))
     if let host {
       host.rootView = report
     } else {

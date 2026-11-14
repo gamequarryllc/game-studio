@@ -111,8 +111,12 @@ func readState(now: Date) -> BatteryState {
 
   // A checkpoint for N minutes of use cannot honestly arrive sooner than N minutes
   // into the day. iOS has been seen to deliver them early; those are ignored.
+  // After the ticked apps change, reports made for the old list are set aside
+  // (checkpoints.ts, countsAfterPicks); the phone re-reports the day for the new one.
+  let picksAt = defaults.double(forKey: "plainlimit_picks_changed_at")
   func reached(_ name: String, afterMinutes minutes: Double) -> Bool {
     let at = defaults.double(forKey: "events_\(activityName)_eventDidReachThreshold_\(name)")
+    guard picksAt < start || at >= picksAt else { return false }
     return at >= start && at >= judgedFrom(at) + max(0, minutes - slackMinutes) * 60_000
   }
 

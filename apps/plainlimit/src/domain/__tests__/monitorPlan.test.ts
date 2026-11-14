@@ -194,5 +194,7 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain('"plainlimit_known"');
     expect(swift).toContain('known?["at"]');
     expect(swift).toContain('known?["most"]');
+    // Reports from before the ticked apps changed are set aside, as in the app.
+    expect(swift).toContain('"plainlimit_picks_changed_at"');
   });
 });

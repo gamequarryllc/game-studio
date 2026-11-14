@@ -19,10 +19,6 @@ export const TIPS: readonly Tip[] = [
     why: 'Use social media, video, shopping and news on the computer, and delete those apps from the phone. Sitting down for it keeps it a choice, not a reflex.',
   },
   {
-    title: 'Delete the app that used the most',
-    why: 'It is at the top of What used it on Today. If you need it now and then, use its website and don’t stay signed in.',
-  },
-  {
     title: 'Keep only tools on the first home screen',
     why: 'Phone, Messages, Maps, Camera, Calendar. Everything else goes to the App Library, a swipe away.',
     how: 'Hold an app > Remove App > Remove from Home Screen.',

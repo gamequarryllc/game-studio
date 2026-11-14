@@ -1,5 +1,5 @@
 import { CELLS, cellsLeft, fractionUsed, wordFor } from '../battery';
-import { believable, checkpointsFor, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
+import { believable, checkpointsFor, countsAfterPicks, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
 import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
 
 describe('cells', () => {
@@ -183,5 +183,22 @@ describe('the last known figure', () => {
     expect(mostByNow(180, 0)).toBe(15);
     expect(mostByNow(180, 30)).toBe(45);
     expect(mostByNow(180, 180)).toBeNull();
+  });
+});
+
+describe('changing what counts', () => {
+  const dayStart = new Date(2026, 10, 14, 6, 0);
+  const clock = (h: number, m = 0) => new Date(2026, 10, 14, h, m);
+
+  it('sets aside reports made for the old list', () => {
+    const changed = clock(14).getTime();
+    expect(countsAfterPicks(clock(13, 59), dayStart, changed)).toBe(false);
+    expect(countsAfterPicks(clock(14), dayStart, changed)).toBe(true);
+    expect(countsAfterPicks(clock(14, 1), dayStart, changed)).toBe(true);
+  });
+
+  it('ignores a change from before today', () => {
+    expect(countsAfterPicks(clock(9), dayStart, new Date(2026, 10, 13, 20).getTime())).toBe(true);
+    expect(countsAfterPicks(clock(9), dayStart, 0)).toBe(true);
   });
 });

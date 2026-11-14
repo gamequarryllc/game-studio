@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { believable, checkpointsFor, guardFrom, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known } from '@/domain/checkpoints';
+import { believable, checkpointsFor, countsAfterPicks, guardFrom, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known } from '@/domain/checkpoints';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
@@ -164,6 +164,53 @@ function holdUntil(): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : 0;
   } catch {
     return 0;
+  }
+}
+
+/**
+ * When the ticked apps last changed, in milliseconds. Unticking an app takes
+ * its time off today's battery and ticking it again puts it back: reports from
+ * before the change were for the old list (countsAfterPicks), and the phone
+ * re-reports the day so far for the new one within seconds of registering.
+ */
+const PICKS_KEY = 'plainlimit_picks_changed_at';
+/** The ticked list as it was when Apple's picker opened, to tell whether closing it changed anything. */
+const PICKS_BEFORE_KEY = 'plainlimit_picks_before';
+
+function picksChangedAt(): number {
+  try {
+    const value = DeviceActivity.userDefaultsGet<number>(PICKS_KEY);
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Call as Apple's picker opens. */
+export function picksBefore(): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    DeviceActivity.userDefaultsSet(PICKS_BEFORE_KEY, countedToken() ?? '');
+  } catch {
+    // Without it, closing the picker changes nothing about today's count.
+  }
+}
+
+/** Call as Apple's picker closes, before the day is registered again. True if the list changed. */
+export function picksAfter(now = new Date()): boolean {
+  if (!SCREEN_TIME_AVAILABLE) return false;
+  try {
+    const before = DeviceActivity.userDefaultsGet<string>(PICKS_BEFORE_KEY);
+    DeviceActivity.userDefaultsRemove(PICKS_BEFORE_KEY);
+    if (typeof before !== 'string' || before === (countedToken() ?? '')) return false;
+    DeviceActivity.userDefaultsSet(PICKS_KEY, now.getTime());
+    // The last known figure was for the old list. A newly ticked app can
+    // honestly add more than it allowed, so it is dropped; a new one is noted
+    // once counting has settled again.
+    DeviceActivity.userDefaultsRemove(KNOWN_KEY);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -440,11 +487,12 @@ export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Da
     );
     const from = dayStartOf(periodStart);
     const sure = known();
+    const picked = picksChangedAt();
     const to = periodEnd?.getTime() ?? Number.POSITIVE_INFINITY;
     const arrived = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)].filter((checkpoint) => {
       const report = reported.find((e) => e.eventName === checkpoint.id);
       if (!report) return false;
-      return report.lastCalledAt.getTime() < to && believable(checkpoint, from, sure, report.lastCalledAt);
+      return report.lastCalledAt.getTime() < to && countsAfterPicks(report.lastCalledAt, from, picked) && believable(checkpoint, from, sure, report.lastCalledAt);
     });
     return usedFloor(arrived);
   } catch {
@@ -487,7 +535,7 @@ export function diagnostics(settings: Settings): string[] {
     lines.push(`Monitor asked for a widget redraw: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_reload_asked'))}`);
     const cells = DeviceActivity.userDefaultsGet<number>('plainlimit_widget_cells');
     lines.push(`Widget last drew: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_widget_drew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
-    lines.push(`Picked: ${pickCount(COUNTED_ID)} counted`);
+    lines.push(`Picked: ${pickCount(COUNTED_ID)} counted${picksChangedAt() > 0 ? `, last changed ${timeOf(picksChangedAt())}` : ''}`);
     // The library notes who last changed what is covered, and when.
     const last = DeviceActivity.userDefaultsGet<Record<string, unknown>>('lastBlockUpdate');
     if (last && typeof last === 'object') {
