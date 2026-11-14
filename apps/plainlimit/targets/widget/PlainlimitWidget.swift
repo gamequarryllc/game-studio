@@ -109,14 +109,25 @@ func readState(now: Date) -> BatteryState {
     return max(start, knownAt - knownMost * 60_000)
   }
 
+  // Checkpoints carry the round they were registered in (checkpoints.ts,
+  // roundName). Just after the ticked apps change, the old round stands until
+  // the phone has reported anything for the new one, or for a minute at most.
+  let round = plan["round"] as? String ?? ""
+  let roundBefore = plan["roundBefore"] as? String ?? ""
+  let picksAt = (plan["picksChangedAt"] as? NSNumber)?.doubleValue ?? 0
+  func stored(_ name: String, _ inRound: String) -> Double {
+    let key = inRound.isEmpty ? name : "\(name)~\(inRound)"
+    return defaults.double(forKey: "events_\(activityName)_eventDidReachThreshold_\(key)")
+  }
+  let names = ["empty"] + (1..<cellCount).map { "cell-\($0)" }
+  let anyNew = names.contains { stored($0, round) > 0 }
+  let nowMs = now.timeIntervalSince1970 * 1000
+  let counting = (picksAt >= start && !anyNew && nowMs - picksAt < 60_000) ? roundBefore : round
+
   // A checkpoint for N minutes of use cannot honestly arrive sooner than N minutes
   // into the day. iOS has been seen to deliver them early; those are ignored.
-  // After the ticked apps change, reports made for the old list are set aside
-  // (checkpoints.ts, countsAfterPicks); the phone re-reports the day for the new one.
-  let picksAt = defaults.double(forKey: "plainlimit_picks_changed_at")
   func reached(_ name: String, afterMinutes minutes: Double) -> Bool {
-    let at = defaults.double(forKey: "events_\(activityName)_eventDidReachThreshold_\(name)")
-    guard picksAt < start || at >= picksAt else { return false }
+    let at = stored(name, counting)
     return at >= start && at >= judgedFrom(at) + max(0, minutes - slackMinutes) * 60_000
   }
 

@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { believable, checkpointsFor, countsAfterPicks, guardFrom, picksSettled, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known } from '@/domain/checkpoints';
+import { believable, checkpointsFor, guardFrom, picksSettled, roundName, splitName, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known } from '@/domain/checkpoints';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
@@ -176,6 +176,23 @@ function holdUntil(): number {
 const PICKS_KEY = 'plainlimit_picks_changed_at';
 /** The ticked list as it was when Apple's picker opened, to tell whether closing it changed anything. */
 const PICKS_BEFORE_KEY = 'plainlimit_picks_before';
+/** The current round of checkpoint names, and the one before it (roundName). */
+const ROUND_KEY = 'plainlimit_round';
+const ROUND_BEFORE_KEY = 'plainlimit_round_before';
+
+function readString(key: string): string {
+  try {
+    const value = DeviceActivity.userDefaultsGet<string>(key);
+    return typeof value === 'string' ? value : '';
+  } catch {
+    return '';
+  }
+}
+
+/** The round of checkpoint names the phone is counting under now. */
+function round(): string {
+  return readString(ROUND_KEY);
+}
 
 function picksChangedAt(): number {
   try {
@@ -204,6 +221,9 @@ export function picksAfter(now = new Date()): boolean {
     DeviceActivity.userDefaultsRemove(PICKS_BEFORE_KEY);
     if (typeof before !== 'string' || before === (countedToken() ?? '')) return false;
     DeviceActivity.userDefaultsSet(PICKS_KEY, now.getTime());
+    // A new round of names, so reports for the old list can't pass for the new one.
+    DeviceActivity.userDefaultsSet(ROUND_BEFORE_KEY, round());
+    DeviceActivity.userDefaultsSet(ROUND_KEY, now.getTime().toString(36));
     // The last known figure was for the old list. A newly ticked app can
     // honestly add more than it allowed, so it is dropped; a new one is noted
     // once counting has settled again.
@@ -291,12 +311,13 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
 function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: Settings, now: Date) {
   const from = guardFrom(dayStartOf(periodStartOf(now, settings.rechargeMinute)), known());
   const held = holdUntil();
+  const named = round();
   for (const event of plan.events) {
     const notBefore = new Date(Math.max(earliestTrue(from, event.minutes).getTime(), held));
     DeviceActivity.configureActions({
       activityName: plan.activity,
       callbackName: 'eventDidReachThreshold',
-      eventName: event.name,
+      eventName: roundName(event.name, named),
       actions: event.actions.map((a) => ({ ...toAction(a), neverTriggerBefore: notBefore })),
     });
   }
@@ -371,14 +392,15 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
     // The screens come off when the day ends, a minute before the next one starts.
     DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'intervalDidEnd', actions: [...UNCOVER, STOP_EARNED_TIME] });
 
-    DeviceActivity.userDefaultsSet(WIDGET_PLAN_KEY, plan.widget);
+    const named = round();
+    DeviceActivity.userDefaultsSet(WIDGET_PLAN_KEY, { ...plan.widget, round: named, roundBefore: readString(ROUND_BEFORE_KEY), picksChangedAt: picksChangedAt() });
 
     await DeviceActivity.startMonitoring(
       plan.activity,
       { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
-      plan.events.map((event) => ({ eventName: event.name, familyActivitySelection: token, threshold: event.after, includesPastActivity: earlier })),
+      plan.events.map((event) => ({ eventName: roundName(event.name, named), familyActivitySelection: token, threshold: event.after, includesPastActivity: earlier })),
     );
-    await registerTicks(plan, token, earlier);
+    await registerTicks(plan, token, earlier, named);
     reloadWidget();
     return true;
   } catch (error) {
@@ -392,7 +414,7 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
  * day. A failure here is noted and otherwise ignored: the day still counts
  * and locks, only in cell-sized steps.
  */
-async function registerTicks(plan: ReturnType<typeof monitorPlan>, token: string, earlier: boolean) {
+async function registerTicks(plan: ReturnType<typeof monitorPlan>, token: string, earlier: boolean, named: string) {
   try {
     if (plan.ticks.length === 0) {
       DeviceActivity.stopMonitoring([TICKS_ACTIVITY]);
@@ -401,7 +423,7 @@ async function registerTicks(plan: ReturnType<typeof monitorPlan>, token: string
     await DeviceActivity.startMonitoring(
       TICKS_ACTIVITY,
       { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
-      plan.ticks.map((tick) => ({ eventName: tick.name, familyActivitySelection: token, threshold: tick.after, includesPastActivity: earlier })),
+      plan.ticks.map((tick) => ({ eventName: roundName(tick.name, named), familyActivitySelection: token, threshold: tick.after, includesPastActivity: earlier })),
     );
   } catch (error) {
     note('the minute checkpoints', error);
@@ -431,10 +453,12 @@ export function health(settings: Settings, periodStart: Date, watching: boolean)
   }
 }
 
-function ownReports(): { id: string; at: Date }[] {
+/** This round's reports for the day's checkpoints. */
+function ownReports(): { id: string; name: string; at: Date }[] {
+  const named = round();
   return DeviceActivity.getEvents(ACTIVITY)
-    .filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName)
-    .map((e) => ({ id: e.eventName as string, at: e.lastCalledAt }));
+    .filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName && splitName(e.eventName).round === named)
+    .map((e) => ({ id: splitName(e.eventName as string).id, name: e.eventName as string, at: e.lastCalledAt }));
 }
 
 /**
@@ -451,7 +475,7 @@ export async function countAgain(settings: Settings, topUpsSoFar: number, period
     for (const report of ownReports()) {
       const checkpoint = own.get(report.id);
       if (checkpoint && report.at.getTime() >= from.getTime() && !believable(checkpoint, from, sure, report.at)) {
-        DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.id}`);
+        DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.name}`);
       }
     }
   } catch (error) {
@@ -487,17 +511,20 @@ export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Da
     );
     const from = dayStartOf(periodStart);
     const sure = known();
-    let picked = picksChangedAt();
+    // Only the current round's reports count (roundName). Just after the ticked
+    // apps change, the old round's figure stands until the phone has
+    // re-reported the day for the new list.
+    let named = round();
+    const picked = picksChangedAt();
     if (picked >= from.getTime() && periodEnd === undefined) {
-      // Keep the old figure until the phone has re-reported the day for the new list.
-      const since = reported.map((e) => e.lastCalledAt.getTime()).filter((at) => at >= picked);
-      if (!picksSettled(Date.now(), picked, since.length > 0 ? Math.max(...since) : null)) picked = 0;
+      const fresh = reported.filter((e) => splitName(e.eventName as string).round === named).map((e) => e.lastCalledAt.getTime());
+      if (!picksSettled(Date.now(), picked, fresh.length > 0 ? Math.max(...fresh) : null)) named = readString(ROUND_BEFORE_KEY);
     }
     const to = periodEnd?.getTime() ?? Number.POSITIVE_INFINITY;
     const arrived = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)].filter((checkpoint) => {
-      const report = reported.find((e) => e.eventName === checkpoint.id);
+      const report = reported.find((e) => e.eventName === roundName(checkpoint.id, named));
       if (!report) return false;
-      return report.lastCalledAt.getTime() < to && countsAfterPicks(report.lastCalledAt, from, picked) && believable(checkpoint, from, sure, report.lastCalledAt);
+      return report.lastCalledAt.getTime() < to && believable(checkpoint, from, sure, report.lastCalledAt);
     });
     return usedFloor(arrived);
   } catch {
@@ -532,7 +559,7 @@ export function diagnostics(settings: Settings): string[] {
     const reported = DeviceActivity.getEvents()
       .filter((e) => e.activityName === ACTIVITY || e.activityName === TOPUP_ACTIVITY)
       .map((e) => {
-        const checkpoint = e.activityName === ACTIVITY && e.eventName ? minutesOf.get(e.eventName) : undefined;
+        const checkpoint = e.activityName === ACTIVITY && e.eventName ? minutesOf.get(splitName(e.eventName).id) : undefined;
         const early = checkpoint !== undefined && e.lastCalledAt.getTime() >= from.getTime() && !believable(checkpoint, from, sureNow, e.lastCalledAt);
         return `${e.eventName ?? e.callbackName}: ${timeOf(e.lastCalledAt.getTime())}${early ? ' (too early to be true, ignored)' : ''}`;
       });
@@ -540,7 +567,7 @@ export function diagnostics(settings: Settings): string[] {
     lines.push(`Monitor asked for a widget redraw: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_reload_asked'))}`);
     const cells = DeviceActivity.userDefaultsGet<number>('plainlimit_widget_cells');
     lines.push(`Widget last drew: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_widget_drew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
-    lines.push(`Picked: ${pickCount(COUNTED_ID)} counted${picksChangedAt() > 0 ? `, last changed ${timeOf(picksChangedAt())}` : ''}`);
+    lines.push(`Picked: ${pickCount(COUNTED_ID)} counted${picksChangedAt() > 0 ? `, last changed ${timeOf(picksChangedAt())} (round ${round() || 'first'})` : ''}`);
     // The library notes who last changed what is covered, and when.
     const last = DeviceActivity.userDefaultsGet<Record<string, unknown>>('lastBlockUpdate');
     if (last && typeof last === 'object') {

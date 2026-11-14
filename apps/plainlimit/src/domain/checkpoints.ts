@@ -76,25 +76,31 @@ export function isPlausible(checkpoint: Checkpoint, periodStart: Date, arrivedAt
  * or the day being registered again after a change to the settings.
  */
 /**
- * Whether a report still counts after the ticked apps changed at
- * `picksChangedAt` (milliseconds). The day is registered again for the new
- * list and the phone re-reports the day so far for it, so a report from before
- * the change, made for the old list, is set aside. A change before today's
- * count began does not matter.
+ * Checkpoints are registered under a round name whenever the ticked apps
+ * change ("cell-2~mhz3k1"), so a report always says which list it was made
+ * for. The phone can deliver reports for the old list well after the change
+ * (build 52: 38 seconds, which put Claude's minutes back after it was
+ * unticked). A report from another round is never mistaken for this one.
  */
-export function countsAfterPicks(arrivedAt: Date, dayStart: Date, picksChangedAt: number): boolean {
-  return picksChangedAt < dayStart.getTime() || arrivedAt.getTime() >= picksChangedAt;
+export function roundName(id: string, round: string): string {
+  return round ? `${id}~${round}` : id;
+}
+
+/** The checkpoint a reported name stands for, and the round it was made in. */
+export function splitName(name: string): { id: string; round: string } {
+  const at = name.indexOf('~');
+  return at < 0 ? { id: name, round: '' } : { id: name.slice(0, at), round: name.slice(at + 1) };
 }
 
 /**
  * Whether the phone has finished re-reporting the day for a new list: two
- * seconds after its last report since the change, or fifteen seconds after the
+ * seconds after its last report for the new round, or a minute after the
  * change if it sends none (the new list may have no use yet). Until then the
- * battery keeps its old figure, so it doesn't show full for a moment and then
- * drop (build 52).
+ * battery keeps the old round's figure, so it doesn't show full for a moment
+ * and then jump (build 52).
  */
 export const PICKS_QUIET_MS = 2000;
-export const PICKS_WAIT_MS = 15000;
+export const PICKS_WAIT_MS = 60000;
 export function picksSettled(nowMs: number, picksChangedAt: number, lastReportSince: number | null): boolean {
   if (nowMs - picksChangedAt >= PICKS_WAIT_MS) return true;
   return lastReportSince !== null && nowMs - lastReportSince >= PICKS_QUIET_MS;

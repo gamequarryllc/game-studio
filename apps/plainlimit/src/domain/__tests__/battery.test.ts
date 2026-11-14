@@ -1,5 +1,5 @@
 import { CELLS, cellsLeft, fractionUsed, wordFor } from '../battery';
-import { believable, checkpointsFor, countsAfterPicks, picksSettled, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
+import { believable, checkpointsFor, picksSettled, roundName, splitName, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
 import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
 
 describe('cells', () => {
@@ -187,19 +187,12 @@ describe('the last known figure', () => {
 });
 
 describe('changing what counts', () => {
-  const dayStart = new Date(2026, 10, 14, 6, 0);
-  const clock = (h: number, m = 0) => new Date(2026, 10, 14, h, m);
-
-  it('sets aside reports made for the old list', () => {
-    const changed = clock(14).getTime();
-    expect(countsAfterPicks(clock(13, 59), dayStart, changed)).toBe(false);
-    expect(countsAfterPicks(clock(14), dayStart, changed)).toBe(true);
-    expect(countsAfterPicks(clock(14, 1), dayStart, changed)).toBe(true);
-  });
-
-  it('ignores a change from before today', () => {
-    expect(countsAfterPicks(clock(9), dayStart, new Date(2026, 10, 13, 20).getTime())).toBe(true);
-    expect(countsAfterPicks(clock(9), dayStart, 0)).toBe(true);
+  it('names each round of checkpoints, so a report says which list it was made for', () => {
+    expect(roundName('cell-2', '')).toBe('cell-2');
+    expect(roundName('cell-2', 'mhz3k1')).toBe('cell-2~mhz3k1');
+    expect(splitName('cell-2~mhz3k1')).toEqual({ id: 'cell-2', round: 'mhz3k1' });
+    expect(splitName('final-warning')).toEqual({ id: 'final-warning', round: '' });
+    expect(splitName('m40~a')).toEqual({ id: 'm40', round: 'a' });
   });
 });
 
@@ -211,9 +204,10 @@ describe('waiting for the phone after changing what counts', () => {
     expect(picksSettled(changed + 3000, changed, changed + 2500)).toBe(false);
   });
 
-  it('switches two seconds after the last report, or after fifteen seconds with none', () => {
+  it('switches two seconds after the last report, or after a minute with none', () => {
     expect(picksSettled(changed + 4600, changed, changed + 2500)).toBe(true);
-    expect(picksSettled(changed + 14_000, changed, null)).toBe(false);
-    expect(picksSettled(changed + 15_000, changed, null)).toBe(true);
+    // Build 52: the phone's first reports for the new list took 38 seconds.
+    expect(picksSettled(changed + 38_000, changed, null)).toBe(false);
+    expect(picksSettled(changed + 60_000, changed, null)).toBe(true);
   });
 });
