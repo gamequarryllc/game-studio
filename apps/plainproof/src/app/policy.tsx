@@ -140,7 +140,7 @@ export default function PolicyScreen() {
                     </View>
                   }
                   title={a.name}
-                  subtitle={`${a.kind === 'pdf' ? 'PDF' : 'Photo'} · ${formatBytes(a.bytes)} · added ${displayTime(a.addedAt)}`}
+                  subtitle={`${a.kind === 'pdf' ? 'PDF' : 'Photo'} · ${formatBytes(a.bytes)} · ${displayTime(a.addedAt)}`}
                   onPress={() => void open(a)}
                 />
               </View>

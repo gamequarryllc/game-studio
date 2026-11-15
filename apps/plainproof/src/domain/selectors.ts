@@ -161,6 +161,13 @@ export function plural(n: number, one: string, many: string = `${one}s`): string
   return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 }
 
+/** "7 photos, 1 video and 2 documents": the parts that are there, joined as a sentence would. */
+export function listJoin(parts: string[]): string {
+  const kept = parts.filter(Boolean);
+  if (kept.length <= 1) return kept.join('');
+  return `${kept.slice(0, -1).join(', ')} and ${kept[kept.length - 1]}`;
+}
+
 /** "Sony · WH-1000XM5" style line under an item's name. */
 export function itemSubtitle(item: Item): string {
   const parts = [item.brand, item.model].filter(Boolean);
@@ -209,7 +216,8 @@ export function formatBytes(bytes: number): string {
 
 /** A video's length: 0:42, 3:05, 1:02:10. */
 export function formatDuration(ms: number | null): string {
-  if (ms === null || !Number.isFinite(ms) || ms < 0) return '';
+  // Zero means the length was not known, not a video with nothing in it.
+  if (ms === null || !Number.isFinite(ms) || ms <= 0) return '';
   const total = Math.round(ms / 1000);
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);

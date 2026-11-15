@@ -153,8 +153,10 @@ export type RestoreOutcome =
       photos: number;
       /** Photos the inventory names that the file did not hold. */
       missing: number;
-      /** Videos and documents restored. */
-      files: number;
+      /** Walk-through videos restored. */
+      videos: number;
+      /** Policy documents restored. */
+      documents: number;
       /** Videos and documents the inventory names that the file did not hold (a backup may leave out videos too big for it). */
       missingFiles: number;
     };
@@ -210,8 +212,9 @@ export async function restoreFromBackup(
     const filesInUse = libraryFileNames(library);
     await removeOrphanAttachments(filesInUse).catch(() => 0);
     const photos = [...inUse].filter((id) => seen.has(id)).length;
-    const files = [...filesInUse].filter((n) => seenFiles.has(n)).length;
-    return { kind: 'restored', ...found, photos, missing: inUse.size - photos, files, missingFiles: filesInUse.size - files };
+    const restoredFiles = [...filesInUse].filter((n) => seenFiles.has(n));
+    const videos = restoredFiles.filter((n) => /\.(mov|mp4)$/.test(n)).length;
+    return { kind: 'restored', ...found, photos, missing: inUse.size - photos, videos, documents: restoredFiles.length - videos, missingFiles: filesInUse.size - restoredFiles.length };
   } catch (e) {
     await staging.abort();
     await fileStaging.abort();

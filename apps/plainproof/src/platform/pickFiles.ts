@@ -41,8 +41,9 @@ async function toVideo(result: ImagePicker.ImagePickerResult, recordedNow: boole
   let takenAt: number | null = recordedNow ? Date.now() : null;
   // A video from the library: when it was recorded, from the file itself.
   if (!recordedNow && native) takenAt = await native.mediaDate(a.uri).catch(() => null);
-  // The picker reports the length in milliseconds.
-  return { uri: a.uri, ext: extOf(a), durationMs: a.duration ?? null, bytes: a.fileSize ?? null, takenAt };
+  // The iPhone's picker reports the length in milliseconds; the browser's in seconds (and 0 when it could not tell).
+  const duration = a.duration ? (Platform.OS === 'web' ? a.duration * 1000 : a.duration) : null;
+  return { uri: a.uri, ext: extOf(a), durationMs: duration, bytes: a.fileSize ?? null, takenAt };
 }
 
 /** Chooses a video from the photo library, as recorded (not re-compressed). */

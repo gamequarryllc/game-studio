@@ -147,7 +147,8 @@ export default function ClaimScreen() {
                 testID={`claim-item-${i}`}
                 leading={<Thumb photoId={item.photos[0]?.id} size={44} rounded={radius.s} />}
                 title={item.name}
-                subtitle={`${item.loss ? LOSS_LABELS[item.loss] : ''} · ${rooms.get(item.roomId) ?? ''}${item.lossNote ? '' : ' · no note'}`}
+                // The missing note before the room: when the line is cut short, the room is what goes.
+                subtitle={[item.loss ? LOSS_LABELS[item.loss] : null, item.lossNote ? null : 'no note', rooms.get(item.roomId) ?? null].filter(Boolean).join(' · ')}
                 value={hasValue(item) ? formatMoney(itemTotalCents(item), currency, { whole: true }) : 'No value'}
                 valueTone={hasValue(item) ? 'ink' : 'amber'}
                 chevron

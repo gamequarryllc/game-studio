@@ -7,7 +7,7 @@ import { displayTime, relativeDay } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { reportTitle } from '@/domain/report';
 import { coverage } from '@/domain/coverage';
-import { backupState, claimSummary, homeSummary, plural, roomSummaries } from '@/domain/selectors';
+import { backupState, claimSummary, homeSummary, listJoin, plural, roomSummaries } from '@/domain/selectors';
 import { LIMITS, type Profile } from '@/domain/types';
 import { success } from '@/platform/haptics';
 import { MAKES_PDF } from '@/platform/exporter';
@@ -123,11 +123,7 @@ export default function ReportTab() {
         ? 'Your things are close to the policy’s limit'
         : cover.toSchedule.length > 0
           ? `${plural(cover.toSchedule.length, 'item')} may need listing on the policy`
-          : doc.policy.documents.length > 0
-            ? `${plural(doc.policy.documents.length, 'document')} kept · limits checked`
-            : cover.state === 'ok'
-              ? 'Within your policy’s limit'
-              : 'Keep your policy here and check the limits';
+          : policyStatus(doc.policy.documents.length, cover.state === 'ok' ? formatMoney(cover.limitCents ?? 0, doc.settings.currency, { whole: true }) : null);
   const several = library.places.length > 1;
   // The name, address, insurer and policy belong to the open place. The owner's name is the same on every place's report.
   const setProfile = (patch: Partial<Profile>) => store.update((d) => updateProfile(d, patch));
@@ -185,8 +181,8 @@ export default function ReportTab() {
           success();
           await notify(
             'Backup restored',
-            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ${plural(outcome.photos, 'photo')}` +
-              `${outcome.files > 0 ? ` and ${plural(outcome.files, 'video or document', 'videos and documents')}` : ''}.` +
+            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ` +
+              `${listJoin([plural(outcome.photos, 'photo'), outcome.videos > 0 ? plural(outcome.videos, 'video') : '', outcome.documents > 0 ? plural(outcome.documents, 'document') : ''])}.` +
               (outcome.missing > 0 ? ` ${plural(outcome.missing, 'photo')} ${outcome.missing === 1 ? 'was' : 'were'} not in the backup and will show as blank.` : '') +
               (outcome.missingFiles > 0 ? ` ${plural(outcome.missingFiles, 'video or document', 'videos and documents')} ${outcome.missingFiles === 1 ? 'was' : 'were'} not in it.` : ''),
           );
@@ -294,9 +290,16 @@ export default function ReportTab() {
               ? 'Not backed up yet.'
               : 'Nothing to back up yet.'}
         </Text>
-        {cloud.on && cloud.bookmark ? (
-          <Text testID="backup-icloud" style={[type.footnote, { color: c.ink2, marginTop: 2 }]}>
-            {`Saved by itself to “${cloud.folder?.name ?? 'iCloud Drive'}” in iCloud Drive after you make changes.`}
+        {cloud.on ? (
+          // A backup that has stopped working says so here too, not only in Settings: this is where people look.
+          <Text testID="backup-icloud" style={[type.footnote, { color: !cloud.bookmark || cloud.problem ? c.amber : c.ink2, marginTop: 2, fontWeight: !cloud.bookmark || cloud.problem ? '600' : '400' }]}>
+            {!cloud.bookmark
+              ? 'The iCloud Drive backup needs its folder chosen again, in Settings.'
+              : cloud.problem === 'folder-gone'
+                ? 'The iCloud Drive folder can’t be found, so nothing is being saved there. Choose it again in Settings.'
+                : cloud.problem === 'failed'
+                  ? 'The last backup to iCloud Drive could not be saved. It tries again after your next change.'
+                  : `Saved by itself to “${cloud.folder?.name ?? 'iCloud Drive'}” in iCloud Drive after you make changes.`}
           </Text>
         ) : null}
         <Button testID="backup-now" label="Back up now" icon="backup" kind="soft" busy={busy === 'backup'} onPress={backup} style={{ marginTop: space.l }} />
@@ -332,3 +335,10 @@ const styles = StyleSheet.create({
   sheetTotals: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 2, paddingHorizontal: 9, paddingVertical: 7, marginTop: 10, marginBottom: 4 },
   sheetRow: { flexDirection: 'row', paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth },
 });
+
+/** The policy row's line when nothing needs attention: what is kept, and the limit it was checked against. */
+function policyStatus(documents: number, limit: string | null): string {
+  const kept = documents > 0 ? `${plural(documents, 'document')} kept` : null;
+  if (limit) return kept ? `${kept} · within the ${limit} limit` : `Within the ${limit} limit`;
+  return kept ? `${kept} · add the contents limit to check it` : 'Keep your policy here and check the limits';
+}
