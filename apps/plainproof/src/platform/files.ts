@@ -17,6 +17,37 @@ async function readIfPresent(file: File): Promise<string | null> {
   }
 }
 
+/** What reading a file found: nothing there, its text, or a file that is there but could not be read. */
+export type ReadResult = { kind: 'missing' } | { kind: 'text'; text: string } | { kind: 'error' };
+
+async function readResult(file: File): Promise<ReadResult> {
+  try {
+    if (!file.exists) return { kind: 'missing' };
+    return { kind: 'text', text: await file.text() };
+  } catch {
+    return { kind: 'error' };
+  }
+}
+
+/** Like readText, but tells "no file" apart from "a file that could not be read", so a bad read is never taken for a fresh install. */
+export async function readTextResult(name: string): Promise<ReadResult> {
+  return readResult(new File(home(), name));
+}
+
+export async function readPreviousTextResult(name: string): Promise<ReadResult> {
+  return readResult(new File(home(), `${name}.bak`));
+}
+
+/** Keeps a copy of a file that could not be opened, beside it, before anything is written over it. */
+export async function keepDamagedCopy(name: string, now: number): Promise<void> {
+  try {
+    const main = new File(home(), name);
+    if (main.exists) await main.copy(new File(home(), `${name}.damaged-${now}`), { overwrite: true });
+  } catch {
+    // Best effort: the copy is a courtesy for support, not something the app depends on.
+  }
+}
+
 export async function readText(name: string): Promise<string | null> {
   return readIfPresent(new File(home(), name));
 }

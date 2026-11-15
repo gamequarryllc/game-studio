@@ -5,7 +5,9 @@ import { emptyDoc } from '@/domain/doc';
 import { currentDoc, libraryOf, parseLibraryText, serializeLibrary, setCurrentDoc, totalItems, type Library } from '@/domain/library';
 import { currencyForLocale } from '@/domain/money';
 import type { Doc } from '@/domain/types';
-import { readPreviousText, readText, writeText } from '@/platform/files';
+import { keepDamagedCopy, readPreviousTextResult, readTextResult, writeText } from '@/platform/files';
+
+import { planLoad, type LoadFailure } from './loadPlan';
 
 // Where the inventory lives while the app is open: every place (the library)
 // and, for the screens, the document of the place being looked at. Screens
@@ -17,7 +19,8 @@ import { readPreviousText, readText, writeText } from '@/platform/files';
 const FILE = 'inventory.json';
 const SAVE_DELAY_MS = 250;
 
-export type LoadState = 'loading' | 'ready';
+/** 'failed': a saved inventory is there but could not be opened. Nothing is saved until the person restores a backup or chooses to start over. */
+export type LoadState = 'loading' | 'ready' | 'failed';
 
 interface Snapshot {
   state: LoadState;
@@ -29,10 +32,12 @@ interface Snapshot {
   recovered: boolean;
   /** Set when a save failed; cleared by the next good one. */
   saveFailed: boolean;
+  /** Why the saved inventory could not be opened, when state is 'failed'. */
+  failure: LoadFailure | null;
 }
 
 const BLANK = libraryOf(emptyDoc(0));
-let snapshot: Snapshot = { state: 'loading', library: BLANK, doc: currentDoc(BLANK), recovered: false, saveFailed: false };
+let snapshot: Snapshot = { state: 'loading', library: BLANK, doc: currentDoc(BLANK), recovered: false, saveFailed: false, failure: null };
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 let dirty = false;
@@ -54,32 +59,24 @@ function deviceLocale(): string | undefined {
 
 async function load(): Promise<void> {
   const now = Date.now();
-  let library: Library | null = null;
-  let recovered = false;
-  const main = await readText(FILE).catch(() => null);
-  if (main !== null) {
-    try {
-      library = parseLibraryText(main, now);
-    } catch {
-      recovered = true;
-    }
+  const main = await readTextResult(FILE).catch((): { kind: 'error' } => ({ kind: 'error' }));
+  const previous = await readPreviousTextResult(FILE).catch((): { kind: 'error' } => ({ kind: 'error' }));
+  const plan = planLoad(main, previous, (text) => parseLibraryText(text, now));
+  if (plan.kind === 'failed') {
+    emit({ ...snapshot, state: 'failed', failure: plan.reason });
+    return;
   }
-  if (!library && recovered) {
-    const previous = await readPreviousText(FILE).catch(() => null);
-    if (previous !== null) {
-      try {
-        library = parseLibraryText(previous, now);
-      } catch {
-        library = null;
-      }
-    }
+  if (plan.kind === 'open' && plan.recovered && main.kind !== 'missing') {
+    // The spare copy opened; keep the damaged main file aside before the next save replaces it.
+    await keepDamagedCopy(FILE, now);
   }
-  const loaded = library ?? libraryOf(emptyDoc(now, currencyForLocale(deviceLocale())));
-  emit({ state: 'ready', library: loaded, doc: currentDoc(loaded), recovered, saveFailed: false });
+  const loaded = plan.kind === 'open' ? plan.library : libraryOf(emptyDoc(now, currencyForLocale(deviceLocale())));
+  emit({ state: 'ready', library: loaded, doc: currentDoc(loaded), recovered: plan.kind === 'open' && plan.recovered, saveFailed: false, failure: null });
 }
 
 function write(): Promise<void> {
-  if (!dirty) return saving;
+  // Never save over a file that could not be opened.
+  if (!dirty || snapshot.state !== 'ready') return saving;
   dirty = false;
   const text = serializeLibrary(snapshot.library);
   saving = saving
@@ -149,8 +146,11 @@ export const store = {
   },
 
   /** Swaps in everything at once (a restore, the sample home, erase everything). */
-  replace(library: Library): Promise<void> {
-    emit({ ...snapshot, library, doc: currentDoc(library), recovered: false });
+  async replace(library: Library): Promise<void> {
+    if (snapshot.state === 'loading') return;
+    // Leaving the "could not be opened" screen (a restore, or starting over): keep the unreadable file aside first.
+    if (snapshot.state === 'failed') await keepDamagedCopy(FILE, Date.now());
+    emit({ ...snapshot, state: 'ready', failure: null, library, doc: currentDoc(library), recovered: false });
     dirty = true;
     return store.flush();
   },
