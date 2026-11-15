@@ -4,6 +4,8 @@ Kept current after every finished item, so a run that is cut off can be picked u
 
 ## Status: the daily loop works on the owner's iPhone (2026-11-13). Not yet ready for the App Store
 
+Update 2026-11-15 (build 66): 23 phone checks passed, among them the setup rebuilt around Screen Time access first, What counts as one list, the day counted from the recharge, unticking an app taking effect within seconds, Apple's access sheet coming back, the recharge after a goal change, and the tips page. Left on the phone: four checks that need an empty battery (one sitting). Watching passively: past days kept, faded days, the widget, no lockout with cells left. Next on this side: steps 2 to 5 below.
+
 Seen working on a real phone over three days of TestFlight builds (15 to 40), details in NOTES.md: counting against the phone's own Screen Time, cells draining, the "Last cell" screen, the empty screen, sums that earn time by the clock, the apps covered again on the minute by the phone itself, the recharge at the start of the next day, settings locked while empty, the widget, and the "What used it" list.
 
 Known faults: the widget runs about a minute behind (the phone's own scheduling, as far as can be told); a video already playing keeps playing under a covering screen; when iOS 26 reports checkpoints too early the app now refuses to lock (build 42) but does not yet tell the owner the day is going uncounted.
@@ -30,7 +32,7 @@ Decided 2026-11-13: the notification stays as the way from the empty screen to t
 ## Next, in order
 
 1. **Done 2026-11-13:** finer minutes, the "Not counting" warning, quitting made visible (build 45); the week view and first-run setup (build 46). Setup can only be seen on a fresh install (or the second phone).
-1b. **Built 2026-11-13, build 48, to be tried on the phone:** one What counts list, counting from the recharge with the last-known-figure guard, setup's starting-figure check, and the phone's exact figure on Today (NOTES.md, "One list, counted from the recharge").
+1b. **Done (builds 48 to 66, passed on the phone by 2026-11-15):** one What counts list, counting from the recharge with the last-known-figure guard, setup's starting-figure check, and the phone's exact figure on Today (NOTES.md, "One list, counted from the recharge").
 2. A fresh-eyes critic on the screenshots, and its findings fixed.
 3. Pro: the owner suggested "What used it" as the paid part; the week view fits beside it. Then RevenueCat and the store listing in `store/plainlimit/`.
 4. Privacy and support sections on the studio's app pages; the review notes Apple needs for a Screen Time app.
