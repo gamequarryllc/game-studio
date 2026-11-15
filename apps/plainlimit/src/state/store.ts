@@ -179,19 +179,37 @@ function checkHealth(doc: Doc): Doc {
   if (doc.watching !== true && screenTime.isOn()) doc = { ...doc, watching: true };
   if (doc.watching !== true) return doc;
   const state = screenTime.health(doc.settings, new Date(doc.day.periodStart), true);
+  // While counting works, the floor it has reached is something known for the guard.
+  if (state === 'fine') {
+    screenTime.rightAgain();
+    screenTime.noteKnown(doc.settings, doc.day.usedMinutes);
+    return doc;
+  }
+  if (state === 'nothingPicked') {
+    screenTime.rightAgain();
+    return doc;
+  }
+  // During setup, and while Plainlimit itself is registering the day (which can
+  // stop and restart the phone's monitoring), a bad reading is Plainlimit's own
+  // doing, not a gap in the day. (A Saturday counted from the recharge was
+  // marked "not fully counted", most likely by a check during setup's steps.)
+  const now = Date.now();
+  if (!doc.setupDone || screenTime.busyRegistering(now)) return doc;
   if (state === 'notRegistered' && !reregistered) {
     reregistered = true;
     void screenTime.applyPlan(doc.settings, doc.day.topUps).then(() => store.tick(new Date()));
     return doc;
   }
-  // While counting works, the floor it has reached is something known for the guard.
-  if (state === 'fine') {
-    screenTime.noteKnown(doc.settings, doc.day.usedMinutes);
-    return doc;
-  }
-  if (doc.day.uncounted || state === 'nothingPicked') return doc;
+  if (doc.day.uncounted) return doc;
+  // Only a fault that lasts: a single bad reading between good ones loses nothing.
+  const since = screenTime.wrongSince(now);
+  if (now - since < WRONG_FOR_MS) return doc;
+  screenTime.noteHistoryLoss(`today marked not fully counted (${state} for ${Math.round((now - since) / 60000)} min)`);
   return { ...doc, day: { ...doc.day, uncounted: true } };
 }
+
+/** How long counting must look wrong before today is marked not fully counted. */
+const WRONG_FOR_MS = 2 * 60 * 1000;
 
 function withSettings(change: (s: Settings) => Settings) {
   if (settingsLocked()) return;
@@ -320,6 +338,7 @@ export const store = {
     const doc = snapshot.doc;
     const at = new Date(doc.day.periodStart);
     screenTime.holdLocks(nextRecharge(at, doc.settings.rechargeMinute).getTime(), doc.settings, doc.day.topUps);
+    screenTime.noteHistoryLoss('today marked not fully counted (started tomorrow in setup)');
     set({ ...doc, watching: true, setupDone: true, day: { ...doc.day, uncounted: true } });
   },
   /** The starting figure looked wrong: count from this moment instead, from zero. */
@@ -345,6 +364,7 @@ export const store = {
   turnOffScreenTime() {
     screenTime.turnOff();
     // The rest of today is not counted, and the week view says so.
+    screenTime.noteHistoryLoss('today marked not fully counted (counting turned off)');
     set({ ...snapshot.doc, watching: false, day: { ...snapshot.doc.day, uncounted: true } });
   },
   /** The person changed their picks in Apple's list: tell the phone, and redraw. */

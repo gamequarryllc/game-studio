@@ -54,8 +54,11 @@ func clockWords(_ seconds: TimeInterval) -> String {
   return "\(minutes / 60):" + String(format: "%02d", minutes % 60)
 }
 
+/// Whole minutes, cut down like the total above the list, so a list row never
+/// says more than the total (it said "1 min" under a total of 0:00).
 func durationWords(_ seconds: TimeInterval) -> String {
-  let minutes = max(1, Int((seconds / 60).rounded()))
+  let minutes = max(0, Int(seconds / 60))
+  if minutes == 0 { return "Under 1 min" }
   if minutes < 60 { return "\(minutes) min" }
   let hours = minutes / 60
   let rest = minutes % 60

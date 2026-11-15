@@ -430,7 +430,60 @@ function countedToken(): string | null {
  * and what the widget needs. Safe to call again whenever a setting changes;
  * the phone keeps today's count.
  */
+/**
+ * Plainlimit's own registering (setup, a new goal, new picks) can stop and
+ * restart the phone's monitoring, and the phone's list of activities can lag a
+ * little behind; a health check during it, or just after, says nothing about
+ * the day.
+ */
+let registering = 0;
+let registerFinishedAt = 0;
+const REGISTER_SETTLE_MS = 10_000;
+
+export function busyRegistering(nowMs = Date.now()): boolean {
+  return registering > 0 || nowMs - registerFinishedAt < REGISTER_SETTLE_MS;
+}
+
+const WRONG_SINCE_KEY = 'plainlimit_wrong_since';
+
+/**
+ * When counting was first seen not working, in the current run of checks with
+ * no "fine" between them. Kept across launches, so a fault that lasts while
+ * Plainlimit is closed is still caught on the next look.
+ */
+export function wrongSince(nowMs: number): number {
+  if (!SCREEN_TIME_AVAILABLE) return nowMs;
+  const at = readNumber(WRONG_SINCE_KEY);
+  if (at > 0 && at <= nowMs) return at;
+  try {
+    DeviceActivity.userDefaultsSet(WRONG_SINCE_KEY, nowMs);
+  } catch {
+    // Only a record.
+  }
+  return nowMs;
+}
+
+/** Counting looked fine again: the run of bad checks is over. */
+export function rightAgain(): void {
+  if (!SCREEN_TIME_AVAILABLE || readNumber(WRONG_SINCE_KEY) === 0) return;
+  try {
+    DeviceActivity.userDefaultsRemove(WRONG_SINCE_KEY);
+  } catch {
+    // Only a record.
+  }
+}
+
 export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh = false, hold = false): Promise<boolean> {
+  registering += 1;
+  try {
+    return await registerPlan(settings, topUpsSoFar, fresh, hold);
+  } finally {
+    registering -= 1;
+    registerFinishedAt = Date.now();
+  }
+}
+
+async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: boolean, hold: boolean): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return false;
   try {
     const now = new Date();
