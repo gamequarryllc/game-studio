@@ -61,7 +61,8 @@ function planSoon() {
  * Otherwise the way round an empty battery would be to nudge the goal up.
  */
 export function settingsLocked(doc: Doc = snapshot.doc): boolean {
-  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0;
+  // While locks are held (setup's "start tomorrow") nothing is enforced, so nothing needs guarding.
+  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0 && screenTime.locksHeldUntil() === 0;
 }
 
 /** The day as the phone reports it, when the app is counting real screen time. */

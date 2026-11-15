@@ -8,7 +8,7 @@ import { clockLabel, durationLabel } from '@/domain/day';
 import { toneAt } from '@/domain/tone';
 import { askToNotify } from '@/platform/notices';
 import { tickStepMinutes } from '@/domain/checkpoints';
-import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, permission, pickCount } from '@/platform/screenTime';
+import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { Battery } from '@/ui/Battery';
@@ -36,8 +36,15 @@ type Step = 'welcome' | 'access' | 'counts' | 'goal' | 'ready';
 
 const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'access', 'counts', 'goal', 'ready'] : ['welcome', 'counts', 'goal', 'ready'];
 
-/** How long the last screen waits for the phone to report the day so far, at least. */
-const SETTLE_MS = 10_000;
+/**
+ * How the last screen waits for the phone's report of the day so far: until
+ * three quiet seconds after its last checkpoint, or half a minute if none
+ * comes (little or no use yet today). Build 60 waited a fixed ten seconds; the
+ * phone took thirteen to eighteen, so "Start counting" showed for a moment
+ * over 0:00 before the figure jumped to the goal.
+ */
+const QUIET_MS = 3000;
+const LONGEST_MS = 30_000;
 
 type Button = { label: string; onPress: () => void };
 
@@ -79,7 +86,12 @@ export default function Setup() {
   // Ready once the phone has had its say: at least ten seconds, and settled after any change (a new goal re-registers the day).
   useEffect(() => {
     if (!checking || phase === 'failed' || waitedAt === null) return;
-    const look = () => setPhase(Date.now() - waitedAt >= SETTLE_MS && countSettled(settings) ? 'ready' : 'reading');
+    const look = () => {
+      const now_ = Date.now();
+      const last = lastReportSince(waitedAt);
+      const heard = last !== null && now_ - last >= QUIET_MS;
+      setPhase((heard || now_ - waitedAt >= LONGEST_MS) && countSettled(settings) ? 'ready' : 'reading');
+    };
     look();
     const timer = setInterval(look, 1000);
     return () => clearInterval(timer);
@@ -238,7 +250,7 @@ export default function Setup() {
         </View>
         <Lead>
           {phase === 'reading'
-            ? 'Reading today\u2019s Screen Time. Nothing locks yet.'
+            ? 'Reading today\u2019s Screen Time. This can take up to half a minute, and nothing locks yet.'
             : phase === 'failed'
               ? 'The phone would not start counting. You can turn it on later in Settings.'
               : over

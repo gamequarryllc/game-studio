@@ -716,6 +716,20 @@ export function holdLocks(untilMs: number, settings: Settings, topUpsSoFar: numb
   }
 }
 
+/** The latest checkpoint report since `ms`, or null if none has come yet. */
+export function lastReportSince(ms: number): number | null {
+  if (!SCREEN_TIME_AVAILABLE) return null;
+  try {
+    const times = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)]
+      .filter((e) => e.callbackName === 'eventDidReachThreshold')
+      .map((e) => e.lastCalledAt.getTime())
+      .filter((at) => at >= ms);
+    return times.length > 0 ? Math.max(...times) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** When held locks act again (0 if they aren't held). */
 export function locksHeldUntil(): number {
   if (!SCREEN_TIME_AVAILABLE) return 0;
