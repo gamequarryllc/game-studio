@@ -143,6 +143,13 @@ struct TopAppsView: View {
             .padding(.top, 10)
         }
       }
+      // Right under the rows: the box is sized for five, and its spare room
+      // falls at the end of the page, not between the list and its note.
+      Text("Drawn by the phone's Screen Time, which Plainlimit never sees. The battery hears of it every few minutes, so it can be a cell behind.")
+        .font(.system(size: 13))
+        .foregroundStyle(quiet)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 12)
       Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

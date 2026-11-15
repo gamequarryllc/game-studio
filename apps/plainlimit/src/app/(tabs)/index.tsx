@@ -11,7 +11,7 @@ import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, locksHeldUntil } from '@/platfo
 import { store, useDoc } from '@/state/store';
 import { Battery } from '@/ui/Battery';
 import { CountingProblem } from '@/ui/CountingProblem';
-import { BigButton, Label } from '@/ui/kit';
+import { BigButton, Label, StatusBand } from '@/ui/kit';
 import { useEasedColor } from '@/ui/motion';
 import { Ruler } from '@/ui/Ruler';
 import { c, display } from '@/ui/theme';
@@ -45,80 +45,84 @@ export default function Today() {
   const next = topUpPlan(day.topUps);
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: c.ground }} contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
-      <Animated.View style={[styles.field, { backgroundColor: field, paddingTop: Math.max(insets.top, 12) + 16 }]}>
-        <View style={styles.top}>
-          <Text accessibilityRole="header" style={[styles.title, { color: tone.fg }]}>
-            Today
-          </Text>
-          <Text style={[styles.goal, { color: tone.fg, borderColor: tone.fg }]}>{goalLabel(settings.goalMinutes)}</Text>
-        </View>
-        <Battery cells={cells} tone={tone} height={104} fill={field} />
-        <View style={{ gap: 4 }}>
-          <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.word, { color: tone.fg, fontSize: wordSize, lineHeight: wordSize + 2 }]}>
-            {wordFor(cells)}
-          </Text>
-          <View style={styles.rechargeRow}>
-            <Text style={[styles.recharge, { color: tone.fg }]}>Recharges at {recharge}</Text>
-            <Text style={[styles.until, { color: tone.fg }]}>{untilLabel(now, nextRecharge(now, settings.rechargeMinute))}</Text>
-          </View>
-        </View>
-      </Animated.View>
-
-      <View style={styles.rest}>
-        <CountingProblem health={problem} />
-        {held > 0 ? (
-          <View style={[styles.strip, { borderColor: accent }]}>
-            <Text style={styles.body}>Nothing locks until {clockLabelOf(new Date(held))}. Today was already past your goal when you set up.</Text>
-          </View>
-        ) : null}
-        {unlocked ? (
-          <View style={[styles.strip, { borderColor: accent }]}>
-            <Text style={styles.body}>Earned time runs until {clockLabelOf(new Date(day.unlockedUntil as string))}.</Text>
-          </View>
-        ) : null}
-        {empty && !unlocked && held === 0 && settings.emptyLevel === 'work' ? (
-          <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} />
-        ) : null}
-        {empty && !unlocked && held === 0 && settings.emptyLevel === 'locked' ? (
-          <View style={[styles.strip, { borderColor: accent }]}>
-            <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>
-          </View>
-        ) : null}
-
-        <View style={{ gap: 12 }}>
-          <Label>Used today</Label>
-          {counting ? (
-            <View style={{ gap: 2 }}>
-              <TodayTotal settings={settings} now={now} fallback={<Text style={styles.used}>{durationLabel(day.usedMinutes)}</Text>} />
-              <Text style={styles.usedOfLine}>of {durationLabel(settings.goalMinutes)}, in apps that count</Text>
-            </View>
-          ) : (
-            <Text style={styles.used}>
-              {durationLabel(day.usedMinutes)} <Text style={styles.usedOf}>of {durationLabel(settings.goalMinutes)}</Text>
+    <View style={{ flex: 1, backgroundColor: c.ground }}>
+      <ScrollView style={{ flex: 1, backgroundColor: c.ground }} contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
+        <Animated.View style={[styles.field, { backgroundColor: field, paddingTop: Math.max(insets.top, 12) + 16 }]}>
+          <View style={styles.top}>
+            <Text accessibilityRole="header" style={[styles.title, { color: tone.fg }]}>
+              Today
             </Text>
+            <Text style={[styles.goal, { color: tone.fg, borderColor: tone.fg }]}>{goalLabel(settings.goalMinutes)}</Text>
+          </View>
+          <Battery cells={cells} tone={tone} height={104} fill={field} />
+          <View style={{ gap: 4 }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.word, { color: tone.fg, fontSize: wordSize, lineHeight: wordSize + 2 }]}>
+              {wordFor(cells)}
+            </Text>
+            <View style={styles.rechargeRow}>
+              <Text style={[styles.recharge, { color: tone.fg }]}>Recharges at {recharge}</Text>
+              <Text style={[styles.until, { color: tone.fg }]}>{untilLabel(now, nextRecharge(now, settings.rechargeMinute))}</Text>
+            </View>
+          </View>
+        </Animated.View>
+
+        <View style={styles.rest}>
+          <CountingProblem health={problem} />
+          {held > 0 ? (
+            <View style={[styles.strip, { borderColor: accent }]}>
+              <Text style={styles.body}>Nothing locks until {clockLabelOf(new Date(held))}. Today was already past your goal when you set up.</Text>
+            </View>
+          ) : null}
+          {unlocked ? (
+            <View style={[styles.strip, { borderColor: accent }]}>
+              <Text style={styles.body}>Earned time runs until {clockLabelOf(new Date(day.unlockedUntil as string))}.</Text>
+            </View>
+          ) : null}
+          {empty && !unlocked && held === 0 && settings.emptyLevel === 'work' ? (
+            <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} />
+          ) : null}
+          {empty && !unlocked && held === 0 && settings.emptyLevel === 'locked' ? (
+            <View style={[styles.strip, { borderColor: accent }]}>
+              <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>
+            </View>
+          ) : null}
+
+          <View style={{ gap: 12 }}>
+            <Label>Used today</Label>
+            {counting ? (
+              <View style={{ gap: 2 }}>
+                <TodayTotal settings={settings} now={now} fallback={<Text style={styles.used}>{durationLabel(day.usedMinutes)}</Text>} />
+                <Text style={styles.usedOfLine}>of {durationLabel(settings.goalMinutes)}, in apps that count</Text>
+              </View>
+            ) : (
+              <Text style={styles.used}>
+                {durationLabel(day.usedMinutes)} <Text style={styles.usedOf}>of {durationLabel(settings.goalMinutes)}</Text>
+              </Text>
+            )}
+            <Ruler fraction={fraction} color={accent} />
+          </View>
+
+          <WeekView week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true)} />
+
+          {/* Last on the page: Apple's list sits in a box sized for five rows, and spare room at the end is only extra scroll. */}
+          {counting ? (
+            <UsageReport settings={settings} now={now} />
+          ) : (
+            <View style={{ gap: 6 }}>
+              <Text style={styles.body}>
+                {SCREEN_TIME_AVAILABLE
+                  ? problem === 'fine'
+                    ? 'Counting is off, so nothing drains the battery and nothing locks. Turn it on in Settings, under Screen Time.'
+                    : 'Nothing is being counted until this is fixed.'
+                  : 'On an iPhone, the battery follows your real screen time.'}
+              </Text>
+              {DEV_TOOLS && !SCREEN_TIME_AVAILABLE ? <Text style={styles.note}>This preview has no real screen time. Drain the battery from Settings, under Developer.</Text> : null}
+            </View>
           )}
-          <Ruler fraction={fraction} color={accent} />
         </View>
-
-        {counting ? <UsageReport settings={settings} now={now} /> : null}
-
-        <WeekView week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true)} />
-
-        <View style={{ gap: 6 }}>
-          <Text style={styles.body}>
-            {counting
-              ? 'The figure is the phone\'s own Screen Time count. The battery hears of it every few minutes, so it moves in steps and can be a cell behind.'
-              : SCREEN_TIME_AVAILABLE
-                ? problem === 'fine'
-                  ? 'Counting is off, so nothing drains the battery and nothing locks. Turn it on in Settings, under Screen Time.'
-                  : 'Nothing is being counted until this is fixed.'
-                : 'On an iPhone, the battery follows your real screen time.'}
-          </Text>
-          {DEV_TOOLS && !SCREEN_TIME_AVAILABLE ? <Text style={styles.note}>This preview has no real screen time. Drain the battery from Settings, under Developer.</Text> : null}
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+      <StatusBand />
+    </View>
   );
 }
 

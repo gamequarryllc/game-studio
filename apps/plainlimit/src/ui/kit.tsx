@@ -12,13 +12,27 @@ import { c, display } from './theme';
 export function Page({ children, top = 0, bottom = 32 }: { children: ReactNode; top?: number; bottom?: number }) {
   const insets = useSafeAreaInsets();
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: c.ground }}
-      contentContainerStyle={{ paddingTop: insets.top + top, paddingBottom: insets.bottom + bottom, paddingHorizontal: 20, gap: 12 }}
-      keyboardShouldPersistTaps="handled">
-      {children}
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: c.ground }}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: c.ground }}
+        contentContainerStyle={{ paddingTop: insets.top + top, paddingBottom: insets.bottom + bottom, paddingHorizontal: 20, gap: 12 }}
+        keyboardShouldPersistTaps="handled">
+        {children}
+      </ScrollView>
+      <StatusBand />
+    </View>
   );
+}
+
+/**
+ * A strip of the page's own colour behind the clock and the battery icon, so a
+ * scrolled page passes under it instead of showing through the status bar.
+ * It covers only what is already blank when the page is at the top.
+ */
+export function StatusBand() {
+  const insets = useSafeAreaInsets();
+  if (insets.top === 0) return null;
+  return <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: c.ground }} />;
 }
 
 export function Title({ children }: { children: string }) {
