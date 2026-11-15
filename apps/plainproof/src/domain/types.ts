@@ -235,7 +235,7 @@ export const LIMITS = {
   videosPerRoom: 6,
   policyDocuments: 20,
   /** 500 MB: a backup has to fit on a phone and in a mail attachment service. */
-  videoBytes: 500 * 1024 * 1024,
+  videoBytes: 500_000_000,
   /** A saved file may hold more rooms than the app lets one add; they are all kept when it is opened. */
   roomsOnLoad: 1000,
 } as const;

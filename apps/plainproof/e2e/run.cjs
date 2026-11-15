@@ -689,7 +689,7 @@ async function main() {
         page.evaluate(
           ([op, value]) =>
             new Promise((resolve, reject) => {
-              const open = indexedDB.open('plainproof', 1);
+              const open = indexedDB.open('plainproof', 2);
               open.onerror = () => reject(open.error);
               open.onsuccess = () => {
                 const tx = open.result.transaction('kv', op === 'get' ? 'readonly' : 'readwrite');

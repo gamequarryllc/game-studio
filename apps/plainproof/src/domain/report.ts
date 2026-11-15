@@ -1,9 +1,9 @@
-import { displayDateTime, displayTime, displayYmd } from './dates';
+import { displayDateTime, displayTime, displayYmd, toYmd } from './dates';
 import { formatMoney } from './money';
-import { homeSummary, itemTotalCents, plural, roomSummaries, unitCents } from './selectors';
+import { formatDuration, homeSummary, itemTotalCents, plural, roomSummaries, unitCents } from './selectors';
 import { sha256Hex } from './sha256';
 import { claimedItems } from './actions';
-import { CATEGORY_LABELS, CONDITION_LABELS, LOSS_CAUSE_LABELS, LOSS_LABELS, LOSS_STATUSES, type Doc, type Item, type Photo } from './types';
+import { CATEGORY_LABELS, CONDITION_LABELS, LOSS_CAUSE_LABELS, LOSS_LABELS, LOSS_STATUSES, type Doc, type Item, type Photo, type Video } from './types';
 
 // The insurance report. This builds one self-contained HTML page; on the
 // phone it is turned into a PDF, on the web preview it opens in a new tab.
@@ -218,6 +218,17 @@ export function pageFootCss(title: string, prepared: string): string {
   );
 }
 
+/** "Walk-through video: 2 videos, 4:12 in all, recorded Nov 15, 2026. Kept in Plainproof; sent with a claim package." */
+export function videoLine(videos: Video[]): string {
+  const ms = videos.reduce((n, v) => n + (v.durationMs ?? 0), 0);
+  const dates = videos.map((v) => v.takenAt ?? v.addedAt).sort((a, b) => a - b);
+  const first = displayYmd(toYmd(new Date(dates[0])));
+  const last = displayYmd(toYmd(new Date(dates[dates.length - 1])));
+  const when = first === last ? `recorded ${first}` : `recorded ${first} to ${last}`;
+  const length = ms > 0 ? `, ${formatDuration(ms)}${videos.length > 1 ? ' in all' : ''}` : '';
+  return `Walk-through video: ${plural(videos.length, 'video')}${length}, ${when}. Kept in Plainproof; sent with a claim package.`;
+}
+
 export function reportTitle(doc: Doc): string {
   return doc.profile.homeName || 'Home inventory';
 }
@@ -322,6 +333,7 @@ export function buildReportHtml(fullDoc: Doc, opts: ReportOptions): string {
       `<p class="sub">${plural(r.count, 'item')} · ${money(r.totalCents)}${unvalued > 0 ? ` · ${unvalued} without a value` : ''}` +
         ` · ${escapeHtml(reportTitle(doc))}, ref ${escapeHtml(reference)}</p>`,
     );
+    if (r.room.videos.length > 0) out.push(`<p class="sub">${escapeHtml(videoLine(r.room.videos))}</p>`);
     out.push(`<table class="list items">${columns}<thead><tr>`);
     if (opts.includePhotos) out.push('<th class="photo">Photo</th>');
     out.push('<th>Item</th><th>Purchase</th><th class="qty">Qty</th><th class="num">Replace each</th><th class="num">Total</th></tr></thead><tbody>');

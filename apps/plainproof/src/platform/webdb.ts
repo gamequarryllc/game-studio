@@ -2,18 +2,20 @@
 // files import this, so none of it is in the iPhone app.
 
 const DB_NAME = 'plainproof';
-export type StoreName = 'kv' | 'photos';
+export type StoreName = 'kv' | 'photos' | 'files';
 
 let opening: Promise<IDBDatabase> | null = null;
 
 function open(): Promise<IDBDatabase> {
   if (!opening) {
     opening = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1);
+      // Version 2 added 'files' (videos and policy documents).
+      const request = indexedDB.open(DB_NAME, 2);
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
         if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos');
+        if (!db.objectStoreNames.contains('files')) db.createObjectStore('files');
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error ?? new Error('Could not open storage'));

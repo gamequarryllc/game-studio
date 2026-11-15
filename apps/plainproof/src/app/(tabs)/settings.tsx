@@ -4,18 +4,22 @@ import { useState } from 'react';
 import { Platform, Switch, Text, View } from 'react-native';
 
 import { setCurrency } from '@/domain/actions';
+import { relativeDay } from '@/domain/dates';
 import { mapDocs, totalItems } from '@/domain/library';
 import { FREE_ITEM_LIMIT } from '@/domain/limits';
 import { CURRENCIES } from '@/domain/money';
 import { plural } from '@/domain/selectors';
 import { success, warning } from '@/platform/haptics';
+import { DELIVERS, openSystemSettings } from '@/platform/notify';
 import { DEV_TOOLS, pro, usePro } from '@/pro/pro';
+import { BACKUP_NAME, cloudBackup, useCloudBackup } from '@/state/cloudBackup';
 import { appVersion, eraseEverything, loadSample } from '@/state/operations';
+import { reminders, useReminderPermission, type ReminderKind } from '@/state/reminders';
 import { store, useDoc, useLibrary } from '@/state/store';
 import { choose, confirm, notify } from '@/ui/dialogs';
 import { FormRow } from '@/ui/form';
 import { Icon } from '@/ui/Icon';
-import { Card, Divider, Footnote, Row, SectionLabel, TabScreen } from '@/ui/kit';
+import { Card, Divider, Footnote, Notice, Row, SectionLabel, TabScreen } from '@/ui/kit';
 import { space, type, useTheme } from '@/ui/theme';
 
 export const PRIVACY_URL = 'https://gamequarryllc.github.io/game-studio/apps/privacy/';
@@ -36,6 +40,57 @@ export default function SettingsTab() {
     // One currency for every place.
     if (picked) store.updateLibrary((lib) => mapDocs(lib, (d) => setCurrency(d, picked)));
   };
+
+  const allowed = useReminderPermission();
+  const cloud = useCloudBackup();
+  const [now] = useState(() => Date.now());
+  const switchColors = { trackColor: { true: c.green, false: c.sunk }, ...(Platform.OS === 'web' ? { activeThumbColor: '#fff' } : {}) };
+  const anyReminder = doc.settings.reminders.yearly || doc.settings.reminders.backup || doc.settings.reminders.warranty;
+
+  const toggleReminder = async (kind: ReminderKind, on: boolean) => {
+    if (!on) {
+      reminders.turnOff(kind);
+      return;
+    }
+    const answer = await reminders.turnOn(kind);
+    if (answer === 'denied') {
+      await notify('Notifications are off for Plainproof', 'The reminder is saved and starts as soon as you allow notifications in the Settings app, under Plainproof.');
+    }
+  };
+
+  const toggleCloud = async (on: boolean) => {
+    if (!on) {
+      await cloudBackup.turnOff();
+      return;
+    }
+    if (!cloud.available) {
+      await notify(
+        Platform.OS === 'web' ? 'Only on iPhone' : 'Not in this version of the app',
+        Platform.OS === 'web' ? 'In the app, this saves a backup to a folder in iCloud Drive by itself.' : 'The automatic backup needs the TestFlight or App Store version of Plainproof.',
+      );
+      return;
+    }
+    await notify('Choose a folder in iCloud Drive', 'In the next screen, open iCloud Drive and choose a folder (or make one called Plainproof), then tap Open. A backup is saved there by itself after you make changes.');
+    const result = await cloudBackup.turnOn();
+    const picked = cloudBackup.snapshot().folder;
+    if (result === 'on' && picked && !picked.inCloud) {
+      await notify('That folder is on this iPhone', `“${picked.name}” is not in iCloud Drive, so a backup there would be lost with the phone. Choose a folder under iCloud Drive instead.`);
+    }
+  };
+
+  const cloudLine = !cloud.on
+    ? 'Off. Back up by hand from the Report tab.'
+    : !cloud.bookmark
+      ? 'Choose the folder again on this iPhone.'
+      : cloud.saving
+        ? 'Saving a backup now…'
+        : cloud.problem === 'folder-gone'
+          ? 'The folder can’t be found. Choose it again.'
+          : cloud.problem === 'failed'
+            ? 'The last backup could not be saved. It tries again after your next change.'
+            : cloud.lastSavedAt
+              ? `Last saved ${relativeDay(cloud.lastSavedAt, Math.max(now, cloud.lastSavedAt))} to “${cloud.folder?.name ?? 'iCloud Drive'}”.`
+              : `Saving to “${cloud.folder?.name ?? 'iCloud Drive'}”.`;
 
   const restorePurchase = async () => {
     if (!proState.storeOpen) {
@@ -101,6 +156,58 @@ export default function SettingsTab() {
         <Row testID="restore-purchase" title="Restore purchase" tint onPress={restorePurchase} />
       </Card>
 
+      <SectionLabel>Reminders</SectionLabel>
+      <Card>
+        <FormRow label="Once a year, look it over">
+          <Switch testID="remind-yearly" accessibilityLabel="Once a year, look it over" value={doc.settings.reminders.yearly} onValueChange={(on) => void toggleReminder('yearly', on)} {...switchColors} />
+        </FormRow>
+        <Divider />
+        <FormRow label="When the backup is behind">
+          <Switch testID="remind-backup" accessibilityLabel="When the backup is behind" value={doc.settings.reminders.backup} onValueChange={(on) => void toggleReminder('backup', on)} {...switchColors} />
+        </FormRow>
+        <Divider />
+        <FormRow label="A month before a warranty ends">
+          <Switch testID="remind-warranty" accessibilityLabel="A month before a warranty ends" value={doc.settings.reminders.warranty} onValueChange={(on) => void toggleReminder('warranty', on)} {...switchColors} />
+        </FormRow>
+      </Card>
+      {anyReminder && allowed === 'denied' ? (
+        <Notice icon="bell" tone="amber">
+          {'Notifications are off for Plainproof, so these can’t arrive. '}
+          <Text accessibilityRole="link" onPress={openSystemSettings} style={{ color: c.green, fontWeight: '600' }}>
+            Open Settings
+          </Text>
+        </Notice>
+      ) : (
+        <Footnote>
+          {DELIVERS
+            ? 'Reminders come from this iPhone at 10 in the morning (a backup nudge at 6 in the evening). Nothing is sent anywhere.'
+            : 'In this web preview nothing arrives; on iPhone these are notifications from the phone itself.'}
+        </Footnote>
+      )}
+
+      <SectionLabel>iCloud Drive backup</SectionLabel>
+      <Card>
+        <FormRow label="Back up by itself">
+          <Switch testID="icloud-backup" accessibilityLabel="Back up to iCloud Drive by itself" value={cloud.on} onValueChange={(on) => void toggleCloud(on)} {...switchColors} />
+        </FormRow>
+        {cloud.on ? (
+          <>
+            <Divider />
+            <Row testID="icloud-folder" title="Folder" value={cloud.folder?.name ?? 'Choose'} chevron onPress={() => void toggleCloud(true)} />
+            {cloud.bookmark ? (
+              <>
+                <Divider />
+                <Row testID="icloud-now" title={cloud.saving ? 'Saving…' : 'Save a backup now'} tint onPress={() => void cloudBackup.runNow()} />
+              </>
+            ) : null}
+          </>
+        ) : null}
+      </Card>
+      <Text testID="icloud-status" style={[type.footnote, { color: cloud.on && (cloud.problem || !cloud.bookmark) ? c.amber : c.ink2, marginHorizontal: space.xl + space.l, marginTop: space.s }]}>
+        {cloudLine}
+      </Text>
+      <Footnote>{`A backup of every place and photo goes to “${BACKUP_NAME}” in your own iCloud Drive a little after you change something, and the one before it is kept beside it. Only you can see it. To restore, use Restore from a backup on the Report tab.`}</Footnote>
+
       <SectionLabel>Values</SectionLabel>
       <Card>
         <Row testID="currency" title="Currency" value={currency ? currency.code : doc.settings.currency} chevron onPress={pickCurrency} />
@@ -115,7 +222,7 @@ export default function SettingsTab() {
         <Divider />
         <Row title="Version" value={appVersion()} />
       </Card>
-      <Footnote>Plainproof has no account and no servers. Your inventory never leaves this iPhone unless you export or back it up yourself.</Footnote>
+      <Footnote>Plainproof has no account and no servers. Your inventory never leaves this iPhone unless you export it, back it up, or turn on the iCloud Drive backup, which goes to your own iCloud.</Footnote>
 
       <SectionLabel>Your data</SectionLabel>
       <Card>

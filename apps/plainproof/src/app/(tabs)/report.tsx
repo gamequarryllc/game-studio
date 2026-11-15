@@ -6,10 +6,12 @@ import { updateProfile } from '@/domain/actions';
 import { displayTime, relativeDay } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { reportTitle } from '@/domain/report';
-import { backupState, homeSummary, plural, roomSummaries } from '@/domain/selectors';
+import { coverage } from '@/domain/coverage';
+import { backupState, claimSummary, homeSummary, plural, roomSummaries } from '@/domain/selectors';
 import { LIMITS, type Profile } from '@/domain/types';
 import { success } from '@/platform/haptics';
 import { MAKES_PDF } from '@/platform/exporter';
+import { useCloudBackup } from '@/state/cloudBackup';
 import { backUp, exportSpreadsheet, makeReport, restoreFromBackup } from '@/state/operations';
 import { PLACE_KIND_LABELS, currentPlace, mapDocs, placeName, totalItems } from '@/domain/library';
 import { store, useDoc, useLibrary } from '@/state/store';
@@ -111,6 +113,21 @@ export default function ReportTab() {
   const held = totalItems(library);
 
   const place = currentPlace(library);
+  const cloud = useCloudBackup();
+  const claim = claimSummary(doc);
+  const cover = coverage(doc);
+  const policyLine =
+    cover.state === 'over'
+      ? 'Your things are worth more than the policy covers'
+      : cover.state === 'close'
+        ? 'Your things are close to the policy’s limit'
+        : cover.toSchedule.length > 0
+          ? `${plural(cover.toSchedule.length, 'item')} may need listing on the policy`
+          : doc.policy.documents.length > 0
+            ? `${plural(doc.policy.documents.length, 'document')} kept · limits checked`
+            : cover.state === 'ok'
+              ? 'Within your policy’s limit'
+              : 'Keep your policy here and check the limits';
   const several = library.places.length > 1;
   // The name, address, insurer and policy belong to the open place. The owner's name is the same on every place's report.
   const setProfile = (patch: Partial<Profile>) => store.update((d) => updateProfile(d, patch));
@@ -140,9 +157,11 @@ export default function ReportTab() {
       async () => {
         const result = await backUp();
         success();
-        if (result.missing > 0) {
-          await notify('Backup made, with a gap', `${plural(result.missing, 'photo')} could not be found on this iPhone and ${result.missing === 1 ? 'is' : 'are'} not in the backup.`);
-        }
+        const gaps: string[] = [];
+        if (result.missing > 0) gaps.push(`${plural(result.missing, 'photo')} could not be found on this iPhone and ${result.missing === 1 ? 'is' : 'are'} not in the backup.`);
+        if (result.missingFiles > 0) gaps.push(`${plural(result.missingFiles, 'video or document', 'videos and documents')} could not be found either.`);
+        if (result.skippedVideos > 0) gaps.push(`${plural(result.skippedVideos, 'video')} ${result.skippedVideos === 1 ? 'was' : 'were'} left out: with ${result.skippedVideos === 1 ? 'it' : 'them'} the file would pass 3.5 GB, more than a backup can hold.`);
+        if (gaps.length > 0) await notify('Backup made, with a gap', gaps.join(' '));
       },
       'The backup could not be made',
       'Check that there is free space on this iPhone, then try again.',
@@ -166,8 +185,10 @@ export default function ReportTab() {
           success();
           await notify(
             'Backup restored',
-            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ${plural(outcome.photos, 'photo')}.` +
-              (outcome.missing > 0 ? ` ${plural(outcome.missing, 'photo')} ${outcome.missing === 1 ? 'was' : 'were'} not in the backup and will show as blank.` : ''),
+            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ${plural(outcome.photos, 'photo')}` +
+              `${outcome.files > 0 ? ` and ${plural(outcome.files, 'video or document', 'videos and documents')}` : ''}.` +
+              (outcome.missing > 0 ? ` ${plural(outcome.missing, 'photo')} ${outcome.missing === 1 ? 'was' : 'were'} not in the backup and will show as blank.` : '') +
+              (outcome.missingFiles > 0 ? ` ${plural(outcome.missingFiles, 'video or document', 'videos and documents')} ${outcome.missingFiles === 1 ? 'was' : 'were'} not in it.` : ''),
           );
         }
       },
@@ -207,6 +228,25 @@ export default function ReportTab() {
       ) : (
         <Notice icon="phone">In this web preview the report opens in a new tab and files download. On iPhone it becomes a PDF in the share sheet.</Notice>
       )}
+
+      <SectionLabel>Claim and policy</SectionLabel>
+      <Card>
+        <Row
+          testID="open-claim"
+          title={doc.claim ? 'Claim in progress' : 'Make a claim'}
+          subtitle={
+            doc.claim
+              ? claim.count === 0
+                ? 'No items in it yet'
+                : `${plural(claim.count, 'item')} · ${formatMoney(claim.totalCents, doc.settings.currency, { whole: true })} claimed`
+              : 'After a loss: the schedule of loss for your insurer'
+          }
+          chevron
+          onPress={() => router.push('/claim')}
+        />
+        <Divider />
+        <Row testID="open-policy" title="Policy and coverage" subtitle={policyLine} subtitleTone={cover.state === 'over' || cover.state === 'close' || cover.toSchedule.length > 0 ? 'amber' : 'muted'} chevron onPress={() => router.push('/policy')} />
+      </Card>
 
       <SectionLabel>In the report</SectionLabel>
       <Card>
@@ -254,12 +294,22 @@ export default function ReportTab() {
               ? 'Not backed up yet.'
               : 'Nothing to back up yet.'}
         </Text>
+        {cloud.on && cloud.bookmark ? (
+          <Text testID="backup-icloud" style={[type.footnote, { color: c.ink2, marginTop: 2 }]}>
+            {`Saved by itself to “${cloud.folder?.name ?? 'iCloud Drive'}” in iCloud Drive after you make changes.`}
+          </Text>
+        ) : null}
         <Button testID="backup-now" label="Back up now" icon="backup" kind="soft" busy={busy === 'backup'} onPress={backup} style={{ marginTop: space.l }} />
       </Card>
+      {!cloud.on ? (
+        <Card style={{ marginTop: space.m }}>
+          <Row testID="backup-icloud-setup" title="Back up to iCloud Drive by itself" subtitle="Off. Turn it on in Settings." chevron onPress={() => router.push('/settings')} />
+        </Card>
+      ) : null}
       <Card style={{ marginTop: space.m }}>
         <Row testID="restore" title="Restore from a backup" tint onPress={restore} />
       </Card>
-      <Footnote>A backup is one file with every item and photo in it. Save it to iCloud Drive, a computer, or email it to yourself.</Footnote>
+      <Footnote>A backup is one file with every item, photo, video and policy document in it. Save it to iCloud Drive or a computer.</Footnote>
     </TabScreen>
   );
 }

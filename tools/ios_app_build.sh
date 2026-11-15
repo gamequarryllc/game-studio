@@ -150,7 +150,11 @@ check_app() {
   if grep -q '"expo-image-picker"' "$app/app.json" && [ -z "$(plist_value "$info" NSCameraUsageDescription)" ]; then
     echo "The app uses the camera but has no camera permission text" >&2; exit 1
   fi
-  if [ -n "$(plist_value "$info" NSMicrophoneUsageDescription)" ]; then echo "The app asks for the microphone, which it never uses" >&2; exit 1; fi
+  # The microphone only for an app that says why in its own words (Plainproof's walk-through videos record sound);
+  # anywhere else the text is the photo picker's default and the app never uses it.
+  if [ -n "$(plist_value "$info" NSMicrophoneUsageDescription)" ] && ! node -e 'const p=(require(process.argv[1]).expo.plugins||[]).find(x=>Array.isArray(x)&&x[0]==="expo-image-picker"); process.exit(p&&typeof p[1].microphonePermission==="string"&&p[1].microphonePermission.length>20?0:1)' "$app/app.json"; then
+    echo "The app asks for the microphone, which it never uses" >&2; exit 1
+  fi
   if [ -n "$(plist_value "$info" NSUserTrackingUsageDescription)" ]; then echo "The app has a tracking prompt; the apps track nothing" >&2; exit 1; fi
   local archs; archs="$(lipo -archs "$built/$(plist_value "$info" CFBundleExecutable)")"
   echo "architectures: $archs"

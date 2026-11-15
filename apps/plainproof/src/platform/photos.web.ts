@@ -67,6 +67,11 @@ async function load(id: string, size: PhotoSize): Promise<string | null> {
   return uri;
 }
 
+/** The web preview reads no text from photos, so there is no file to hand over. */
+export function photoFileUri(_id: string, _size: PhotoSize): string | null {
+  return null;
+}
+
 export function usePhotoUri(id: string | null | undefined, size: PhotoSize): string | null {
   const k = id ? key(id, size) : null;
   const [loaded, setLoaded] = useState<{ k: string; uri: string | null } | null>(null);

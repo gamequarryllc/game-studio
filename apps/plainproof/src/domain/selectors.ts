@@ -1,4 +1,4 @@
-import { SERIAL_CATEGORIES, type Doc, type Id, type Item, type Room } from './types';
+import { LOSS_LABELS, LOSS_STATUSES, SERIAL_CATEGORIES, type Doc, type Id, type Item, type LossStatus, type Room } from './types';
 
 /** What one of this item is worth: its stated value, else what was paid. */
 export function unitCents(item: Item): number | null {
@@ -166,4 +166,53 @@ export function itemSubtitle(item: Item): string {
   const parts = [item.brand, item.model].filter(Boolean);
   if (item.quantity > 1) parts.push(`${item.quantity} of them`);
   return parts.join(' · ');
+}
+
+export interface ClaimSummary {
+  count: number;
+  /** What the claimed items are worth (replacement value, else price paid). */
+  totalCents: number;
+  /** Claimed items with no value at all: the adjuster will ask. */
+  unvalued: number;
+  byStatus: Record<LossStatus, number>;
+}
+
+export function claimSummary(doc: Doc): ClaimSummary {
+  const byStatus: Record<LossStatus, number> = { stolen: 0, damaged: 0, destroyed: 0, lost: 0 };
+  let count = 0;
+  let totalCents = 0;
+  let unvalued = 0;
+  for (const item of doc.items) {
+    if (!item.loss) continue;
+    count += 1;
+    byStatus[item.loss] += 1;
+    if (hasValue(item)) totalCents += itemTotalCents(item);
+    else unvalued += 1;
+  }
+  return { count, totalCents, unvalued, byStatus };
+}
+
+/** "2 stolen · 1 damaged", in the order the statuses are listed. */
+export function lossCountLine(byStatus: Record<LossStatus, number>): string {
+  return LOSS_STATUSES.filter((k) => byStatus[k] > 0)
+    .map((k) => `${byStatus[k]} ${LOSS_LABELS[k].toLowerCase()}`)
+    .join(' · ');
+}
+
+/** A file size the way Files shows it: 820 KB, 14.2 MB, 1.3 GB. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1000) return `${bytes} bytes`;
+  if (bytes < 1_000_000) return `${Math.round(bytes / 1000)} KB`;
+  if (bytes < 1_000_000_000) return `${(bytes / 1_000_000).toFixed(bytes < 10_000_000 ? 1 : 0)} MB`;
+  return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+}
+
+/** A video's length: 0:42, 3:05, 1:02:10. */
+export function formatDuration(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms) || ms < 0) return '';
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }

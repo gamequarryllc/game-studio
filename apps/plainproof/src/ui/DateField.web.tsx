@@ -6,14 +6,26 @@ import { useTheme } from './theme';
 
 // The web preview's date row: the browser's own date field.
 
-export function DateField({ value, onChange, testID }: { value: string | null; onChange: (ymd: string | null) => void; testID?: string }) {
+export function DateField({
+  value,
+  onChange,
+  testID,
+  future,
+  label = 'Purchase date',
+}: {
+  value: string | null;
+  onChange: (ymd: string | null) => void;
+  testID?: string;
+  future?: boolean;
+  label?: string;
+}) {
   const { c, dark } = useTheme();
   return createElement('input', {
     type: 'date',
     'data-testid': testID,
-    'aria-label': 'Purchase date',
+    'aria-label': label,
     value: value ?? '',
-    max: toYmd(new Date()),
+    max: future ? undefined : toYmd(new Date()),
     onChange: (e: { target: { value: string } }) => onChange(isValidYmd(e.target.value) ? e.target.value : null),
     style: {
       fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',

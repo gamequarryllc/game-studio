@@ -1,17 +1,22 @@
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Pressable, Text, View } from 'react-native';
 
-import { deleteRoom, moveRoom, renameRoom, setRoomIcon } from '@/domain/actions';
+import { addRoomVideo, deleteRoom, moveRoom, removeRoomVideo, renameRoom, setRoomIcon } from '@/domain/actions';
+import { displayTime } from '@/domain/dates';
+import { newId } from '@/domain/ids';
 import { formatMoney } from '@/domain/money';
-import { findItems, itemSubtitle, itemTotalCents, hasValue, plural, roomSummaries } from '@/domain/selectors';
-import { ROOM_ICONS, type RoomIcon } from '@/domain/types';
-import { warning } from '@/platform/haptics';
+import { findItems, formatBytes, formatDuration, itemSubtitle, itemTotalCents, hasValue, plural, roomSummaries } from '@/domain/selectors';
+import { LIMITS, ROOM_ICONS, type RoomIcon, type Video } from '@/domain/types';
+import { importFile } from '@/platform/attachments';
+import { success, warning } from '@/platform/haptics';
+import { pickVideo, recordVideo } from '@/platform/pickFiles';
 import { openNewItem } from '@/state/nav';
-import { dropPhotos } from '@/state/operations';
+import { dropFiles, dropPhotos } from '@/state/operations';
 import { store, useDoc } from '@/state/store';
-import { ask, choose, confirm } from '@/ui/dialogs';
+import { ask, choose, confirm, notify } from '@/ui/dialogs';
 import { Icon, roomIconName } from '@/ui/Icon';
-import { Button, Card, Divider, EmptyState, IconTile, PushedScreen, Row, Thumb } from '@/ui/kit';
+import { Button, Card, Divider, EmptyState, Footnote, IconTile, PushedScreen, Row, SectionLabel, Thumb } from '@/ui/kit';
 import { space, type, useTheme } from '@/ui/theme';
 
 const ICON_LABELS: Record<RoomIcon, string> = {
@@ -36,6 +41,7 @@ export default function RoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const doc = useDoc();
   const summary = roomSummaries(doc).find((r) => r.room.id === id);
+  const [saving, setSaving] = useState(false);
 
   if (!summary) {
     return (
@@ -49,6 +55,62 @@ export default function RoomScreen() {
   const items = findItems(doc, { roomId: room.id, sort: 'recent' });
   const currency = doc.settings.currency;
   const index = doc.rooms.findIndex((r) => r.id === room.id);
+
+  const videoName = (v: Video) => `${v.id}.${v.ext}`;
+
+  const addVideo = async () => {
+    if (room.videos.length >= LIMITS.videosPerRoom) {
+      await notify('That’s the most for one room', `Up to ${LIMITS.videosPerRoom} videos a room. Remove one to add another.`);
+      return;
+    }
+    const how =
+      Platform.OS === 'web'
+        ? 'library'
+        : await choose<'camera' | 'library'>({
+            title: 'Walk-through video',
+            message: 'Film the room slowly, opening cupboards and closets, and say what things are as you go. Up to five minutes.',
+            choices: [
+              { key: 'camera', label: 'Record a walk-through' },
+              { key: 'library', label: 'Choose a video' },
+            ],
+          });
+    if (!how) return;
+    try {
+      const picked = how === 'camera' ? await recordVideo() : await pickVideo();
+      if (picked === 'denied') {
+        await notify('The camera is switched off for Plainproof', 'You can allow it in the Settings app, under Plainproof.');
+        return;
+      }
+      if (!picked) return;
+      if (picked.bytes !== null && picked.bytes > LIMITS.videoBytes) {
+        await notify('That video is too long to keep', `It is ${formatBytes(picked.bytes)}; the most is ${formatBytes(LIMITS.videoBytes)}. Film one room at a time.`);
+        return;
+      }
+      setSaving(true);
+      const id = newId();
+      const bytes = await importFile(picked.uri, `${id}.${picked.ext}`);
+      if (bytes > LIMITS.videoBytes) {
+        void dropFiles([`${id}.${picked.ext}`]);
+        await notify('That video is too long to keep', `It is ${formatBytes(bytes)}; the most is ${formatBytes(LIMITS.videoBytes)}. Film one room at a time.`);
+        return;
+      }
+      const video: Omit<Video, 'addedAt'> = { id, durationMs: picked.durationMs, bytes, takenAt: picked.takenAt, ext: picked.ext };
+      store.update((d, now) => addRoomVideo(d, room.id, { ...video, addedAt: now }));
+      success();
+    } catch {
+      await notify('That video could not be added', 'Check that there is free space on this iPhone, then try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeVideo = async (v: Video, n: number) => {
+    const sure = await confirm({ title: `Delete walk-through ${n}?`, message: 'The copy kept in Plainproof is deleted. One in your photo library is not touched.', confirmLabel: 'Delete video', destructive: true });
+    if (!sure) return;
+    warning();
+    store.update((d) => removeRoomVideo(d, room.id, v.id));
+    void dropFiles([videoName(v)]);
+  };
 
   const rename = async () => {
     const name = await ask({ title: 'Rename room', initial: room.name, confirmLabel: 'Rename' });
@@ -83,11 +145,13 @@ export default function RoomScreen() {
     });
     if (!sure) return;
     const photoIds = moveTo ? [] : items.flatMap((it) => [...it.photos, ...it.receipts].map((p) => p.id));
+    const videoFiles = room.videos.map(videoName);
     warning();
     if (router.canGoBack()) router.back();
     else router.replace('/');
     store.update((d, now) => deleteRoom(d, room.id, moveTo, now));
     void dropPhotos(photoIds);
+    void dropFiles(videoFiles);
   };
 
   const menu = async () => {
@@ -162,6 +226,38 @@ export default function RoomScreen() {
           </View>
         </>
       )}
+
+      <SectionLabel>Walk-through video</SectionLabel>
+      <Card>
+        {room.videos.map((v, i) => (
+          <View key={v.id}>
+            {i > 0 ? <Divider inset={space.l + 36 + space.m} /> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Row
+                  testID={`room-video-${i}`}
+                  leading={
+                    <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: c.greenSoft, alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="play" size={16} color={c.green} />
+                    </View>
+                  }
+                  title={`Walk-through ${i + 1}`}
+                  subtitle={[formatDuration(v.durationMs), formatBytes(v.bytes), v.takenAt ? `recorded ${displayTime(v.takenAt)}` : `added ${displayTime(v.addedAt)}`].filter(Boolean).join(' · ')}
+                  onPress={() => router.push({ pathname: '/video', params: { name: videoName(v) } })}
+                />
+              </View>
+              <Pressable testID={`room-video-remove-${i}`} accessibilityRole="button" accessibilityLabel={`Delete walk-through ${i + 1}`} hitSlop={8} onPress={() => void removeVideo(v, i + 1)} style={{ paddingHorizontal: space.l, paddingVertical: space.m }}>
+                <Icon name="trash" size={18} color={c.ink3} />
+              </Pressable>
+            </View>
+          </View>
+        ))}
+        {room.videos.length > 0 ? <Divider /> : null}
+        {room.videos.length < LIMITS.videosPerRoom ? (
+          <Row testID="room-video-add" title={saving ? 'Adding the video…' : room.videos.length === 0 ? 'Add a walk-through video' : 'Add another video'} subtitle={room.videos.length === 0 ? 'Insurers suggest a slow video of every room' : undefined} tint onPress={() => void addVideo()} />
+        ) : null}
+      </Card>
+      <Footnote>A video shows what a list can miss: the things on shelves and in drawers, and how the room looked before. It is kept in the app, goes in your backups, and goes in a claim package for this room.</Footnote>
     </PushedScreen>
   );
 }

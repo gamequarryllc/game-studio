@@ -4,11 +4,14 @@ import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { addItem, addRoom, draftFromItem, emptyDraft, isFutureYmd, updateItem, type ItemDraft } from '@/domain/actions';
+import { displayYmd, toYmd } from '@/domain/dates';
+import { readReceipt, serialCandidates } from '@/domain/scan';
 import { canAddItem } from '@/domain/limits';
-import { centsToInput, parseMoney, tidyMoneyInput } from '@/domain/money';
+import { centsToInput, formatMoney, parseMoney, tidyMoneyInput } from '@/domain/money';
 import { CATEGORIES, CATEGORY_LABELS, CONDITIONS, CONDITION_LABELS, LIMITS, type Category, type Condition, type Photo } from '@/domain/types';
 import { success, warning } from '@/platform/haptics';
-import { importPhoto } from '@/platform/photos';
+import { importPhoto, photoFileUri } from '@/platform/photos';
+import { canScan, readTextIn } from '@/platform/textScan';
 import { pickFromLibrary, takePhoto } from '@/platform/pickImages';
 import { pro } from '@/pro/pro';
 import { dropPhotos } from '@/state/operations';
@@ -16,7 +19,7 @@ import { store, useDoc } from '@/state/store';
 import { DateField } from '@/ui/DateField';
 import { ask, choose, confirm, notify } from '@/ui/dialogs';
 import { FormRow, PhotoStrip, PickRow, Stepper, TextRow } from '@/ui/form';
-import { BarButton, Button, Card, Divider, Footnote, SectionLabel } from '@/ui/kit';
+import { BarButton, Button, Card, Divider, Footnote, Row, SectionLabel } from '@/ui/kit';
 import { NO_OUTLINE, space, type, useTheme } from '@/ui/theme';
 
 /** An amount as the field shows it: grouped, as it reads after the person moves on. */
@@ -50,6 +53,7 @@ export default function ItemForm() {
   /** When the form opened: "today" for the purchase date check. */
   const [openedAt] = useState(() => Date.now());
   const [importing, setImporting] = useState<'photos' | 'receipts' | null>(null);
+  const [scanning, setScanning] = useState<'serial' | 'receipt' | null>(null);
   /** Photos imported while this form was open; deleted again if it is cancelled. */
   const imported = useRef<string[]>([]);
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -119,6 +123,73 @@ export default function ItemForm() {
       await notify('That photo could not be added', 'Try another photo, or take a new one.');
     } finally {
       setImporting(null);
+    }
+  };
+
+  /** Reads a serial number off a label: a new photo of it, or one of the item's photos. */
+  const scanSerial = async () => {
+    const source = await choose<'camera' | 'library' | 'photo'>({
+      title: 'Read the serial number',
+      message: 'Take a close, sharp photo of the label. The text is read on this iPhone.',
+      choices: [
+        { key: 'camera', label: 'Photograph the label' },
+        { key: 'library', label: 'Choose a photo of it' },
+        ...(draft.photos.length > 0 ? [{ key: 'photo' as const, label: 'Use this item’s photos' }] : []),
+      ],
+    });
+    if (!source) return;
+    try {
+      let uris: string[] = [];
+      if (source === 'photo') uris = draft.photos.map((p) => photoFileUri(p.id, 'full')).filter((u): u is string => u !== null);
+      else {
+        const picked = source === 'camera' ? await takePhoto() : await pickFromLibrary(1);
+        if (picked === 'denied') {
+          await notify('The camera is switched off for Plainproof', 'You can allow it in the Settings app, under Plainproof.');
+          return;
+        }
+        uris = picked.map((p) => p.uri);
+      }
+      if (uris.length === 0) return;
+      setScanning('serial');
+      const lines: string[] = [];
+      for (const uri of uris) lines.push(...(await readTextIn(uri)));
+      setScanning(null);
+      const found = serialCandidates(lines).slice(0, 6);
+      if (found.length === 0) {
+        await notify('No serial number found', 'Try a closer photo with the label flat and well lit, or type it in.');
+        return;
+      }
+      const picked = await choose({ title: 'Which is the serial number?', message: 'Check it against the label.', choices: found.map((f) => ({ key: f, label: f })) });
+      if (picked) set('serial', picked);
+    } catch {
+      await notify('The label could not be read', 'Try another photo, or type the number in.');
+    } finally {
+      setScanning(null);
+    }
+  };
+
+  /** Fills the purchase date, price and shop from the first receipt photo, after asking. */
+  const scanReceipt = async () => {
+    const first = draft.receipts[0];
+    const uri = first ? photoFileUri(first.id, 'full') : null;
+    if (!uri) return;
+    setScanning('receipt');
+    try {
+      const guess = readReceipt(await readTextIn(uri), toYmd(new Date()));
+      setScanning(null);
+      const parts = [guess.date ? displayYmd(guess.date) : null, guess.totalCents !== null ? formatMoney(guess.totalCents, doc.settings.currency) : null, guess.store].filter(Boolean);
+      if (parts.length === 0) {
+        await notify('Nothing to read', 'No date, total or shop name could be made out. A flatter, brighter photo may help.');
+        return;
+      }
+      const ok = await confirm({ title: 'Fill in from the receipt?', message: `${parts.join(' · ')}\n\nCheck these against the receipt afterwards.`, confirmLabel: 'Fill in' });
+      if (!ok) return;
+      setDraft((d) => ({ ...d, purchaseDate: guess.date ?? d.purchaseDate, purchasedFrom: guess.store ?? d.purchasedFrom }));
+      if (guess.totalCents !== null) setPaidText(moneyText(guess.totalCents));
+    } catch {
+      await notify('The receipt could not be read', 'Type the details in instead.');
+    } finally {
+      setScanning(null);
     }
   };
 
@@ -291,6 +362,12 @@ export default function ItemForm() {
           <TextRow testID="field-model" label="Model" value={draft.model} onChangeText={(t) => set('model', t)} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="characters" autoCorrect={false} />
           <Divider />
           <TextRow testID="field-serial" label="Serial number" value={draft.serial} onChangeText={(t) => set('serial', t)} placeholder="Optional" maxLength={LIMITS.short} autoCapitalize="characters" autoCorrect={false} />
+          {canScan ? (
+            <>
+              <Divider />
+              <Row testID="scan-serial" title={scanning === 'serial' ? 'Reading the label…' : 'Read it off the label'} tint onPress={() => void scanSerial()} />
+            </>
+          ) : null}
         </Card>
         <Footnote>The serial number is usually on a label on the back or underside. Police and insurers ask for it after a theft.</Footnote>
 
@@ -313,7 +390,12 @@ export default function ItemForm() {
             keyboardType="decimal-pad"
             error={showErrors || paidText !== '' ? paidProblem : null}
           />
+          <Divider />
+          <FormRow label="Warranty until">
+            <DateField testID="field-warranty" label="Warranty until" future value={draft.warrantyUntil} onChange={(ymd) => set('warrantyUntil', ymd)} />
+          </FormRow>
         </Card>
+        <Footnote>A warranty can pay for a repair the insurer won’t. Plainproof can remind you a month before one ends.</Footnote>
 
         <SectionLabel>Receipt</SectionLabel>
         <PhotoStrip
@@ -326,6 +408,11 @@ export default function ItemForm() {
           onAdd={() => addPhotos('receipts')}
           onRemove={(id) => removePhoto('receipts', id)}
         />
+        {canScan && draft.receipts.length > 0 ? (
+          <Card style={{ marginTop: space.m }}>
+            <Row testID="scan-receipt" title={scanning === 'receipt' ? 'Reading the receipt…' : 'Fill in the date, price and shop from it'} tint onPress={() => void scanReceipt()} />
+          </Card>
+        ) : null}
 
         <SectionLabel>Notes</SectionLabel>
         <Card>

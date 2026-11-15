@@ -48,16 +48,30 @@ export async function deliverReport(_target: unknown, html: string, baseName: st
   await share(file, 'application/pdf', 'com.adobe.pdf');
 }
 
+/** The report as a file to put inside a zip: a PDF on the iPhone. */
+export const REPORT_EXT = 'pdf' as const;
+
+export async function renderReportFile(html: string): Promise<Uint8Array> {
+  const printed = await Print.printToFileAsync({ html });
+  const file = new File(printed.uri);
+  try {
+    return await file.bytes();
+  } finally {
+    if (file.exists) file.delete();
+  }
+}
+
 export interface BackupSink {
   onChunk(chunk: Uint8Array): void;
   /** Puts what has arrived so far on disk. */
   flush(): Promise<void>;
-  /** Hands the finished backup to the share sheet. */
-  finish(): Promise<void>;
+  /** Hands the finished file to the share sheet (or, with keep, only finishes it). Returns where it is. */
+  finish(): Promise<string>;
   abort(): Promise<void>;
 }
 
-export function createBackupSink(name: string): BackupSink {
+/** A zip being written to a file. With keep, it is not shared: the caller copies it somewhere (iCloud Drive) and drops it. */
+export function createBackupSink(name: string, opts: { keep?: boolean } = {}): BackupSink {
   const file = fresh(name);
   file.create();
   let pending: Uint8Array[] = [];
@@ -73,7 +87,8 @@ export function createBackupSink(name: string): BackupSink {
     flush,
     async finish() {
       await flush();
-      await share(file, 'application/zip', 'public.zip-archive');
+      if (!opts.keep) await share(file, 'application/zip', 'public.zip-archive');
+      return file.uri;
     },
     async abort() {
       pending = [];
@@ -89,6 +104,16 @@ export interface PickedBackup {
 }
 
 const READ_SIZE = 512 * 1024;
+
+/** Deletes a file this module made (a kept zip, once it has been copied away). */
+export function dropOutboxFile(uri: string): void {
+  try {
+    const file = new File(uri);
+    if (file.exists) file.delete();
+  } catch {
+    // Best effort: the cache folder is emptied by iOS in time anyway.
+  }
+}
 
 export async function pickBackupFile(): Promise<PickedBackup | null> {
   const result = await DocumentPicker.getDocumentAsync({
