@@ -26,6 +26,76 @@ export interface Room {
   name: string;
   icon: RoomIcon;
   createdAt: number;
+  /** Walk-through videos of the room, the way insurers suggest documenting a home. */
+  videos: Video[];
+}
+
+/** A video file kept in the app. */
+export interface Video {
+  id: Id;
+  /** Length in milliseconds, when the phone said. */
+  durationMs: number | null;
+  /** Size of the file in bytes. */
+  bytes: number;
+  /** When it was recorded (ms), when known. */
+  takenAt: number | null;
+  addedAt: number;
+  /** The file's extension: mov or mp4. */
+  ext: 'mov' | 'mp4';
+}
+
+/** A document kept with a place: the insurance policy, as a PDF or a photo of each page. */
+export interface Attachment {
+  id: Id;
+  /** The name it had when it was added, shown in the list. */
+  name: string;
+  kind: 'pdf' | 'image';
+  bytes: number;
+  addedAt: number;
+}
+
+export const LOSS_STATUSES = ['stolen', 'damaged', 'destroyed', 'lost'] as const;
+export type LossStatus = (typeof LOSS_STATUSES)[number];
+export const LOSS_LABELS: Record<LossStatus, string> = {
+  stolen: 'Stolen',
+  damaged: 'Damaged',
+  destroyed: 'Destroyed',
+  lost: 'Lost',
+};
+
+export const LOSS_CAUSES = ['fire', 'smoke', 'water', 'storm', 'theft', 'vandalism', 'accident', 'other'] as const;
+export type LossCause = (typeof LOSS_CAUSES)[number];
+export const LOSS_CAUSE_LABELS: Record<LossCause, string> = {
+  fire: 'Fire',
+  smoke: 'Smoke',
+  water: 'Water or flood',
+  storm: 'Storm or wind',
+  theft: 'Theft or break-in',
+  vandalism: 'Vandalism',
+  accident: 'Accident',
+  other: 'Something else',
+};
+
+/** The claim being made for this place, if one is open. Items it covers carry a loss status. */
+export interface Claim {
+  openedAt: number;
+  /** YYYY-MM-DD */
+  lossDate: string | null;
+  cause: LossCause | null;
+  /** The number the insurer gave the claim. */
+  claimNumber: string;
+  /** What happened, in the person's words. */
+  description: string;
+}
+
+export interface Policy {
+  /** The policy's limit for personal property (contents), in cents. */
+  contentsLimitCents: number | null;
+  deductibleCents: number | null;
+  /** Lower limits the policy sets for some kinds of things (jewelry, often), in cents. */
+  categoryLimits: Partial<Record<Category, number>>;
+  /** The policy itself. */
+  documents: Attachment[];
 }
 
 export const CATEGORIES = [
@@ -106,6 +176,12 @@ export interface Item {
   receipts: Photo[];
   createdAt: number;
   updatedAt: number;
+  /** YYYY-MM-DD the warranty runs to. */
+  warrantyUntil: string | null;
+  /** Set while a claim is open and this item is part of it. */
+  loss: LossStatus | null;
+  /** What happened to this item, for the claim. */
+  lossNote: string;
 }
 
 export interface Profile {
@@ -119,6 +195,10 @@ export interface Profile {
 export interface Settings {
   /** ISO 4217 code. */
   currency: string;
+  /** Local reminders: a yearly look over the inventory, a nudge when the backup falls behind, warranties about to end. All off until the person turns them on. */
+  reminders: { yearly: boolean; backup: boolean; warranty: boolean };
+  /** Save a backup to the app's iCloud Drive folder by itself. Off by default. */
+  icloudBackup: boolean;
 }
 
 export interface Meta {
@@ -137,6 +217,8 @@ export interface Doc {
   profile: Profile;
   settings: Settings;
   meta: Meta;
+  claim: Claim | null;
+  policy: Policy;
 }
 
 export const LIMITS = {
@@ -150,6 +232,10 @@ export const LIMITS = {
   photosPerItem: 12,
   receiptsPerItem: 6,
   rooms: 60,
+  videosPerRoom: 6,
+  policyDocuments: 20,
+  /** 500 MB: a backup has to fit on a phone and in a mail attachment service. */
+  videoBytes: 500 * 1024 * 1024,
   /** A saved file may hold more rooms than the app lets one add; they are all kept when it is opened. */
   roomsOnLoad: 1000,
 } as const;

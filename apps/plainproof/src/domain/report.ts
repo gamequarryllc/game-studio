@@ -2,7 +2,8 @@ import { displayDateTime, displayTime, displayYmd } from './dates';
 import { formatMoney } from './money';
 import { homeSummary, itemTotalCents, plural, roomSummaries, unitCents } from './selectors';
 import { sha256Hex } from './sha256';
-import { CATEGORY_LABELS, CONDITION_LABELS, type Doc, type Item, type Photo } from './types';
+import { claimedItems } from './actions';
+import { CATEGORY_LABELS, CONDITION_LABELS, LOSS_CAUSE_LABELS, LOSS_LABELS, LOSS_STATUSES, type Doc, type Item, type Photo } from './types';
 
 // The insurance report. This builds one self-contained HTML page; on the
 // phone it is turned into a PDF, on the web preview it opens in a new tab.
@@ -14,6 +15,8 @@ export interface ReportOptions {
   includeAllPhotos?: boolean;
   /** The app's version, printed so a report can be traced to the build that made it. */
   appVersion?: string;
+  /** 'claim': only the items marked for the open claim, headed with the claim's details. */
+  scope?: 'inventory' | 'claim';
   /** When the report was made (ms). */
   generatedAt: number;
   /** Photo id to a data: URI. Photos that are missing here are simply left out. */
@@ -93,14 +96,19 @@ const CSS = `
   .photo-grid figure:nth-child(2n) { margin-right: 0; }
   .photo-grid img { display: block; width: 100%; max-height: 105mm; object-fit: contain; border: 0.5pt solid #d8d2c4; background: #f6f3ec; }
   .photo-grid figcaption, .receipt .caption { color: #6b675e; font-size: 8pt; margin-top: 2pt; }
+  .loss { display: inline-block; font-size: 7.5pt; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: #8a2a1b; border: 0.75pt solid #c98a7e; border-radius: 2pt; padding: 0 3pt; margin: 1pt 0 2pt; }
+  .what { margin: -6pt 0 16pt; padding: 8pt 10pt; background: #f6f3ec; border-radius: 3pt; font-size: 9.5pt; }
+  .what .label { display: block; font-size: 8pt; letter-spacing: 0.08em; text-transform: uppercase; color: #6b675e; }
   .closing { margin-top: 22pt; padding-top: 8pt; border-top: 0.75pt solid #d8d2c4; color: #6b675e; font-size: 8.5pt; }
 `;
 
 /** An empty cell: a quiet dash reads better down a column than the same words repeated. */
 const NOTHING = '<span class="muted" title="Not recorded">—</span>';
 
-function itemCell(item: Item): string {
-  const parts: string[] = [`<div class="name">${escapeHtml(item.name)}</div>`];
+function itemCell(item: Item, claim: boolean): string {
+  const parts: string[] = [];
+  if (claim && item.loss) parts.push(`<div class="loss">${LOSS_LABELS[item.loss]}</div>`);
+  parts.push(`<div class="name">${escapeHtml(item.name)}</div>`);
   const makeModel = [item.brand, item.model].filter(Boolean).map(escapeHtml).join(' ');
   const facts: string[] = [];
   if (makeModel) facts.push(makeModel);
@@ -108,6 +116,8 @@ function itemCell(item: Item): string {
   if (facts.length) parts.push(`<div class="detail">${facts.join(' · ')}</div>`);
   if (item.serial) parts.push(`<div class="detail">Serial no. <b>${escapeHtml(item.serial)}</b></div>`);
   if (item.condition) parts.push(`<div class="detail">Condition: ${escapeHtml(CONDITION_LABELS[item.condition])}</div>`);
+  if (item.warrantyUntil) parts.push(`<div class="detail">Warranty until ${escapeHtml(displayYmd(item.warrantyUntil))}</div>`);
+  if (claim && item.lossNote) parts.push(`<div class="note"><b>What happened:</b> ${lines(item.lossNote)}</div>`);
   if (item.notes) parts.push(`<div class="note">${lines(item.notes)}</div>`);
   parts.push(`<div class="basis">${escapeHtml(documentedLine(item))}</div>`);
   return parts.join('');
@@ -143,7 +153,9 @@ export function inventoryReference(doc: Doc): string {
     items: doc.items.map((i) => [
       i.id, i.roomId, i.name, i.category, i.condition, i.quantity, i.valueCents, i.pricePaidCents, i.purchaseDate,
       i.purchasedFrom, i.brand, i.model, i.serial, i.notes, i.photos.map((p) => p.id), i.receipts.map((p) => p.id), i.createdAt,
+      i.warrantyUntil, i.loss, i.lossNote,
     ]),
+    claim: doc.claim,
   });
   return sha256Hex(canonical).slice(0, 16).toUpperCase().replace(/(.{4})(?!$)/g, '$1-');
 }
@@ -210,7 +222,10 @@ export function reportTitle(doc: Doc): string {
   return doc.profile.homeName || 'Home inventory';
 }
 
-export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
+export function buildReportHtml(fullDoc: Doc, opts: ReportOptions): string {
+  const claim = opts.scope === 'claim';
+  // A claim schedule is the same report over only the items marked for the claim.
+  const doc: Doc = claim ? { ...fullDoc, items: claimedItems(fullDoc) } : fullDoc;
   const currency = doc.settings.currency;
   const money = (cents: number) => escapeHtml(formatMoney(cents, currency));
   const summary = homeSummary(doc);
@@ -220,11 +235,11 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
 
   out.push('<!doctype html><html lang="en"><head><meta charset="utf-8">');
   out.push('<meta name="viewport" content="width=device-width, initial-scale=1">');
-  out.push(`<title>${escapeHtml(reportTitle(doc))}: home inventory</title>`);
+  out.push(`<title>${escapeHtml(reportTitle(doc))}: ${claim ? 'claim schedule' : 'home inventory'}</title>`);
   const reference = inventoryReference(doc);
   out.push(`<style>${CSS}${pageFootCss(`${reportTitle(doc)} · Ref ${reference}`, displayTime(opts.generatedAt))}</style></head><body>`);
 
-  out.push('<div class="kicker">Home inventory</div>');
+  out.push(`<div class="kicker">${claim ? 'Insurance claim · schedule of loss' : 'Home inventory'}</div>`);
   out.push(`<h1 class="serif">${escapeHtml(reportTitle(doc))}</h1>`);
 
   const who: [string, string][] = [];
@@ -232,6 +247,12 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
   if (doc.profile.address) who.push(['Address', lines(doc.profile.address)]);
   if (doc.profile.insurer) who.push(['Insurer', escapeHtml(doc.profile.insurer)]);
   if (doc.profile.policyNumber) who.push(['Policy number', escapeHtml(doc.profile.policyNumber)]);
+  if (claim && doc.claim) {
+    if (doc.claim.claimNumber) who.push(['Claim number', escapeHtml(doc.claim.claimNumber)]);
+    who.push(['Date of loss', doc.claim.lossDate ? escapeHtml(displayYmd(doc.claim.lossDate)) : NOTHING]);
+    if (doc.claim.cause) who.push(['Cause', escapeHtml(LOSS_CAUSE_LABELS[doc.claim.cause])]);
+  }
+  if (claim && doc.policy.deductibleCents !== null) who.push(['Deductible', money(doc.policy.deductibleCents)]);
   who.push(['Prepared', escapeHtml(displayDateTime(opts.generatedAt))]);
   who.push(['Report reference', `${escapeHtml(reference)}${opts.appVersion ? ` <span class="muted">· Plainproof ${escapeHtml(opts.appVersion)}</span>` : ''}`]);
   out.push('<table class="who">');
@@ -245,10 +266,17 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
   out.push('</table>');
 
   out.push('<div class="totals">');
-  out.push(`<div><span class="label">Total value</span><span class="figure serif">${money(summary.totalCents)}</span></div>`);
+  out.push(`<div><span class="label">${claim ? 'Value claimed' : 'Total value'}</span><span class="figure serif">${money(summary.totalCents)}</span></div>`);
   out.push(`<div><span class="label">Items</span><span class="figure serif">${summary.count.toLocaleString('en-US')}</span></div>`);
   out.push(`<div><span class="label">Rooms</span><span class="figure serif">${rooms.filter((r) => r.count > 0).length}</span></div>`);
   out.push('</div>');
+  if (claim && doc.claim?.description) {
+    out.push(`<div class="what"><span class="label">What happened</span>${lines(doc.claim.description)}</div>`);
+  }
+  if (claim && summary.count > 0) {
+    const counts = LOSS_STATUSES.map((st) => [st, doc.items.filter((i) => i.loss === st).length] as const).filter(([, n]) => n > 0);
+    out.push(`<p class="counted">${counts.map(([st, n]) => `${n} ${LOSS_LABELS[st].toLowerCase()}`).join(' · ')}</p>`);
+  }
   const basis = valueBasisSentence(doc);
   if (basis.text) {
     const missingAt = basis.text.search(/\d[\d,]* items? (has|have) no value/);
@@ -257,7 +285,7 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
   }
 
   if (summary.count === 0) {
-    out.push('<p class="muted">Nothing has been added to this inventory yet.</p>');
+    out.push(`<p class="muted">${claim ? 'No items have been marked for this claim yet.' : 'Nothing has been added to this inventory yet.'}</p>`);
   } else {
     const totalsEm = moneyColumnEm([money(summary.totalCents), ...rooms.map((r) => money(r.totalCents))]);
     out.push('<h2 class="serif">Summary by room</h2>');
@@ -304,7 +332,7 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
         out.push(`<td class="photo">${src ? `<img src="${src}" alt="">` : '<div class="none">No photo</div>'}</td>`);
       }
       const each = unitCents(item);
-      out.push(`<td>${itemCell(item)}</td>`);
+      out.push(`<td>${itemCell(item, claim)}</td>`);
       out.push(`<td class="detail">${purchaseCell(item, currency)}</td>`);
       out.push(`<td class="qty">${item.quantity}</td>`);
       out.push(`<td class="num">${item.valueCents === null ? NOTHING : money(item.valueCents)}</td>`);
@@ -385,7 +413,7 @@ export function reportPhotoIds(doc: Doc, opts: Pick<ReportOptions, 'includePhoto
   return { thumbs, full };
 }
 
-export function reportFileName(doc: Doc, generatedAt: number): string {
+export function reportFileName(doc: Doc, generatedAt: number, scope: 'inventory' | 'claim' = 'inventory'): string {
   const d = new Date(generatedAt);
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   // Accents are folded ("Café" becomes "Cafe") rather than dropped.
@@ -395,5 +423,5 @@ export function reportFileName(doc: Doc, generatedAt: number): string {
     .replace(/[^A-Za-z0-9 _-]+/g, '')
     .trim()
     .replace(/\s+/g, '-');
-  return `${base || 'Home-inventory'}-${stamp}`;
+  return `${base || 'Home-inventory'}${scope === 'claim' ? '-claim' : ''}-${stamp}`;
 }

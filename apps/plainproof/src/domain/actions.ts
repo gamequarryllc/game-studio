@@ -1,7 +1,7 @@
 import { cleanCents, cleanQuantity, cleanText } from './doc';
 import { isValidYmd, toYmd } from './dates';
 import { newId } from './ids';
-import { CATEGORIES, CONDITIONS, LIMITS, ROOM_ICONS, type Category, type Condition, type Doc, type Id, type Item, type Photo, type Profile, type Room, type RoomIcon } from './types';
+import { CATEGORIES, CONDITIONS, LIMITS, LOSS_CAUSES, LOSS_STATUSES, ROOM_ICONS, type Attachment, type Category, type Claim, type Condition, type Doc, type LossStatus, type Policy, type Settings, type Video, type Id, type Item, type Photo, type Profile, type Room, type RoomIcon } from './types';
 
 // Every change to the document is a plain function: (doc, input, now) -> new doc.
 // Nothing here touches files, the clock or the screen, so all of it is unit tested.
@@ -64,7 +64,7 @@ export function addRooms(doc: Doc, seeds: readonly RoomSeed[], now: number): Doc
     const name = cleanText(seed.name, LIMITS.name);
     if (!name) continue;
     const icon = (ROOM_ICONS as readonly string[]).includes(seed.icon) ? seed.icon : 'box';
-    rooms.push({ id: newId(), name: uniqueRoomName(rooms, name), icon, createdAt: now });
+    rooms.push({ id: newId(), name: uniqueRoomName(rooms, name), icon, createdAt: now, videos: [] });
   }
   return { ...doc, rooms };
 }
@@ -129,6 +129,8 @@ export interface ItemDraft {
   notes: string;
   photos: Photo[];
   receipts: Photo[];
+  /** YYYY-MM-DD the warranty runs to. */
+  warrantyUntil: string | null;
 }
 
 export function emptyDraft(roomId: Id): ItemDraft {
@@ -148,6 +150,7 @@ export function emptyDraft(roomId: Id): ItemDraft {
     notes: '',
     photos: [],
     receipts: [],
+    warrantyUntil: null,
   };
 }
 
@@ -168,6 +171,7 @@ export function draftFromItem(item: Item): ItemDraft {
     notes: item.notes,
     photos: item.photos,
     receipts: item.receipts,
+    warrantyUntil: item.warrantyUntil,
   };
 }
 
@@ -203,12 +207,13 @@ function fieldsFromDraft(draft: ItemDraft) {
     notes: cleanText(draft.notes, LIMITS.notes, true),
     photos: draft.photos.slice(0, LIMITS.photosPerItem),
     receipts: draft.receipts.slice(0, LIMITS.receiptsPerItem),
+    warrantyUntil: draft.warrantyUntil && isValidYmd(draft.warrantyUntil) ? draft.warrantyUntil : null,
   };
 }
 
 export function addItem(doc: Doc, draft: ItemDraft, now: number): { doc: Doc; itemId: Id | null } {
   if (draftProblems(doc, draft, now).length > 0) return { doc, itemId: null };
-  const item: Item = { id: newId(), ...fieldsFromDraft(draft), createdAt: now, updatedAt: now };
+  const item: Item = { id: newId(), ...fieldsFromDraft(draft), createdAt: now, updatedAt: now, loss: null, lossNote: '' };
   return { doc: { ...doc, items: [...doc.items, item] }, itemId: item.id };
 }
 
@@ -253,4 +258,110 @@ export function markBackup(doc: Doc, now: number): Doc {
 
 export function markReport(doc: Doc, now: number): Doc {
   return { ...doc, meta: { ...doc.meta, lastReportAt: now } };
+}
+
+// The claim: one at a time for a place, with the items it covers marked.
+
+export function openClaim(doc: Doc, now: number): Doc {
+  if (doc.claim) return doc;
+  return { ...doc, claim: { openedAt: now, lossDate: null, cause: null, claimNumber: '', description: '' } };
+}
+
+export function updateClaim(doc: Doc, patch: Partial<Omit<Claim, 'openedAt'>>, now: number = Date.now()): Doc {
+  if (!doc.claim) return doc;
+  const merged = { ...doc.claim, ...patch };
+  return {
+    ...doc,
+    claim: {
+      openedAt: doc.claim.openedAt,
+      lossDate: merged.lossDate && isValidYmd(merged.lossDate) && !isFutureYmd(merged.lossDate, now) ? merged.lossDate : null,
+      cause: merged.cause && (LOSS_CAUSES as readonly string[]).includes(merged.cause) ? merged.cause : null,
+      claimNumber: cleanText(merged.claimNumber, LIMITS.short),
+      description: cleanText(merged.description, LIMITS.notes, true),
+    },
+  };
+}
+
+/** Marks an item as part of the claim (or takes it out with null). Opens the claim if there isn't one. */
+export function setItemLoss(doc: Doc, itemId: Id, loss: LossStatus | null, note: string | undefined, now: number): Doc {
+  if (loss !== null && !(LOSS_STATUSES as readonly string[]).includes(loss)) return doc;
+  const base = loss !== null ? openClaim(doc, now) : doc;
+  return {
+    ...base,
+    items: base.items.map((it) =>
+      it.id === itemId
+        ? { ...it, loss, lossNote: loss === null ? '' : cleanText(note ?? it.lossNote, LIMITS.notes, true), updatedAt: now }
+        : it,
+    ),
+  };
+}
+
+/** Ends the claim: the claim details go and every item is unmarked. The items themselves stay. */
+export function closeClaim(doc: Doc, now: number): Doc {
+  if (!doc.claim && !doc.items.some((i) => i.loss)) return doc;
+  return {
+    ...doc,
+    claim: null,
+    items: doc.items.map((it) => (it.loss || it.lossNote ? { ...it, loss: null, lossNote: '', updatedAt: now } : it)),
+  };
+}
+
+/** Items marked for the claim, in room order. */
+export function claimedItems(doc: Doc): Item[] {
+  const order = new Map(doc.rooms.map((r, i) => [r.id, i]));
+  return doc.items.filter((i) => i.loss !== null).sort((a, b) => (order.get(a.roomId) ?? 0) - (order.get(b.roomId) ?? 0));
+}
+
+// The policy kept with a place.
+
+export function updatePolicy(doc: Doc, patch: Partial<Omit<Policy, 'documents'>>): Doc {
+  const merged = { ...doc.policy, ...patch };
+  const limits: Policy['categoryLimits'] = {};
+  for (const k of CATEGORIES) {
+    const v = merged.categoryLimits[k];
+    const c = v === undefined || v === null ? null : cleanCents(v);
+    if (c !== null) limits[k] = c;
+  }
+  return {
+    ...doc,
+    policy: {
+      ...doc.policy,
+      contentsLimitCents: merged.contentsLimitCents === null ? null : cleanCents(merged.contentsLimitCents),
+      deductibleCents: merged.deductibleCents === null ? null : cleanCents(merged.deductibleCents),
+      categoryLimits: limits,
+    },
+  };
+}
+
+export function addPolicyDocuments(doc: Doc, added: Attachment[]): Doc {
+  const room = LIMITS.policyDocuments - doc.policy.documents.length;
+  if (room <= 0 || added.length === 0) return doc;
+  return { ...doc, policy: { ...doc.policy, documents: [...doc.policy.documents, ...added.slice(0, room)] } };
+}
+
+export function removePolicyDocument(doc: Doc, id: Id): Doc {
+  return { ...doc, policy: { ...doc.policy, documents: doc.policy.documents.filter((d) => d.id !== id) } };
+}
+
+// Walk-through videos, one list per room.
+
+export function addRoomVideo(doc: Doc, roomId: Id, video: Video): Doc {
+  return {
+    ...doc,
+    rooms: doc.rooms.map((r) => (r.id === roomId && r.videos.length < LIMITS.videosPerRoom ? { ...r, videos: [...r.videos, video] } : r)),
+  };
+}
+
+export function removeRoomVideo(doc: Doc, roomId: Id, videoId: Id): Doc {
+  return { ...doc, rooms: doc.rooms.map((r) => (r.id === roomId ? { ...r, videos: r.videos.filter((v) => v.id !== videoId) } : r)) };
+}
+
+// Settings that every place shares (the store applies them to each).
+
+export function setReminders(doc: Doc, patch: Partial<Settings['reminders']>): Doc {
+  return { ...doc, settings: { ...doc.settings, reminders: { ...doc.settings.reminders, ...patch } } };
+}
+
+export function setIcloudBackup(doc: Doc, on: boolean): Doc {
+  return { ...doc, settings: { ...doc.settings, icloudBackup: on } };
 }

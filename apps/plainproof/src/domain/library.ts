@@ -59,7 +59,9 @@ export function contentChanged(before: Doc, after: Doc): boolean {
     before.rooms !== after.rooms ||
     before.items !== after.items ||
     before.profile !== after.profile ||
-    before.settings !== after.settings
+    before.settings !== after.settings ||
+    before.claim !== after.claim ||
+    before.policy !== after.policy
   );
 }
 

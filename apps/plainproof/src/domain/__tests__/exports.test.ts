@@ -137,11 +137,11 @@ describe('the spreadsheet', () => {
   it('has one row per item with exact amounts', () => {
     const csv = buildCsv(home());
     const rows = csv.replace('﻿', '').trimEnd().split('\r\n');
-    expect(rows[0].split(',')).toHaveLength(21);
+    expect(rows[0].split(',')).toHaveLength(22);
     expect(csv.startsWith('﻿')).toBe(true);
     expect(csv).toContain('449.00,399.00,449.00,898.00,Replacement value,2021-03-04');
     expect(csv).toContain('"\'=SUM(A1:A9)\nSecond line, with a comma"');
-    expect(csv).toContain('Kitchen,Unvalued thing,,,1,,,,,,,,No value,,,,0,0,2026-11-11,,');
+    expect(csv).toContain('Kitchen,Unvalued thing,,,1,,,,,,,,No value,,,,0,0,2026-11-11,,,');
   });
 });
 
