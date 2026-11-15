@@ -1,4 +1,4 @@
-import { centsToInput, figureSize, formatMoney, parseMoney } from '../money';
+import { centsToInput, figureSize, formatMoney, parseMoney, tidyMoneyInput } from '../money';
 
 const cents = (s: string) => {
   const r = parseMoney(s);
@@ -22,6 +22,9 @@ describe('parseMoney', () => {
     expect(cents('1.299,50')).toBe(129950);
     expect(cents('1.299.000')).toBe(129900000);
     expect(cents('1 299,50')).toBe(129950);
+    // One dot and three digits is a thousands mark, as a comma is: never $1.30.
+    expect(cents('1.299')).toBe(129900);
+    expect(cents('12.5')).toBe(1250);
   });
 
   it('ignores a currency sign and spaces', () => {
@@ -31,9 +34,10 @@ describe('parseMoney', () => {
   });
 
   it('rounds a third decimal half up', () => {
-    expect(cents('1.005')).toBe(101);
-    expect(cents('1.004')).toBe(100);
-    expect(cents('19.999')).toBe(2000);
+    expect(cents('1,000.005')).toBe(100001);
+    expect(cents('1,000.004')).toBe(100000);
+    expect(cents('19.9999')).toBe(2000);
+    expect(cents('0.999')).toBe(100);
   });
 
   it('treats empty as no amount', () => {
@@ -104,5 +108,15 @@ describe('the size of a headline amount', () => {
 
   it('never goes below a readable size', () => {
     expect(figureSize('9'.repeat(80), 44)).toBe(20);
+  });
+});
+
+describe('tidyMoneyInput', () => {
+  it('shows the amount as it was understood', () => {
+    expect(tidyMoneyInput('1.299')).toBe('1,299');
+    expect(tidyMoneyInput('12,5')).toBe('12.50');
+    expect(tidyMoneyInput('$1299.5')).toBe('1,299.50');
+    expect(tidyMoneyInput('abc')).toBe('abc');
+    expect(tidyMoneyInput('')).toBe('');
   });
 });

@@ -70,7 +70,9 @@ export async function backUp(): Promise<{ photos: number; missing: number }> {
   }
 }
 
-export type RestoreOutcome = { kind: 'cancelled' } | { kind: 'restored'; items: number; rooms: number; places: number; photos: number };
+export type RestoreOutcome =
+  | { kind: 'cancelled' }
+  | { kind: 'restored'; items: number; rooms: number; places: number; photos: number; /** Photos the inventory names that the file did not hold. */ missing: number };
 
 /** Reads a backup the person picks and, if all of it is good, replaces everything (every place) with it. */
 export async function restoreFromBackup(
@@ -103,7 +105,8 @@ export async function restoreFromBackup(
     await store.replace(mapDocs(library, (d) => markBackup(d, restoredAt)));
     const inUse = libraryPhotoIds(library);
     await removeOrphanPhotos(inUse);
-    return { kind: 'restored', ...found, photos: [...inUse].filter((id) => seen.has(id)).length };
+    const photos = [...inUse].filter((id) => seen.has(id)).length;
+    return { kind: 'restored', ...found, photos, missing: inUse.size - photos };
   } catch (e) {
     await staging.abort();
     throw e;

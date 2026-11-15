@@ -3,10 +3,10 @@ import { useRef, useState, type ComponentRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { addItem, addRoom, draftFromItem, emptyDraft, updateItem, type ItemDraft } from '@/domain/actions';
+import { addItem, addRoom, draftFromItem, emptyDraft, isFutureYmd, updateItem, type ItemDraft } from '@/domain/actions';
 import { canAddItem } from '@/domain/limits';
-import { centsToInput, parseMoney } from '@/domain/money';
-import { CATEGORIES, CATEGORY_LABELS, LIMITS, type Category, type Photo } from '@/domain/types';
+import { centsToInput, parseMoney, tidyMoneyInput } from '@/domain/money';
+import { CATEGORIES, CATEGORY_LABELS, CONDITIONS, CONDITION_LABELS, LIMITS, type Category, type Condition, type Photo } from '@/domain/types';
 import { success, warning } from '@/platform/haptics';
 import { importPhoto } from '@/platform/photos';
 import { pickFromLibrary, takePhoto } from '@/platform/pickImages';
@@ -18,6 +18,11 @@ import { ask, choose, confirm, notify } from '@/ui/dialogs';
 import { FormRow, PhotoStrip, PickRow, Stepper, TextRow } from '@/ui/form';
 import { BarButton, Button, Card, Divider, Footnote, SectionLabel } from '@/ui/kit';
 import { NO_OUTLINE, space, type, useTheme } from '@/ui/theme';
+
+/** An amount as the field shows it: grouped, as it reads after the person moves on. */
+function moneyText(cents: number | null): string {
+  return tidyMoneyInput(centsToInput(cents));
+}
 
 function moneyError(text: string): string | null {
   const parsed = parseMoney(text);
@@ -39,9 +44,11 @@ export default function ItemForm() {
     return emptyDraft(room?.id ?? '');
   });
   const [draft, setDraft] = useState<ItemDraft>(initial);
-  const [valueText, setValueText] = useState(centsToInput(initial.valueCents));
-  const [paidText, setPaidText] = useState(centsToInput(initial.pricePaidCents));
+  const [valueText, setValueText] = useState(moneyText(initial.valueCents));
+  const [paidText, setPaidText] = useState(moneyText(initial.pricePaidCents));
   const [showErrors, setShowErrors] = useState(false);
+  /** When the form opened: "today" for the purchase date check. */
+  const [openedAt] = useState(() => Date.now());
   const [importing, setImporting] = useState<'photos' | 'receipts' | null>(null);
   /** Photos imported while this form was open; deleted again if it is cancelled. */
   const imported = useRef<string[]>([]);
@@ -52,10 +59,11 @@ export default function ItemForm() {
   const nameMissing = draft.name.trim() === '';
   const valueProblem = moneyError(valueText);
   const paidProblem = moneyError(paidText);
+  const futureDate = isFutureYmd(draft.purchaseDate, openedAt);
   const dirty =
     JSON.stringify(draft) !== JSON.stringify(initial) ||
-    valueText !== centsToInput(initial.valueCents) ||
-    paidText !== centsToInput(initial.pricePaidCents);
+    valueText !== moneyText(initial.valueCents) ||
+    paidText !== moneyText(initial.pricePaidCents);
 
   const leave = () => {
     if (router.canGoBack()) router.back();
@@ -145,10 +153,19 @@ export default function ItemForm() {
     if (picked) set('category', picked === 'none' ? null : picked);
   };
 
+  const pickCondition = async () => {
+    const picked = await choose<Condition | 'none'>({
+      title: 'What condition is it in?',
+      message: 'Insurers use this to work out what an older thing is worth.',
+      choices: [...CONDITIONS.map((k) => ({ key: k, label: CONDITION_LABELS[k] })), { key: 'none' as const, label: 'Not stated' }],
+    });
+    if (picked) set('condition', picked === 'none' ? null : picked);
+  };
+
   const save = (another: boolean) => {
     const value = parseMoney(valueText);
     const paid = parseMoney(paidText);
-    if (nameMissing || !room || !value.ok || !paid.ok) {
+    if (nameMissing || !room || !value.ok || !paid.ok || futureDate) {
       setShowErrors(true);
       warning();
       if (nameMissing) scroll.current?.scrollTo({ y: 0, animated: true });
@@ -243,6 +260,8 @@ export default function ItemForm() {
           <PickRow testID="field-room" label="Room" value={room?.name ?? null} placeholder="Choose" onPress={pickRoom} />
           <Divider />
           <PickRow testID="field-category" label="Category" value={draft.category ? CATEGORY_LABELS[draft.category] : null} placeholder="None" onPress={pickCategory} />
+          <Divider />
+          <PickRow testID="field-condition" label="Condition" value={draft.condition ? CONDITION_LABELS[draft.condition] : null} placeholder="Not stated" onPress={pickCondition} />
         </Card>
 
         <SectionLabel>What it’s worth</SectionLabel>
@@ -252,6 +271,7 @@ export default function ItemForm() {
             label="Value"
             value={valueText}
             onChangeText={setValueText}
+            onBlur={() => setValueText((t) => tidyMoneyInput(t))}
             placeholder="Cost to replace one"
             suffix={doc.settings.currency}
             keyboardType="decimal-pad"
@@ -276,7 +296,7 @@ export default function ItemForm() {
 
         <SectionLabel>When you bought it</SectionLabel>
         <Card>
-          <FormRow label="Date">
+          <FormRow label="Date" error={futureDate ? 'That date hasn’t happened yet.' : null}>
             <DateField testID="field-date" value={draft.purchaseDate} onChange={(ymd) => set('purchaseDate', ymd)} />
           </FormRow>
           <Divider />
@@ -287,6 +307,7 @@ export default function ItemForm() {
             label="Price paid"
             value={paidText}
             onChangeText={setPaidText}
+            onBlur={() => setPaidText((t) => tidyMoneyInput(t))}
             placeholder="Optional"
             suffix={doc.settings.currency}
             keyboardType="decimal-pad"

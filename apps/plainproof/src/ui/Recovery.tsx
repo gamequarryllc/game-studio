@@ -27,7 +27,7 @@ export function RecoveryScreen() {
     try {
       const outcome = await restoreFromBackup(() => Promise.resolve(true));
       if (outcome.kind === 'restored') {
-        await notify('Backup restored', `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}, with ${plural(outcome.photos, 'photo')}.`);
+        await notify('Backup restored', `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}, with ${plural(outcome.photos, 'photo')}.${outcome.missing > 0 ? ` ${plural(outcome.missing, 'photo')} ${outcome.missing === 1 ? 'was' : 'were'} not in the backup.` : ''}`);
       }
     } catch (e) {
       await notify('That backup could not be restored', e instanceof Error && e.name === 'DocError' ? e.message : 'The file may be damaged. Try another backup.');

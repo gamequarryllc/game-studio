@@ -4,6 +4,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import type { Photo } from '@/domain/types';
 import { tap } from '@/platform/haptics';
 
+import { ask } from './dialogs';
+
 import { Icon, type IconName } from './Icon';
 import { Thumb } from './kit';
 import { HAIRLINE, NO_OUTLINE, radius, space, type, useTheme } from './theme';
@@ -109,9 +111,22 @@ export function Stepper({ value, onChange, min = 1, max = 9999, testID }: { valu
   };
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.m }}>
-      <Text testID={testID} style={[type.body, type.tabular, { color: c.ink, minWidth: 24, textAlign: 'right' }]}>
-        {value}
-      </Text>
+      {/* Tapping the number lets a big count (40 books, 120 records) be typed instead of tapped out. */}
+      <Pressable
+        testID={testID ? `${testID}-type` : undefined}
+        accessibilityRole="button"
+        accessibilityLabel={`${value}. Tap to type a number`}
+        hitSlop={8}
+        onPress={async () => {
+          const typed = await ask({ title: 'How many?', initial: String(value), placeholder: `${min} to ${max}`, confirmLabel: 'Done' });
+          if (typed === null) return;
+          const n = Number.parseInt(typed.replace(/[^\d]/g, ''), 10);
+          if (Number.isFinite(n)) onChange(Math.min(Math.max(n, min), max));
+        }}>
+        <Text testID={testID} style={[type.body, type.tabular, { color: c.green, minWidth: 24, textAlign: 'right', textDecorationLine: 'underline', textDecorationStyle: 'dotted' }]}>
+          {value}
+        </Text>
+      </Pressable>
       <View style={[styles.stepper, { backgroundColor: c.sunk }]}>
         {button(-1, 'minus', 'One fewer')}
         <View style={{ width: HAIRLINE, height: 18, backgroundColor: c.ink3 }} />

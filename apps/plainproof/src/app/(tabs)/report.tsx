@@ -166,7 +166,8 @@ export default function ReportTab() {
           success();
           await notify(
             'Backup restored',
-            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ${plural(outcome.photos, 'photo')}.`,
+            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ${plural(outcome.photos, 'photo')}.` +
+              (outcome.missing > 0 ? ` ${plural(outcome.missing, 'photo')} ${outcome.missing === 1 ? 'was' : 'were'} not in the backup and will show as blank.` : ''),
           );
         }
       },

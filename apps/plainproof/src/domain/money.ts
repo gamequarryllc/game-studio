@@ -21,7 +21,7 @@ export type MoneyParse = { ok: true; cents: number | null } | { ok: false; reaso
 
 /**
  * Reads what someone typed into a money field. Empty means "no amount".
- * Accepts "1299", "1,299.50", "1.299,50", "$ 1 299.5" and "12,5".
+ * Accepts "1299", "1,299.50", "1.299,50", "1.299", "$ 1 299.5" and "12,5".
  */
 export function parseMoney(input: string): MoneyParse {
   const s = input.replace(/[\s  '’]/g, '').replace(/^[^\d.,-]+|[^\d.,]+$/g, '');
@@ -42,7 +42,11 @@ export function parseMoney(input: string): MoneyParse {
     decimalAt = commas === 1 && tail !== 3 ? lastComma : -1;
   } else if (lastDot >= 0) {
     const dots = s.split('.').length - 1;
-    decimalAt = dots === 1 ? lastDot : -1;
+    const tail = s.length - lastDot - 1;
+    const head = s.slice(0, lastDot);
+    // Like the comma: "1.299" is a thousand two hundred ninety-nine (how most of Europe writes it), not $1.30.
+    // "12.5", "0.999" and ".999" stay decimals. The field shows the amount back once it's typed, so either way it's seen.
+    decimalAt = dots === 1 && (tail !== 3 || head === '' || /^0+$/.test(head)) ? lastDot : -1;
   }
 
   let whole = decimalAt >= 0 ? s.slice(0, decimalAt) : s;
@@ -130,4 +134,14 @@ export function currencyForLocale(locale: string | undefined): string {
 export function figureSize(text: string, full: number, fits = 11, smallest = 20): number {
   if (text.length <= fits) return full;
   return Math.max(smallest, Math.floor((full * fits) / text.length));
+}
+
+/** What a money field shows once the person moves on: the amount as understood, grouped ("1299" becomes "1,299"; "12,5" becomes "12.50"). Text that isn't an amount is left alone. */
+export function tidyMoneyInput(text: string): string {
+  const parsed = parseMoney(text);
+  if (!parsed.ok || parsed.cents === null) return text;
+  const whole = Math.floor(parsed.cents / 100);
+  const frac = parsed.cents % 100;
+  const grouped = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return frac === 0 ? grouped : `${grouped}.${String(frac).padStart(2, '0')}`;
 }
