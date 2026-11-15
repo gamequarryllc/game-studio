@@ -1,7 +1,8 @@
-import { displayTime, displayYmd } from './dates';
+import { displayDateTime, displayTime, displayYmd } from './dates';
 import { formatMoney } from './money';
 import { homeSummary, itemTotalCents, plural, roomSummaries, unitCents } from './selectors';
-import { CATEGORY_LABELS, type Doc, type Item } from './types';
+import { sha256Hex } from './sha256';
+import { CATEGORY_LABELS, CONDITION_LABELS, type Doc, type Item, type Photo } from './types';
 
 // The insurance report. This builds one self-contained HTML page; on the
 // phone it is turned into a PDF, on the web preview it opens in a new tab.
@@ -9,6 +10,10 @@ import { CATEGORY_LABELS, type Doc, type Item } from './types';
 export interface ReportOptions {
   includePhotos: boolean;
   includeReceipts: boolean;
+  /** Every photo of every item, full size, in an appendix after the receipts. */
+  includeAllPhotos?: boolean;
+  /** The app's version, printed so a report can be traced to the build that made it. */
+  appVersion?: string;
   /** When the report was made (ms). */
   generatedAt: number;
   /** Photo id to a data: URI. Photos that are missing here are simply left out. */
@@ -78,6 +83,16 @@ const CSS = `
   .receipts { page-break-before: always; }
   .receipt { page-break-inside: avoid; margin: 0 0 14pt; }
   .receipt img { display: block; max-width: 100%; max-height: 190mm; border: 0.5pt solid #d8d2c4; margin-top: 4pt; }
+  .basis { color: #6b675e; font-size: 8pt; white-space: normal; }
+  .counted { margin: -10pt 0 18pt; font-size: 9pt; color: #45423b; }
+  .counted b { color: #8a4b0f; font-weight: 600; }
+  .photos { page-break-before: always; }
+  .photo-item { page-break-inside: avoid; margin: 0 0 12pt; }
+  .photo-grid { font-size: 0; }
+  .photo-grid figure { display: inline-block; vertical-align: top; width: 49%; margin: 6pt 2% 0 0; font-size: 8pt; page-break-inside: avoid; }
+  .photo-grid figure:nth-child(2n) { margin-right: 0; }
+  .photo-grid img { display: block; width: 100%; max-height: 105mm; object-fit: contain; border: 0.5pt solid #d8d2c4; background: #f6f3ec; }
+  .photo-grid figcaption, .receipt .caption { color: #6b675e; font-size: 8pt; margin-top: 2pt; }
   .closing { margin-top: 22pt; padding-top: 8pt; border-top: 0.75pt solid #d8d2c4; color: #6b675e; font-size: 8.5pt; }
 `;
 
@@ -92,8 +107,65 @@ function itemCell(item: Item): string {
   if (item.category) facts.push(escapeHtml(CATEGORY_LABELS[item.category]));
   if (facts.length) parts.push(`<div class="detail">${facts.join(' · ')}</div>`);
   if (item.serial) parts.push(`<div class="detail">Serial no. <b>${escapeHtml(item.serial)}</b></div>`);
+  if (item.condition) parts.push(`<div class="detail">Condition: ${escapeHtml(CONDITION_LABELS[item.condition])}</div>`);
   if (item.notes) parts.push(`<div class="note">${lines(item.notes)}</div>`);
+  parts.push(`<div class="basis">${escapeHtml(documentedLine(item))}</div>`);
   return parts.join('');
+}
+
+/** When the item went into the inventory, and when its first photo was taken: the evidence that it was owned before a loss. */
+export function documentedLine(item: Item): string {
+  const parts = [`Recorded ${displayTime(item.createdAt)}`];
+  const taken = item.photos.map((p) => p.takenAt).filter((t): t is number => t !== null);
+  if (taken.length > 0) parts.push(`photo taken ${displayTime(Math.min(...taken))}`);
+  return parts.join(' · ');
+}
+
+function photoCaption(photo: Photo, label: string): string {
+  const parts = [label];
+  if (photo.takenAt !== null) parts.push(`taken ${displayTime(photo.takenAt)}`);
+  if (photo.addedAt !== null) parts.push(`added ${displayTime(photo.addedAt)}`);
+  return parts.join(' · ');
+}
+
+/**
+ * A short reference for one state of the inventory: the same data always
+ * gives the same reference, and any change to an item, a value, a room or the
+ * heading gives a different one. Printed on the report and in the
+ * spreadsheet's file so the two can be matched, and so an adjuster can tell
+ * which of two reports is which.
+ */
+export function inventoryReference(doc: Doc): string {
+  const canonical = JSON.stringify({
+    profile: doc.profile,
+    currency: doc.settings.currency,
+    rooms: doc.rooms.map((r) => [r.id, r.name]),
+    items: doc.items.map((i) => [
+      i.id, i.roomId, i.name, i.category, i.condition, i.quantity, i.valueCents, i.pricePaidCents, i.purchaseDate,
+      i.purchasedFrom, i.brand, i.model, i.serial, i.notes, i.photos.map((p) => p.id), i.receipts.map((p) => p.id), i.createdAt,
+    ]),
+  });
+  return sha256Hex(canonical).slice(0, 16).toUpperCase().replace(/(.{4})(?!$)/g, '$1-');
+}
+
+/** How the headline total was reached, in one sentence: which values are replacement costs, which are prices paid, and what is missing. */
+export function valueBasisSentence(doc: Doc): { text: string; missing: number } {
+  let replacement = 0;
+  let paid = 0;
+  let missing = 0;
+  for (const item of doc.items) {
+    if (item.valueCents !== null) replacement += 1;
+    else if (item.pricePaidCents !== null) paid += 1;
+    else missing += 1;
+  }
+  const parts: string[] = [];
+  if (replacement > 0) parts.push(`${plural(replacement, 'item')} at replacement value`);
+  if (paid > 0) parts.push(`${plural(paid, 'item')} at the price paid, where no replacement value was given`);
+  let text = parts.length ? `The total counts ${parts.join(', and ')}.` : '';
+  if (missing > 0) {
+    text += `${text ? ' ' : ''}${missing === 1 ? '1 item has' : `${plural(missing, 'item')} have`} no value and ${missing === 1 ? 'is' : 'are'} not in the total.`;
+  }
+  return { text, missing };
 }
 
 function purchaseCell(item: Item, currency: string): string {
@@ -149,7 +221,8 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
   out.push('<!doctype html><html lang="en"><head><meta charset="utf-8">');
   out.push('<meta name="viewport" content="width=device-width, initial-scale=1">');
   out.push(`<title>${escapeHtml(reportTitle(doc))}: home inventory</title>`);
-  out.push(`<style>${CSS}${pageFootCss(reportTitle(doc), displayTime(opts.generatedAt))}</style></head><body>`);
+  const reference = inventoryReference(doc);
+  out.push(`<style>${CSS}${pageFootCss(`${reportTitle(doc)} · Ref ${reference}`, displayTime(opts.generatedAt))}</style></head><body>`);
 
   out.push('<div class="kicker">Home inventory</div>');
   out.push(`<h1 class="serif">${escapeHtml(reportTitle(doc))}</h1>`);
@@ -159,7 +232,8 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
   if (doc.profile.address) who.push(['Address', lines(doc.profile.address)]);
   if (doc.profile.insurer) who.push(['Insurer', escapeHtml(doc.profile.insurer)]);
   if (doc.profile.policyNumber) who.push(['Policy number', escapeHtml(doc.profile.policyNumber)]);
-  who.push(['Date prepared', escapeHtml(displayTime(opts.generatedAt))]);
+  who.push(['Prepared', escapeHtml(displayDateTime(opts.generatedAt))]);
+  who.push(['Report reference', `${escapeHtml(reference)}${opts.appVersion ? ` <span class="muted">· Plainproof ${escapeHtml(opts.appVersion)}</span>` : ''}`]);
   out.push('<table class="who">');
   for (let i = 0; i < who.length; i += 2) {
     out.push('<tr>');
@@ -175,6 +249,12 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
   out.push(`<div><span class="label">Items</span><span class="figure serif">${summary.count.toLocaleString('en-US')}</span></div>`);
   out.push(`<div><span class="label">Rooms</span><span class="figure serif">${rooms.filter((r) => r.count > 0).length}</span></div>`);
   out.push('</div>');
+  const basis = valueBasisSentence(doc);
+  if (basis.text) {
+    const missingAt = basis.text.search(/\d[\d,]* items? (has|have) no value/);
+    const shown = missingAt >= 0 ? `${escapeHtml(basis.text.slice(0, missingAt))}<b>${escapeHtml(basis.text.slice(missingAt))}</b>` : escapeHtml(basis.text);
+    out.push(`<p class="counted">${shown}</p>`);
+  }
 
   if (summary.count === 0) {
     out.push('<p class="muted">Nothing has been added to this inventory yet.</p>');
@@ -203,14 +283,20 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
     '</colgroup>';
 
   const receiptBlocks: string[] = [];
+  const photoBlocks: string[] = [];
   for (const r of rooms) {
     if (r.count === 0) continue;
     const items = doc.items.filter((it) => it.roomId === r.room.id);
     out.push(`<h2 class="serif">${escapeHtml(r.room.name)}</h2>`);
-    out.push(`<p class="sub">${plural(r.count, 'item')} · ${money(r.totalCents)}</p>`);
+    // The room line carries whose inventory and which report it is, in case the PDF maker leaves out the page foot.
+    const unvalued = r.count - r.valued;
+    out.push(
+      `<p class="sub">${plural(r.count, 'item')} · ${money(r.totalCents)}${unvalued > 0 ? ` · ${unvalued} without a value` : ''}` +
+        ` · ${escapeHtml(reportTitle(doc))}, ref ${escapeHtml(reference)}</p>`,
+    );
     out.push(`<table class="list items">${columns}<thead><tr>`);
     if (opts.includePhotos) out.push('<th class="photo">Photo</th>');
-    out.push('<th>Item</th><th>Purchase</th><th class="qty">Qty</th><th class="num">Each</th><th class="num">Total</th></tr></thead><tbody>');
+    out.push('<th>Item</th><th>Purchase</th><th class="qty">Qty</th><th class="num">Replace each</th><th class="num">Total</th></tr></thead><tbody>');
     for (const item of items) {
       out.push('<tr>');
       if (opts.includePhotos) {
@@ -221,8 +307,12 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
       out.push(`<td>${itemCell(item)}</td>`);
       out.push(`<td class="detail">${purchaseCell(item, currency)}</td>`);
       out.push(`<td class="qty">${item.quantity}</td>`);
-      out.push(`<td class="num">${each === null ? '<span class="muted">No value</span>' : money(each)}</td>`);
-      out.push(`<td class="num">${each === null ? NOTHING : money(itemTotalCents(item))}</td>`);
+      out.push(`<td class="num">${item.valueCents === null ? NOTHING : money(item.valueCents)}</td>`);
+      const atPaid = item.valueCents === null && item.pricePaidCents !== null;
+      out.push(
+        `<td class="num">${each === null ? '<span class="muted">No value</span>' : money(itemTotalCents(item))}` +
+          `${atPaid ? '<div class="basis">at price paid</div>' : ''}</td>`,
+      );
       out.push('</tr>');
 
       if (opts.includeReceipts) {
@@ -232,9 +322,28 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
           const label = item.receipts.length > 1 ? ` (${index + 1} of ${item.receipts.length})` : '';
           receiptBlocks.push(
             `<div class="receipt"><div class="name">${escapeHtml(item.name)}${label}</div>` +
-              `<div class="detail">${escapeHtml(r.room.name)}</div><img src="${src}" alt=""></div>`,
+              `<div class="detail">${escapeHtml(r.room.name)}</div><img src="${src}" alt="">` +
+              `<div class="caption">${escapeHtml(photoCaption(receipt, 'Receipt'))}</div></div>`,
           );
         });
+      }
+
+      if (opts.includeAllPhotos && item.photos.length > 0) {
+        const figures = item.photos
+          .map((photo, index) => {
+            const src = safeImage(photoData[photo.id]);
+            if (!src) return '';
+            const label = `Photo ${index + 1} of ${item.photos.length}`;
+            return `<figure><img src="${src}" alt=""><figcaption>${escapeHtml(photoCaption(photo, label))}</figcaption></figure>`;
+          })
+          .join('');
+        if (figures) {
+          photoBlocks.push(
+            `<div class="photo-item"><div class="name">${escapeHtml(item.name)}</div>` +
+              `<div class="detail">${escapeHtml(r.room.name)}${item.serial ? ` · Serial no. ${escapeHtml(item.serial)}` : ''}</div>` +
+              `<div class="photo-grid">${figures}</div></div>`,
+          );
+        }
       }
     }
     out.push('</tbody></table>');
@@ -246,16 +355,23 @@ export function buildReportHtml(doc: Doc, opts: ReportOptions): string {
     out.push('</div>');
   }
 
+  if (photoBlocks.length > 0) {
+    out.push('<div class="photos"><h2 class="serif">Photos</h2>');
+    out.push(photoBlocks.join(''));
+    out.push('</div>');
+  }
+
   out.push(
-    '<p class="closing">Values are the owner’s own figures: the replacement value where one was given, otherwise the price paid. ' +
-      `Prepared with Plainproof on ${escapeHtml(displayTime(opts.generatedAt))}.</p>`,
+    '<p class="closing">Values are the owner’s own figures: the replacement value where one was given, otherwise the price paid, as marked on each line. ' +
+      '“Recorded” is the day an item was added to this inventory; “taken” is the date the camera wrote into the photo. ' +
+      `Prepared with Plainproof${opts.appVersion ? ` ${escapeHtml(opts.appVersion)}` : ''} on ${escapeHtml(displayDateTime(opts.generatedAt))}, report reference ${escapeHtml(reference)}.</p>`,
   );
   out.push('</body></html>');
   return out.join('');
 }
 
 /** Which photo files the report needs, so only those are read from disk. */
-export function reportPhotoIds(doc: Doc, opts: Pick<ReportOptions, 'includePhotos' | 'includeReceipts'>): {
+export function reportPhotoIds(doc: Doc, opts: Pick<ReportOptions, 'includePhotos' | 'includeReceipts' | 'includeAllPhotos'>): {
   thumbs: string[];
   full: string[];
 } {
@@ -264,6 +380,7 @@ export function reportPhotoIds(doc: Doc, opts: Pick<ReportOptions, 'includePhoto
   for (const item of doc.items) {
     if (opts.includePhotos && item.photos.length) thumbs.push(item.photos[0].id);
     if (opts.includeReceipts) for (const r of item.receipts) full.push(r.id);
+    if (opts.includeAllPhotos) for (const p of item.photos) full.push(p.id);
   }
   return { thumbs, full };
 }
@@ -271,6 +388,12 @@ export function reportPhotoIds(doc: Doc, opts: Pick<ReportOptions, 'includePhoto
 export function reportFileName(doc: Doc, generatedAt: number): string {
   const d = new Date(generatedAt);
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const base = (doc.profile.homeName || 'Home inventory').replace(/[^A-Za-z0-9 _-]+/g, '').trim().replace(/\s+/g, '-');
+  // Accents are folded ("Café" becomes "Cafe") rather than dropped.
+  const base = (doc.profile.homeName || 'Home inventory')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9 _-]+/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
   return `${base || 'Home-inventory'}-${stamp}`;
 }

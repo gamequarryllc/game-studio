@@ -16,6 +16,7 @@ export interface PickedImage {
   uri: string;
   width: number;
   height: number;
+  takenAt?: number | null;
 }
 
 const key = (id: string, size: PhotoSize) => (size === 'thumb' ? `${id}_t` : id);
@@ -54,7 +55,7 @@ export async function importPhoto(source: PickedImage): Promise<Photo> {
   await dbPut('photos', key(id, 'thumb'), thumb.uri);
   cache.set(key(id, 'full'), full.uri);
   cache.set(key(id, 'thumb'), thumb.uri);
-  return { id, width: full.width, height: full.height };
+  return { id, width: full.width, height: full.height, takenAt: source.takenAt ?? null, addedAt: Date.now() };
 }
 
 async function load(id: string, size: PhotoSize): Promise<string | null> {

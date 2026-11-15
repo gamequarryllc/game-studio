@@ -19,7 +19,7 @@ export function appVersion(): string {
   return Constants.expoConfig?.version ?? '0';
 }
 
-export async function makeReport(opts: { includePhotos: boolean; includeReceipts: boolean }): Promise<void> {
+export async function makeReport(opts: { includePhotos: boolean; includeReceipts: boolean; includeAllPhotos: boolean }): Promise<void> {
   const target = prepareReport();
   try {
     const doc = store.get();
@@ -30,11 +30,11 @@ export async function makeReport(opts: { includePhotos: boolean; includeReceipts
       const b64 = await readPhotoBase64(id, 'thumb');
       if (b64) photoData[id] = `data:image/jpeg;base64,${b64}`;
     }
-    for (const id of wanted.full) {
+    for (const id of new Set(wanted.full)) {
       const b64 = await readPhotoBase64(id, 'full');
       if (b64) photoData[id] = `data:image/jpeg;base64,${b64}`;
     }
-    const html = buildReportHtml(doc, { ...opts, generatedAt: now, photoData });
+    const html = buildReportHtml(doc, { ...opts, generatedAt: now, photoData, appVersion: appVersion() });
     await deliverReport(target, html, reportFileName(doc, now));
     store.update((d) => markReport(d, now));
   } catch (e) {

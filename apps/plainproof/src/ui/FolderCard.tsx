@@ -130,7 +130,7 @@ export function FolderCard({
         <Text testID={id('home-count')} style={[type.subhead, { color: inks.ink2, marginTop: 2 }]}>
           {empty
             ? `${plural(summary.rooms, 'room')} ready to fill`
-            : `${plural(summary.count, 'item')} in ${plural(summary.rooms, 'room')}`}
+            : `${plural(summary.count, 'item')} in ${plural(summary.filledRooms, 'room')}`}
         </Text>
         {empty && whenEmpty ? <View style={{ marginTop: space.l }}>{whenEmpty}</View> : null}
         {empty || compact ? null : (

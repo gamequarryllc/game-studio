@@ -11,8 +11,8 @@ function home() {
   const draft = emptyDraft(doc.rooms[0].id);
   draft.name = 'Toaster';
   draft.valueCents = 4500;
-  draft.photos = [{ id: 'photoaaaa', width: 400, height: 300 }];
-  draft.receipts = [{ id: 'receiptaa', width: 300, height: 600 }];
+  draft.photos = [{ id: 'photoaaaa', width: 400, height: 300, takenAt: null, addedAt: null }];
+  draft.receipts = [{ id: 'receiptaa', width: 300, height: 600, takenAt: null, addedAt: null }];
   doc = addItem(doc, draft, NOW).doc;
   return doc;
 }
@@ -69,7 +69,7 @@ describe('parseDoc', () => {
             purchaseDate: '2021-02-30',
             category: 'spaceships',
             notes: 'line one\nline two',
-            photos: [{ id: 'ok_photo1', width: 10, height: 10 }, { id: '../../etc/passwd' }, { id: 'ok_photo1' }],
+            photos: [{ id: 'ok_photo1', width: 10, height: 10, takenAt: null, addedAt: null }, { id: '../../etc/passwd' }, { id: 'ok_photo1' }],
           },
           { id: 'item2222', roomId: 'room1111', name: '   ' },
         ],
@@ -88,7 +88,7 @@ describe('parseDoc', () => {
     expect(item.purchaseDate).toBeNull();
     expect(item.category).toBeNull();
     expect(item.notes).toBe('line one\nline two');
-    expect(item.photos).toEqual([{ id: 'ok_photo1', width: 10, height: 10 }]);
+    expect(item.photos).toEqual([{ id: 'ok_photo1', width: 10, height: 10, takenAt: null, addedAt: null }]);
     expect(doc.settings.currency).toBe('USD');
   });
 

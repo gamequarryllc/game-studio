@@ -53,6 +53,43 @@ export function currentDoc(lib: Library): Doc {
   return currentPlace(lib).doc;
 }
 
+/** True when something a backup holds changed (not just the record of when a backup or report was made). */
+export function contentChanged(before: Doc, after: Doc): boolean {
+  return (
+    before.rooms !== after.rooms ||
+    before.items !== after.items ||
+    before.profile !== after.profile ||
+    before.settings !== after.settings
+  );
+}
+
+function touch(doc: Doc, now: number): Doc {
+  return { ...doc, meta: { ...doc.meta, modifiedAt: now } };
+}
+
+/**
+ * Records when each place last changed, so "backed up" can't claim to be
+ * current after a deleted item, a renamed room or a new policy number. When
+ * the set of places itself changes (one added, removed or retyped), every
+ * place is marked, since one backup holds them all.
+ */
+export function stampChanges(before: Library, after: Library, now: number): Library {
+  if (before === after) return after;
+  const shape = (lib: Library) => lib.places.map((p) => `${p.id}:${p.kind}`).join(',');
+  const all = shape(before) !== shape(after);
+  const old = new Map(before.places.map((p) => [p.id, p.doc]));
+  let changed = false;
+  const places = after.places.map((p) => {
+    const was = old.get(p.id);
+    if (all || !was || contentChanged(was, p.doc)) {
+      changed = true;
+      return { ...p, doc: touch(p.doc, now) };
+    }
+    return p;
+  });
+  return changed ? { ...after, places } : after;
+}
+
 /** Puts a changed document back as the current place's. */
 export function setCurrentDoc(lib: Library, doc: Doc): Library {
   const at = currentPlace(lib);

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
 import { emptyDoc } from '@/domain/doc';
-import { currentDoc, libraryOf, parseLibraryText, serializeLibrary, setCurrentDoc, totalItems, type Library } from '@/domain/library';
+import { currentDoc, libraryOf, parseLibraryText, serializeLibrary, setCurrentDoc, stampChanges, totalItems, type Library } from '@/domain/library';
 import { currencyForLocale } from '@/domain/money';
 import type { Doc } from '@/domain/types';
 import { keepDamagedCopy, readPreviousTextResult, readTextResult, writeText } from '@/platform/files';
@@ -130,17 +130,21 @@ export const store = {
   /** Applies a change to the current place. The function gets its document and the time. */
   update(change: (doc: Doc, now: number) => Doc): void {
     if (snapshot.state !== 'ready') return;
-    const next = change(snapshot.doc, Date.now());
+    const now = Date.now();
+    const next = change(snapshot.doc, now);
     if (next === snapshot.doc) return;
-    emit({ ...snapshot, library: setCurrentDoc(snapshot.library, next), doc: next });
+    const library = stampChanges(snapshot.library, setCurrentDoc(snapshot.library, next), now);
+    emit({ ...snapshot, library, doc: currentDoc(library) });
     schedule();
   },
 
   /** Applies a change to the places themselves: adding one, switching, renaming, or a change every place gets. */
   updateLibrary(change: (library: Library, now: number) => Library): void {
     if (snapshot.state !== 'ready') return;
-    const next = change(snapshot.library, Date.now());
-    if (next === snapshot.library) return;
+    const now = Date.now();
+    const changed = change(snapshot.library, now);
+    if (changed === snapshot.library) return;
+    const next = stampChanges(snapshot.library, changed, now);
     emit({ ...snapshot, library: next, doc: currentDoc(next) });
     schedule();
   },

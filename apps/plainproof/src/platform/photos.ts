@@ -16,6 +16,8 @@ export interface PickedImage {
   uri: string;
   width: number;
   height: number;
+  /** When the picture was taken, if the camera recorded it (ms). */
+  takenAt?: number | null;
 }
 
 function folder(name: 'photos' | 'photos-restore'): Directory {
@@ -48,7 +50,8 @@ export async function importPhoto(source: PickedImage): Promise<Photo> {
   const id = newId();
   const full = await render(source, FULL_SIDE, 0.82, fileFor(id, 'full'));
   await render({ uri: fileFor(id, 'full').uri, ...full }, THUMB_SIDE, 0.7, fileFor(id, 'thumb'));
-  return { id, ...full };
+  // The stored copy is re-encoded and carries no EXIF (so no location leaves in a backup); the date taken is kept here instead.
+  return { id, ...full, takenAt: source.takenAt ?? null, addedAt: Date.now() };
 }
 
 /** Where to show a photo from. On the iPhone this is known straight away. */

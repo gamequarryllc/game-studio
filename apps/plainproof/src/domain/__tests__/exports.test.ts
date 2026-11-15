@@ -37,8 +37,8 @@ function home(): Doc {
   a.purchasedFrom = 'Larder & Hearth';
   a.pricePaidCents = 39900;
   a.notes = '=SUM(A1:A9)\nSecond line, with a comma';
-  a.photos = [{ id: 'photo0001', width: 400, height: 300 }];
-  a.receipts = [{ id: 'rcpt00001', width: 300, height: 600 }];
+  a.photos = [{ id: 'photo0001', width: 400, height: 300, takenAt: null, addedAt: null }];
+  a.receipts = [{ id: 'rcpt00001', width: 300, height: 600, takenAt: null, addedAt: null }];
   doc = addItem(doc, a, NOW).doc;
   const b = emptyDraft(doc.rooms[0].id);
   b.name = 'Unvalued thing';
@@ -137,11 +137,11 @@ describe('the spreadsheet', () => {
   it('has one row per item with exact amounts', () => {
     const csv = buildCsv(home());
     const rows = csv.replace('﻿', '').trimEnd().split('\r\n');
-    expect(rows[0].split(',')).toHaveLength(15);
+    expect(rows[0].split(',')).toHaveLength(21);
     expect(csv.startsWith('﻿')).toBe(true);
-    expect(csv).toContain('449.00,898.00,399.00,2021-03-04');
+    expect(csv).toContain('449.00,399.00,449.00,898.00,Replacement value,2021-03-04');
     expect(csv).toContain('"\'=SUM(A1:A9)\nSecond line, with a comma"');
-    expect(csv).toContain('Kitchen,Unvalued thing,,1,,,,,,,,,,0,0');
+    expect(csv).toContain('Kitchen,Unvalued thing,,,1,,,,,,,,No value,,,,0,0,2026-11-11,,');
   });
 });
 
@@ -200,7 +200,7 @@ describe('backups', () => {
     const draft = emptyDraft(cabin.rooms[0].id);
     draft.name = 'Canoe';
     draft.valueCents = 90000;
-    draft.photos = [{ id: 'cabinphoto1', width: 4, height: 3 }];
+    draft.photos = [{ id: 'cabinphoto1', width: 4, height: 3, takenAt: null, addedAt: null }];
     const withCanoe = { ...two, places: two.places.map((p) => (p.id === placeId ? { ...p, doc: addItem(p.doc, draft, NOW).doc } : p)) };
     const chunks: Uint8Array[] = [];
     const all = { ...files, 'cabinphoto1:full': new Uint8Array([4, 2]) };
@@ -220,7 +220,7 @@ describe('backups', () => {
 
   it('counts photos whose files have gone missing and carries on', async () => {
     const d = home();
-    d.items[0].photos.push({ id: 'vanished1', width: 1, height: 1 });
+    d.items[0].photos.push({ id: 'vanished1', width: 1, height: 1, takenAt: null, addedAt: null });
     const { result, bytes } = await makeBackup(d);
     expect(result).toEqual({ photos: 2, missing: 1 });
     expect(restore(bytes, 1000).doc.items[0].photos).toHaveLength(2);
