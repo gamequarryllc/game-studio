@@ -330,7 +330,7 @@ async function main() {
       await h.tap('form-save');
       await h.visible('rooms-screen');
       await h.expectText('home-total', '$1,899');
-      await h.expectText('home-count', '1 item in 5 rooms');
+      await h.expectText('home-count', '1 item in 1 room');
       // The drawer: every room's folder is on the screen at once, one under the other, and the first is the open one.
       const five = ['Living room', 'Kitchen', 'Bedroom', 'Home office', 'Garage'];
       const tops = [];
@@ -458,7 +458,7 @@ async function main() {
       await h.visible('photos-remove-0', 15000);
       await h.tap('form-save');
       await h.visible('rooms-screen');
-      await h.expectText('home-count', '6 items in 5 rooms');
+      await h.expectText('home-count', '6 items in 4 rooms');
       await h.expectText('home-total', '$7,097');
       await h.visible('gap-no-value');
       await h.visible('gap-no-serial');
@@ -510,7 +510,7 @@ async function main() {
       assert.match(await h.dialogText(), /moved, not deleted/);
       await h.confirm();
       await h.visible('rooms-screen');
-      await h.expectText('home-count', '6 items in 4 rooms');
+      await h.expectText('home-count', '6 items in 3 rooms');
       await h.expectText('home-total', '$7,097');
     });
 
@@ -566,7 +566,7 @@ async function main() {
       await h.expectText('room-summary', '1 item · $2,400');
       await h.back();
       await h.expectText('home-total', '$6,648');
-      await h.expectText('home-count', '5 items in 4 rooms');
+      await h.expectText('home-count', '5 items in 3 rooms');
     });
 
     await step('report: opens with every item, photo and receipt; the spreadsheet matches', async () => {
@@ -589,8 +589,8 @@ async function main() {
       watch(reportPage, 'report');
       await reportPage.waitForFunction(() => document.body && document.body.innerText.includes('Summary by room'), null, { timeout: 20000 });
       const text = await reportPage.evaluate(() => document.body.innerText);
-      for (const s of ['Fern Cottage', 'Sample household', '3 Fern Road, Elm Hill', 'Example Mutual', 'HO-0000000', '$6,648.00', '65-inch OLED television', 'NV65A2X0418K', 'Three-seat sofa', 'No value', 'Receipts', 'Paid $1,799.99']) {
-        assert.ok(text.includes(s), `the report is missing "${s}"`);
+      for (const s of ['Fern Cottage', 'Sample household', '3 Fern Road, Elm Hill', 'Example Mutual', 'HO-0000000', '$6,648.00', '65-inch OLED television', 'NV65A2X0418K', 'Three-seat sofa', 'No value', 'Receipts', 'Paid $1,799.99', 'Replace each', 'Report reference', '1 item has no value and is not in the total.', 'Recorded ']) {
+        assert.ok(text.toLowerCase().includes(s.toLowerCase()), `the report is missing "${s}"`);
       }
       const images = await reportPage.evaluate(() => Array.from(document.images).map((i) => ({ ok: i.complete && i.naturalWidth > 0, data: i.src.startsWith('data:image/jpeg') })));
       assert.strictEqual(images.length, 5, `expected 4 item photos and 1 receipt, found ${images.length}`);
@@ -600,6 +600,19 @@ async function main() {
       await reportPage.screenshot({ path: path.join(SHOTS, '27-report-page.png'), fullPage: true });
       await reportPage.pdf({ path: path.join(SHOTS, 'report.pdf'), format: 'Letter', printBackground: true });
       await reportPage.close();
+
+      // Every photo, full size, in an appendix with its dates.
+      await h.tap('opt-all-photos');
+      const [allPhotos] = await Promise.all([context.waitForEvent('page'), h.tap('make-report')]);
+      watch(allPhotos, 'report-all-photos');
+      await allPhotos.waitForFunction(() => document.body && document.body.innerText.includes('Summary by room'), null, { timeout: 20000 });
+      assert.ok((await allPhotos.evaluate(() => document.body.innerText)).includes('Photo 1 of 1 · added '), 'the photo appendix is missing its captions');
+      assert.ok((await allPhotos.evaluate(() => document.images.length)) > 5, 'the photo appendix added no photos');
+      await allPhotos.setViewportSize({ width: 816, height: 1056 });
+      await allPhotos.emulateMedia({ media: 'print' });
+      await allPhotos.screenshot({ path: path.join(SHOTS, '27c-report-all-photos.png'), fullPage: true });
+      await allPhotos.close();
+      await h.tap('opt-all-photos');
 
       // Without photos or receipts.
       await h.tap('opt-photos');
@@ -617,7 +630,7 @@ async function main() {
       const csv = fs.readFileSync(await download.path(), 'utf8');
       const rows = csv.replace('﻿', '').trimEnd().split('\r\n');
       assert.strictEqual(rows.length, 6, `expected a header and 5 items, got ${rows.length} rows`);
-      assert.ok(csv.includes('Living room,65-inch OLED television,Electronics,1,Norvik,OL65-A2,NV65A2X0418K,1899.00,1899.00,1799.99,2021-03-04,Brightway Electronics'));
+      assert.ok(csv.includes('Living room,65-inch OLED television,Electronics,,1,Norvik,OL65-A2,NV65A2X0418K,1899.00,1799.99,1899.00,1899.00,Replacement value,2021-03-04,Brightway Electronics'), 'the spreadsheet row for the television is wrong');
     });
 
     await step('backup: one file with the document and every photo', async () => {
@@ -671,6 +684,41 @@ async function main() {
       await h.visible('rooms-screen');
     });
 
+    await step('a damaged save file shows the recovery screen and is never saved over', async () => {
+      const kv = (op, value) =>
+        page.evaluate(
+          ([op, value]) =>
+            new Promise((resolve, reject) => {
+              const open = indexedDB.open('plainproof', 1);
+              open.onerror = () => reject(open.error);
+              open.onsuccess = () => {
+                const tx = open.result.transaction('kv', op === 'get' ? 'readonly' : 'readwrite');
+                const req = op === 'get' ? tx.objectStore('kv').get('inventory.json') : tx.objectStore('kv').put(value, 'inventory.json');
+                req.onsuccess = () => resolve(op === 'get' ? req.result : true);
+                req.onerror = () => reject(req.error);
+              };
+            }),
+          [op, value],
+        );
+      const good = await kv('get');
+      assert.ok(typeof good === 'string' && good.includes('65-inch OLED television'), 'the saved inventory was not where expected');
+      await kv('put', '{"format":"plainproof-library","places":[{"doc":');
+      await page.reload();
+      await h.visible('recovery-screen');
+      await assert.doesNotReject(page.getByText('Your inventory couldn’t be opened').waitFor({ timeout: 5000 }));
+      await h.shot('28b-recovery');
+      await page.waitForTimeout(800);
+      assert.strictEqual(await kv('get'), '{"format":"plainproof-library","places":[{"doc":', 'the damaged file was saved over');
+      // A newer version's file is refused the same way, with no restore offered.
+      await kv('put', JSON.stringify({ format: 'plainproof-library', version: 99, places: [] }));
+      await page.reload();
+      await assert.doesNotReject(page.getByText('Update Plainproof to open your inventory').waitFor({ timeout: 8000 }));
+      await kv('put', good);
+      await page.reload();
+      await h.visible('rooms-screen');
+      await h.expectText('home-total', '$6,648');
+    });
+
     await step('erase everything, then restore the backup', async () => {
       await h.tab('Settings');
       await h.tap('erase-everything');
@@ -693,7 +741,7 @@ async function main() {
       await h.confirm();
       await h.tab('Rooms');
       await h.expectText('home-total', '$6,648');
-      await h.expectText('home-count', '5 items in 4 rooms');
+      await h.expectText('home-count', '5 items in 3 rooms');
       await h.openRoom('Living room');
       await h.tap('item-65-inch OLED television');
       await h.expectText('fact-serial', 'NV65A2X0418K');
@@ -712,7 +760,7 @@ async function main() {
         if (i < 20) await h.expectText('field-name', '');
       }
       await h.visible('rooms-screen'); // the 20th save closes the form: there is no room for another
-      await h.expectText('home-count', '20 items in 4 rooms');
+      await h.expectText('home-count', '20 items in 3 rooms');
       await h.expectText('free-note', /The free version is full at 20 items\./);
       await h.tap('add-item');
       await h.visible('pro-screen');
@@ -752,12 +800,12 @@ async function main() {
       await h.tap('add-item');
       await h.quickAdd('The 21st thing', '10');
       await h.tap('form-save');
-      await h.expectText('home-count', '21 items in 4 rooms');
+      await h.expectText('home-count', '21 items in 3 rooms');
       // Pro off again: the 21 items stay, adding stops.
       await h.tab('Settings');
       await h.tap('dev-pretend-pro');
       await h.tab('Rooms');
-      await h.expectText('home-count', '21 items in 4 rooms');
+      await h.expectText('home-count', '21 items in 3 rooms');
       await h.tap('add-item');
       await h.visible('pro-screen');
       await h.tap('pro-close');
@@ -766,7 +814,7 @@ async function main() {
 
     await step('free and full: everything but adding still works, deleting makes room, a bigger backup comes back whole', async () => {
       // 21 items, Pro off. This is what a person who never pays is left with.
-      await h.expectText('home-count', '21 items in 4 rooms');
+      await h.expectText('home-count', '21 items in 3 rooms');
       // The restore counted as a backup; the sixteen things added since have put it behind.
       await h.expectText('gap-backup', /Backup out of date/);
       // Editing, and adding a photo to something already there.
@@ -785,7 +833,7 @@ async function main() {
       await h.tap('add-room');
       await h.answer('Attic');
       await h.visible('room-Attic');
-      await h.expectText('home-count', '21 items in 5 rooms');
+      await h.expectText('home-count', '21 items in 3 rooms');
       // The report, the spreadsheet and the backup carry all of it.
       await h.tab('Report');
       const [fullReport] = await Promise.all([context.waitForEvent('page'), h.tap('make-report')]);
@@ -838,7 +886,7 @@ async function main() {
       assert.match(await h.dialogText(), /Backup restored 21 items in 5 rooms, with \d+ photos\./);
       await h.confirm();
       await h.tab('Rooms');
-      await h.expectText('home-count', '21 items in 5 rooms');
+      await h.expectText('home-count', '21 items in 3 rooms');
       await h.expectText('free-note', /The free version is full at 20 items\./);
       await h.gone('gap-backup'); // what was just restored is what the file holds
       await h.shot('33b-free-full-restored');
@@ -975,7 +1023,7 @@ async function main() {
       await h.tap('form-save');
       await h.visible('rooms-screen');
       await h.expectText('home-total', '$900');
-      await h.expectText('home-count', '1 item in 4 rooms');
+      await h.expectText('home-count', '1 item in 1 room');
       // The report is this place's own, and with more than one place the Report tab says which.
       await h.tab('Report');
       await h.expectText('report-place', /This report is for Lake cabin only\. Each place has its own\./);
