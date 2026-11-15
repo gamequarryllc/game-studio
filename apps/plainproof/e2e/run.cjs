@@ -689,7 +689,7 @@ async function main() {
         page.evaluate(
           ([op, value]) =>
             new Promise((resolve, reject) => {
-              const open = indexedDB.open('plainproof', 1);
+              const open = indexedDB.open('plainproof', 2);
               open.onerror = () => reject(open.error);
               open.onsuccess = () => {
                 const tx = open.result.transaction('kv', op === 'get' ? 'readonly' : 'readwrite');
@@ -749,6 +749,193 @@ async function main() {
       assert.ok(photoOk, 'the restored photo is not showing');
       await h.back();
       await h.back();
+    });
+
+    await step('warranty: a date ahead is kept and shown on the item', async () => {
+      await h.openRoom('Living room');
+      await h.tap('item-65-inch OLED television');
+      await h.tap('item-edit');
+      await h.visible('item-form');
+      await h.fill('field-warranty', '2027-03-04');
+      await h.tap('form-save');
+      await h.expectText('fact-warranty', /Mar 4, 2027/);
+      assert.ok(!(await h.text('fact-warranty')).includes('ended'), 'a warranty still running is shown as ended');
+      await h.back();
+      await h.back();
+    });
+
+    await step('a claim: choose what was lost, the details, and everything the insurer gets', async () => {
+      await h.tab('Report');
+      await h.tap('open-claim');
+      await h.visible('claim-screen');
+      await h.shot('34-claim-empty');
+      await h.tap('claim-start');
+      await h.tap('claim-choose');
+      await h.visible('claim-items');
+      await page.getByRole('checkbox', { name: /^65-inch OLED television/ }).click();
+      await h.tap('claim-status-damaged');
+      await page.getByRole('checkbox', { name: /^Three-seat sofa/ }).click();
+      assert.strictEqual(await page.getByRole('checkbox', { name: /^65-inch OLED television, Stolen/ }).count(), 1, 'the television is not marked stolen');
+      assert.strictEqual(await page.getByRole('checkbox', { name: /^Three-seat sofa, oatmeal linen, Damaged/ }).count(), 1, 'the sofa is not marked damaged');
+      await h.shot('35-claim-items');
+      await h.tap('claim-items-done');
+      await h.visible('claim-screen');
+      await h.expectText('claim-count', /^2 items · 1 stolen · 1 damaged$/);
+      await h.expectText('claim-total', '$3,349');
+      await h.fill('claim-number', 'CL-2026-0042');
+      await h.fill('claim-date', '2026-11-14');
+      await h.tap('claim-cause');
+      await h.choose('Theft or break-in');
+      await h.expectText('claim-cause', /Theft or break-in/);
+      await h.fill('claim-description', 'Came home to the back door forced. The television was gone and the sofa slashed.');
+      // A note on one item, from its own screen.
+      await h.tap('claim-item-0');
+      await h.visible('item-screen');
+      await h.expectText('item-loss', /Stolen/);
+      await h.fill('item-loss-note', 'Taken off the wall bracket.');
+      await page.waitForTimeout(600);
+      await h.back();
+      await h.visible('claim-screen');
+      await h.shot('36-claim');
+      await h.shot('36b-claim-full', { fullPage: true });
+
+      // The schedule of loss: only the claimed items, with the claim details.
+      const [schedule] = await Promise.all([context.waitForEvent('page'), h.tap('claim-pdf')]);
+      watch(schedule, 'schedule');
+      await schedule.waitForFunction(() => document.body && document.body.innerText.toLowerCase().includes('schedule of loss'), null, { timeout: 20000 });
+      const sText = await schedule.evaluate(() => document.body.innerText);
+      for (const s of ['CL-2026-0042', 'Value claimed', 'Theft or break-in', 'back door forced', 'Taken off the wall bracket', '65-inch OLED television', 'Three-seat sofa']) {
+        assert.ok(sText.toLowerCase().includes(s.toLowerCase()), `the schedule of loss is missing "${s}"`);
+      }
+      for (const s of ['14-inch laptop', 'Hybrid bicycle']) assert.ok(!sText.includes(s), `the schedule of loss lists "${s}", which is not in the claim`);
+      await schedule.setViewportSize({ width: 816, height: 1056 });
+      await schedule.emulateMedia({ media: 'print' });
+      await schedule.screenshot({ path: path.join(SHOTS, '37-schedule-of-loss.png'), fullPage: true });
+      await schedule.close();
+
+      // The claim spreadsheet: a header and the two items, with what happened in front.
+      const [sheet] = await Promise.all([page.waitForEvent('download'), h.tap('claim-csv')]);
+      assert.match(sheet.suggestedFilename(), /^Fern-Cottage-claim-\d{4}-\d{2}-\d{2}\.csv$/);
+      const sheetRows = fs.readFileSync(await sheet.path(), 'utf8').replace('﻿', '').trimEnd().split('\r\n');
+      assert.strictEqual(sheetRows.length, 3, `expected a header and 2 items, got ${sheetRows.length} rows`);
+      assert.ok(sheetRows[0].startsWith('Loss,What happened,'), sheetRows[0]);
+      assert.ok(sheetRows.some((r) => r.startsWith('Stolen,Taken off the wall bracket.,Living room,65-inch OLED television')), sheetRows.join('\n'));
+
+      // The claim package: one zip with everything, in folders.
+      const [pkg] = await Promise.all([page.waitForEvent('download'), h.tap('claim-package')]);
+      assert.match(pkg.suggestedFilename(), /^Fern-Cottage-claim-package-\d{4}-\d{2}-\d{2}\.zip$/);
+      const pkgFiles = unzipSync(new Uint8Array(fs.readFileSync(await pkg.path())));
+      const pkgNames = Object.keys(pkgFiles).sort();
+      for (const n of ['Schedule of loss.html', 'Schedule of loss.csv', 'Read me.txt', 'Items/01 Living room - 65-inch OLED television/Photo 1.jpg', 'Items/01 Living room - 65-inch OLED television/Receipt 1.jpg', 'Items/02 Living room - Three-seat sofa, oatmeal linen/Photo 2.jpg']) {
+        assert.ok(pkgNames.includes(n), `the claim package is missing "${n}": ${pkgNames.join(', ')}`);
+      }
+      assert.ok(!pkgNames.some((n) => n.includes('laptop') || n.includes('bicycle')), 'the claim package holds items not in the claim');
+      const readMe = strFromU8(pkgFiles['Read me.txt']);
+      for (const s of ['Insurance claim: Fern Cottage', 'Claim number: CL-2026-0042', 'Date of loss: Nov 14, 2026', 'Cause: Theft or break-in', 'Items: 2 (1 stolen · 1 damaged)', 'Value claimed: $3,349.00']) {
+        assert.ok(readMe.includes(s), `the read-me is missing "${s}":\n${readMe}`);
+      }
+      assert.ok(strFromU8(pkgFiles['Schedule of loss.html']).includes('CL-2026-0042'), 'the packaged schedule is not the claim');
+
+      // The Rooms tab says a claim is open, and leads back to it.
+      await h.back();
+      await h.visible('report-screen');
+      await h.tab('Rooms');
+      await h.expectText('gap-claim', /Claim · 2 items/);
+      await h.tap('gap-claim');
+      await h.visible('claim-screen');
+      await h.back();
+      await h.visible('rooms-screen');
+    });
+
+    await step('the policy: limits, the coverage check, and the policy document itself', async () => {
+      await h.tab('Report');
+      await h.tap('open-policy');
+      await h.visible('policy-screen');
+      await h.expectText('coverage-line', /Your things are worth \$6,648\. Add the contents limit above to compare\./);
+      await h.fill('policy-limit', '6,000');
+      await t('policy-limit').first().blur();
+      await h.expectText('coverage-line', /more than the \$6,000 the policy covers/);
+      await h.shot('38-policy-over');
+      await h.fill('policy-limit', '50,000');
+      await t('policy-limit').first().blur();
+      await h.expectText('coverage-line', /13% of the \$50,000 the policy covers/);
+      await h.fill('policy-deductible', '1,000');
+      await t('policy-deductible').first().blur();
+      await h.tap('policy-add');
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), h.choose('Choose a PDF')]);
+      await chooser.setFiles(path.join(FIXTURES, 'policy.pdf'));
+      await h.expectText('policy-doc-0', /policy/i);
+      await h.shot('39-policy');
+      await h.shot('39b-policy-full', { fullPage: true });
+      await h.back();
+      await h.expectText('open-policy', /1 document kept · within the \$50,000 limit/);
+      // The claim shows the deductible next to what is claimed.
+      await h.tap('open-claim');
+      await h.expectText('claim-count', /deductible \$1,000/);
+      // The package now carries the policy too.
+      const [pkg] = await Promise.all([page.waitForEvent('download'), h.tap('claim-package')]);
+      const pkgNames = Object.keys(unzipSync(new Uint8Array(fs.readFileSync(await pkg.path()))));
+      assert.ok(pkgNames.some((n) => /^Policy\/.+\.pdf$/.test(n)), `no policy in the package: ${pkgNames.join(', ')}`);
+      // Ending the claim takes the marks off; the items stay.
+      await h.tap('claim-end');
+      assert.match(await h.dialogText(), /End this claim\?/);
+      await h.confirm();
+      await h.visible('claim-start');
+      await h.back();
+      await h.tab('Rooms');
+      await h.gone('gap-claim');
+      await h.expectText('home-total', '$6,648');
+    });
+
+    await step('a walk-through video: added to a room, plays, and is in the report', async () => {
+      await h.openRoom('Living room');
+      await h.upload('room-video-add', path.join(FIXTURES, 'walkthrough.mp4'));
+      await h.expectText('room-video-0', /Walk-through 1 0:03 · 34 KB · added /);
+      await h.shot('40-room-video');
+      await h.tap('room-video-0');
+      await h.visible('video-screen');
+      await page.waitForFunction(() => { const v = document.querySelector('video'); return v && v.readyState >= 1 && v.duration > 2; }, null, { timeout: 15000 });
+      await h.shot('41-video');
+      await h.tap('video-close');
+      await h.visible('room-screen');
+      await h.back();
+      await h.tab('Report');
+      const [report] = await Promise.all([context.waitForEvent('page'), h.tap('make-report')]);
+      watch(report, 'report-video');
+      await report.waitForFunction(() => document.body && document.body.innerText.includes('Summary by room'), null, { timeout: 20000 });
+      assert.ok((await report.evaluate(() => document.body.innerText)).includes('Walk-through video: 1 video'), 'the report does not mention the walk-through video');
+      await report.close();
+    });
+
+    await step('backup: the video and the policy go in it too', async () => {
+      const [download] = await Promise.all([page.waitForEvent('download'), h.tap('backup-now')]);
+      const files = unzipSync(new Uint8Array(fs.readFileSync(await download.path())));
+      const names = Object.keys(files);
+      assert.strictEqual(names.filter((n) => /^files\/[a-z0-9]+\.mp4$/.test(n)).length, 1, names.join(', '));
+      assert.strictEqual(names.filter((n) => /^files\/[a-z0-9]+\.pdf$/.test(n)).length, 1, names.join(', '));
+      const video = names.find((n) => n.endsWith('.mp4'));
+      assert.strictEqual(files[video].length, fs.statSync(path.join(FIXTURES, 'walkthrough.mp4')).size, 'the video in the backup is not the whole file');
+      await h.expectText('last-backup', 'Last backed up today.');
+    });
+
+    await step('settings: reminders switch on and off, and iCloud backup says it is for the iPhone', async () => {
+      await h.tab('Settings');
+      const isOn = (id) => t(id).first().locator('input').first().isChecked();
+      assert.strictEqual(await isOn('remind-yearly'), false, 'reminders start on');
+      await h.tap('remind-yearly');
+      const deadline = Date.now() + 3000;
+      while (!(await isOn('remind-yearly')) && Date.now() < deadline) await page.waitForTimeout(100);
+      assert.strictEqual(await isOn('remind-yearly'), true, 'the yearly reminder did not switch on');
+      await h.shot('42-settings-reminders');
+      await h.tap('remind-yearly');
+      await page.waitForTimeout(300);
+      assert.strictEqual(await isOn('remind-yearly'), false, 'the yearly reminder did not switch off');
+      assert.strictEqual(await isOn('icloud-backup'), false, 'iCloud backup starts on');
+      await h.tap('icloud-backup');
+      assert.match(await h.dialogText(), /Only on iPhone/);
+      await h.confirm();
+      assert.strictEqual(await isOn('icloud-backup'), false, 'iCloud backup switched on in the browser');
+      await h.tab('Rooms');
     });
 
     await step('the free limit: full at 20, Pro unlocks it, nothing is held hostage', async () => {
@@ -883,7 +1070,7 @@ async function main() {
       await h.upload('restore', fullZip);
       assert.match(await h.dialogText(), /The backup holds 21 items in 5 rooms/);
       await h.confirm();
-      assert.match(await h.dialogText(), /Backup restored 21 items in 5 rooms, with \d+ photos\./);
+      assert.match(await h.dialogText(), /Backup restored 21 items in 5 rooms, with \d+ photos, 1 video and 1 document\./);
       await h.confirm();
       await h.tab('Rooms');
       await h.expectText('home-count', '21 items in 3 rooms');

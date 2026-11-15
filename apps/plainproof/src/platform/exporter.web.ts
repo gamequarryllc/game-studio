@@ -48,14 +48,21 @@ export async function deliverReport(target: unknown, html: string, baseName: str
   download(`${baseName}.html`, new Blob([html], { type: 'text/html' }));
 }
 
+/** The report as a file inside a zip: the web preview cannot print a PDF, so it is the page itself. */
+export const REPORT_EXT = 'html' as const;
+
+export async function renderReportFile(html: string): Promise<Uint8Array> {
+  return new TextEncoder().encode(html);
+}
+
 export interface BackupSink {
   onChunk(chunk: Uint8Array): void;
   flush(): Promise<void>;
-  finish(): Promise<void>;
+  finish(): Promise<string>;
   abort(): Promise<void>;
 }
 
-export function createBackupSink(name: string): BackupSink {
+export function createBackupSink(name: string, _opts: { keep?: boolean } = {}): BackupSink {
   let parts: BlobPart[] = [];
   return {
     onChunk: (chunk) => {
@@ -65,6 +72,7 @@ export function createBackupSink(name: string): BackupSink {
     async finish() {
       download(name, new Blob(parts, { type: 'application/zip' }));
       parts = [];
+      return name;
     },
     async abort() {
       parts = [];
@@ -78,6 +86,8 @@ export interface PickedBackup {
 }
 
 const READ_SIZE = 512 * 1024;
+
+export function dropOutboxFile(_uri: string): void {}
 
 export async function pickBackupFile(): Promise<PickedBackup | null> {
   const result = await DocumentPicker.getDocumentAsync({ type: ['application/zip', '.zip'], multiple: false });

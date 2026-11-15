@@ -2,17 +2,19 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
-import { deleteItem } from '@/domain/actions';
-import { displayTime, displayYmd } from '@/domain/dates';
+import { deleteItem, setItemLoss } from '@/domain/actions';
+import { displayTime, displayYmd, toYmd } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { hasValue, itemTotalCents, needsSerial, unitCents } from '@/domain/selectors';
-import { CATEGORY_LABELS, CONDITION_LABELS } from '@/domain/types';
+import { CATEGORY_LABELS, CONDITION_LABELS, LIMITS, LOSS_LABELS } from '@/domain/types';
 import { warning } from '@/platform/haptics';
 import { dropPhotos } from '@/state/operations';
 import { store, useDoc } from '@/state/store';
+import { pickLoss } from '@/ui/claim';
 import { confirm } from '@/ui/dialogs';
+import { LiveTextArea } from '@/ui/form';
 import { Icon } from '@/ui/Icon';
-import { BarButton, Button, Card, Divider, EmptyState, Notice, PushedScreen, SectionLabel, Thumb } from '@/ui/kit';
+import { BarButton, Button, Card, Divider, EmptyState, Notice, PushedScreen, Row, SectionLabel, Thumb } from '@/ui/kit';
 import { radius, space, type, useTheme } from '@/ui/theme';
 
 function Fact({ label, value, mono, testID }: { label: string; value: string; mono?: boolean; testID?: string }) {
@@ -35,6 +37,7 @@ export default function ItemScreen() {
   const doc = useDoc();
   const item = doc.items.find((it) => it.id === id);
   const [page, setPage] = useState(0);
+  const [today] = useState(() => toYmd(new Date()));
 
   if (!item) {
     return (
@@ -78,8 +81,22 @@ export default function ItemScreen() {
   if (item.purchaseDate) purchase.push({ label: 'Bought', value: displayYmd(item.purchaseDate) });
   if (item.purchasedFrom) purchase.push({ label: 'From', value: item.purchasedFrom });
   if (item.pricePaidCents !== null) purchase.push({ label: 'Price paid', value: formatMoney(item.pricePaidCents, currency), mono: true });
+  if (item.warrantyUntil) {
+    purchase.push({ label: 'Warranty until', value: `${displayYmd(item.warrantyUntil)}${item.warrantyUntil < today ? ' (ended)' : ''}`, testID: 'fact-warranty' });
+  }
   // When it went into the inventory: on a claim, this is the proof it was owned before the loss.
   purchase.push({ label: 'Recorded', value: displayTime(item.createdAt), testID: 'fact-recorded' });
+
+  const changeLoss = async () => {
+    const picked = await pickLoss({ current: item.loss, name: item.name });
+    if (!picked) return;
+    store.update((d, now) => setItemLoss(d, item.id, picked === 'remove' ? null : picked, undefined, now));
+  };
+  const setLossNote = (note: string) =>
+    store.update((d, now) => {
+      const current = d.items.find((i) => i.id === item.id);
+      return current?.loss ? setItemLoss(d, item.id, current.loss, note, now) : d;
+    });
 
   return (
     <PushedScreen testID="item-screen">
@@ -156,6 +173,35 @@ export default function ItemScreen() {
         </Notice>
       ) : null}
 
+      {item.loss ? (
+        <>
+          <SectionLabel
+            trailing={
+              <Text testID="item-open-claim" accessibilityRole="link" onPress={() => router.push('/claim')} style={[type.footnote, { color: c.green, fontWeight: '600' }]}>
+                Open the claim
+              </Text>
+            }>
+            In the claim
+          </SectionLabel>
+          <Card>
+            <Row testID="item-loss" title="What happened" value={LOSS_LABELS[item.loss]} valueTone="ink" chevron onPress={changeLoss} />
+            <Divider />
+            <LiveTextArea
+              testID="item-loss-note"
+              label="What happened to it"
+              stored={item.lossNote}
+              onType={setLossNote}
+              placeholder="A line or two for the adjuster: “Taken from the desk”, “Water came up through the base”"
+              maxLength={LIMITS.notes}
+            />
+          </Card>
+        </>
+      ) : doc.claim ? (
+        <Card style={{ marginTop: space.l }}>
+          <Row testID="item-add-to-claim" title="Add to the claim" subtitle="Mark it stolen, damaged, destroyed or lost" tint onPress={changeLoss} />
+        </Card>
+      ) : null}
+
       {facts.length > 0 ? (
         <>
           <SectionLabel>Details</SectionLabel>
@@ -209,6 +255,7 @@ export default function ItemScreen() {
       ) : null}
 
       <View style={{ marginTop: space.xxl, marginHorizontal: space.xl }}>
+        {!item.loss && !doc.claim ? <Button testID="item-start-claim" label="Add to a claim" kind="plain" onPress={changeLoss} /> : null}
         <Button testID="item-delete" label="Delete item" kind="danger" onPress={remove} />
       </View>
     </PushedScreen>

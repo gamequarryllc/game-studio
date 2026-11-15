@@ -7,7 +7,11 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 
+import { switchPlace } from '@/domain/library';
+import { onReminderOpened } from '@/platform/notify';
 import { pro, usePro } from '@/pro/pro';
+import { cloudBackup } from '@/state/cloudBackup';
+import { reminders } from '@/state/reminders';
 import { store, useStore } from '@/state/store';
 import { DialogHost } from '@/ui/dialogs';
 import { RecoveryScreen } from '@/ui/Recovery';
@@ -29,6 +33,25 @@ function useWebDeepLink(ready: boolean) {
   }, [ready, router]);
 }
 
+/** A tapped reminder opens what it was about: the item whose warranty ends, the backup, or the rooms. */
+function useReminderLinks(ready: boolean) {
+  const router = useRouter();
+  useEffect(() => {
+    if (!ready) return;
+    return onReminderOpened((target) => {
+      const lib = store.library();
+      if (target.placeId && target.placeId !== lib.currentId && lib.places.some((p) => p.id === target.placeId)) {
+        const placeId = target.placeId;
+        store.updateLibrary((l) => switchPlace(l, placeId));
+      }
+      const doc = store.get();
+      if (target.kind === 'warranty' && target.itemId && doc.items.some((i) => i.id === target.itemId)) router.push({ pathname: '/item/[id]', params: { id: target.itemId } });
+      else if (target.kind === 'backup') router.push({ pathname: '/report', params: { show: 'backup', at: String(Date.now()) } });
+      else router.push('/');
+    });
+  }, [ready, router]);
+}
+
 export default function RootLayout() {
   const { c, dark } = useTheme();
   const [fontsLoaded, fontError] = useFonts({ Newsreader_500Medium, Newsreader_600SemiBold });
@@ -37,7 +60,10 @@ export default function RootLayout() {
   const proReady = usePro().ready;
 
   useEffect(() => {
-    void store.start();
+    void store.start().then(() => {
+      reminders.start();
+      cloudBackup.start();
+    });
     void pro.start();
   }, []);
 
@@ -46,6 +72,7 @@ export default function RootLayout() {
     if (ready) SplashScreen.hideAsync().catch(() => {});
   }, [ready]);
   useWebDeepLink(ready);
+  useReminderLinks(ready && storeState === 'ready');
 
   if (!ready) return <View style={{ flex: 1, backgroundColor: c.paper }} />;
 
@@ -81,7 +108,11 @@ export default function RootLayout() {
             <Stack.Screen name="item-form" options={{ presentation: 'modal', title: 'New item' }} />
             <Stack.Screen name="pro" options={{ presentation: 'modal', title: '' }} />
             <Stack.Screen name="places" options={{ presentation: 'modal', title: 'Places' }} />
+            <Stack.Screen name="claim" options={{ title: 'Claim' }} />
+            <Stack.Screen name="claim-items" options={{ presentation: 'modal', title: 'Items in the claim' }} />
+            <Stack.Screen name="policy" options={{ title: 'Policy and coverage' }} />
             <Stack.Screen name="photo" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade', title: 'Photo' }} />
+            <Stack.Screen name="video" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade', title: 'Video' }} />
             <Stack.Screen name="+not-found" options={{ title: '' }} />
           </Stack>
           )}

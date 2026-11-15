@@ -1,4 +1,4 @@
-import { DocError, cleanText, emptyDoc, parseDoc, photoIdsInUse } from './doc';
+import { DocError, cleanText, emptyDoc, filesInUse, parseDoc, photoIdsInUse } from './doc';
 import { isSafeId, newId } from './ids';
 import { addRooms, type RoomSeed } from './actions';
 import { itemTotalCents } from './selectors';
@@ -59,7 +59,9 @@ export function contentChanged(before: Doc, after: Doc): boolean {
     before.rooms !== after.rooms ||
     before.items !== after.items ||
     before.profile !== after.profile ||
-    before.settings !== after.settings
+    before.settings !== after.settings ||
+    before.claim !== after.claim ||
+    before.policy !== after.policy
   );
 }
 
@@ -178,6 +180,20 @@ export function libraryPhotoIds(lib: Library): Set<string> {
   const ids = new Set<string>();
   for (const p of lib.places) for (const id of photoIdsInUse(p.doc)) ids.add(id);
   return ids;
+}
+
+/** Every other file (videos, policy documents) any place still points at, by file name. */
+export function libraryFileNames(lib: Library): Set<string> {
+  const names = new Set<string>();
+  for (const p of lib.places) for (const name of filesInUse(p.doc).values()) names.add(name);
+  return names;
+}
+
+/** The videos of every place, largest last, with their file names: a backup leaves out the last ones first if it must. */
+export function libraryVideos(lib: Library): { name: string; bytes: number }[] {
+  const out: { name: string; bytes: number }[] = [];
+  for (const p of lib.places) for (const r of p.doc.rooms) for (const v of r.videos) out.push({ name: `${v.id}.${v.ext}`, bytes: v.bytes });
+  return out;
 }
 
 export function canAddPlace(lib: Library, isPro: boolean): boolean {

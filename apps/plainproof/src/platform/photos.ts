@@ -54,6 +54,11 @@ export async function importPhoto(source: PickedImage): Promise<Photo> {
   return { id, ...full, takenAt: source.takenAt ?? null, addedAt: Date.now() };
 }
 
+/** The file of a photo kept in the app, for reading the text in it. */
+export function photoFileUri(id: string, size: PhotoSize): string {
+  return fileFor(id, size).uri;
+}
+
 /** Where to show a photo from. On the iPhone this is known straight away. */
 export function usePhotoUri(id: string | null | undefined, size: PhotoSize): string | null {
   return id ? fileFor(id, size).uri : null;

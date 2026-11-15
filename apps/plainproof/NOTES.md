@@ -100,6 +100,14 @@ Everything the app keeps is a **library** (`src/domain/library.ts`): a list of p
 
 **Different on the web preview:** no PDF and no share sheet (the report opens in a new tab and files download; a note under the Report buttons says so, on the web only), Material symbols stand in for SF Symbols, the browser's date field stands in for the iPhone's, and the tab bar, action sheets and alerts are drawn to match the system's. Each of these sits behind a `.web.ts` or `.web.tsx` twin.
 
+**The app's own native module** (`modules/plainproof-native`, Swift, autolinked by `expo prebuild`): text recognition (Vision, accurate, no language correction so serial numbers are not "corrected"), the recorded date of a video (AVFoundation), Quick Look for the policy, and the iCloud Drive folder (pick, describe, save into). JS reaches it through `src/platform/native.ts` with `requireOptionalNativeModule`, so in Expo Go and on the web it is `null` and the scan rows, Quick Look and the automatic backup are hidden or explain themselves. Needs a TestFlight build.
+
+**iCloud Drive backup, why a folder and not iCloud itself:** the app has no iCloud entitlement or container and no server. The person picks a folder with the system picker (`UIDocumentPickerViewController` for folders) and the app keeps a security-scoped bookmark to it in `icloud-backup.json`, a file that belongs to this iPhone and is never in the inventory or a backup. Saving writes `.Plainproof backup.zip.saving` beside the old file under an `NSFileCoordinator`, moves the old one to `Plainproof backup (previous).zip`, then moves the new one into place, so the folder never holds half a backup under the real name. A stale bookmark is renewed after a save; a folder that is gone shows a problem line in Settings and on the Report tab. An empty inventory is never saved over a backup. The privacy label stays "Data Not Collected": the file goes to the person's own iCloud Drive, not to us.
+
+**The microphone:** `app.json` now has a microphone text (walk-through videos are filmed with sound), so the studio's build check allows it for this app when the image picker's microphone text is set (STUDIO.md). Notifications are local only (`enableRemoteNotifications: false`): no push entitlement.
+
+**Videos and documents in backups:** stored as `files/<id>.<ext>` entries, streamed a megabyte at a time. fflate writes no zip64, so a backup keeps under 3.5 GB of videos (smallest first) and says how many it left out; the documents always go in.
+
 ## QA
 
 **Unit tests** (`npm test`, 76): the document parser and its repairs, rooms and items, totals, gaps, search, filters and sorting, money parsing and formatting, dates, the report's contents and escaping, the spreadsheet, the backup file round trip, the free limit, and one test for every bug below.

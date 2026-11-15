@@ -2,7 +2,7 @@ import { Unzip, UnzipInflate, Zip, ZipDeflate, ZipPassThrough, strFromU8, strToU
 
 import { DocError, parseDoc } from './doc';
 import { isSafeId } from './ids';
-import { libraryOf, libraryPhotoIds, parseLibrary, type Library } from './library';
+import { libraryFileNames, libraryOf, libraryPhotoIds, libraryVideos, parseLibrary, type Library } from './library';
 
 // A backup is one .zip: everything the app keeps as JSON (every place and its
 // inventory) plus every photo file. It is made and read in pieces so a large
@@ -28,6 +28,30 @@ export function parsePhotoEntryName(name: string): { id: string; size: PhotoSize
   if (!m || !isSafeId(m[1])) return null;
   return { id: m[1], size: m[2] ? 'thumb' : 'full' };
 }
+
+// Videos and policy documents: files/<id>.<ext>.
+const ATTACHMENT_RX = /^([0-9a-z_-]+)\.(mov|mp4|pdf|jpg)$/;
+
+export function isAttachmentName(name: string): boolean {
+  const m = ATTACHMENT_RX.exec(name);
+  return m !== null && isSafeId(m[1]);
+}
+
+export function fileEntryName(name: string): string {
+  return `files/${name}`;
+}
+
+export function parseFileEntryName(entry: string): string | null {
+  if (!entry.startsWith('files/')) return null;
+  const name = entry.slice('files/'.length);
+  return isAttachmentName(name) ? name : null;
+}
+
+/**
+ * A zip without the zip64 extension (fflate writes none) cannot pass 4 GB. Photos and documents always go in;
+ * videos go in while the backup stays under this, and the rest are left out and counted.
+ */
+export const BACKUP_VIDEO_BUDGET = 3_500_000_000;
 
 export function backupFileName(now: number): string {
   const d = new Date(now);
@@ -68,6 +92,8 @@ export function parseManifest(text: string, now: number): Library {
 
 export interface ZipWriter {
   add(name: string, data: Uint8Array, compress?: boolean): void;
+  /** Starts an entry whose data arrives in pieces (stored as is); push the last piece with final true. */
+  stream(name: string): { push(chunk: Uint8Array, final: boolean): void };
   end(): void;
 }
 
@@ -85,6 +111,16 @@ export function createZipWriter(onChunk: (chunk: Uint8Array) => void): ZipWriter
       entry.push(data, true);
       if (failure) throw failure;
     },
+    stream(name) {
+      const entry = new ZipPassThrough(name);
+      zip.add(entry);
+      return {
+        push(chunk, final) {
+          entry.push(chunk, final);
+          if (failure) throw failure;
+        },
+      };
+    },
     end() {
       zip.end();
       if (failure) throw failure;
@@ -96,16 +132,26 @@ export interface ZipReader {
   push(chunk: Uint8Array, final: boolean): void;
 }
 
-/** Reads a zip piece by piece and hands over each file as soon as it is complete. */
-export function createZipReader(onFile: (name: string, data: Uint8Array) => void): ZipReader {
+export type ChunkSink = (chunk: Uint8Array, final: boolean) => void;
+
+/**
+ * Reads a zip piece by piece and hands over each file as soon as it is complete. A file `onStream` takes (it
+ * returns a sink for it) is handed over in pieces instead, so a large video never sits in memory whole.
+ */
+export function createZipReader(onFile: (name: string, data: Uint8Array) => void, onStream?: (name: string) => ChunkSink | null): ZipReader {
   const unzip = new Unzip();
   unzip.register(UnzipInflate);
   let failure: Error | null = null;
   unzip.onfile = (file) => {
+    const sink = onStream ? onStream(file.name) : null;
     const parts: Uint8Array[] = [];
     file.ondata = (err, chunk, final) => {
       if (err) {
         failure = err;
+        return;
+      }
+      if (sink) {
+        sink(chunk, final);
         return;
       }
       parts.push(chunk);
@@ -142,6 +188,20 @@ export const bytesToText = strFromU8;
 
 export interface BackupSource {
   readPhoto(id: string, size: PhotoSize): Promise<Uint8Array | null>;
+  /** Reads a video or document in pieces. False when the file is missing. */
+  readFile?(name: string, onChunk: (chunk: Uint8Array, final: boolean) => Promise<void> | void): Promise<boolean>;
+}
+
+export interface BackupResult {
+  photos: number;
+  /** Photos the inventory names that were not on the phone. */
+  missing: number;
+  /** Videos and documents in the backup. */
+  files: number;
+  /** Videos and documents the inventory names that were not on the phone. */
+  missingFiles: number;
+  /** Videos left out because the backup would have passed what a zip can hold. */
+  skippedVideos: number;
 }
 
 /**
@@ -151,12 +211,13 @@ export interface BackupSource {
 export async function writeBackup(
   library: Library,
   source: BackupSource,
-  opts: { now: number; appVersion: string; onChunk: (chunk: Uint8Array) => void; flush?: () => Promise<void> },
-): Promise<{ photos: number; missing: number }> {
+  opts: { now: number; appVersion: string; onChunk: (chunk: Uint8Array) => void; flush?: () => Promise<void>; videoBudget?: number },
+): Promise<BackupResult> {
   const writer = createZipWriter(opts.onChunk);
   writer.add(MANIFEST_NAME, textToBytes(buildManifest(library, opts.now, opts.appVersion)), true);
   let photos = 0;
   let missing = 0;
+  let written = 0;
   for (const id of libraryPhotoIds(library)) {
     const full = await source.readPhoto(id, 'full');
     if (!full) {
@@ -167,11 +228,38 @@ export async function writeBackup(
     const thumb = await source.readPhoto(id, 'thumb');
     if (thumb) writer.add(photoEntryName(id, 'thumb'), thumb);
     photos += 1;
+    written += full.length + (thumb?.length ?? 0);
     if (opts.flush) await opts.flush();
+  }
+
+  let files = 0;
+  let missingFiles = 0;
+  let skippedVideos = 0;
+  if (source.readFile) {
+    const videoSizes = new Map(libraryVideos(library).map((v) => [v.name, v.bytes]));
+    const budget = opts.videoBudget ?? BACKUP_VIDEO_BUDGET;
+    // Documents first: they are small and always go in. Then videos, smallest first, while they fit.
+    const names = [...libraryFileNames(library)].sort((a, b) => (videoSizes.get(a) ?? -1) - (videoSizes.get(b) ?? -1));
+    for (const name of names) {
+      const videoBytes = videoSizes.get(name);
+      if (videoBytes !== undefined && written + videoBytes > budget) {
+        skippedVideos += 1;
+        continue;
+      }
+      let entry: { push(chunk: Uint8Array, final: boolean): void } | null = null;
+      const found = await source.readFile(name, async (chunk, final) => {
+        if (!entry) entry = writer.stream(fileEntryName(name));
+        entry.push(chunk, final);
+        written += chunk.length;
+        if (opts.flush) await opts.flush();
+      });
+      if (found) files += 1;
+      else missingFiles += 1;
+    }
   }
   writer.end();
   if (opts.flush) await opts.flush();
-  return { photos, missing };
+  return { photos, missing, files, missingFiles, skippedVideos };
 }
 
 export interface RestoreResult {
@@ -188,16 +276,26 @@ export interface RestoreResult {
 export function createBackupReader(
   now: number,
   onPhoto: (id: string, size: PhotoSize, data: Uint8Array) => void,
+  /** For a video or document: a sink its pieces go to, or null to skip it. */
+  onFile?: (name: string) => ChunkSink | null,
 ): { push(chunk: Uint8Array, final: boolean): void; finish(): Library } {
   let manifest: string | null = null;
-  const reader = createZipReader((name, data) => {
-    if (name === MANIFEST_NAME) {
-      manifest = bytesToText(data);
-      return;
-    }
-    const photo = parsePhotoEntryName(name);
-    if (photo) onPhoto(photo.id, photo.size, data);
-  });
+  const reader = createZipReader(
+    (name, data) => {
+      if (name === MANIFEST_NAME) {
+        manifest = bytesToText(data);
+        return;
+      }
+      const photo = parsePhotoEntryName(name);
+      if (photo) onPhoto(photo.id, photo.size, data);
+    },
+    (entry) => {
+      const name = parseFileEntryName(entry);
+      if (name === null) return null;
+      // A file the app does not take is still read through, and dropped.
+      return (onFile ? onFile(name) : null) ?? (() => {});
+    },
+  );
   return {
     push: (chunk, final) => reader.push(chunk, final),
     finish() {

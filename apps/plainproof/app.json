@@ -70,13 +70,26 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Plainproof uses the camera to photograph your belongings and receipts. Photos stay on this iPhone.",
-          "photosPermission": "Plainproof lets you add photos of your belongings and receipts from your library. Photos stay on this iPhone.",
-          "microphonePermission": false
+          "cameraPermission": "Plainproof uses the camera to photograph your belongings, receipts and policy, and to film a walk-through of each room. Photos and videos stay on this iPhone.",
+          "photosPermission": "Plainproof lets you add photos and videos of your belongings, receipts and policy from your library. They stay on this iPhone.",
+          "microphonePermission": "Plainproof records sound with a walk-through video, so you can say what each thing is as you film. The video stays on this iPhone."
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-iap"
+      "expo-iap",
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableRemoteNotifications": false
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": true

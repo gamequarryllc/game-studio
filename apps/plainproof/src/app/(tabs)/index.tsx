@@ -6,7 +6,7 @@ import { addRoom } from '@/domain/actions';
 import { currentPlace, placeName, totalItems } from '@/domain/library';
 import { FREE_ITEM_LIMIT, freeItemsLeft } from '@/domain/limits';
 import { formatMoney } from '@/domain/money';
-import { backupState, homeSummary, plural, roomSummaries } from '@/domain/selectors';
+import { backupState, claimSummary, homeSummary, plural, roomSummaries } from '@/domain/selectors';
 import { usePro } from '@/pro/pro';
 import { openNewItem } from '@/state/nav';
 import { store, useDoc, useLibrary } from '@/state/store';
@@ -77,6 +77,9 @@ export default function RoomsTab() {
     opacity: pressed ? 0.7 : 1,
   });
 
+  // An open claim comes first: it is what the person is in the middle of.
+  const claimCount = doc.claim ? claimSummary(doc).count : null;
+
   // Under the drawer: "Add a room", and the free-version line when there is one.
   const under = 44 + (left !== null ? 24 : 0);
 
@@ -97,9 +100,22 @@ export default function RoomsTab() {
         summary={summary}
         currency={currency}
         footer={
-          gaps.length > 0 || backupDue ? (
+          gaps.length > 0 || backupDue || claimCount !== null ? (
             // One row, however narrow the phone: it slides sideways sooner than it wraps and pushes the drawer down.
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.m, marginHorizontal: -space.l }} contentContainerStyle={{ gap: 6, paddingHorizontal: space.l }}>
+              {claimCount !== null ? (
+                <Pressable
+                  testID="gap-claim"
+                  accessibilityRole="button"
+                  accessibilityLabel={`A claim is open with ${plural(claimCount, 'item')}`}
+                  hitSlop={6}
+                  onPress={() => router.push('/claim')}
+                  style={({ pressed }) => [chip({ pressed }), { backgroundColor: c.greenSoft }]}>
+                  <Icon name="claim" size={11} color={c.green} />
+                  <Text style={[type.caption, { color: c.green, fontWeight: '600' }]}>{`Claim · ${plural(claimCount, 'item')}`}</Text>
+                  <Icon name="chevron" size={9} color={c.green} />
+                </Pressable>
+              ) : null}
               {backupDue ? (
                 <Pressable
                   testID="gap-backup"

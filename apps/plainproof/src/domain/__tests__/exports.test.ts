@@ -137,11 +137,11 @@ describe('the spreadsheet', () => {
   it('has one row per item with exact amounts', () => {
     const csv = buildCsv(home());
     const rows = csv.replace('﻿', '').trimEnd().split('\r\n');
-    expect(rows[0].split(',')).toHaveLength(21);
+    expect(rows[0].split(',')).toHaveLength(22);
     expect(csv.startsWith('﻿')).toBe(true);
     expect(csv).toContain('449.00,399.00,449.00,898.00,Replacement value,2021-03-04');
     expect(csv).toContain('"\'=SUM(A1:A9)\nSecond line, with a comma"');
-    expect(csv).toContain('Kitchen,Unvalued thing,,,1,,,,,,,,No value,,,,0,0,2026-11-11,,');
+    expect(csv).toContain('Kitchen,Unvalued thing,,,1,,,,,,,,No value,,,,0,0,2026-11-11,,,');
   });
 });
 
@@ -182,7 +182,7 @@ describe('backups', () => {
 
   it('round-trips the document and every photo, whatever the chunk size', async () => {
     const { bytes, result } = await makeBackup();
-    expect(result).toEqual({ photos: 2, missing: 0 });
+    expect(result).toEqual({ photos: 2, missing: 0, files: 0, missingFiles: 0, skippedVideos: 0 });
     for (const chunkSize of [bytes.length, 4096, 7]) {
       const back = restore(bytes, chunkSize);
       expect(back.doc).toEqual({ ...doc, meta: { ...doc.meta, onboarded: true } });
@@ -209,7 +209,7 @@ describe('backups', () => {
       { readPhoto: async (id: string, size: PhotoSize) => all[`${id}:${size}` as keyof typeof all] ?? null },
       { now: NOW, appVersion: '0.1.0', onChunk: (c) => chunks.push(c) },
     );
-    expect(result).toEqual({ photos: 3, missing: 0 });
+    expect(result).toEqual({ photos: 3, missing: 0, files: 0, missingFiles: 0, skippedVideos: 0 });
     const back = restore(concat(chunks), 4096);
     expect(back.library.places.map((p) => p.doc.profile.homeName)).toEqual(['Fern Cottage', 'Lake cabin']);
     expect(back.library.places[1].kind).toBe('rental');
@@ -222,7 +222,7 @@ describe('backups', () => {
     const d = home();
     d.items[0].photos.push({ id: 'vanished1', width: 1, height: 1, takenAt: null, addedAt: null });
     const { result, bytes } = await makeBackup(d);
-    expect(result).toEqual({ photos: 2, missing: 1 });
+    expect(result).toEqual({ photos: 2, missing: 1, files: 0, missingFiles: 0, skippedVideos: 0 });
     expect(restore(bytes, 1000).doc.items[0].photos).toHaveLength(2);
   });
 

@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useState, type ComponentProps, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 
+import { centsToInput, parseMoney, tidyMoneyInput } from '@/domain/money';
 import type { Photo } from '@/domain/types';
 import { tap } from '@/platform/haptics';
 
@@ -62,6 +63,95 @@ export function TextRow({
         </Text>
       ) : null}
     </FormRow>
+  );
+}
+
+/**
+ * Text that is saved as it is typed. What is typed is kept as typed; the saved copy is tidied (trimmed) on every key,
+ * and showing that copy back would swallow each space the moment it was typed. A change from outside (another place
+ * opened, a backup restored) is shown instead.
+ */
+export function useLiveText(stored: string): [string, (text: string) => void] {
+  const [typed, setTyped] = useState(stored);
+  const [seen, setSeen] = useState(stored);
+  if (stored !== seen) {
+    setSeen(stored);
+    if (stored !== typed.trim()) setTyped(stored);
+  }
+  return [typed, setTyped];
+}
+
+export function LiveTextRow({ stored, onType, ...row }: { stored: string; onType: (text: string) => void } & Omit<ComponentProps<typeof TextRow>, 'value' | 'onChangeText'>) {
+  const [typed, setTyped] = useLiveText(stored);
+  return (
+    <TextRow
+      {...row}
+      value={typed}
+      onChangeText={(text) => {
+        setTyped(text);
+        onType(text);
+      }}
+    />
+  );
+}
+
+/**
+ * An amount saved as it is typed (when it reads as an amount). Empty means none. The text is tidied when the
+ * person moves on, and a change from outside is shown instead.
+ */
+export function MoneyRow({ label, cents, onChange, currency, placeholder, testID }: { label: string; cents: number | null; onChange: (cents: number | null) => void; currency: string; placeholder: string; testID?: string }) {
+  const shown = tidyMoneyInput(centsToInput(cents));
+  const [text, setText] = useState(shown);
+  const [seen, setSeen] = useState(cents);
+  if (cents !== seen) {
+    setSeen(cents);
+    const parsed = parseMoney(text);
+    if (!parsed.ok || parsed.cents !== cents) setText(shown);
+  }
+  const parsed = parseMoney(text);
+  const error = text === '' || parsed.ok ? null : parsed.reason === 'too-large' ? 'That is more than the app can hold.' : 'Enter an amount, like 300,000';
+  return (
+    <TextRow
+      testID={testID}
+      label={label}
+      value={text}
+      onChangeText={(t) => {
+        setText(t);
+        const p = parseMoney(t);
+        if (p.ok && p.cents !== cents) {
+          setSeen(p.cents);
+          onChange(p.cents);
+        }
+      }}
+      onBlur={() => setText((t) => tidyMoneyInput(t))}
+      placeholder={placeholder}
+      suffix={currency}
+      keyboardType="decimal-pad"
+      error={error}
+    />
+  );
+}
+
+/** Several lines of text inside a card, saved as typed. */
+export function LiveTextArea({ stored, onType, placeholder, label, maxLength, testID }: { stored: string; onType: (text: string) => void; placeholder: string; label: string; maxLength: number; testID?: string }) {
+  const { c } = useTheme();
+  const [typed, setTyped] = useLiveText(stored);
+  return (
+    <TextInput
+      testID={testID}
+      accessibilityLabel={label}
+      value={typed}
+      onChangeText={(text) => {
+        setTyped(text);
+        onType(text);
+      }}
+      placeholder={placeholder}
+      placeholderTextColor={c.ink3}
+      selectionColor={c.green}
+      multiline
+      maxLength={maxLength}
+      style={[type.body, NO_OUTLINE, { color: c.ink, minHeight: 88, padding: space.l, textAlignVertical: 'top' }]}
+    />
   );
 }
 

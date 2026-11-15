@@ -40,6 +40,13 @@ const ICONS = {
   warning: { ios: 'exclamationmark.triangle', web: 'warning' },
   info: { ios: 'info.circle', web: 'info' },
   key: { ios: 'key.fill', web: 'key' },
+  video: { ios: 'video.fill', web: 'videocam' },
+  play: { ios: 'play.fill', web: 'play_arrow' },
+  scan: { ios: 'text.viewfinder', web: 'document_scanner' },
+  bell: { ios: 'bell', web: 'notifications' },
+  cloud: { ios: 'icloud', web: 'cloud' },
+  shield: { ios: 'checkmark.shield', web: 'verified_user' },
+  claim: { ios: 'exclamationmark.shield', web: 'gpp_maybe' },
   // Places
   cabinets: { ios: 'tray.2.fill', web: 'dns' },
   building: { ios: 'building.2.fill', web: 'apartment' },

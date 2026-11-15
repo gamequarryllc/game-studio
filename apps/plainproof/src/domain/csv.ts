@@ -1,6 +1,6 @@
 import { toYmd } from './dates';
 import { itemTotalCents, unitCents } from './selectors';
-import { CATEGORY_LABELS, CONDITION_LABELS, type Doc, type Item } from './types';
+import { CATEGORY_LABELS, CONDITION_LABELS, LOSS_LABELS, type Doc, type Item } from './types';
 
 function decimal(cents: number | null): string {
   if (cents === null) return '';
@@ -61,17 +61,24 @@ export const CSV_HEADER = [
   'Receipts',
   'Recorded',
   'First photo taken',
+  'Warranty until',
   'Item ID',
 ] as const;
 
-export function buildCsv(doc: Doc): string {
+/** The two columns a claim schedule adds in front. */
+export const CLAIM_COLUMNS = ['Loss', 'What happened'] as const;
+
+export function buildCsv(doc: Doc, opts: { claim?: boolean } = {}): string {
+  const claim = opts.claim === true;
   const roomNames = new Map(doc.rooms.map((r) => [r.id, r.name]));
-  const rows: string[] = [CSV_HEADER.join(',')];
+  const rows: string[] = [(claim ? [...CLAIM_COLUMNS, ...CSV_HEADER] : CSV_HEADER).join(',')];
   for (const room of doc.rooms) {
     for (const item of doc.items) {
       if (item.roomId !== room.id) continue;
+      if (claim && item.loss === null) continue;
       rows.push(
         [
+          ...(claim ? [item.loss ? LOSS_LABELS[item.loss] : '', csvCell(item.lossNote)] : []),
           csvCell(roomNames.get(item.roomId) ?? ''),
           csvCell(item.name),
           csvCell(item.category ? CATEGORY_LABELS[item.category] : ''),
@@ -92,6 +99,7 @@ export function buildCsv(doc: Doc): string {
           String(item.receipts.length),
           toYmd(new Date(item.createdAt)),
           firstTaken(item),
+          item.warrantyUntil ?? '',
           item.id,
         ].join(','),
       );
