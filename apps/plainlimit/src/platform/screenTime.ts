@@ -226,7 +226,18 @@ function readNumber(key: string): number {
  * did ("cell-3" is 90 minutes of a 3-hour goal, 120 of a 4-hour one).
  */
 function startRound(now: Date, goalBefore: number) {
-  DeviceActivity.userDefaultsSet(ROUND_BEFORE_KEY, round());
+  // Only the round now ending is still read (as the previous one, while the
+  // phone re-reports); reports from any older round are no use any more.
+  const ending = round();
+  try {
+    for (const e of [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)]) {
+      if (e.callbackName !== 'eventDidReachThreshold' || !e.eventName) continue;
+      if (splitName(e.eventName).round !== ending) DeviceActivity.userDefaultsRemove(`events_${e.activityName}_eventDidReachThreshold_${e.eventName}`);
+    }
+  } catch {
+    // Tidying only.
+  }
+  DeviceActivity.userDefaultsSet(ROUND_BEFORE_KEY, ending);
   DeviceActivity.userDefaultsSet(ROUND_GOAL_BEFORE_KEY, goalBefore);
   DeviceActivity.userDefaultsSet(ROUND_KEY, now.getTime().toString(36));
   DeviceActivity.userDefaultsSet(PICKS_KEY, now.getTime());
@@ -585,10 +596,9 @@ export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Da
     const to = periodEnd?.getTime() ?? Number.POSITIVE_INFINITY;
     let goal = goalMinutes;
     let matches = (name: string, id: string) => name === roundName(id, round());
-    if (periodEnd !== undefined) {
-      // A finished day: its reports may be from any round it had.
-      matches = (name, id) => splitName(name).id === id;
-    } else if (!roundSettled(reported, from)) {
+    // A finished day is closed from the round it ended in, read with today's
+    // goal. (Matching any round read a 3:00 goal's "empty" as the 5:00 goal's.)
+    if (periodEnd === undefined && !roundSettled(reported, from)) {
       const before = readString(ROUND_BEFORE_KEY);
       goal = readNumber(ROUND_GOAL_BEFORE_KEY) || goalMinutes;
       matches = (name, id) => name === roundName(id, before);
