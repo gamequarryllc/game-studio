@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
 import { deleteItem } from '@/domain/actions';
-import { displayYmd } from '@/domain/dates';
+import { displayTime, displayYmd } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { hasValue, itemTotalCents, needsSerial, unitCents } from '@/domain/selectors';
-import { CATEGORY_LABELS } from '@/domain/types';
+import { CATEGORY_LABELS, CONDITION_LABELS } from '@/domain/types';
 import { warning } from '@/platform/haptics';
 import { dropPhotos } from '@/state/operations';
 import { store, useDoc } from '@/state/store';
@@ -72,11 +72,14 @@ export default function ItemScreen() {
   if (item.brand) facts.push({ label: 'Brand', value: item.brand });
   if (item.model) facts.push({ label: 'Model', value: item.model });
   if (item.serial) facts.push({ label: 'Serial number', value: item.serial, mono: true, testID: 'fact-serial' });
+  if (item.condition) facts.push({ label: 'Condition', value: CONDITION_LABELS[item.condition] });
   if (item.quantity > 1) facts.push({ label: 'How many', value: String(item.quantity), mono: true });
   const purchase: typeof facts = [];
   if (item.purchaseDate) purchase.push({ label: 'Bought', value: displayYmd(item.purchaseDate) });
   if (item.purchasedFrom) purchase.push({ label: 'From', value: item.purchasedFrom });
   if (item.pricePaidCents !== null) purchase.push({ label: 'Price paid', value: formatMoney(item.pricePaidCents, currency), mono: true });
+  // When it went into the inventory: on a claim, this is the proof it was owned before the loss.
+  purchase.push({ label: 'Recorded', value: displayTime(item.createdAt), testID: 'fact-recorded' });
 
   return (
     <PushedScreen testID="item-screen">
@@ -169,7 +172,7 @@ export default function ItemScreen() {
 
       {purchase.length > 0 ? (
         <>
-          <SectionLabel>Purchase</SectionLabel>
+          <SectionLabel>{purchase.length > 1 ? 'Purchase and record' : 'Record'}</SectionLabel>
           <Card>
             {purchase.map((f, i) => (
               <View key={f.label}>

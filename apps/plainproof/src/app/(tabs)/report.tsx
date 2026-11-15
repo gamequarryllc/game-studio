@@ -6,7 +6,7 @@ import { updateProfile } from '@/domain/actions';
 import { displayTime, relativeDay } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { reportTitle } from '@/domain/report';
-import { homeSummary, plural, roomSummaries } from '@/domain/selectors';
+import { backupState, homeSummary, plural, roomSummaries } from '@/domain/selectors';
 import { LIMITS, type Profile } from '@/domain/types';
 import { success } from '@/platform/haptics';
 import { MAKES_PDF } from '@/platform/exporter';
@@ -101,6 +101,7 @@ export default function ReportTab() {
   const doc = useDoc();
   const [includePhotos, setIncludePhotos] = useState(true);
   const [includeReceipts, setIncludeReceipts] = useState(true);
+  const [includeAllPhotos, setIncludeAllPhotos] = useState(false);
   const [busy, setBusy] = useState<'report' | 'csv' | 'backup' | 'restore' | null>(null);
   const [now] = useState(() => Date.now());
   const count = doc.items.length;
@@ -129,7 +130,7 @@ export default function ReportTab() {
   };
 
   const report = () =>
-    run('report', () => makeReport({ includePhotos, includeReceipts }).then(success), 'The report could not be made', 'Try again. If it keeps happening, try it without photos.');
+    run('report', () => makeReport({ includePhotos, includeReceipts, includeAllPhotos }).then(success), 'The report could not be made', 'Try again. If it keeps happening, try it without photos.');
 
   const csv = () => run('csv', exportSpreadsheet, 'The spreadsheet could not be made', 'Try again in a moment.');
 
@@ -165,7 +166,8 @@ export default function ReportTab() {
           success();
           await notify(
             'Backup restored',
-            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ${plural(outcome.photos, 'photo')}.`,
+            `${plural(outcome.items, 'item')} in ${plural(outcome.rooms, 'room')}${outcome.places > 1 ? ` across ${outcome.places} places` : ''}, with ${plural(outcome.photos, 'photo')}.` +
+              (outcome.missing > 0 ? ` ${plural(outcome.missing, 'photo')} ${outcome.missing === 1 ? 'was' : 'were'} not in the backup and will show as blank.` : ''),
           );
         }
       },
@@ -215,7 +217,12 @@ export default function ReportTab() {
         <FormRow label="Receipts, at the end">
           <Switch testID="opt-receipts" accessibilityLabel="Receipts, at the end" value={includeReceipts} onValueChange={setIncludeReceipts} {...switchColors} />
         </FormRow>
+        <Divider />
+        <FormRow label="Every photo, full size, at the end">
+          <Switch testID="opt-all-photos" accessibilityLabel="Every photo, full size, at the end" value={includeAllPhotos} onValueChange={setIncludeAllPhotos} {...switchColors} />
+        </FormRow>
       </Card>
+      <Footnote>For a claim, turn on every photo: the adjuster sees each one large, with the date it was taken. The file is bigger.</Footnote>
 
       <SectionLabel>{place.kind === 'home' ? 'This home' : 'This place'}</SectionLabel>
       <Card>
@@ -240,8 +247,12 @@ export default function ReportTab() {
         <Text style={[type.subhead, { color: c.ink }]}>
           This inventory lives on this iPhone and nowhere else. Keep a copy somewhere the phone isn’t, so losing one doesn’t mean losing both.
         </Text>
-        <Text testID="last-backup" style={[type.footnote, { color: lastBackup ? c.ink2 : c.amber, marginTop: space.s, fontWeight: lastBackup ? '400' : '600' }]}>
-          {lastBackup ? `Last backed up ${relativeDay(lastBackup, Math.max(now, lastBackup))}.` : count > 0 ? 'Not backed up yet.' : 'Nothing to back up yet.'}
+        <Text testID="last-backup" style={[type.footnote, { color: lastBackup && backupState(doc) !== 'behind' ? c.ink2 : c.amber, marginTop: space.s, fontWeight: lastBackup && backupState(doc) !== 'behind' ? '400' : '600' }]}>
+          {lastBackup
+            ? `Last backed up ${relativeDay(lastBackup, Math.max(now, lastBackup))}.${backupState(doc) === 'behind' ? ' You’ve made changes since, so back up again.' : ''}`
+            : count > 0
+              ? 'Not backed up yet.'
+              : 'Nothing to back up yet.'}
         </Text>
         <Button testID="backup-now" label="Back up now" icon="backup" kind="soft" busy={busy === 'backup'} onPress={backup} style={{ marginTop: space.l }} />
       </Card>

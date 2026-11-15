@@ -10,6 +10,7 @@ import { Platform, View } from 'react-native';
 import { pro, usePro } from '@/pro/pro';
 import { store, useStore } from '@/state/store';
 import { DialogHost } from '@/ui/dialogs';
+import { RecoveryScreen } from '@/ui/Recovery';
 import { useTheme } from '@/ui/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -31,7 +32,8 @@ function useWebDeepLink(ready: boolean) {
 export default function RootLayout() {
   const { c, dark } = useTheme();
   const [fontsLoaded, fontError] = useFonts({ Newsreader_500Medium, Newsreader_600SemiBold });
-  const loaded = useStore().state === 'ready';
+  const storeState = useStore().state;
+  const loaded = storeState !== 'loading';
   const proReady = usePro().ready;
 
   useEffect(() => {
@@ -59,6 +61,9 @@ export default function RootLayout() {
       {/* On a wide browser window the preview keeps the proportions of a phone. */}
       <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? (dark ? '#060606' : '#E3DED2') : c.paper }}>
         <View style={{ flex: 1, width: '100%', maxWidth: Platform.OS === 'web' ? 480 : undefined, alignSelf: 'center', backgroundColor: c.paper, overflow: 'hidden' }}>
+          {storeState === 'failed' ? (
+            <RecoveryScreen />
+          ) : (
           <Stack
             screenOptions={{
               headerTintColor: c.green,
@@ -79,6 +84,7 @@ export default function RootLayout() {
             <Stack.Screen name="photo" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade', title: 'Photo' }} />
             <Stack.Screen name="+not-found" options={{ title: '' }} />
           </Stack>
+          )}
           <DialogHost />
         </View>
       </View>

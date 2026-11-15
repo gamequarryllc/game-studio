@@ -1,7 +1,7 @@
 import { cleanCents, cleanQuantity, cleanText } from './doc';
-import { isValidYmd } from './dates';
+import { isValidYmd, toYmd } from './dates';
 import { newId } from './ids';
-import { CATEGORIES, LIMITS, ROOM_ICONS, type Category, type Doc, type Id, type Item, type Photo, type Profile, type Room, type RoomIcon } from './types';
+import { CATEGORIES, CONDITIONS, LIMITS, ROOM_ICONS, type Category, type Condition, type Doc, type Id, type Item, type Photo, type Profile, type Room, type RoomIcon } from './types';
 
 // Every change to the document is a plain function: (doc, input, now) -> new doc.
 // Nothing here touches files, the clock or the screen, so all of it is unit tested.
@@ -117,6 +117,7 @@ export interface ItemDraft {
   roomId: Id;
   name: string;
   category: Category | null;
+  condition: Condition | null;
   quantity: number;
   valueCents: number | null;
   pricePaidCents: number | null;
@@ -135,6 +136,7 @@ export function emptyDraft(roomId: Id): ItemDraft {
     roomId,
     name: '',
     category: null,
+    condition: null,
     quantity: 1,
     valueCents: null,
     pricePaidCents: null,
@@ -154,6 +156,7 @@ export function draftFromItem(item: Item): ItemDraft {
     roomId: item.roomId,
     name: item.name,
     category: item.category,
+    condition: item.condition,
     quantity: item.quantity,
     valueCents: item.valueCents,
     pricePaidCents: item.pricePaidCents,
@@ -168,12 +171,18 @@ export function draftFromItem(item: Item): ItemDraft {
   };
 }
 
-export type DraftProblem = 'name' | 'room';
+export type DraftProblem = 'name' | 'room' | 'future-date';
 
-export function draftProblems(doc: Doc, draft: ItemDraft): DraftProblem[] {
+/** A purchase date after today (on the phone's calendar) can't be right, and on a claim it reads as a mistake or worse. */
+export function isFutureYmd(ymd: string | null, now: number): boolean {
+  return ymd !== null && ymd > toYmd(new Date(now));
+}
+
+export function draftProblems(doc: Doc, draft: ItemDraft, now: number = Date.now()): DraftProblem[] {
   const problems: DraftProblem[] = [];
   if (!cleanText(draft.name, LIMITS.name)) problems.push('name');
   if (!doc.rooms.some((r) => r.id === draft.roomId)) problems.push('room');
+  if (isFutureYmd(draft.purchaseDate, now)) problems.push('future-date');
   return problems;
 }
 
@@ -182,6 +191,7 @@ function fieldsFromDraft(draft: ItemDraft) {
     roomId: draft.roomId,
     name: cleanText(draft.name, LIMITS.name),
     category: draft.category && (CATEGORIES as readonly string[]).includes(draft.category) ? draft.category : null,
+    condition: draft.condition && (CONDITIONS as readonly string[]).includes(draft.condition) ? draft.condition : null,
     quantity: cleanQuantity(draft.quantity),
     valueCents: draft.valueCents === null ? null : cleanCents(draft.valueCents),
     pricePaidCents: draft.pricePaidCents === null ? null : cleanCents(draft.pricePaidCents),
@@ -197,13 +207,13 @@ function fieldsFromDraft(draft: ItemDraft) {
 }
 
 export function addItem(doc: Doc, draft: ItemDraft, now: number): { doc: Doc; itemId: Id | null } {
-  if (draftProblems(doc, draft).length > 0) return { doc, itemId: null };
+  if (draftProblems(doc, draft, now).length > 0) return { doc, itemId: null };
   const item: Item = { id: newId(), ...fieldsFromDraft(draft), createdAt: now, updatedAt: now };
   return { doc: { ...doc, items: [...doc.items, item] }, itemId: item.id };
 }
 
 export function updateItem(doc: Doc, itemId: Id, draft: ItemDraft, now: number): Doc {
-  if (draftProblems(doc, draft).length > 0) return doc;
+  if (draftProblems(doc, draft, now).length > 0) return doc;
   return {
     ...doc,
     items: doc.items.map((it) => (it.id === itemId ? { ...it, ...fieldsFromDraft(draft), updatedAt: now } : it)),

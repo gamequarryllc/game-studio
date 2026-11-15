@@ -46,6 +46,8 @@ export interface HomeSummary {
   count: number;
   pieces: number;
   rooms: number;
+  /** Rooms with at least one item in them: the count the report gives. */
+  filledRooms: number;
   totalCents: number;
   withPhoto: number;
   withValue: number;
@@ -59,6 +61,7 @@ export function homeSummary(doc: Doc): HomeSummary {
     count: doc.items.length,
     pieces: 0,
     rooms: doc.rooms.length,
+    filledRooms: 0,
     totalCents: 0,
     withPhoto: 0,
     withValue: 0,
@@ -75,6 +78,8 @@ export function homeSummary(doc: Doc): HomeSummary {
     if (item.receipts.length > 0) s.withReceipt += 1;
     if (needsSerial(item)) s.missingSerial += 1;
   }
+  const roomIds = new Set(doc.rooms.map((r) => r.id));
+  s.filledRooms = new Set(doc.items.map((i) => i.roomId).filter((id) => roomIds.has(id))).size;
   return s;
 }
 
@@ -88,7 +93,9 @@ export function backupState(doc: Doc): BackupState {
   if (doc.items.length === 0) return 'none';
   const at = doc.meta.lastBackupAt;
   if (at === null) return 'never';
-  return doc.items.some((item) => item.updatedAt > at) ? 'behind' : 'current';
+  // Anything changed since (an item deleted, a room renamed, the policy number) counts, not only edited items.
+  const modified = doc.meta.modifiedAt ?? 0;
+  return modified > at || doc.items.some((item) => item.updatedAt > at) ? 'behind' : 'current';
 }
 
 export type ItemFilter = 'all' | 'no-photo' | 'no-value' | 'no-serial';

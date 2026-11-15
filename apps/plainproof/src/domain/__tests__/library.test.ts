@@ -32,7 +32,7 @@ function home(): Doc {
   const draft = emptyDraft(doc.rooms[0].id);
   draft.name = 'Mixer';
   draft.valueCents = 44900;
-  draft.photos = [{ id: 'photo0001', width: 4, height: 3 }];
+  draft.photos = [{ id: 'photo0001', width: 4, height: 3, takenAt: null, addedAt: null }];
   return addItem(doc, draft, NOW).doc;
 }
 
@@ -40,7 +40,7 @@ function withThing(doc: Doc, name: string, cents: number, photo?: string): Doc {
   const draft = emptyDraft(doc.rooms[0].id);
   draft.name = name;
   draft.valueCents = cents;
-  if (photo) draft.photos = [{ id: photo, width: 4, height: 3 }];
+  if (photo) draft.photos = [{ id: photo, width: 4, height: 3, takenAt: null, addedAt: null }];
   return addItem(doc, draft, NOW).doc;
 }
 

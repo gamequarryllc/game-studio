@@ -19,7 +19,7 @@ export function appVersion(): string {
   return Constants.expoConfig?.version ?? '0';
 }
 
-export async function makeReport(opts: { includePhotos: boolean; includeReceipts: boolean }): Promise<void> {
+export async function makeReport(opts: { includePhotos: boolean; includeReceipts: boolean; includeAllPhotos: boolean }): Promise<void> {
   const target = prepareReport();
   try {
     const doc = store.get();
@@ -30,11 +30,11 @@ export async function makeReport(opts: { includePhotos: boolean; includeReceipts
       const b64 = await readPhotoBase64(id, 'thumb');
       if (b64) photoData[id] = `data:image/jpeg;base64,${b64}`;
     }
-    for (const id of wanted.full) {
+    for (const id of new Set(wanted.full)) {
       const b64 = await readPhotoBase64(id, 'full');
       if (b64) photoData[id] = `data:image/jpeg;base64,${b64}`;
     }
-    const html = buildReportHtml(doc, { ...opts, generatedAt: now, photoData });
+    const html = buildReportHtml(doc, { ...opts, generatedAt: now, photoData, appVersion: appVersion() });
     await deliverReport(target, html, reportFileName(doc, now));
     store.update((d) => markReport(d, now));
   } catch (e) {
@@ -70,7 +70,9 @@ export async function backUp(): Promise<{ photos: number; missing: number }> {
   }
 }
 
-export type RestoreOutcome = { kind: 'cancelled' } | { kind: 'restored'; items: number; rooms: number; places: number; photos: number };
+export type RestoreOutcome =
+  | { kind: 'cancelled' }
+  | { kind: 'restored'; items: number; rooms: number; places: number; photos: number; /** Photos the inventory names that the file did not hold. */ missing: number };
 
 /** Reads a backup the person picks and, if all of it is good, replaces everything (every place) with it. */
 export async function restoreFromBackup(
@@ -103,7 +105,8 @@ export async function restoreFromBackup(
     await store.replace(mapDocs(library, (d) => markBackup(d, restoredAt)));
     const inUse = libraryPhotoIds(library);
     await removeOrphanPhotos(inUse);
-    return { kind: 'restored', ...found, photos: [...inUse].filter((id) => seen.has(id)).length };
+    const photos = [...inUse].filter((id) => seen.has(id)).length;
+    return { kind: 'restored', ...found, photos, missing: inUse.size - photos };
   } catch (e) {
     await staging.abort();
     throw e;

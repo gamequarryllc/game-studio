@@ -66,13 +66,30 @@ export interface Photo {
   id: Id;
   width: number;
   height: number;
+  /** When the photo was taken, from the camera's own record (ms, local clock). Null when the picture didn't say. */
+  takenAt: number | null;
+  /** When it was added to Plainproof (ms). Null for photos saved before this was recorded. */
+  addedAt: number | null;
 }
+
+export const CONDITIONS = ['new', 'excellent', 'good', 'fair', 'poor'] as const;
+export type Condition = (typeof CONDITIONS)[number];
+
+export const CONDITION_LABELS: Record<Condition, string> = {
+  new: 'New',
+  excellent: 'Excellent',
+  good: 'Good',
+  fair: 'Fair',
+  poor: 'Poor',
+};
 
 export interface Item {
   id: Id;
   roomId: Id;
   name: string;
   category: Category | null;
+  /** How worn it is: insurers use it to work out what an older thing is worth. */
+  condition: Condition | null;
   quantity: number;
   /** What one of these would cost to replace, in the smallest currency unit. */
   valueCents: number | null;
@@ -109,6 +126,8 @@ export interface Meta {
   onboarded: boolean;
   lastBackupAt: number | null;
   lastReportAt: number | null;
+  /** The last change to anything in this place (items, rooms, the report heading, settings). */
+  modifiedAt: number | null;
 }
 
 export interface Doc {
@@ -131,4 +150,6 @@ export const LIMITS = {
   photosPerItem: 12,
   receiptsPerItem: 6,
   rooms: 60,
+  /** A saved file may hold more rooms than the app lets one add; they are all kept when it is opened. */
+  roomsOnLoad: 1000,
 } as const;

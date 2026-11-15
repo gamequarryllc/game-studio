@@ -1,10 +1,12 @@
 import { isSafeId, newId } from './ids';
 import {
   CATEGORIES,
+  CONDITIONS,
   DOC_VERSION,
   LIMITS,
   ROOM_ICONS,
   type Category,
+  type Condition,
   type Doc,
   type Item,
   type Photo,
@@ -32,7 +34,7 @@ export function emptyDoc(now: number, currency: string = DEFAULT_CURRENCY): Doc 
     items: [],
     profile: { homeName: '', ownerName: '', address: '', insurer: '', policyNumber: '' },
     settings: { currency },
-    meta: { createdAt: now, onboarded: false, lastBackupAt: null, lastReportAt: null },
+    meta: { createdAt: now, onboarded: false, lastBackupAt: null, lastReportAt: null, modifiedAt: null },
   };
 }
 
@@ -73,7 +75,7 @@ function cleanPhotos(v: unknown, max: number, seen: Set<string>): Photo[] {
     seen.add(p.id);
     const width = typeof p.width === 'number' && p.width > 0 ? Math.round(p.width) : 0;
     const height = typeof p.height === 'number' && p.height > 0 ? Math.round(p.height) : 0;
-    out.push({ id: p.id, width, height });
+    out.push({ id: p.id, width, height, takenAt: cleanTimeOrNull(p.takenAt), addedAt: cleanTimeOrNull(p.addedAt) });
     if (out.length >= max) break;
   }
   return out;
@@ -103,7 +105,7 @@ export function parseDoc(raw: unknown, now: number): Doc {
     const icon: RoomIcon = (ROOM_ICONS as readonly string[]).includes(r.icon as string) ? (r.icon as RoomIcon) : 'box';
     rooms.push({ id: r.id, name, icon, createdAt: cleanTime(r.createdAt, now) });
     roomIds.add(r.id);
-    if (rooms.length >= LIMITS.rooms) break;
+    if (rooms.length >= LIMITS.roomsOnLoad) break;
   }
 
   const items: Item[] = [];
@@ -131,12 +133,16 @@ export function parseDoc(raw: unknown, now: number): Doc {
     const category: Category | null = (CATEGORIES as readonly string[]).includes(it.category as string)
       ? (it.category as Category)
       : null;
+    const condition: Condition | null = (CONDITIONS as readonly string[]).includes(it.condition as string)
+      ? (it.condition as Condition)
+      : null;
     const createdAt = cleanTime(it.createdAt, now);
     items.push({
       id: it.id,
       roomId,
       name,
       category,
+      condition,
       quantity: cleanQuantity(it.quantity),
       valueCents: cleanCents(it.valueCents),
       pricePaidCents: cleanCents(it.pricePaidCents),
@@ -178,6 +184,7 @@ export function parseDoc(raw: unknown, now: number): Doc {
       onboarded: meta.onboarded === true || rooms.length > 0,
       lastBackupAt: cleanTimeOrNull(meta.lastBackupAt),
       lastReportAt: cleanTimeOrNull(meta.lastReportAt),
+      modifiedAt: cleanTimeOrNull(meta.modifiedAt),
     },
   };
 }
