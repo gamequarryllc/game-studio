@@ -311,6 +311,16 @@ export const store = {
     screenTime.releaseLocks(doc.settings, doc.day.topUps, doc.day.usedMinutes);
     set({ ...doc, watching: true, setupDone: true });
   },
+  /**
+   * Setup, when today was already past the goal: counting is on, but nothing
+   * locks until the next recharge. Today is marked as not fully counted.
+   */
+  startTomorrow() {
+    const doc = snapshot.doc;
+    const at = new Date(doc.day.periodStart);
+    screenTime.holdLocks(nextRecharge(at, doc.settings.rechargeMinute).getTime(), doc.settings, doc.day.topUps);
+    set({ ...doc, watching: true, setupDone: true, day: { ...doc.day, uncounted: true } });
+  },
   /** The starting figure looked wrong: count from this moment instead, from zero. */
   async countFromNow(): Promise<boolean> {
     const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, true);
@@ -339,7 +349,7 @@ export const store = {
   /** The person changed their picks in Apple's list: tell the phone, and redraw. */
   picksChanged() {
     // Before registering again: reports from before this moment were for the old list.
-    if (screenTime.picksAfter()) {
+    if (screenTime.picksAfter(snapshot.doc.settings.goalMinutes)) {
       // Look again while the phone re-reports the day, so Today moves to the new figure once it has.
       for (const wait of [3000, 6000, 10000, 16000]) setTimeout(() => store.tick(new Date()), wait);
     }

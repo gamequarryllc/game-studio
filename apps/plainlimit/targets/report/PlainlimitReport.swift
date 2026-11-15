@@ -7,6 +7,8 @@ import SwiftUI
 // Two pictures for Today, both as Apple's Screen Time counts:
 //   TopApps  the "what used it" list: the apps that used the most time since the
 //            battery last recharged.
+//   Average  for setup: the counted apps' use over the seven days before
+//            today, a day on average, to help pick a goal.
 //   Total    the day's figure: every minute the counted apps have been used
 //            since the recharge, to the minute, added up app by app. The app
 //            itself only learns use in steps, so this is the exact number the
@@ -30,6 +32,7 @@ struct UsageSummary {
 extension DeviceActivityReport.Context {
   static let topApps = Self("TopApps")
   static let total = Self("Total")
+  static let average = Self("Average")
 }
 
 private let ink = Color(red: 244 / 255, green: 245 / 255, blue: 242 / 255)
@@ -168,6 +171,27 @@ struct TotalReport: DeviceActivityReportScene {
   }
 }
 
+struct AverageReport: DeviceActivityReportScene {
+  let context: DeviceActivityReport.Context = .average
+  let content: (TimeInterval) -> TotalView
+
+  func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
+    -> TimeInterval {
+    var seconds: TimeInterval = 0
+    for await device in data {
+      for await segment in device.activitySegments {
+        for await category in segment.categories {
+          for await app in category.applications {
+            seconds += app.totalActivityDuration
+          }
+        }
+      }
+    }
+    // The app asks for the seven days before today.
+    return seconds / 7
+  }
+}
+
 struct TotalView: View {
   let seconds: TimeInterval
 
@@ -194,6 +218,9 @@ struct PlainlimitReport: DeviceActivityReportExtension {
       TopAppsView(summary: summary)
     }
     TotalReport { seconds in
+      TotalView(seconds: seconds)
+    }
+    AverageReport { seconds in
       TotalView(seconds: seconds)
     }
   }

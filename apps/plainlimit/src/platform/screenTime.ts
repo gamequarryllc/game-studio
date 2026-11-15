@@ -206,6 +206,32 @@ function round(): string {
   return readString(ROUND_KEY);
 }
 
+/** The goal the previous round's checkpoints were made for: a cell is a share of the goal, so its minutes depend on it. */
+const ROUND_GOAL_BEFORE_KEY = 'plainlimit_round_goal_before';
+/** The goal the day was last registered with. */
+const REGISTERED_GOAL_KEY = 'plainlimit_registered_goal';
+
+function readNumber(key: string): number {
+  try {
+    const value = DeviceActivity.userDefaultsGet<number>(key);
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Starts a new round of checkpoint names (roundName). Done whenever reports
+ * already made would mean something else: the ticked apps changed, or the goal
+ * did ("cell-3" is 90 minutes of a 3-hour goal, 120 of a 4-hour one).
+ */
+function startRound(now: Date, goalBefore: number) {
+  DeviceActivity.userDefaultsSet(ROUND_BEFORE_KEY, round());
+  DeviceActivity.userDefaultsSet(ROUND_GOAL_BEFORE_KEY, goalBefore);
+  DeviceActivity.userDefaultsSet(ROUND_KEY, now.getTime().toString(36));
+  DeviceActivity.userDefaultsSet(PICKS_KEY, now.getTime());
+}
+
 function picksChangedAt(): number {
   try {
     const value = DeviceActivity.userDefaultsGet<number>(PICKS_KEY);
@@ -226,16 +252,14 @@ export function picksBefore(): void {
 }
 
 /** Call as Apple's picker closes, before the day is registered again. True if the list changed. */
-export function picksAfter(now = new Date()): boolean {
+export function picksAfter(goalMinutes: number, now = new Date()): boolean {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
     const before = DeviceActivity.userDefaultsGet<string>(PICKS_BEFORE_KEY);
     DeviceActivity.userDefaultsRemove(PICKS_BEFORE_KEY);
     if (typeof before !== 'string' || before === (countedToken() ?? '')) return false;
-    DeviceActivity.userDefaultsSet(PICKS_KEY, now.getTime());
     // A new round of names, so reports for the old list can't pass for the new one.
-    DeviceActivity.userDefaultsSet(ROUND_BEFORE_KEY, round());
-    DeviceActivity.userDefaultsSet(ROUND_KEY, now.getTime().toString(36));
+    startRound(now, goalMinutes);
     // The last known figure was for the old list. A newly ticked app can
     // honestly add more than it allowed, so it is dropped; a new one is noted
     // once counting has settled again.
@@ -410,6 +434,10 @@ export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh =
     if (hold) DeviceActivity.userDefaultsSet(HOLD_KEY, now.getTime() + 2 * 3600 * 1000);
     else if (fresh) DeviceActivity.userDefaultsRemove(HOLD_KEY);
     DeviceActivity.userDefaultsSet(REGISTERED_KEY, now.getTime());
+    // A different goal gives the same checkpoint names other minutes.
+    const lastGoal = readNumber(REGISTERED_GOAL_KEY);
+    if (!fresh && lastGoal > 0 && lastGoal !== settings.goalMinutes) startRound(now, lastGoal);
+    DeviceActivity.userDefaultsSet(REGISTERED_GOAL_KEY, settings.goalMinutes);
     if (fresh) {
       // Counting starts (or starts over) now: forget earlier checkpoints and take every cover away.
       DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
@@ -554,15 +582,19 @@ export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Da
     // Only the current round's reports count (roundName). Just after the ticked
     // apps change, the old round's figure stands until the phone has
     // re-reported the day for the new list.
-    let named = round();
-    const picked = picksChangedAt();
-    if (picked >= from.getTime() && periodEnd === undefined) {
-      const fresh = reported.filter((e) => splitName(e.eventName as string).round === named).map((e) => e.lastCalledAt.getTime());
-      if (!picksSettled(Date.now(), picked, fresh.length > 0 ? Math.max(...fresh) : null)) named = readString(ROUND_BEFORE_KEY);
-    }
     const to = periodEnd?.getTime() ?? Number.POSITIVE_INFINITY;
-    const arrived = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)].filter((checkpoint) => {
-      const report = reported.find((e) => e.eventName === roundName(checkpoint.id, named));
+    let goal = goalMinutes;
+    let matches = (name: string, id: string) => name === roundName(id, round());
+    if (periodEnd !== undefined) {
+      // A finished day: its reports may be from any round it had.
+      matches = (name, id) => splitName(name).id === id;
+    } else if (!roundSettled(reported, from)) {
+      const before = readString(ROUND_BEFORE_KEY);
+      goal = readNumber(ROUND_GOAL_BEFORE_KEY) || goalMinutes;
+      matches = (name, id) => name === roundName(id, before);
+    }
+    const arrived = [...checkpointsFor(goal), ...minuteTicksFor(goal)].filter((checkpoint) => {
+      const report = reported.filter((e) => matches(e.eventName as string, checkpoint.id)).sort((a, b) => b.lastCalledAt.getTime() - a.lastCalledAt.getTime())[0];
       if (!report) return false;
       return report.lastCalledAt.getTime() < to && believable(checkpoint, from, sure, report.lastCalledAt);
     });
@@ -634,6 +666,61 @@ export function reportWindow(settings: Settings, now: Date): { fromMs: number; t
   const from = dayStartOf(periodStart);
   const token = SCREEN_TIME_AVAILABLE ? countedToken() : null;
   return { fromMs: from.getTime(), toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: token, fromRecharge: from.getTime() === periodStart.getTime() };
+}
+
+/** The seven days before today's battery, for the phone's 7-day average in setup. */
+export function averageWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
+  const periodStart = periodStartOf(now, settings.rechargeMinute);
+  const token = SCREEN_TIME_AVAILABLE ? countedToken() : null;
+  return { fromMs: periodStart.getTime() - 7 * 24 * 3600 * 1000, toMs: periodStart.getTime(), selection: token };
+}
+
+/**
+ * Whether the phone has finished reporting the day for the current round
+ * (picksSettled). Just after a change it hasn't, and the figure is still the
+ * previous round's.
+ */
+function roundSettled(reported: { eventName?: string | null; lastCalledAt: Date }[], from: Date): boolean {
+  const changed = picksChangedAt();
+  if (changed < from.getTime()) return true;
+  const named = round();
+  const fresh = reported.filter((e) => e.eventName && splitName(e.eventName).round === named).map((e) => e.lastCalledAt.getTime());
+  return picksSettled(Date.now(), changed, fresh.length > 0 ? Math.max(...fresh) : null);
+}
+
+/** For setup's last screen: whether the day's figure has settled after the latest change. */
+export function countSettled(settings: Settings): boolean {
+  if (!SCREEN_TIME_AVAILABLE) return true;
+  try {
+    const reported = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)].filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName);
+    return roundSettled(reported, dayStartOf(periodStartOf(new Date(), settings.rechargeMinute)));
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Counting is on but nothing locks until `untilMs`: setup's "start tomorrow",
+ * when today was already past the goal. The day's checkpoints still arrive and
+ * fill the battery; the phone is told not to act on them before then.
+ */
+export function holdLocks(untilMs: number, settings: Settings, topUpsSoFar: number) {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    DeviceActivity.userDefaultsSet(HOLD_KEY, untilMs);
+    writeCheckpointActions(monitorPlan(settings, topUpsSoFar, countingSince()), settings, new Date());
+    DeviceActivity.disableBlockAllMode('plainlimit');
+    DeviceActivity.resetBlocks('plainlimit');
+  } catch (error) {
+    note('holding the locks', error);
+  }
+}
+
+/** When held locks act again (0 if they aren't held). */
+export function locksHeldUntil(): number {
+  if (!SCREEN_TIME_AVAILABLE) return 0;
+  const until = holdUntil();
+  return until > Date.now() ? until : 0;
 }
 
 /** Calls back whenever the phone reports a checkpoint while the app is open. */

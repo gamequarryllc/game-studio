@@ -8,35 +8,38 @@ import { clockLabel, durationLabel } from '@/domain/day';
 import { toneAt } from '@/domain/tone';
 import { askToNotify } from '@/platform/notices';
 import { tickStepMinutes } from '@/domain/checkpoints';
-import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, permission, pickCount } from '@/platform/screenTime';
+import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, permission, pickCount } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { Battery } from '@/ui/Battery';
-import { COUNTS_LEAD, COUNTS_NOTE, COUNTS_STEPS, pickedWords } from '@/ui/countWords';
+import { COUNTS_LEAD, COUNTS_STEPS, pickedWords } from '@/ui/countWords';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
-import { TodayTotal } from '@/ui/UsageReport';
+import { TodayTotal, WeekAverage } from '@/ui/UsageReport';
 import { useDay } from '@/ui/useDay';
 
-// The first launch, one question at a time. On a phone, Screen Time access
-// comes before anything that opens Apple's list of apps, which needs it.
-// Everything here can be changed later in Settings.
+// The first launch, in five screens: what it is, Screen Time access, what
+// counts, the goal, and a last check. Access comes first, so the goal screen
+// can show the phone's own figures (today so far, and the last week's
+// average) while the goal is picked; the old order asked for a goal before
+// anything was known, and a quick tap-through could lock every app at once.
 //
 // Counting always takes in the day since the recharge, so the app can be
 // installed at any time of day. The last screen registers the day with the
-// locks held, shows Plainlimit's starting figure beside the phone's own, and
-// only lets the locks act once the person has seen them agree. If they don't
-// (iOS sometimes misreports right after a day is registered), counting can
-// start from that moment instead.
+// locks held and shows Plainlimit's figure beside the phone's. If today is
+// already past the goal, starting is not the main button: tomorrow is.
+// Everything here can be changed later in Settings.
 
 const FULL = toneAt(0);
 
-type Step = 'welcome' | 'goal' | 'recharge' | 'access' | 'notify' | 'counts' | 'widget' | 'done';
+type Step = 'welcome' | 'access' | 'counts' | 'goal' | 'ready';
 
-const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'goal', 'recharge', 'access', 'notify', 'counts', 'widget', 'done'] : ['welcome', 'goal', 'recharge', 'counts', 'widget', 'done'];
+const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'access', 'counts', 'goal', 'ready'] : ['welcome', 'counts', 'goal', 'ready'];
 
-/** How long the last screen waits for the phone to report the day so far before offering Start counting. */
+/** How long the last screen waits for the phone to report the day so far, at least. */
 const SETTLE_MS = 10_000;
+
+type Button = { label: string; onPress: () => void };
 
 export default function Setup() {
   const router = useRouter();
@@ -48,45 +51,46 @@ export default function Setup() {
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [, redraw] = useState(0);
-  // The last screen on a phone: reading the day so far, then ready to start.
+  // The last screen on a phone: reading the day so far, then ready.
   const [phase, setPhase] = useState<'reading' | 'ready' | 'failed'>('reading');
+  const [waitedAt, setWaitedAt] = useState<number | null>(null);
   const previewed = useRef(false);
 
   const step = STEPS[at];
+  const goTo = (s: Step) => setAt(Math.max(0, STEPS.indexOf(s)));
   const next = () => setAt((i) => Math.min(STEPS.length - 1, i + 1));
   const approved = access === 'approved';
   const canPick = SCREEN_TIME_AVAILABLE && approved;
   const picked = pickCount(COUNTED_ID);
+  const figures = canPick && picked > 0;
   // Only a phone with access and something ticked can count; anywhere else the last screen is a summary.
-  const checking = step === 'done' && canPick && picked > 0;
+  const checking = step === 'ready' && figures;
 
+  // Registers the day (locks held) on reaching the last screen, once.
   useEffect(() => {
     if (!checking || previewed.current) return;
     previewed.current = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
     void store.previewCounting().then((ok) => {
       if (!ok) setPhase('failed');
-      else timer = setTimeout(() => setPhase('ready'), SETTLE_MS);
+      else setWaitedAt(Date.now());
     });
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
   }, [checking]);
 
-  const finish = () => {
-    store.finishSetup();
-    router.replace('/');
-  };
+  // Ready once the phone has had its say: at least ten seconds, and settled after any change (a new goal re-registers the day).
+  useEffect(() => {
+    if (!checking || phase === 'failed' || waitedAt === null) return;
+    const look = () => setPhase(Date.now() - waitedAt >= SETTLE_MS && countSettled(settings) ? 'ready' : 'reading');
+    look();
+    const timer = setInterval(look, 1000);
+    return () => clearInterval(timer);
+  }, [checking, phase, waitedAt, settings]);
 
-  const start = () => {
-    store.startCounting();
-    router.replace('/');
-  };
-
-  const fromNow = async () => {
+  const leave = (then: () => void | Promise<unknown>) => async () => {
     if (busy) return;
     setBusy(true);
-    await store.countFromNow();
+    // "I need more time" on a locked app works through a notification.
+    await askToNotify();
+    await then();
     setBusy(false);
     router.replace('/');
   };
@@ -102,8 +106,9 @@ export default function Setup() {
   };
 
   let body: ReactNode = null;
-  let primary: { label: string; onPress: () => void } = { label: 'Next', onPress: next };
-  let secondary: { label: string; onPress: () => void } | null = null;
+  let primary: Button = { label: 'Next', onPress: next };
+  let secondary: Button | null = null;
+  let quiet: Button | null = null;
 
   if (step === 'welcome') {
     body = (
@@ -112,86 +117,25 @@ export default function Setup() {
           <Battery cells={6} tone={FULL} height={84} decorative />
         </View>
         <Heading>Your screen time is a battery</Heading>
-        <Point n="1">You get one battery a day, in six cells.</Point>
-        <Point n="2">The apps you choose use it up while you use them.</Point>
-        <Point n="3">When it runs out, those apps lock. Solve a few sums to earn a little more.</Point>
-        <Point n="4">It recharges every morning.</Point>
+        <Lead>One battery a day. The apps you choose use it up, and lock when it&apos;s empty. It recharges every morning.</Lead>
       </>
     );
     primary = { label: 'Set it up', onPress: next };
-  }
-
-  if (step === 'goal') {
-    body = (
-      <>
-        <Heading>How much a day?</Heading>
-        <Lead>Your daily goal. Starting a little under what you use now works well. You can change it any time the battery isn&apos;t empty.</Lead>
-        <Card style={{ paddingVertical: 18, gap: 10 }}>
-          <View style={styles.stepper}>
-            <StepButton sign="−" label="Less time" size={52} onPress={() => store.stepGoal(-1)} />
-            <Text accessibilityLabel={`Daily goal, ${durationLabel(settings.goalMinutes)}`} style={[styles.big, { color: accent }]}>
-              {durationLabel(settings.goalMinutes)}
-            </Text>
-            <StepButton sign="+" label="More time" size={52} onPress={() => store.stepGoal(1)} />
-          </View>
-          <Text style={styles.note}>Six cells of {cellWords(settings.goalMinutes)} each</Text>
-        </Card>
-      </>
-    );
-  }
-
-  if (step === 'recharge') {
-    body = (
-      <>
-        <Heading>When does it recharge?</Heading>
-        <Lead>A full battery arrives at this time every day. Pick when your day starts.</Lead>
-        <Card style={{ paddingVertical: 18 }}>
-          <View style={styles.stepper}>
-            <StepButton sign="−" label="Recharge earlier" size={52} onPress={() => store.stepRecharge(-1)} />
-            <Text accessibilityLabel={`Recharges at ${clockLabel(settings.rechargeMinute)}`} style={[styles.big, { fontSize: 44, lineHeight: 48, color: accent }]}>
-              {clockLabel(settings.rechargeMinute)}
-            </Text>
-            <StepButton sign="+" label="Recharge later" size={52} onPress={() => store.stepRecharge(1)} />
-          </View>
-        </Card>
-      </>
-    );
   }
 
   if (step === 'access') {
     body = (
       <>
         <Heading>Allow Screen Time</Heading>
-        <Lead>Apple asks you to allow this. Plainlimit is told when a cell&apos;s worth of time has been used, and never what you did in an app.</Lead>
+        <Lead>Plainlimit counts and locks apps through Apple&apos;s Screen Time. It never sees what you do in them.</Lead>
         {approved ? <Text style={styles.ok}>Allowed.</Text> : null}
         {asked && !approved ? (
-          <Text style={styles.note}>
-            It wasn&apos;t allowed, so Plainlimit can&apos;t count yet. Try again, or skip and allow it later in Settings. If no question appears, open the Settings app, then Screen Time.
-          </Text>
+          <Text style={styles.note}>It wasn&apos;t allowed, so nothing can be counted yet. Try again, or skip and allow it later in Settings.</Text>
         ) : null}
       </>
     );
-    primary = approved ? { label: 'Next', onPress: next } : { label: busy ? 'One moment…' : asked ? 'Try again' : 'Allow Screen Time', onPress: () => void allow() };
+    primary = approved ? { label: 'Next', onPress: next } : { label: busy ? 'One moment…' : asked ? 'Try again' : 'Allow', onPress: () => void allow() };
     if (asked && !approved) secondary = { label: 'Skip for now', onPress: next };
-  }
-
-  if (step === 'notify') {
-    body = (
-      <>
-        <Heading>One notification you&apos;ll want</Heading>
-        <Lead>
-          When the battery is empty, &ldquo;I need more time&rdquo; sends a notification that opens the sums. Apple doesn&apos;t let a lock screen open an app any other way. The only
-          other one is a heads-up when the battery is nearly out.
-        </Lead>
-      </>
-    );
-    primary = {
-      label: 'Allow notifications',
-      onPress: () => {
-        void askToNotify().then(next);
-      },
-    };
-    secondary = { label: 'Not now', onPress: next };
   }
 
   if (step === 'counts') {
@@ -210,7 +154,6 @@ export default function Setup() {
             </Card>
             <Text style={picked === 0 ? styles.ok : styles.body}>{pickedWords(picked)}</Text>
             {picked > 0 ? <BigButton quiet label="Change the apps" onPress={() => setPicking(true)} /> : null}
-            <Text style={styles.note}>{COUNTS_NOTE}</Text>
           </>
         ) : SCREEN_TIME_AVAILABLE ? (
           <Text style={styles.note}>You can tick apps once Screen Time is allowed, in Settings, under What counts.</Text>
@@ -225,27 +168,59 @@ export default function Setup() {
     }
   }
 
-  if (step === 'widget') {
+  if (step === 'goal') {
     body = (
       <>
-        <Heading>Put it on your home screen</Heading>
-        <Lead>The widget shows the battery without opening the app.</Lead>
-        <Point n="1">Touch and hold an empty spot on your home screen.</Point>
-        <Point n="2">Tap Edit, then Add Widget.</Point>
-        <Point n="3">Search for Plainlimit and pick a size.</Point>
+        <Heading>How much a day?</Heading>
+        {figures ? (
+          <View style={styles.figureBox}>
+            <View style={styles.figures}>
+              <View style={styles.figure}>
+                <Text style={styles.figureLabel}>Used today</Text>
+                <TodayTotal settings={settings} now={now} fallback={<Text style={styles.figureValue}>…</Text>} />
+              </View>
+              <View style={styles.figure}>
+                <Text style={styles.figureLabel}>Daily average</Text>
+                <WeekAverage settings={settings} now={now} fallback={<Text style={styles.figureValue}>…</Text>} />
+              </View>
+            </View>
+            <Text style={styles.note}>In the apps you ticked, from Screen Time. The average is over the last 7 days.</Text>
+          </View>
+        ) : null}
+        <Lead>Pick a little under a normal day. You can change it later.</Lead>
+        <Card style={{ paddingVertical: 18, gap: 10 }}>
+          <View style={styles.stepper}>
+            <StepButton sign="−" label="Less time" size={52} onPress={() => store.stepGoal(-1)} />
+            <Text accessibilityLabel={`Daily goal, ${durationLabel(settings.goalMinutes)}`} style={[styles.big, { color: accent }]}>
+              {durationLabel(settings.goalMinutes)}
+            </Text>
+            <StepButton sign="+" label="More time" size={52} onPress={() => store.stepGoal(1)} />
+          </View>
+          <Text style={styles.note}>Six cells of {cellWords(settings.goalMinutes)} each</Text>
+        </Card>
+        <Card style={{ paddingVertical: 12 }}>
+          <View style={styles.stepper}>
+            <Text style={styles.rowLabel}>Recharges at</Text>
+            <View style={styles.smallStepper}>
+              <StepButton sign="−" label="Recharge earlier" size={40} onPress={() => store.stepRecharge(-1)} />
+              <Text accessibilityLabel={`Recharges at ${clockLabel(settings.rechargeMinute)}`} style={styles.rowValueBig}>
+                {clockLabel(settings.rechargeMinute)}
+              </Text>
+              <StepButton sign="+" label="Recharge later" size={40} onPress={() => store.stepRecharge(1)} />
+            </View>
+          </View>
+        </Card>
       </>
     );
   }
 
-  if (step === 'done' && checking) {
-    const stepMinutes = tickStepMinutes(settings.goalMinutes);
+  if (step === 'ready' && checking) {
+    const recharge = clockLabel(settings.rechargeMinute);
+    // Plainlimit's count stops at the goal: reaching it means today is already past.
+    const over = phase === 'ready' && day.usedMinutes >= settings.goalMinutes;
     body = (
       <>
-        <Heading>Check today so far</Heading>
-        <Lead>
-          Plainlimit counts from the recharge at {clockLabel(settings.rechargeMinute)}, so time already used today counts. Its figure should be the same as the phone&apos;s, or up to {stepMinutes} minutes
-          under.
-        </Lead>
+        <Heading>{phase === 'failed' ? 'Not counting yet' : over ? 'Already past your goal' : 'Ready'}</Heading>
         {/* On the plain ground, not a card: the phone draws its figure on the ground's own colour. */}
         <View style={styles.figureBox}>
           <View style={styles.figures}>
@@ -261,21 +236,30 @@ export default function Setup() {
             </View>
           </View>
         </View>
-        <Text style={styles.note}>
+        <Lead>
           {phase === 'reading'
-            ? 'Reading today\u2019s Screen Time. Nothing locks until you start.'
+            ? 'Reading today\u2019s Screen Time. Nothing locks yet.'
             : phase === 'failed'
-              ? 'The phone would not start counting. You can turn it on later in Settings, under Screen Time.'
-              : 'If Plainlimit\u2019s figure is well above the phone\u2019s, the phone misreported. Count from now starts at zero instead.'}
-        </Text>
+              ? 'The phone would not start counting. You can turn it on later in Settings.'
+              : over
+                ? `You\u2019ve used more than ${durationLabel(settings.goalMinutes)} today, so starting now would lock your counted apps until ${recharge}.`
+                : `The two should match, or Plainlimit can be up to ${tickStepMinutes(settings.goalMinutes)} minutes under.`}
+        </Lead>
       </>
     );
-    if (phase === 'failed') primary = { label: 'Go to Today', onPress: finish };
-    else {
-      primary = { label: phase === 'reading' ? 'One moment…' : 'Start counting', onPress: phase === 'reading' ? () => {} : start };
-      if (phase === 'ready') secondary = { label: busy ? 'One moment…' : 'Count from now instead', onPress: () => void fromNow() };
+    if (phase === 'failed') {
+      primary = { label: 'Go to Today', onPress: () => void leave(() => store.finishSetup())() };
+    } else if (phase === 'reading') {
+      primary = { label: 'One moment…', onPress: () => {} };
+    } else if (over) {
+      primary = { label: busy ? 'One moment…' : `Start tomorrow at ${recharge}`, onPress: () => void leave(() => store.startTomorrow())() };
+      secondary = { label: 'Raise my goal', onPress: () => goTo('goal') };
+      quiet = { label: 'Lock now anyway', onPress: () => void leave(() => store.startCounting())() };
+    } else {
+      primary = { label: busy ? 'One moment…' : 'Start counting', onPress: () => void leave(() => store.startCounting())() };
+      quiet = { label: 'Plainlimit is well above? Count from now instead', onPress: () => void leave(() => store.countFromNow())() };
     }
-  } else if (step === 'done') {
+  } else if (step === 'ready') {
     body = (
       <>
         <Heading>You&apos;re set</Heading>
@@ -293,13 +277,13 @@ export default function Setup() {
         </Lead>
       </>
     );
-    primary = { label: 'Go to Today', onPress: finish };
+    primary = { label: 'Go to Today', onPress: () => void leave(() => store.finishSetup())() };
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: c.ground }}>
       <View style={[styles.top, { paddingTop: insets.top + 10 }]}>
-        {at > 0 && step !== 'done' ? (
+        {at > 0 ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} onPress={() => setAt((i) => Math.max(0, i - 1))} style={styles.back}>
             <Text style={styles.backText}>Back</Text>
           </Pressable>
@@ -319,6 +303,11 @@ export default function Setup() {
       <View style={[styles.foot, { paddingBottom: insets.bottom + 16 }]}>
         <BigButton label={primary.label} onPress={primary.onPress} />
         {secondary ? <BigButton quiet label={secondary.label} onPress={secondary.onPress} /> : null}
+        {quiet ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={quiet.label} hitSlop={8} onPress={quiet.onPress} style={styles.quiet}>
+            <Text style={styles.quietText}>{quiet.label}</Text>
+          </Pressable>
+        ) : null}
       </View>
       <AppPicker
         id={COUNTED_ID}
@@ -394,4 +383,8 @@ const styles = StyleSheet.create({
   rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },
   rowLabel: { fontSize: 16, color: c.ink2 },
   rowValue: { fontSize: 16, fontWeight: '600', color: c.ink },
+  rowValueBig: { fontFamily: display.semi, fontSize: 20, color: c.ink, minWidth: 92, textAlign: 'center' },
+  smallStepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  quiet: { minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  quietText: { fontSize: 14, color: c.ink3, textDecorationLine: 'underline' },
 });

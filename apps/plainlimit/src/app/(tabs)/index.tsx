@@ -7,7 +7,7 @@ import { clockLabel, clockLabelOf, durationLabel, goalLabel, nextRecharge, until
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
 import { weekView } from '@/domain/week';
-import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn } from '@/platform/screenTime';
+import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, locksHeldUntil } from '@/platform/screenTime';
 import { store, useDoc } from '@/state/store';
 import { Battery } from '@/ui/Battery';
 import { CountingProblem } from '@/ui/CountingProblem';
@@ -39,6 +39,8 @@ export default function Today() {
 
   const recharge = clockLabel(settings.rechargeMinute);
   const empty = cells === 0;
+  // Setup's "start tomorrow": counting, but nothing locks before the recharge.
+  const held = locksHeldUntil();
   const unlocked = isUnlocked(day, now);
   const next = topUpPlan(day.topUps);
 
@@ -65,15 +67,20 @@ export default function Today() {
 
       <View style={styles.rest}>
         <CountingProblem health={problem} />
+        {held > 0 ? (
+          <View style={[styles.strip, { borderColor: accent }]}>
+            <Text style={styles.body}>Nothing locks until {clockLabelOf(new Date(held))}. Today was already past your goal when you set up.</Text>
+          </View>
+        ) : null}
         {unlocked ? (
           <View style={[styles.strip, { borderColor: accent }]}>
             <Text style={styles.body}>Earned time runs until {clockLabelOf(new Date(day.unlockedUntil as string))}.</Text>
           </View>
         ) : null}
-        {empty && !unlocked && settings.emptyLevel === 'work' ? (
+        {empty && !unlocked && held === 0 && settings.emptyLevel === 'work' ? (
           <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} />
         ) : null}
-        {empty && !unlocked && settings.emptyLevel === 'locked' ? (
+        {empty && !unlocked && held === 0 && settings.emptyLevel === 'locked' ? (
           <View style={[styles.strip, { borderColor: accent }]}>
             <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>
           </View>
