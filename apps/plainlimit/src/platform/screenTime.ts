@@ -129,10 +129,100 @@ export function pickCount(id: typeof COUNTED_ID): number {
   if (!SCREEN_TIME_AVAILABLE) return 0;
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });
-    return (meta?.applicationCount ?? 0) + (meta?.categoryCount ?? 0) + (meta?.webDomainCount ?? 0);
+    return meta ? meta.applicationCount + meta.categoryCount + sitesIn(meta) : 0;
   } catch {
     return 0;
   }
+}
+
+/** Sites in a selection. The library's type says "webDomainCount"; its native side sends "webdomainCount". */
+function sitesIn(meta: DeviceActivity.ActivitySelectionMetadata): number {
+  const raw = meta as unknown as Record<string, unknown>;
+  const n = raw.webdomainCount ?? raw.webDomainCount;
+  return typeof n === 'number' ? n : 0;
+}
+
+/**
+ * The most apps iOS will lock one by one. With 51 or more in the list it locks
+ * none of them (Apple's forums; seen Nov 16 at 12:05 AM on build 68: the battery
+ * was empty and most counted apps still opened). Whole categories are locked
+ * as categories and have no such limit, so they don't count towards it.
+ */
+export const APP_LOCK_LIMIT = 50;
+
+/** Whether the counted picks hold more single apps than iOS will lock. */
+export function tooManyApps(): boolean {
+  if (MOCK_PHONE) return MOCK.has('tooManyApps');
+  if (!SCREEN_TIME_AVAILABLE) return false;
+  try {
+    return (DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID })?.applicationCount ?? 0) > APP_LOCK_LIMIT;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Picks made before build 71 were kept "with every app of each ticked
+ * category" (Apple's includeEntireCategory), which put every app of a ticked
+ * category in the list of single apps, usually far over iOS's lock limit. When
+ * switching that off alone brings the list under the limit with the same
+ * categories, the picks are rewritten that way; otherwise they have to be made
+ * again ("pickAgain"). Nothing changes when the picks are fine.
+ */
+export function fixOldPicks(): 'fine' | 'fixed' | 'pickAgain' {
+  if (!SCREEN_TIME_AVAILABLE) return 'fine';
+  try {
+    const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID });
+    if (!meta || meta.applicationCount <= APP_LOCK_LIMIT) return 'fine';
+    const token = DeviceActivity.getFamilyActivitySelectionId(COUNTED_ID);
+    if (meta.includeEntireCategory && typeof token === 'string' && token.length > 0) {
+      const picks = JSON.parse(atob(token)) as Record<string, unknown>;
+      if (picks.includeEntireCategory === true) {
+        const rewritten = btoa(JSON.stringify({ ...picks, includeEntireCategory: false }));
+        const after = DeviceActivity.activitySelectionMetadata({ activitySelectionToken: rewritten });
+        if (after && after.applicationCount <= APP_LOCK_LIMIT && after.categoryCount === meta.categoryCount && after.applicationCount + after.categoryCount + sitesIn(after) > 0) {
+          picksBefore();
+          DeviceActivity.setFamilyActivitySelectionId({ id: COUNTED_ID, familyActivitySelection: rewritten });
+          return 'fixed';
+        }
+      }
+    }
+    return 'pickAgain';
+  } catch (error) {
+    note('fixOldPicks', error);
+    return 'pickAgain';
+  }
+}
+
+/** Forgets the counted picks, so Apple's list opens empty and they are made again (see `fixOldPicks`). */
+export function clearPicks(): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    picksBefore();
+    const all = DeviceActivity.userDefaultsGet<Record<string, string>>('familyActivitySelectionIds') ?? {};
+    const rest = { ...all };
+    delete rest[COUNTED_ID];
+    DeviceActivity.userDefaultsSet('familyActivitySelectionIds', rest);
+  } catch (error) {
+    note('clearPicks', error);
+  }
+}
+
+/**
+ * Takes every cover off and, when `cover` is true, puts the empty screen back
+ * over the counted apps as they are picked now. The phone keeps a running list
+ * of what it covered, so new picks only take effect on the covers once that
+ * list is cleared.
+ */
+export function coverAgain(cover: boolean, settings: Settings, topUpsSoFar: number) {
+  if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return;
+  try {
+    DeviceActivity.disableBlockAllMode('plainlimit');
+    DeviceActivity.resetBlocks('plainlimit');
+  } catch (error) {
+    note('coverAgain', error);
+  }
+  if (cover) coverEmptyNow(settings, topUpsSoFar);
 }
 
 /** Where the moment counting was turned on (or started over) is kept, in milliseconds. */
@@ -590,7 +680,7 @@ async function registerTicks(plan: ReturnType<typeof monitorPlan>, token: string
 }
 
 /** How the day's counting stands. Only ever not 'fine' when counting is meant to be on. */
-export type Health = 'fine' | 'nothingPicked' | 'accessOff' | 'notRegistered' | 'miscounted';
+export type Health = 'fine' | 'nothingPicked' | 'tooManyApps' | 'accessOff' | 'notRegistered' | 'miscounted';
 
 /**
  * Whether the day is really being counted. `watching` is whether the person
@@ -601,12 +691,13 @@ export type Health = 'fine' | 'nothingPicked' | 'accessOff' | 'notRegistered' | 
  * - miscounted: the phone reported a checkpoint too soon to be true (see `miscounted`).
  */
 export function health(settings: Settings, periodStart: Date, watching: boolean): Health {
-  if (MOCK_PHONE) return (['nothingPicked', 'accessOff', 'notRegistered', 'miscounted'] as const).find((h) => MOCK.has(h)) ?? 'fine';
+  if (MOCK_PHONE) return (['nothingPicked', 'tooManyApps', 'accessOff', 'notRegistered', 'miscounted'] as const).find((h) => MOCK.has(h)) ?? 'fine';
   if (!SCREEN_TIME_AVAILABLE || !watching) return 'fine';
   if (permission() !== 'approved') return 'accessOff';
   try {
     if (pickCount(COUNTED_ID) === 0) return 'nothingPicked';
     if (!DeviceActivity.getActivities().includes(ACTIVITY)) return 'notRegistered';
+    if (tooManyApps()) return 'tooManyApps';
     return miscounted(ownReports(), settings.goalMinutes, dayStartOf(periodStart), known()) ? 'miscounted' : 'fine';
   } catch {
     return 'fine';

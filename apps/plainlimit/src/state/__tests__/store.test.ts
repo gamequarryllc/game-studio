@@ -16,7 +16,10 @@ function fakePhone(): Fake {
     applyPlan: jest.fn(async () => true),
     askPermission: jest.fn(async () => 'approved'),
     busyRegistering: jest.fn(() => false),
+    clearPicks: jest.fn(),
     countAgain: jest.fn(async () => true),
+    coverAgain: jest.fn(),
+    fixOldPicks: jest.fn(() => 'fine'),
     coverEmptyNow: jest.fn(),
     grantExtraTime: jest.fn(async () => {}),
     holdLocks: jest.fn(),
@@ -182,6 +185,50 @@ describe('locked settings', () => {
     const { store, settingsLocked } = load(fakePhone(), saved(60));
     await store.start();
     expect(settingsLocked()).toBe(false);
+  });
+});
+
+describe('picks over the 50-app lock limit', () => {
+  it('rewrites old picks at start-up and treats it as a change of picks', async () => {
+    const phone = fakePhone();
+    phone.fixOldPicks = jest.fn(() => 'fixed');
+    phone.picksAfter = jest.fn(() => true);
+    const { store } = load(phone, saved(60));
+    await store.start();
+    expect(phone.picksAfter).toHaveBeenCalled();
+    // Cells left: no covers are up, so none are put back.
+    expect(phone.coverAgain).not.toHaveBeenCalled();
+  });
+
+  it('puts the covers up again from the new picks while the battery is empty', async () => {
+    const phone = fakePhone();
+    phone.picksAfter = jest.fn(() => true);
+    const { store } = load(phone, saved(180));
+    await store.start();
+    store.picksChanged();
+    expect(phone.coverAgain).toHaveBeenCalledWith(true, expect.objectContaining({ goalMinutes: 180 }), 0);
+  });
+
+  it('leaves them off while earned time runs', async () => {
+    const phone = fakePhone();
+    phone.picksAfter = jest.fn(() => true);
+    const { store } = load(phone, saved(180));
+    await store.start();
+    // Earned time, as the puzzle grants it.
+    store.earnTopUp();
+    expect(store.get().doc.day.unlockedUntil).not.toBeNull();
+    store.picksChanged();
+    expect(phone.coverAgain).toHaveBeenLastCalledWith(false, expect.anything(), expect.any(Number));
+  });
+
+  it('does not mark the day for too many apps: counting still works', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(40));
+    await store.start();
+    phone.health = jest.fn(() => 'tooManyApps');
+    phone.wrongSince = jest.fn((now: number) => now - 60 * 60 * 1000);
+    store.tick(new Date());
+    expect(store.get().doc.day.uncounted).toBe(false);
   });
 });
 

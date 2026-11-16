@@ -14,7 +14,10 @@ export function AppPicker({ id, open, header, onClose }: { id: string; open: boo
       style={{ width: 1, height: 1, position: 'absolute' }}
       familyActivitySelectionId={id}
       headerText={header}
-      includeEntireCategory
+      // A ticked category stays one category, not every app in it: iOS locks
+      // whole categories without limit but at most 50 single apps (build 68's
+      // picks listed every app of every category, and most never locked).
+      includeEntireCategory={false}
       onDismissRequest={onClose}
       onSelectionChange={() => {}}
     />

@@ -12,8 +12,13 @@ import { c } from './theme';
 // being counted. Turning counting off on purpose is not shown here; the week
 // view marks those days instead.
 
-const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string }> = {
+const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string; title?: string }> = {
   nothingPicked: { line: 'Nothing is ticked in What counts, so nothing is counted or locked.', button: 'Choose apps' },
+  tooManyApps: {
+    title: 'Not locking',
+    line: 'iOS locks at most 50 apps ticked one by one, and What counts lists more, so most of them won\'t lock. Pick again, ticking whole categories: those have no limit.',
+    button: 'Pick again',
+  },
   accessOff: {
     line: 'Screen Time access for Plainlimit was turned off in the Settings app, so nothing is being counted or locked.',
     button: 'Turn it back on',
@@ -31,7 +36,7 @@ export function CountingProblem({ health }: { health: Health }) {
 
   const fix = async () => {
     if (busy) return;
-    if (health === 'nothingPicked') {
+    if (health === 'nothingPicked' || health === 'tooManyApps') {
       router.push('/what-counts');
       return;
     }
@@ -51,7 +56,7 @@ export function CountingProblem({ health }: { health: Health }) {
 
   return (
     <View accessibilityRole="alert" style={styles.box}>
-      <Text style={styles.title}>Not counting</Text>
+      <Text style={styles.title}>{copy.title ?? 'Not counting'}</Text>
       <Text style={styles.line}>{copy.line}</Text>
       {problem ? <Text style={styles.problem}>{problem}</Text> : null}
       <BigButton label={busy ? 'One moment…' : copy.button} onPress={() => void fix()} />

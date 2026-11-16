@@ -187,7 +187,9 @@ function checkHealth(doc: Doc): Doc {
     screenTime.noteKnown(doc.settings, doc.day.usedMinutes);
     return doc;
   }
-  if (state === 'nothingPicked') {
+  // Nothing ticked, or more single apps than iOS will lock: counting still
+  // works, so the day is not marked; Today says what to do.
+  if (state === 'nothingPicked' || state === 'tooManyApps') {
     screenTime.rightAgain();
     return doc;
   }
@@ -269,6 +271,8 @@ export const store = {
     set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
     screenTime.onCheckpoint(() => store.tick(new Date()));
+    // Picks from before build 71 may list more single apps than iOS will lock.
+    if (screenTime.fixOldPicks() === 'fixed') store.picksChanged();
     void askAgain();
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
     AppState.addEventListener('change', (state) => {
@@ -398,9 +402,19 @@ export const store = {
     if (screenTime.picksAfter(snapshot.doc.settings.goalMinutes)) {
       // Look again while the phone re-reports the day, so Today moves to the new figure once it has.
       for (const wait of [3000, 6000, 10000, 16000]) setTimeout(() => store.tick(new Date()), wait);
+      // While the battery is empty the covers are up, built from the old list:
+      // put them up again from the new one.
+      const { day, settings } = snapshot.doc;
+      if (screenTime.isOn() && cellsLeft(day.usedMinutes, settings.goalMinutes) === 0) {
+        screenTime.coverAgain(!isUnlocked(day, new Date()) && screenTime.locksHeldUntil() === 0, settings, day.topUps);
+      }
     }
     planSoon();
     set({ ...snapshot.doc }, false);
+  },
+  /** Old picks over iOS's 50-app lock limit: forget them, so Apple's list opens empty to pick again. */
+  clearPicksToPickAgain() {
+    screenTime.clearPicks();
   },
   stepGoal(direction: 1 | -1) {
     withSettings((s) => ({ ...s, goalMinutes: stepGoal(s.goalMinutes, direction) }));

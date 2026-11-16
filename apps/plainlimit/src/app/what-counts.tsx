@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { COUNTED_ID, MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount, picksBefore } from '@/platform/screenTime';
+import { APP_LOCK_LIMIT, COUNTED_ID, MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount, picksBefore, tooManyApps } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { COUNTS_LEAD, COUNTS_NOTE, countsSteps, pickedWords } from '@/ui/countWords';
@@ -22,6 +22,10 @@ export default function WhatCounts() {
   const picked = pickCount(COUNTED_ID);
   useDoc();
   const locked = settingsLocked();
+  // More single apps than iOS will lock: picking again is open even while the
+  // battery is empty, since the lock isn't working for most of them anyway.
+  const tooMany = tooManyApps();
+  const button = tooMany ? 'Pick again' : picked === 0 ? 'Choose apps' : 'Change the apps';
   return (
     <Page top={8}>
       <Title>What counts</Title>
@@ -29,7 +33,7 @@ export default function WhatCounts() {
       {SCREEN_TIME_AVAILABLE || MOCK_PHONE ? (
         <>
           <Card style={{ paddingVertical: 14, gap: 8 }}>
-            {countsSteps(picked).map((line, i) => (
+            {countsSteps(button).map((line, i) => (
               <View key={line} style={{ flexDirection: 'row', gap: 12 }}>
                 <Text style={{ fontSize: 15, lineHeight: 21, fontWeight: '700', color: c.ink3, width: 12 }}>{i + 1}</Text>
                 <Text style={{ flex: 1, fontSize: 15, lineHeight: 21, color: c.ink }}>{line}</Text>
@@ -37,11 +41,24 @@ export default function WhatCounts() {
             ))}
           </Card>
           <Text style={{ fontSize: 15, lineHeight: 21, color: picked === 0 ? c.ink : c.ink2, marginTop: 4 }}>{pickedWords(picked)}</Text>
-          {locked ? (
+          {tooMany ? (
+            <View accessibilityRole="alert" style={{ borderWidth: 1.5, borderColor: '#F79200', borderRadius: 18, padding: 16, gap: 10 }}>
+              <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>
+                iOS locks at most {APP_LOCK_LIMIT} apps ticked one by one, and this list has more, so most of them won&apos;t lock. Pick again and tick whole categories (All Apps &amp; Categories at the top counts everything): categories have no limit.
+              </Text>
+              <BigButton
+                label="Pick again"
+                onPress={() => {
+                  store.clearPicksToPickAgain();
+                  setPicking(true);
+                }}
+              />
+            </View>
+          ) : locked ? (
             <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>This can&apos;t change while the battery is empty. It opens again when it recharges.</Text>
           ) : (
             <BigButton
-              label={picked === 0 ? 'Choose apps' : 'Change the apps'}
+              label={button}
               onPress={() => {
                 picksBefore();
                 setPicking(true);

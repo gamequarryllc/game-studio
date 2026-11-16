@@ -6,8 +6,8 @@
 export const COUNTS_LEAD =
   'Count the time wasters, not what the phone is for. The apps you tick use up the battery and lock when it’s empty. Anything left unticked never counts and never locks.';
 
-/** The steps, the first naming the button as it reads: "Choose apps" with nothing ticked, "Change the apps" after. */
-export const countsSteps = (picked: number) => [`Tap ${picked === 0 ? 'Choose apps' : 'Change the apps'}.`, ...COUNTS_STEPS.slice(1)];
+/** The steps, the first naming the button as it reads ("Choose apps", "Change the apps", "Pick again"). */
+export const countsSteps = (button: string) => [`Tap ${button}.`, ...COUNTS_STEPS.slice(1)];
 
 export const COUNTS_STEPS = [
   'Tap Choose apps.',

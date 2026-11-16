@@ -150,6 +150,18 @@ async function main() {
     });
   }
 
+  await scenario('too many single apps: Today says so, and What counts opens to pick again even while empty', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,tooManyApps');
+    await see(page, 'Not locking');
+    await see(page, 'iOS locks at most 50 apps ticked one by one');
+    await shot(page, 'q04b-too-many-today');
+    await page.getByRole('button', { name: 'Pick again', exact: true }).click();
+    await see(page, 'this list has more, so most of them won');
+    await page.getByRole('button', { name: 'Pick again', exact: true }).waitFor();
+    await shot(page, 'q04c-too-many-what-counts');
+    await context.close();
+  });
+
   await scenario('a small phone fits a counting problem', async () => {
     const { page, context } = await open(doc({ used: 40 }), '?mock=counting,accessOff', SMALL);
     await see(page, 'Not counting');

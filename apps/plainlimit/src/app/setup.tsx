@@ -163,7 +163,7 @@ export default function Setup() {
         {canPick ? (
           <>
             <Card style={{ paddingVertical: 14, gap: 8 }}>
-              {countsSteps(picked).map((line, i) => (
+              {countsSteps(picked === 0 ? 'Choose apps' : 'Change the apps').map((line, i) => (
                 <Point key={line} n={String(i + 1)} small>
                   {line}
                 </Point>
