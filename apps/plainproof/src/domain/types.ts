@@ -76,8 +76,22 @@ export const LOSS_CAUSE_LABELS: Record<LossCause, string> = {
   other: 'Something else',
 };
 
-/** The claim being made for this place, if one is open. Items it covers carry a loss status. */
+/** One item in a claim: what happened to it, and a note for the adjuster. */
+export interface ClaimItem {
+  itemId: Id;
+  loss: LossStatus;
+  note: string;
+}
+
+/**
+ * A claim being made for this place. A place can have several open at once
+ * (a break-in in March and a burst pipe in May are two claims, often with two
+ * insurers' adjusters), each with its own items, details and package.
+ */
 export interface Claim {
+  id: Id;
+  /** A name to tell claims apart ("Kitchen fire"). Empty: one is made from the cause and date. */
+  name: string;
   openedAt: number;
   /** YYYY-MM-DD */
   lossDate: string | null;
@@ -86,7 +100,12 @@ export interface Claim {
   claimNumber: string;
   /** What happened, in the person's words. */
   description: string;
+  /** The items it covers, each once. */
+  items: ClaimItem[];
 }
+
+/** An item as it appears in one claim's schedule: the item, with what happened to it in that claim. */
+export type ClaimedItem = Item & { loss: LossStatus; lossNote: string };
 
 export interface Policy {
   /** The policy's limit for personal property (contents), in cents. */
@@ -178,10 +197,6 @@ export interface Item {
   updatedAt: number;
   /** YYYY-MM-DD the warranty runs to. */
   warrantyUntil: string | null;
-  /** Set while a claim is open and this item is part of it. */
-  loss: LossStatus | null;
-  /** What happened to this item, for the claim. */
-  lossNote: string;
 }
 
 export interface Profile {
@@ -217,7 +232,7 @@ export interface Doc {
   profile: Profile;
   settings: Settings;
   meta: Meta;
-  claim: Claim | null;
+  claims: Claim[];
   policy: Policy;
 }
 
@@ -234,6 +249,8 @@ export const LIMITS = {
   rooms: 60,
   videosPerRoom: 6,
   policyDocuments: 20,
+  /** Open claims in one place. More than a handful at once would be unusual; ending one makes room. */
+  claims: 12,
   /** 500 MB: a backup has to fit on a phone and in a mail attachment service. */
   videoBytes: 500_000_000,
   /** A saved file may hold more rooms than the app lets one add; they are all kept when it is opened. */

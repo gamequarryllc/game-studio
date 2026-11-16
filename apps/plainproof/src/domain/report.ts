@@ -1,9 +1,9 @@
 import { displayDateTime, displayTime, displayYmd, toYmd } from './dates';
 import { formatMoney } from './money';
-import { formatDuration, homeSummary, itemTotalCents, plural, roomSummaries, unitCents } from './selectors';
+import { claimTitle, formatDuration, homeSummary, itemTotalCents, plural, roomSummaries, unitCents } from './selectors';
 import { sha256Hex } from './sha256';
-import { claimedItems } from './actions';
-import { CATEGORY_LABELS, CONDITION_LABELS, LOSS_CAUSE_LABELS, LOSS_LABELS, LOSS_STATUSES, type Doc, type Item, type Photo, type Video } from './types';
+import { claimedItems, findClaim } from './actions';
+import { CATEGORY_LABELS, CONDITION_LABELS, LOSS_CAUSE_LABELS, LOSS_LABELS, LOSS_STATUSES, type Claim, type ClaimedItem, type Doc, type Id, type Item, type Photo, type Video } from './types';
 
 // The insurance report. This builds one self-contained HTML page; on the
 // phone it is turned into a PDF, on the web preview it opens in a new tab.
@@ -15,8 +15,8 @@ export interface ReportOptions {
   includeAllPhotos?: boolean;
   /** The app's version, printed so a report can be traced to the build that made it. */
   appVersion?: string;
-  /** 'claim': only the items marked for the open claim, headed with the claim's details. */
-  scope?: 'inventory' | 'claim';
+  /** A claim's schedule of loss: only that claim's items, headed with its details. */
+  claimId?: Id | null;
   /** When the report was made (ms). */
   generatedAt: number;
   /** Photo id to a data: URI. Photos that are missing here are simply left out. */
@@ -105,9 +105,10 @@ const CSS = `
 /** An empty cell: a quiet dash reads better down a column than the same words repeated. */
 const NOTHING = '<span class="muted" title="Not recorded">—</span>';
 
-function itemCell(item: Item, claim: boolean): string {
+function itemCell(item: Item | ClaimedItem, claim: boolean): string {
   const parts: string[] = [];
-  if (claim && item.loss) parts.push(`<div class="loss">${LOSS_LABELS[item.loss]}</div>`);
+  const loss = claim && 'loss' in item ? item : null;
+  if (loss) parts.push(`<div class="loss">${LOSS_LABELS[loss.loss]}</div>`);
   parts.push(`<div class="name">${escapeHtml(item.name)}</div>`);
   const makeModel = [item.brand, item.model].filter(Boolean).map(escapeHtml).join(' ');
   const facts: string[] = [];
@@ -117,7 +118,7 @@ function itemCell(item: Item, claim: boolean): string {
   if (item.serial) parts.push(`<div class="detail">Serial no. <b>${escapeHtml(item.serial)}</b></div>`);
   if (item.condition) parts.push(`<div class="detail">Condition: ${escapeHtml(CONDITION_LABELS[item.condition])}</div>`);
   if (item.warrantyUntil) parts.push(`<div class="detail">Warranty until ${escapeHtml(displayYmd(item.warrantyUntil))}</div>`);
-  if (claim && item.lossNote) parts.push(`<div class="note"><b>What happened:</b> ${lines(item.lossNote)}</div>`);
+  if (loss?.lossNote) parts.push(`<div class="note"><b>What happened:</b> ${lines(loss.lossNote)}</div>`);
   if (item.notes) parts.push(`<div class="note">${lines(item.notes)}</div>`);
   parts.push(`<div class="basis">${escapeHtml(documentedLine(item))}</div>`);
   return parts.join('');
@@ -145,7 +146,7 @@ function photoCaption(photo: Photo, label: string): string {
  * spreadsheet's file so the two can be matched, and so an adjuster can tell
  * which of two reports is which.
  */
-export function inventoryReference(doc: Doc): string {
+export function inventoryReference(doc: Doc, claim: Claim | null = null): string {
   const canonical = JSON.stringify({
     profile: doc.profile,
     currency: doc.settings.currency,
@@ -153,9 +154,10 @@ export function inventoryReference(doc: Doc): string {
     items: doc.items.map((i) => [
       i.id, i.roomId, i.name, i.category, i.condition, i.quantity, i.valueCents, i.pricePaidCents, i.purchaseDate,
       i.purchasedFrom, i.brand, i.model, i.serial, i.notes, i.photos.map((p) => p.id), i.receipts.map((p) => p.id), i.createdAt,
-      i.warrantyUntil, i.loss, i.lossNote,
+      i.warrantyUntil,
     ]),
-    claim: doc.claim,
+    // A claim's schedule also changes reference with the claim: its details, its items and what happened to each.
+    ...(claim ? { claim } : {}),
   });
   return sha256Hex(canonical).slice(0, 16).toUpperCase().replace(/(.{4})(?!$)/g, '$1-');
 }
@@ -233,10 +235,21 @@ export function reportTitle(doc: Doc): string {
   return doc.profile.homeName || 'Home inventory';
 }
 
+/** The document a claim's schedule is made from: the place, with only that claim's items. */
+export function claimDoc(fullDoc: Doc, claimId: Id | null | undefined): Doc {
+  return { ...fullDoc, items: claimedItems(fullDoc, claimId) };
+}
+
+/** The reference printed on a claim's schedule (and in its package's read-me). */
+export function claimReference(fullDoc: Doc, claim: Claim): string {
+  return inventoryReference(claimDoc(fullDoc, claim.id), claim);
+}
+
 export function buildReportHtml(fullDoc: Doc, opts: ReportOptions): string {
-  const claim = opts.scope === 'claim';
-  // A claim schedule is the same report over only the items marked for the claim.
-  const doc: Doc = claim ? { ...fullDoc, items: claimedItems(fullDoc) } : fullDoc;
+  const claim = opts.claimId != null;
+  const claimRecord = findClaim(fullDoc, opts.claimId);
+  // A claim schedule is the same report over only the items in that claim.
+  const doc: Doc = claim ? claimDoc(fullDoc, opts.claimId) : fullDoc;
   const currency = doc.settings.currency;
   const money = (cents: number) => escapeHtml(formatMoney(cents, currency));
   const summary = homeSummary(doc);
@@ -247,7 +260,7 @@ export function buildReportHtml(fullDoc: Doc, opts: ReportOptions): string {
   out.push('<!doctype html><html lang="en"><head><meta charset="utf-8">');
   out.push('<meta name="viewport" content="width=device-width, initial-scale=1">');
   out.push(`<title>${escapeHtml(reportTitle(doc))}: ${claim ? 'claim schedule' : 'home inventory'}</title>`);
-  const reference = inventoryReference(doc);
+  const reference = inventoryReference(doc, claimRecord);
   out.push(`<style>${CSS}${pageFootCss(`${reportTitle(doc)} · Ref ${reference}`, displayTime(opts.generatedAt))}</style></head><body>`);
 
   out.push(`<div class="kicker">${claim ? 'Insurance claim · schedule of loss' : 'Home inventory'}</div>`);
@@ -258,10 +271,11 @@ export function buildReportHtml(fullDoc: Doc, opts: ReportOptions): string {
   if (doc.profile.address) who.push(['Address', lines(doc.profile.address)]);
   if (doc.profile.insurer) who.push(['Insurer', escapeHtml(doc.profile.insurer)]);
   if (doc.profile.policyNumber) who.push(['Policy number', escapeHtml(doc.profile.policyNumber)]);
-  if (claim && doc.claim) {
-    if (doc.claim.claimNumber) who.push(['Claim number', escapeHtml(doc.claim.claimNumber)]);
-    who.push(['Date of loss', doc.claim.lossDate ? escapeHtml(displayYmd(doc.claim.lossDate)) : NOTHING]);
-    if (doc.claim.cause) who.push(['Cause', escapeHtml(LOSS_CAUSE_LABELS[doc.claim.cause])]);
+  if (claimRecord) {
+    if (claimRecord.name) who.push(['Claim', escapeHtml(claimTitle(claimRecord))]);
+    if (claimRecord.claimNumber) who.push(['Claim number', escapeHtml(claimRecord.claimNumber)]);
+    who.push(['Date of loss', claimRecord.lossDate ? escapeHtml(displayYmd(claimRecord.lossDate)) : NOTHING]);
+    if (claimRecord.cause) who.push(['Cause', escapeHtml(LOSS_CAUSE_LABELS[claimRecord.cause])]);
   }
   if (claim && doc.policy.deductibleCents !== null) who.push(['Deductible', money(doc.policy.deductibleCents)]);
   who.push(['Prepared', escapeHtml(displayDateTime(opts.generatedAt))]);
@@ -281,11 +295,12 @@ export function buildReportHtml(fullDoc: Doc, opts: ReportOptions): string {
   out.push(`<div><span class="label">Items</span><span class="figure serif">${summary.count.toLocaleString('en-US')}</span></div>`);
   out.push(`<div><span class="label">Rooms</span><span class="figure serif">${rooms.filter((r) => r.count > 0).length}</span></div>`);
   out.push('</div>');
-  if (claim && doc.claim?.description) {
-    out.push(`<div class="what"><span class="label">What happened</span>${lines(doc.claim.description)}</div>`);
+  if (claimRecord?.description) {
+    out.push(`<div class="what"><span class="label">What happened</span>${lines(claimRecord.description)}</div>`);
   }
   if (claim && summary.count > 0) {
-    const counts = LOSS_STATUSES.map((st) => [st, doc.items.filter((i) => i.loss === st).length] as const).filter(([, n]) => n > 0);
+    const claimed = doc.items as ClaimedItem[];
+    const counts = LOSS_STATUSES.map((st) => [st, claimed.filter((i) => i.loss === st).length] as const).filter(([, n]) => n > 0);
     out.push(`<p class="counted">${counts.map(([st, n]) => `${n} ${LOSS_LABELS[st].toLowerCase()}`).join(' · ')}</p>`);
   }
   const basis = valueBasisSentence(doc);
@@ -425,15 +440,28 @@ export function reportPhotoIds(doc: Doc, opts: Pick<ReportOptions, 'includePhoto
   return { thumbs, full };
 }
 
-export function reportFileName(doc: Doc, generatedAt: number, scope: 'inventory' | 'claim' = 'inventory'): string {
-  const d = new Date(generatedAt);
-  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** A short label for a claim in a file name: the insurer's number, else the person's name for it. */
+export function claimFileLabel(claim: Claim | null): string {
+  if (!claim) return '';
+  return fileSafe(claim.claimNumber || claim.name).slice(0, 30).replace(/-+$/, '');
+}
+
+function fileSafe(text: string): string {
   // Accents are folded ("Café" becomes "Cafe") rather than dropped.
-  const base = (doc.profile.homeName || 'Home inventory')
+  return text
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^A-Za-z0-9 _-]+/g, '')
     .trim()
     .replace(/\s+/g, '-');
-  return `${base || 'Home-inventory'}${scope === 'claim' ? '-claim' : ''}-${stamp}`;
+}
+
+/** "Fern-Cottage-2026-11-15", or for a claim's files "Fern-Cottage-claim-CL-2026-0042-2026-11-15". */
+export function reportFileName(doc: Doc, generatedAt: number, claim: Claim | null = null): string {
+  const d = new Date(generatedAt);
+  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const base = fileSafe(doc.profile.homeName || 'Home inventory') || 'Home-inventory';
+  if (!claim) return `${base}-${stamp}`;
+  const label = claimFileLabel(claim);
+  return `${base}-claim${label ? `-${label}` : ''}-${stamp}`;
 }

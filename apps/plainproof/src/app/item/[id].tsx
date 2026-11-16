@@ -2,16 +2,17 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 
-import { deleteItem, setItemLoss } from '@/domain/actions';
+import { addClaim, claimsOf, deleteItem, findClaim, setClaimItem } from '@/domain/actions';
 import { displayTime, displayYmd, toYmd } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
-import { hasValue, itemTotalCents, needsSerial, unitCents } from '@/domain/selectors';
-import { CATEGORY_LABELS, CONDITION_LABELS, LIMITS, LOSS_LABELS } from '@/domain/types';
+import { newId } from '@/domain/ids';
+import { claimTitle, hasValue, itemTotalCents, needsSerial, unitCents } from '@/domain/selectors';
+import { CATEGORY_LABELS, CONDITION_LABELS, LIMITS, LOSS_LABELS, type Id, type LossStatus } from '@/domain/types';
 import { warning } from '@/platform/haptics';
 import { dropPhotos } from '@/state/operations';
 import { store, useDoc } from '@/state/store';
 import { pickLoss } from '@/ui/claim';
-import { confirm } from '@/ui/dialogs';
+import { choose, confirm, notify } from '@/ui/dialogs';
 import { LiveTextArea } from '@/ui/form';
 import { Icon } from '@/ui/Icon';
 import { BarButton, Button, Card, Divider, EmptyState, Notice, PushedScreen, Row, SectionLabel, Thumb } from '@/ui/kit';
@@ -87,16 +88,40 @@ export default function ItemScreen() {
   // When it went into the inventory: on a claim, this is the proof it was owned before the loss.
   purchase.push({ label: 'Recorded', value: displayTime(item.createdAt), testID: 'fact-recorded' });
 
-  const changeLoss = async () => {
-    const picked = await pickLoss({ current: item.loss, name: item.name });
+  // The claims this item is in, and the ones it could still go in.
+  const inClaims = claimsOf(doc, item.id);
+  const notIn = doc.claims.filter((cl) => !inClaims.some((x) => x.claim.id === cl.id));
+  const canStartClaim = doc.claims.length < LIMITS.claims;
+
+  const changeLoss = async (claimId: Id, current: LossStatus) => {
+    const picked = await pickLoss({ current, name: item.name });
     if (!picked) return;
-    store.update((d, now) => setItemLoss(d, item.id, picked === 'remove' ? null : picked, undefined, now));
+    store.update((d) => setClaimItem(d, claimId, item.id, picked === 'remove' ? null : picked));
   };
-  const setLossNote = (note: string) =>
-    store.update((d, now) => {
-      const current = d.items.find((i) => i.id === item.id);
-      return current?.loss ? setItemLoss(d, item.id, current.loss, note, now) : d;
+  const setLossNote = (claimId: Id) => (note: string) =>
+    store.update((d) => {
+      const entry = findClaim(d, claimId)?.items.find((e) => e.itemId === item.id);
+      return entry ? setClaimItem(d, claimId, item.id, entry.loss, note) : d;
     });
+  const addToClaim = async () => {
+    if (notIn.length === 0 && !canStartClaim) {
+      await notify('That’s the most claims at once', `Up to ${LIMITS.claims} open claims in one place. End one that is settled to start another.`);
+      return;
+    }
+    // Which claim: asked only when there is a choice to make.
+    let target: Id | 'new' | null = 'new';
+    if (notIn.length > 0) {
+      target = await choose<Id | 'new'>({
+        title: `Add ${item.name} to`,
+        choices: [...notIn.map((cl) => ({ key: cl.id, label: claimTitle(cl) })), ...(canStartClaim ? [{ key: 'new' as const, label: 'A new claim' }] : [])],
+      });
+    }
+    if (!target) return;
+    const picked = await pickLoss({ current: null, name: item.name });
+    if (!picked || picked === 'remove') return;
+    const claimId = target === 'new' ? newId() : target;
+    store.update((d, now) => setClaimItem(target === 'new' ? addClaim(d, claimId, now) : d, claimId, item.id, picked));
+  };
 
   return (
     <PushedScreen testID="item-screen">
@@ -173,32 +198,39 @@ export default function ItemScreen() {
         </Notice>
       ) : null}
 
-      {item.loss ? (
-        <>
+      {inClaims.map(({ claim, entry }, n) => (
+        <View key={claim.id}>
           <SectionLabel
             trailing={
-              <Text testID="item-open-claim" accessibilityRole="link" onPress={() => router.push('/claim')} style={[type.footnote, { color: c.green, fontWeight: '600' }]}>
+              <Text testID={`item-open-claim-${n}`} accessibilityRole="link" onPress={() => router.push({ pathname: '/claim/[id]', params: { id: claim.id } })} style={[type.footnote, { color: c.green, fontWeight: '600' }]}>
                 Open the claim
               </Text>
             }>
-            In the claim
+            {doc.claims.length === 1 ? 'In the claim' : `In ${claimTitle(claim)}`}
           </SectionLabel>
           <Card>
-            <Row testID="item-loss" title="What happened" value={LOSS_LABELS[item.loss]} valueTone="ink" chevron onPress={changeLoss} />
+            <Row testID={`item-loss-${n}`} title="What happened" value={LOSS_LABELS[entry.loss]} valueTone="ink" chevron onPress={() => void changeLoss(claim.id, entry.loss)} />
             <Divider />
             <LiveTextArea
-              testID="item-loss-note"
+              testID={`item-loss-note-${n}`}
               label="What happened to it"
-              stored={item.lossNote}
-              onType={setLossNote}
+              stored={entry.note}
+              onType={setLossNote(claim.id)}
               placeholder="A line or two for the adjuster: “Taken from the desk”, “Water came up through the base”"
               maxLength={LIMITS.notes}
             />
           </Card>
-        </>
-      ) : doc.claim ? (
+        </View>
+      ))}
+      {doc.claims.length > 0 && (notIn.length > 0 || canStartClaim) ? (
         <Card style={{ marginTop: space.l }}>
-          <Row testID="item-add-to-claim" title="Add to the claim" subtitle="Mark it stolen, damaged, destroyed or lost" tint onPress={changeLoss} />
+          <Row
+            testID="item-add-to-claim"
+            title={inClaims.length > 0 ? 'Add to another claim' : 'Add to a claim'}
+            subtitle="Mark it stolen, damaged, destroyed or lost"
+            tint
+            onPress={() => void addToClaim()}
+          />
         </Card>
       ) : null}
 
@@ -255,7 +287,7 @@ export default function ItemScreen() {
       ) : null}
 
       <View style={{ marginTop: space.xxl, marginHorizontal: space.xl }}>
-        {!item.loss && !doc.claim ? <Button testID="item-start-claim" label="Add to a claim" kind="plain" onPress={changeLoss} /> : null}
+        {doc.claims.length === 0 ? <Button testID="item-start-claim" label="Add to a claim" kind="plain" onPress={() => void addToClaim()} /> : null}
         <Button testID="item-delete" label="Delete item" kind="danger" onPress={remove} />
       </View>
     </PushedScreen>

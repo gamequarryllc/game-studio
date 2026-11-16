@@ -1,15 +1,17 @@
 import {
+  addClaim,
   addItem,
   addPolicyDocuments,
   addRoomVideo,
   addRooms,
   claimedItems,
-  closeClaim,
+  claimsOf,
+  deleteItem,
   deleteRoom,
   emptyDraft,
-  openClaim,
+  removeClaim,
   removePolicyDocument,
-  setItemLoss,
+  setClaimItem,
   setReminders,
   updateClaim,
   updatePolicy,
@@ -21,8 +23,8 @@ import { libraryOf, setCurrentDoc, stampChanges } from '../library';
 import { planReminders } from '../reminders';
 import { buildReportHtml, reportFileName } from '../report';
 import { readReceipt, serialCandidates } from '../scan';
-import { backupState } from '../selectors';
-import type { Doc } from '../types';
+import { backupState, claimSummary, claimTitle } from '../selectors';
+import { LIMITS, type Doc } from '../types';
 
 const NOW = new Date(2026, 10, 15, 9, 0).getTime();
 const DAY = 86_400_000;
@@ -38,34 +40,108 @@ function home(): Doc {
 }
 
 describe('claim mode', () => {
-  it('opens a claim when the first item is marked, and closes it without touching the items', () => {
+  /** A home with one claim open: the ring stolen (with a note) and the laptop stolen. */
+  function withClaim(): Doc {
+    let doc = addClaim(home(), 'claim1', NOW);
+    doc = setClaimItem(doc, 'claim1', doc.items[2].id, 'stolen', 'Taken from the dresser');
+    return setClaimItem(doc, 'claim1', doc.items[1].id, 'stolen');
+  }
+
+  it('adds items to a claim, changes and removes them, and ends the claim without touching the items', () => {
+    let doc = withClaim();
+    expect(doc.claims).toHaveLength(1);
+    expect(doc.claims[0].openedAt).toBe(NOW);
+    expect(claimedItems(doc, 'claim1').map((i) => [i.name, i.loss, i.lossNote])).toEqual([
+      ['Laptop', 'stolen', ''],
+      ['Engagement ring', 'stolen', 'Taken from the dresser'],
+    ]);
+    // Changing the status keeps the note unless a new one is given.
+    doc = setClaimItem(doc, 'claim1', doc.items[2].id, 'lost');
+    expect(claimedItems(doc, 'claim1')[1]).toMatchObject({ loss: 'lost', lossNote: 'Taken from the dresser' });
+    doc = setClaimItem(doc, 'claim1', doc.items[1].id, null);
+    expect(claimedItems(doc, 'claim1').map((i) => i.name)).toEqual(['Engagement ring']);
+    const ended = removeClaim(doc, 'claim1');
+    expect(ended.claims).toEqual([]);
+    expect(ended.items).toEqual(doc.items);
+    // Nothing happens for a claim or an item that isn't there.
+    expect(setClaimItem(doc, 'nope', doc.items[0].id, 'stolen')).toBe(doc);
+    expect(setClaimItem(doc, 'claim1', 'nope', 'stolen')).toBe(doc);
+  });
+
+  it('keeps several claims apart: their own items, totals and schedules', () => {
+    let doc = withClaim();
+    doc = addClaim(doc, 'claim2', NOW + 1);
+    doc = setClaimItem(doc, 'claim2', doc.items[0].id, 'damaged', 'Water through the ceiling');
+    // The same thing can be in two claims: damaged in one loss, stolen in another.
+    doc = setClaimItem(doc, 'claim2', doc.items[1].id, 'damaged');
+    doc = updateClaim(doc, 'claim2', { name: 'Burst pipe', claimNumber: 'W-77' }, NOW);
+    expect(claimedItems(doc, 'claim2').map((i) => i.name)).toEqual(['Television', 'Laptop']);
+    expect(claimSummary(doc, doc.claims[0])).toMatchObject({ count: 2, totalCents: 800000, byStatus: { stolen: 2 } });
+    expect(claimSummary(doc, doc.claims[1])).toMatchObject({ count: 2, totalCents: 350000, byStatus: { damaged: 2 } });
+    expect(claimsOf(doc, doc.items[1].id).map(({ claim, entry }) => [claim.id, entry.loss])).toEqual([
+      ['claim1', 'stolen'],
+      ['claim2', 'damaged'],
+    ]);
+    const second = buildReportHtml(doc, { includePhotos: false, includeReceipts: false, generatedAt: NOW, claimId: 'claim2' });
+    expect(second).toContain('Burst pipe');
+    expect(second).toContain('W-77');
+    expect(second).toContain('Water through the ceiling');
+    expect(second).not.toContain('Engagement ring');
+    expect(second).not.toContain('Taken from the dresser');
+    const first = buildReportHtml(doc, { includePhotos: false, includeReceipts: false, generatedAt: NOW, claimId: 'claim1' });
+    expect(first).toContain('Engagement ring');
+    expect(first).not.toContain('Television');
+    expect(reportFileName(doc, NOW, doc.claims[1])).toBe('Home-inventory-claim-W-77-2026-11-15');
+    // Ending one leaves the other as it was.
+    const left = removeClaim(doc, 'claim1');
+    expect(left.claims.map((c) => c.id)).toEqual(['claim2']);
+    expect(claimedItems(left, 'claim2')).toHaveLength(2);
+  });
+
+  it('opens at most a dozen claims at once, and never two with one id', () => {
     let doc = home();
-    expect(doc.claim).toBeNull();
-    doc = setItemLoss(doc, doc.items[2].id, 'stolen', 'Taken from the dresser', NOW);
-    doc = setItemLoss(doc, doc.items[1].id, 'stolen', undefined, NOW);
-    expect(doc.claim?.openedAt).toBe(NOW);
-    expect(claimedItems(doc).map((i) => i.name)).toEqual(['Laptop', 'Engagement ring']);
-    doc = setItemLoss(doc, doc.items[1].id, null, undefined, NOW);
-    expect(claimedItems(doc).map((i) => i.name)).toEqual(['Engagement ring']);
-    const closed = closeClaim(doc, NOW);
-    expect(closed.claim).toBeNull();
-    expect(closed.items).toHaveLength(4);
-    expect(closed.items.every((i) => i.loss === null && i.lossNote === '')).toBe(true);
+    for (let i = 0; i < LIMITS.claims + 3; i++) doc = addClaim(doc, `claim${i}`, NOW);
+    expect(doc.claims).toHaveLength(LIMITS.claims);
+    expect(addClaim(doc, 'claim0', NOW)).toBe(doc);
+  });
+
+  it('takes a deleted item, or a deleted room’s items, out of every claim', () => {
+    let doc = withClaim();
+    doc = addClaim(doc, 'claim2', NOW);
+    doc = setClaimItem(doc, 'claim2', doc.items[2].id, 'damaged');
+    doc = deleteItem(doc, doc.items[2].id);
+    expect(doc.claims.map((c) => c.items.length)).toEqual([1, 0]);
+    doc = deleteRoom(doc, doc.rooms[0].id, null, NOW);
+    expect(doc.claims.map((c) => c.items.length)).toEqual([0, 0]);
+    expect(doc.claims).toHaveLength(2);
+  });
+
+  it('names a claim by what the person called it, else what happened and when, else its number', () => {
+    let doc = addClaim(home(), 'c', NOW);
+    expect(claimTitle(doc.claims[0])).toBe('Claim started Nov 15, 2026');
+    doc = updateClaim(doc, 'c', { claimNumber: 'CL-9' }, NOW);
+    expect(claimTitle(doc.claims[0])).toBe('Claim CL-9');
+    doc = updateClaim(doc, 'c', { cause: 'fire', lossDate: '2026-11-02' }, NOW);
+    expect(claimTitle(doc.claims[0])).toBe('Fire, Nov 2, 2026');
+    doc = updateClaim(doc, 'c', { name: '  Kitchen fire ' }, NOW);
+    expect(claimTitle(doc.claims[0])).toBe('Kitchen fire');
   });
 
   it('keeps the claim details tidy and refuses a loss date in the future', () => {
-    let doc = openClaim(home(), NOW);
-    doc = updateClaim(doc, { claimNumber: '  CL-123 ', cause: 'theft', lossDate: '2026-11-12', description: 'Break-in\nthrough the back door' }, NOW);
-    expect(doc.claim).toEqual({ openedAt: NOW, lossDate: '2026-11-12', cause: 'theft', claimNumber: 'CL-123', description: 'Break-in\nthrough the back door' });
-    expect(updateClaim(doc, { lossDate: '2027-01-01' }, NOW).claim?.lossDate).toBeNull();
+    let doc = addClaim(home(), 'c', NOW);
+    doc = updateClaim(doc, 'c', { claimNumber: '  CL-123 ', cause: 'theft', lossDate: '2026-11-12', description: 'Break-in\nthrough the back door' }, NOW);
+    expect(doc.claims[0]).toEqual({ id: 'c', name: '', openedAt: NOW, lossDate: '2026-11-12', cause: 'theft', claimNumber: 'CL-123', description: 'Break-in\nthrough the back door', items: [] });
+    expect(updateClaim(doc, 'c', { lossDate: '2027-01-01' }, NOW).claims[0].lossDate).toBeNull();
   });
 
   it('makes a claim schedule with only the claimed items and the claim on top', () => {
     let doc = home();
-    doc = updateClaim(setItemLoss(doc, doc.items[2].id, 'stolen', 'Taken from the dresser', NOW), { claimNumber: 'CL-123', cause: 'theft', lossDate: '2026-11-12', description: 'Back door forced' }, NOW);
-    doc = setItemLoss(doc, doc.items[0].id, 'damaged', 'Pushed off the stand', NOW);
+    doc = addClaim(doc, 'c', NOW);
+    doc = setClaimItem(doc, 'c', doc.items[2].id, 'stolen', 'Taken from the dresser');
+    doc = updateClaim(doc, 'c', { claimNumber: 'CL-123', cause: 'theft', lossDate: '2026-11-12', description: 'Back door forced' }, NOW);
+    doc = setClaimItem(doc, 'c', doc.items[0].id, 'damaged', 'Pushed off the stand');
     doc = updatePolicy(doc, { deductibleCents: 50000 });
-    const html = buildReportHtml(doc, { includePhotos: false, includeReceipts: false, generatedAt: NOW, scope: 'claim' });
+    const html = buildReportHtml(doc, { includePhotos: false, includeReceipts: false, generatedAt: NOW, claimId: 'c' });
     expect(html).toContain('Insurance claim · schedule of loss');
     expect(html).toContain('CL-123');
     expect(html).toContain('Nov 12, 2026');
@@ -78,32 +154,58 @@ describe('claim mode', () => {
     expect(html).toContain('<div class="loss">Stolen</div>');
     expect(html).toContain('<b>What happened:</b> Taken from the dresser');
     expect(html).not.toContain('Laptop');
-    expect(reportFileName(doc, NOW, 'claim')).toBe('Home-inventory-claim-2026-11-15');
+    expect(reportFileName(doc, NOW, doc.claims[0])).toBe('Home-inventory-claim-CL-123-2026-11-15');
+    expect(reportFileName(doc, NOW, { ...doc.claims[0], claimNumber: '', name: '' })).toBe('Home-inventory-claim-2026-11-15');
+    // The inventory report carries no claim marks.
+    expect(buildReportHtml(doc, { includePhotos: false, includeReceipts: false, generatedAt: NOW })).not.toContain('class="loss"');
   });
 
   it('writes a claim spreadsheet with the loss in front', () => {
-    let doc = home();
-    doc = setItemLoss(doc, doc.items[2].id, 'stolen', 'From the dresser, with "box"', NOW);
-    const rows = buildCsv(doc, { claim: true }).replace('﻿', '').trimEnd().split('\r\n');
+    let doc = addClaim(home(), 'c', NOW);
+    doc = setClaimItem(doc, 'c', doc.items[2].id, 'stolen', 'From the dresser, with "box"');
+    const rows = buildCsv(doc, { claim: doc.claims[0] }).replace('\uFEFF', '').trimEnd().split('\r\n');
     expect(rows).toHaveLength(2);
     expect(rows[0].startsWith('Loss,What happened,Room,Item')).toBe(true);
     expect(rows[1].startsWith('Stolen,"From the dresser, with ""box""",Bedroom,Engagement ring,Jewelry and watches')).toBe(true);
+    expect(buildCsv(doc).replace('\uFEFF', '').split('\r\n')[0].startsWith('Room,')).toBe(true);
   });
 
-  it('survives a save and load, and repairs a bad loss status', () => {
-    let doc = setItemLoss(home(), home().items[0].id, 'stolen', '', NOW);
-    doc = setItemLoss(doc, doc.items[0].id, 'stolen', 'x', NOW);
+  it('survives a save and load, and repairs bad entries', () => {
+    let doc = withClaim();
+    doc = addClaim(doc, 'claim2', NOW);
     const raw = JSON.parse(JSON.stringify(doc));
-    raw.items[1].loss = 'vaporised';
+    raw.claims[0].items.push({ itemId: raw.items[2].id, loss: 'damaged', note: 'twice' }); // a second entry for one item
+    raw.claims[0].items.push({ itemId: 'gone', loss: 'stolen', note: '' }); // an item that isn't there
+    raw.claims[0].items.push({ itemId: raw.items[3].id, loss: 'vaporised', note: '' }); // no such status
+    raw.claims[1].id = 'claim1'; // the same id twice
     const back = parseDoc(raw, NOW);
-    expect(back.items[0].loss).toBe('stolen');
-    expect(back.items[1].loss).toBeNull();
-    expect(back.claim?.openedAt).toBe(NOW);
+    expect(back.claims[0]).toEqual(doc.claims[0]);
+    expect(back.claims[1].id).not.toBe('claim1');
+    expect(back.claims[1].items).toEqual([]);
+  });
+
+  it('brings back the single claim of the build before several claims, from a save or a backup', () => {
+    const raw = JSON.parse(JSON.stringify(home()));
+    delete raw.claims;
+    raw.claim = { openedAt: NOW - DAY, lossDate: '2026-11-12', cause: 'theft', claimNumber: 'CL-1', description: 'Break-in' };
+    raw.items[2].loss = 'stolen';
+    raw.items[2].lossNote = 'From the dresser';
+    raw.items[0].loss = 'nonsense';
+    const back = parseDoc(raw, NOW);
+    expect(back.claims).toHaveLength(1);
+    expect(back.claims[0]).toMatchObject({ name: '', openedAt: NOW - DAY, lossDate: '2026-11-12', cause: 'theft', claimNumber: 'CL-1', description: 'Break-in' });
+    expect(back.claims[0].items).toEqual([{ itemId: raw.items[2].id, loss: 'stolen', note: 'From the dresser' }]);
+    expect(back.items[2]).not.toHaveProperty('loss');
+    // Marked items with no claim record still make a claim; nothing marked and no claim makes none.
+    delete raw.claim;
+    expect(parseDoc(raw, NOW).claims[0].items).toHaveLength(1);
+    delete raw.items[2].loss;
+    expect(parseDoc(raw, NOW).claims).toEqual([]);
   });
 
   it('counts as a change for the backup', () => {
     const lib = libraryOf(home());
-    const marked = setItemLoss(lib.places[0].doc, lib.places[0].doc.items[0].id, 'stolen', '', NOW);
+    const marked = setClaimItem(addClaim(lib.places[0].doc, 'c', NOW), 'c', lib.places[0].doc.items[0].id, 'stolen');
     const next = stampChanges(lib, setCurrentDoc(lib, { ...marked, meta: { ...marked.meta, lastBackupAt: NOW - 1 } }), NOW + 5);
     expect(backupState(next.places[0].doc)).toBe('behind');
   });

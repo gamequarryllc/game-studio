@@ -11,6 +11,7 @@ import {
   type Condition,
   type Attachment,
   type Claim,
+  type ClaimItem,
   type LossCause,
   type LossStatus,
   type Policy,
@@ -44,7 +45,7 @@ export function emptyDoc(now: number, currency: string = DEFAULT_CURRENCY): Doc 
     profile: { homeName: '', ownerName: '', address: '', insurer: '', policyNumber: '' },
     settings: defaultSettings(currency),
     meta: { createdAt: now, onboarded: false, lastBackupAt: null, lastReportAt: null, modifiedAt: null },
-    claim: null,
+    claims: [],
     policy: emptyPolicy(),
   };
 }
@@ -137,15 +138,56 @@ export function cleanAttachments(v: unknown, seen: Set<string>, max: number): At
   return out;
 }
 
-function cleanClaim(v: unknown, now: number): Claim | null {
-  if (!isRecord(v)) return null;
+function isLoss(v: unknown): v is LossStatus {
+  return (LOSS_STATUSES as readonly unknown[]).includes(v);
+}
+
+function cleanClaimItems(v: unknown, itemIds: Set<string>): ClaimItem[] {
+  const out: ClaimItem[] = [];
+  const seen = new Set<string>();
+  for (const x of Array.isArray(v) ? v : []) {
+    // An entry for an item that has gone, or a second entry for the same item, is dropped.
+    if (!isRecord(x) || typeof x.itemId !== 'string' || !itemIds.has(x.itemId) || seen.has(x.itemId) || !isLoss(x.loss)) continue;
+    seen.add(x.itemId);
+    out.push({ itemId: x.itemId, loss: x.loss, note: cleanText(x.note, LIMITS.notes, true) });
+  }
+  return out;
+}
+
+function cleanClaim(v: Record<string, unknown>, id: string, items: ClaimItem[], now: number): Claim {
   return {
+    id,
+    name: cleanText(v.name, LIMITS.short),
     openedAt: cleanTime(v.openedAt, now),
     lossDate: typeof v.lossDate === 'string' && isValidYmd(v.lossDate) ? v.lossDate : null,
     cause: (LOSS_CAUSES as readonly unknown[]).includes(v.cause) ? (v.cause as LossCause) : null,
     claimNumber: cleanText(v.claimNumber, LIMITS.short),
     description: cleanText(v.description, LIMITS.notes, true),
+    items,
   };
+}
+
+/**
+ * The place's claims. Builds before several claims (1.0.1 build 64) kept one
+ * claim as `claim`, with each claimed item carrying its own status and note;
+ * that comes back as a single claim.
+ */
+function cleanClaims(raw: Record<string, unknown>, itemIds: Set<string>, legacy: ClaimItem[], now: number): Claim[] {
+  const out: Claim[] = [];
+  if (Array.isArray(raw.claims)) {
+    const ids = new Set<string>();
+    for (const c of raw.claims) {
+      if (!isRecord(c)) continue;
+      const id = isSafeId(c.id) && !ids.has(c.id) ? c.id : newId();
+      ids.add(id);
+      out.push(cleanClaim(c, id, cleanClaimItems(c.items, itemIds), now));
+      // A file may hold more than the app lets one open; they are all kept, up to a sane bound.
+      if (out.length >= LIMITS.claims * 4) break;
+    }
+    return out;
+  }
+  if (isRecord(raw.claim) || legacy.length > 0) out.push(cleanClaim(isRecord(raw.claim) ? raw.claim : {}, newId(), legacy, now));
+  return out;
 }
 
 function cleanPolicy(v: unknown, seen: Set<string>): Policy {
@@ -206,6 +248,7 @@ export function parseDoc(raw: unknown, now: number): Doc {
 
   const items: Item[] = [];
   const itemIds = new Set<string>();
+  const legacyClaimItems: ClaimItem[] = [];
   const photoIds = fileIds;
   let unsortedId: string | null = null;
   for (const it of raw.items) {
@@ -253,10 +296,9 @@ export function parseDoc(raw: unknown, now: number): Doc {
       createdAt,
       updatedAt: cleanTime(it.updatedAt, createdAt),
       warrantyUntil: typeof it.warrantyUntil === 'string' && isValidYmd(it.warrantyUntil) ? it.warrantyUntil : null,
-      loss: (LOSS_STATUSES as readonly unknown[]).includes(it.loss) ? (it.loss as LossStatus) : null,
-      lossNote: cleanText(it.lossNote, LIMITS.notes, true),
     });
     itemIds.add(it.id);
+    if (isLoss(it.loss)) legacyClaimItems.push({ itemId: it.id, loss: it.loss, note: cleanText(it.lossNote, LIMITS.notes, true) });
   }
 
   const profile = isRecord(raw.profile) ? raw.profile : {};
@@ -283,7 +325,7 @@ export function parseDoc(raw: unknown, now: number): Doc {
       lastReportAt: cleanTimeOrNull(meta.lastReportAt),
       modifiedAt: cleanTimeOrNull(meta.modifiedAt),
     },
-    claim: cleanClaim(raw.claim, now),
+    claims: cleanClaims(raw, itemIds, legacyClaimItems, now),
     policy: cleanPolicy(raw.policy, fileIds),
   };
 }

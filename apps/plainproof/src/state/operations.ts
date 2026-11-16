@@ -1,12 +1,12 @@
 import Constants from 'expo-constants';
 
-import { claimedItems, markBackup, markReport } from '@/domain/actions';
+import { findClaim, markBackup, markReport } from '@/domain/actions';
 import { backupFileName, createBackupReader, createZipWriter, textToBytes, writeBackup, type BackupResult, type ChunkSink } from '@/domain/backup';
 import { claimPackageName, claimPackagePlan } from '@/domain/claimPackage';
 import { buildCsv } from '@/domain/csv';
 import { emptyDoc } from '@/domain/doc';
 import { libraryFileNames, libraryOf, libraryPhotoIds, mapDocs, removePlace, totalItems, totalRooms } from '@/domain/library';
-import { buildReportHtml, reportFileName, reportPhotoIds } from '@/domain/report';
+import { buildReportHtml, claimDoc, reportFileName, reportPhotoIds } from '@/domain/report';
 import { heavyHome, sampleHome } from '@/domain/sample';
 import type { Doc, Id } from '@/domain/types';
 import { beginAttachmentRestore, deleteAttachments, readAttachment, removeOrphanAttachments } from '@/platform/attachments';
@@ -25,13 +25,13 @@ export interface ReportChoice {
   includePhotos: boolean;
   includeReceipts: boolean;
   includeAllPhotos: boolean;
-  /** 'claim': the schedule of loss, only the items marked for the claim. */
-  scope?: 'inventory' | 'claim';
+  /** A claim's schedule of loss: only that claim's items. */
+  claimId?: Id | null;
 }
 
 /** Reads the photos a report needs, as data: URIs. */
 async function reportPhotos(doc: Doc, opts: ReportChoice): Promise<Record<string, string>> {
-  const wanted = reportPhotoIds(opts.scope === 'claim' ? { ...doc, items: claimedItems(doc) } : doc, opts);
+  const wanted = reportPhotoIds(opts.claimId != null ? claimDoc(doc, opts.claimId) : doc, opts);
   const photoData: Record<string, string> = {};
   for (const id of wanted.thumbs) {
     const b64 = await readPhotoBase64(id, 'thumb');
@@ -51,7 +51,7 @@ export async function makeReport(opts: ReportChoice): Promise<void> {
     const now = Date.now();
     const photoData = await reportPhotos(doc, opts);
     const html = buildReportHtml(doc, { ...opts, generatedAt: now, photoData, appVersion: appVersion() });
-    await deliverReport(target, html, reportFileName(doc, now, opts.scope));
+    await deliverReport(target, html, reportFileName(doc, now, findClaim(doc, opts.claimId)));
     store.update((d) => markReport(d, now));
   } catch (e) {
     cancelReport(target);
@@ -59,30 +59,34 @@ export async function makeReport(opts: ReportChoice): Promise<void> {
   }
 }
 
-export async function exportSpreadsheet(scope: 'inventory' | 'claim' = 'inventory'): Promise<void> {
+/** The inventory as a spreadsheet, or with a claim id, that claim's items. */
+export async function exportSpreadsheet(claimId: Id | null = null): Promise<void> {
   const doc = store.get();
-  const name = `${reportFileName(doc, Date.now(), scope)}.csv`;
-  await shareTextFile(name, 'text/csv', 'public.comma-separated-values-text', buildCsv(doc, { claim: scope === 'claim' }));
+  const claim = findClaim(doc, claimId);
+  const name = `${reportFileName(doc, Date.now(), claim)}.csv`;
+  await shareTextFile(name, 'text/csv', 'public.comma-separated-values-text', buildCsv(doc, { claim }));
 }
 
 /** The claim package: one zip with the schedule of loss, the spreadsheet, and the claim's photos, videos and policy in folders. */
-export async function makeClaimPackage(): Promise<void> {
+export async function makeClaimPackage(claimId: Id): Promise<void> {
   await store.flush();
   const doc = store.get();
+  const claim = findClaim(doc, claimId);
+  if (!claim) throw new Error('That claim is gone.');
   const now = Date.now();
   const version = appVersion();
-  const plan = claimPackagePlan(doc, { generatedAt: now, reportExt: REPORT_EXT, appVersion: version });
-  const sink = createBackupSink(`${claimPackageName(doc, now)}.zip`);
+  const plan = claimPackagePlan(doc, claim, { generatedAt: now, reportExt: REPORT_EXT, appVersion: version });
+  const sink = createBackupSink(`${claimPackageName(doc, claim, now)}.zip`);
   try {
     const writer = createZipWriter(sink.onChunk);
     for (const entry of plan) {
       const { source } = entry;
       if (source.kind === 'report') {
-        const choice: ReportChoice = { scope: 'claim', includePhotos: true, includeReceipts: true, includeAllPhotos: true };
+        const choice: ReportChoice = { claimId: claim.id, includePhotos: true, includeReceipts: true, includeAllPhotos: true };
         const html = buildReportHtml(doc, { ...choice, generatedAt: now, photoData: await reportPhotos(doc, choice), appVersion: version });
         writer.add(entry.path, await renderReportFile(html), true);
       } else if (source.kind === 'csv') {
-        writer.add(entry.path, textToBytes(buildCsv(doc, { claim: true })), true);
+        writer.add(entry.path, textToBytes(buildCsv(doc, { claim })), true);
       } else if (source.kind === 'text') {
         writer.add(entry.path, textToBytes(source.text), true);
       } else if (source.kind === 'photo') {

@@ -1,4 +1,4 @@
-import { addItem, addPolicyDocuments, addRoomVideo, addRooms, emptyDraft, setItemLoss, updateClaim, updateProfile } from '../actions';
+import { addClaim, addItem, addPolicyDocuments, addRoomVideo, addRooms, emptyDraft, setClaimItem, updateClaim, updateProfile } from '../actions';
 import { BACKUP_VIDEO_BUDGET, concat, createBackupReader, fileEntryName, isAttachmentName, parseFileEntryName, writeBackup, type PhotoSize } from '../backup';
 import { claimPackageName, claimPackagePlan, safeName } from '../claimPackage';
 import { emptyDoc } from '../doc';
@@ -33,10 +33,10 @@ function home(): Doc {
 
 describe('claim summary', () => {
   it('counts, totals and names what happened', () => {
-    let doc = home();
-    doc = setItemLoss(doc, doc.items[0].id, 'stolen', 'Taken from the stand', NOW);
-    doc = setItemLoss(doc, doc.items[2].id, 'damaged', undefined, NOW);
-    const s = claimSummary(doc);
+    let doc = addClaim(home(), 'c', NOW);
+    doc = setClaimItem(doc, 'c', doc.items[0].id, 'stolen', 'Taken from the stand');
+    doc = setClaimItem(doc, 'c', doc.items[2].id, 'damaged');
+    const s = claimSummary(doc, doc.claims[0]);
     expect(s.count).toBe(2);
     expect(s.totalCents).toBe(150000);
     expect(s.unvalued).toBe(1);
@@ -46,14 +46,15 @@ describe('claim summary', () => {
 
 describe('claim package', () => {
   function claimed(): Doc {
-    let doc = home();
-    doc = setItemLoss(doc, doc.items[0].id, 'stolen', 'Taken from the stand', NOW);
-    doc = updateClaim(doc, { claimNumber: 'CL-77', lossDate: '2026-11-14', cause: 'theft', description: 'Back door forced.' }, NOW);
+    let doc = addClaim(home(), 'c', NOW);
+    doc = setClaimItem(doc, 'c', doc.items[0].id, 'stolen', 'Taken from the stand');
+    doc = updateClaim(doc, 'c', { claimNumber: 'CL-77', lossDate: '2026-11-14', cause: 'theft', description: 'Back door forced.' }, NOW);
     return doc;
   }
 
   it('puts the schedule, the spreadsheet, a read-me and each claimed item’s photos in folders', () => {
-    const plan = claimPackagePlan(claimed(), { generatedAt: NOW, reportExt: 'pdf', appVersion: '1.0.1' });
+    const doc = claimed();
+    const plan = claimPackagePlan(doc, doc.claims[0], { generatedAt: NOW, reportExt: 'pdf', appVersion: '1.0.1' });
     const paths = plan.map((e) => e.path);
     expect(paths.slice(0, 3)).toEqual(['Schedule of loss.pdf', 'Schedule of loss.csv', 'Read me.txt']);
     expect(paths).toContain('Items/01 Living room - Television/Photo 1.jpg');
@@ -67,9 +68,14 @@ describe('claim package', () => {
   });
 
   it('writes a read-me with the claim and the notes, with Windows line ends', () => {
-    const plan = claimPackagePlan(claimed(), { generatedAt: NOW, reportExt: 'html' });
+    const doc = claimed();
+    const plan = claimPackagePlan(doc, doc.claims[0], { generatedAt: NOW, reportExt: 'html' });
     const readMe = plan.find((e) => e.path === 'Read me.txt');
     const text = readMe?.source.kind === 'text' ? readMe.source.text : '';
+    // The read-me's reference is the schedule's, so the two can be matched.
+    const schedule = buildReportHtml(doc, { includePhotos: false, includeReceipts: false, generatedAt: NOW, claimId: 'c' });
+    const ref = /report reference ([0-9A-F-]{19})/.exec(text)?.[1];
+    expect(ref && schedule.includes(ref)).toBe(true);
     expect(text).toContain('Claim number: CL-77\r\n');
     expect(text).toContain('Cause: Theft or break-in');
     expect(text).toContain('Items: 1 (1 stolen)');
@@ -79,12 +85,31 @@ describe('claim package', () => {
     expect(text.split('\n').every((l, i, all) => i === all.length - 1 || l.endsWith('\r'))).toBe(true);
   });
 
+  it('packs only its own claim’s items when several claims are open', () => {
+    let doc = claimed();
+    doc = addClaim(doc, 'd', NOW);
+    doc = setClaimItem(doc, 'd', doc.items[1].id, 'lost', 'Lost in the move');
+    doc = updateClaim(doc, 'd', { name: 'The move' }, NOW);
+    const paths = claimPackagePlan(doc, doc.claims[1], { generatedAt: NOW, reportExt: 'pdf' }).map((e) => e.path);
+    expect(paths.filter((p) => p.startsWith('Items/'))).toEqual([]);
+    expect(paths).toContain('Videos/Bed room main walk-through 1.mov');
+    expect(paths.some((p) => p.includes('Television') || p.includes('Living room'))).toBe(false);
+    const readMe = claimPackagePlan(doc, doc.claims[1], { generatedAt: NOW, reportExt: 'pdf' }).find((e) => e.path === 'Read me.txt');
+    const text = readMe?.source.kind === 'text' ? readMe.source.text : '';
+    expect(text).toContain('Claim: The move\r\n');
+    expect(text).toContain('- Ring (Lost): Lost in the move');
+    expect(text).not.toContain('Television');
+    expect(claimPackageName(doc, doc.claims[1], NOW)).toBe('Fern-Cottage-claim-package-The-move-2026-11-15');
+  });
+
   it('makes names safe for any computer', () => {
     expect(safeName('Bed/room: "main"')).toBe('Bed room main');
     expect(safeName('  ..hidden  ')).toBe('hidden');
     expect(safeName('')).toBe('Untitled');
     expect(safeName('x'.repeat(100)).length).toBe(60);
-    expect(claimPackageName(home(), NOW)).toBe('Fern-Cottage-claim-package-2026-11-15');
+    const doc = claimed();
+    expect(claimPackageName(doc, doc.claims[0], NOW)).toBe('Fern-Cottage-claim-package-CL-77-2026-11-15');
+    expect(claimPackageName(doc, { ...doc.claims[0], claimNumber: '' }, NOW)).toBe('Fern-Cottage-claim-package-2026-11-15');
   });
 });
 
