@@ -12,7 +12,8 @@ export const countsSteps = (button: string) => [`Tap ${button}.`, ...COUNTS_STEP
 export const COUNTS_STEPS = [
   'Tap Choose apps.',
   'Tap All Apps & Categories at the top, to count everything.',
-  'Untick Navigation, so Maps never counts.',
+  // Apple's list has no Navigation category: Maps is under Travel (seen in Screen Time on Nov 15, and Maps counted on Nov 16 with Travel ticked).
+  'Untick Travel, so Maps never counts.',
   'Messages and FaceTime are in Social, with Instagram and Snapchat. To leave them out, untick Social, then open it and tick only the apps that should count.',
 ] as const;
 
