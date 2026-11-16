@@ -33,8 +33,8 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
     <View style={{ gap: 10 }}>
       <Label>What used it</Label>
       {/* Nothing in the list can be tapped; touches pass to the screen behind so it still scrolls under a finger. */}
-      {/* Sized for five rows and the note under them; it is last on Today, so spare room is only extra scroll at the end. */}
-      <View pointerEvents="none" style={{ height: 330, alignSelf: 'stretch' }}>
+      {/* Sized for five rows, "and N more apps" and up to four lines of note (330 cut the note's third line); it is last on Today, so spare room is only extra scroll at the end. */}
+      <View pointerEvents="none" style={{ height: 420, alignSelf: 'stretch' }}>
         {/* Shows through only until the phone has drawn the list over it. */}
         <Text style={{ position: 'absolute', top: 14, left: 0, right: 0, fontSize: 16, lineHeight: 22, color: c.ink3 }}>Waiting for the phone&apos;s Screen Time to draw the list…</Text>
         <NativeReport fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />

@@ -149,11 +149,19 @@ class UsageReportView: ExpoView {
       )
     }
 
-    let report = AnyView(DeviceActivityReport(DeviceActivityReport.Context(context), filter: filter).allowsHitTesting(false).id(generation))
+    // Safe areas are ignored: a hosting view near the clock was given a top
+    // inset, which pushed the phone's figure down and shrank it, so it showed
+    // squeezed under Plainlimit's own number (build 67, Today's "Used today").
+    let report = AnyView(
+      DeviceActivityReport(DeviceActivityReport.Context(context), filter: filter)
+        .allowsHitTesting(false)
+        .ignoresSafeArea()
+        .id(generation))
     if let host {
       host.rootView = report
     } else {
       let created = UIHostingController(rootView: report)
+      created.safeAreaRegions = []
       created.view.backgroundColor = .clear
       created.view.isUserInteractionEnabled = false
       created.view.frame = bounds
