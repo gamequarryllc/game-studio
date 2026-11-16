@@ -108,7 +108,7 @@ export default function RootLayout() {
             <Stack.Screen name="item-form" options={{ presentation: 'modal', title: 'New item' }} />
             <Stack.Screen name="pro" options={{ presentation: 'modal', title: '' }} />
             <Stack.Screen name="places" options={{ presentation: 'modal', title: 'Places' }} />
-            <Stack.Screen name="claim" options={{ title: 'Claim' }} />
+            <Stack.Screen name="claim/[id]" options={{ title: 'Claim' }} />
             <Stack.Screen name="claim-items" options={{ presentation: 'modal', title: 'Items in the claim' }} />
             <Stack.Screen name="policy" options={{ title: 'Policy and coverage' }} />
             <Stack.Screen name="photo" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade', title: 'Photo' }} />

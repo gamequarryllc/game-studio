@@ -77,8 +77,9 @@ export default function RoomsTab() {
     opacity: pressed ? 0.7 : 1,
   });
 
-  // An open claim comes first: it is what the person is in the middle of.
-  const claimCount = doc.claim ? claimSummary(doc).count : null;
+  // Open claims come first: they are what the person is in the middle of.
+  const claimCount = doc.claims.length === 1 ? claimSummary(doc, doc.claims[0]).count : null;
+  const claims = doc.claims.length;
 
   // Under the drawer: "Add a room", and the free-version line when there is one.
   const under = 44 + (left !== null ? 24 : 0);
@@ -100,19 +101,23 @@ export default function RoomsTab() {
         summary={summary}
         currency={currency}
         footer={
-          gaps.length > 0 || backupDue || claimCount !== null ? (
+          gaps.length > 0 || backupDue || claims > 0 ? (
             // One row, however narrow the phone: it slides sideways sooner than it wraps and pushes the drawer down.
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.m, marginHorizontal: -space.l }} contentContainerStyle={{ gap: 6, paddingHorizontal: space.l }}>
-              {claimCount !== null ? (
+              {claims > 0 ? (
                 <Pressable
                   testID="gap-claim"
                   accessibilityRole="button"
-                  accessibilityLabel={`A claim is open with ${plural(claimCount, 'item')}`}
+                  accessibilityLabel={claimCount !== null ? `A claim is open with ${plural(claimCount, 'item')}` : `${claims} claims are open`}
                   hitSlop={6}
-                  onPress={() => router.push('/claim')}
+                  onPress={() =>
+                    claimCount !== null
+                      ? router.push({ pathname: '/claim/[id]', params: { id: doc.claims[0].id } })
+                      : router.push({ pathname: '/report', params: { show: 'claims', at: String(Date.now()) } })
+                  }
                   style={({ pressed }) => [chip({ pressed }), { backgroundColor: c.greenSoft }]}>
                   <Icon name="claim" size={11} color={c.green} />
-                  <Text style={[type.caption, { color: c.green, fontWeight: '600' }]}>{`Claim · ${plural(claimCount, 'item')}`}</Text>
+                  <Text style={[type.caption, { color: c.green, fontWeight: '600' }]}>{claimCount !== null ? `Claim · ${plural(claimCount, 'item')}` : `${claims} claims open`}</Text>
                   <Icon name="chevron" size={9} color={c.green} />
                 </Pressable>
               ) : null}

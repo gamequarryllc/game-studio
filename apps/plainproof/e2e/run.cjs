@@ -791,8 +791,8 @@ async function main() {
       // A note on one item, from its own screen.
       await h.tap('claim-item-0');
       await h.visible('item-screen');
-      await h.expectText('item-loss', /Stolen/);
-      await h.fill('item-loss-note', 'Taken off the wall bracket.');
+      await h.expectText('item-loss-0', /Stolen/);
+      await h.fill('item-loss-note-0', 'Taken off the wall bracket.');
       await page.waitForTimeout(600);
       await h.back();
       await h.visible('claim-screen');
@@ -815,7 +815,7 @@ async function main() {
 
       // The claim spreadsheet: a header and the two items, with what happened in front.
       const [sheet] = await Promise.all([page.waitForEvent('download'), h.tap('claim-csv')]);
-      assert.match(sheet.suggestedFilename(), /^Fern-Cottage-claim-\d{4}-\d{2}-\d{2}\.csv$/);
+      assert.match(sheet.suggestedFilename(), /^Fern-Cottage-claim-CL-2026-0042-\d{4}-\d{2}-\d{2}\.csv$/);
       const sheetRows = fs.readFileSync(await sheet.path(), 'utf8').replace('﻿', '').trimEnd().split('\r\n');
       assert.strictEqual(sheetRows.length, 3, `expected a header and 2 items, got ${sheetRows.length} rows`);
       assert.ok(sheetRows[0].startsWith('Loss,What happened,'), sheetRows[0]);
@@ -823,7 +823,7 @@ async function main() {
 
       // The claim package: one zip with everything, in folders.
       const [pkg] = await Promise.all([page.waitForEvent('download'), h.tap('claim-package')]);
-      assert.match(pkg.suggestedFilename(), /^Fern-Cottage-claim-package-\d{4}-\d{2}-\d{2}\.zip$/);
+      assert.match(pkg.suggestedFilename(), /^Fern-Cottage-claim-package-CL-2026-0042-\d{4}-\d{2}-\d{2}\.zip$/);
       const pkgFiles = unzipSync(new Uint8Array(fs.readFileSync(await pkg.path())));
       const pkgNames = Object.keys(pkgFiles).sort();
       for (const n of ['Schedule of loss.html', 'Schedule of loss.csv', 'Read me.txt', 'Items/01 Living room - 65-inch OLED television/Photo 1.jpg', 'Items/01 Living room - 65-inch OLED television/Receipt 1.jpg', 'Items/02 Living room - Three-seat sofa, oatmeal linen/Photo 2.jpg']) {
@@ -845,6 +845,68 @@ async function main() {
       await h.visible('claim-screen');
       await h.back();
       await h.visible('rooms-screen');
+    });
+
+    await step('several claims at once: each with its own items, totals and package', async () => {
+      await h.tab('Report');
+      await h.expectText('claim-row-0', /Claim in progress.*2 items · \$3,349 claimed/);
+      await h.tap('claim-new');
+      await h.visible('claim-screen');
+      await h.fill('claim-name', 'Burst pipe');
+      await h.fill('claim-number', 'W-77');
+      await h.tap('claim-choose');
+      await h.visible('claim-items');
+      await h.expectText('claim-items-for', 'For Burst pipe');
+      // The television is already in the first claim, and says so; it can go in this one too.
+      assert.strictEqual(await page.getByText('In Theft or break-in, Nov 14, 2026').count(), 2, 'the items in the first claim do not say so');
+      await h.tap('claim-status-damaged');
+      await page.getByRole('checkbox', { name: /^65-inch OLED television/ }).click();
+      await page.getByRole('checkbox', { name: /^14-inch laptop/ }).click();
+      await h.shot('35b-second-claim-items');
+      await h.tap('claim-items-done');
+      await h.expectText('claim-count', /^2 items · 2 damaged$/);
+      await h.expectText('claim-total', '$1,899');
+      const [pkg] = await Promise.all([page.waitForEvent('download'), h.tap('claim-package')]);
+      assert.match(pkg.suggestedFilename(), /^Fern-Cottage-claim-package-W-77-\d{4}-\d{2}-\d{2}\.zip$/);
+      const files = unzipSync(new Uint8Array(fs.readFileSync(await pkg.path())));
+      const names = Object.keys(files);
+      assert.ok(names.includes('Items/01 Living room - 65-inch OLED television/Photo 1.jpg'), names.join(', '));
+      assert.ok(names.some((n) => n.startsWith('Items/02 Home office - 14-inch laptop/')), names.join(', '));
+      assert.ok(!names.some((n) => n.includes('sofa')), 'the second claim’s package holds the first claim’s sofa');
+      const readMe = strFromU8(files['Read me.txt']);
+      assert.ok(readMe.includes('Claim: Burst pipe') && readMe.includes('Claim number: W-77') && !readMe.includes('CL-2026-0042'), readMe);
+      await h.back();
+      // The Report tab lists both; the Rooms tab says two are open and leads to them.
+      await h.expectText('claim-row-0', /Theft or break-in, Nov 14, 2026.*2 items · \$3,349 claimed/);
+      await h.expectText('claim-row-1', /Burst pipe.*2 items · \$1,899 claimed/);
+      await h.shot('36c-report-two-claims');
+      await h.tab('Rooms');
+      await h.expectText('gap-claim', /2 claims open/);
+      await h.tap('gap-claim');
+      await h.visible('report-screen');
+      await h.visible('claim-row-1');
+      // The television's own screen shows both claims, each with its own status and note.
+      await h.tab('Rooms');
+      await h.openRoom('Living room');
+      await h.tap('item-65-inch OLED television');
+      await h.expectText('item-loss-0', /Stolen/);
+      await h.expectText('item-loss-1', /Damaged/);
+      assert.strictEqual(await t('item-loss-note-0').first().inputValue(), 'Taken off the wall bracket.');
+      assert.strictEqual(await t('item-loss-note-1').first().inputValue(), '');
+      await h.shot('36d-item-in-two-claims');
+      await h.back();
+      await h.back();
+      // Ending the second claim leaves the first as it was.
+      await h.tab('Report');
+      await h.tap('claim-row-1');
+      await h.tap('claim-end');
+      assert.match(await h.dialogText(), /your other claim stays open/);
+      await h.confirm();
+      await h.visible('report-screen');
+      await h.gone('claim-row-1');
+      await h.expectText('claim-row-0', /Claim in progress.*2 items · \$3,349 claimed/);
+      await h.tab('Rooms');
+      await h.expectText('gap-claim', /Claim · 2 items/);
     });
 
     await step('the policy: limits, the coverage check, and the policy document itself', async () => {
@@ -870,7 +932,7 @@ async function main() {
       await h.back();
       await h.expectText('open-policy', /1 document kept · within the \$50,000 limit/);
       // The claim shows the deductible next to what is claimed.
-      await h.tap('open-claim');
+      await h.tap('claim-row-0');
       await h.expectText('claim-count', /deductible \$1,000/);
       // The package now carries the policy too.
       const [pkg] = await Promise.all([page.waitForEvent('download'), h.tap('claim-package')]);
@@ -880,8 +942,8 @@ async function main() {
       await h.tap('claim-end');
       assert.match(await h.dialogText(), /End this claim\?/);
       await h.confirm();
-      await h.visible('claim-start');
-      await h.back();
+      await h.visible('report-screen');
+      await h.visible('open-claim');
       await h.tab('Rooms');
       await h.gone('gap-claim');
       await h.expectText('home-total', '$6,648');

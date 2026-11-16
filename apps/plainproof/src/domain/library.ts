@@ -60,7 +60,7 @@ export function contentChanged(before: Doc, after: Doc): boolean {
     before.items !== after.items ||
     before.profile !== after.profile ||
     before.settings !== after.settings ||
-    before.claim !== after.claim ||
+    before.claims !== after.claims ||
     before.policy !== after.policy
   );
 }

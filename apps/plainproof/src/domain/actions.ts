@@ -1,7 +1,7 @@
 import { cleanCents, cleanQuantity, cleanText } from './doc';
 import { isValidYmd, toYmd } from './dates';
 import { newId } from './ids';
-import { CATEGORIES, CONDITIONS, LIMITS, LOSS_CAUSES, LOSS_STATUSES, ROOM_ICONS, type Attachment, type Category, type Claim, type Condition, type Doc, type LossStatus, type Policy, type Settings, type Video, type Id, type Item, type Photo, type Profile, type Room, type RoomIcon } from './types';
+import { CATEGORIES, CONDITIONS, LIMITS, LOSS_CAUSES, LOSS_STATUSES, ROOM_ICONS, type Attachment, type Category, type Claim, type ClaimItem, type ClaimedItem, type Condition, type Doc, type LossStatus, type Policy, type Settings, type Video, type Id, type Item, type Photo, type Profile, type Room, type RoomIcon } from './types';
 
 // Every change to the document is a plain function: (doc, input, now) -> new doc.
 // Nothing here touches files, the clock or the screen, so all of it is unit tested.
@@ -109,7 +109,7 @@ export function deleteRoom(doc: Doc, roomId: Id, moveItemsTo: Id | null, now: nu
   const items = target
     ? doc.items.map((it) => (it.roomId === roomId ? { ...it, roomId: target, updatedAt: now } : it))
     : doc.items.filter((it) => it.roomId !== roomId);
-  return { ...doc, rooms: doc.rooms.filter((r) => r.id !== roomId), items };
+  return dropFromClaims({ ...doc, rooms: doc.rooms.filter((r) => r.id !== roomId), items });
 }
 
 /** What the item form hands over. Money is already in cents. */
@@ -213,7 +213,7 @@ function fieldsFromDraft(draft: ItemDraft) {
 
 export function addItem(doc: Doc, draft: ItemDraft, now: number): { doc: Doc; itemId: Id | null } {
   if (draftProblems(doc, draft, now).length > 0) return { doc, itemId: null };
-  const item: Item = { id: newId(), ...fieldsFromDraft(draft), createdAt: now, updatedAt: now, loss: null, lossNote: '' };
+  const item: Item = { id: newId(), ...fieldsFromDraft(draft), createdAt: now, updatedAt: now };
   return { doc: { ...doc, items: [...doc.items, item] }, itemId: item.id };
 }
 
@@ -226,7 +226,7 @@ export function updateItem(doc: Doc, itemId: Id, draft: ItemDraft, now: number):
 }
 
 export function deleteItem(doc: Doc, itemId: Id): Doc {
-  return { ...doc, items: doc.items.filter((it) => it.id !== itemId) };
+  return dropFromClaims({ ...doc, items: doc.items.filter((it) => it.id !== itemId) });
 }
 
 export function updateProfile(doc: Doc, patch: Partial<Profile>): Doc {
@@ -260,56 +260,86 @@ export function markReport(doc: Doc, now: number): Doc {
   return { ...doc, meta: { ...doc.meta, lastReportAt: now } };
 }
 
-// The claim: one at a time for a place, with the items it covers marked.
+// Claims: a place can have several open at once, each with the items it covers.
 
-export function openClaim(doc: Doc, now: number): Doc {
-  if (doc.claim) return doc;
-  return { ...doc, claim: { openedAt: now, lossDate: null, cause: null, claimNumber: '', description: '' } };
+export function findClaim(doc: Doc, claimId: Id | null | undefined): Claim | null {
+  return (claimId && doc.claims.find((c) => c.id === claimId)) || null;
 }
 
-export function updateClaim(doc: Doc, patch: Partial<Omit<Claim, 'openedAt'>>, now: number = Date.now()): Doc {
-  if (!doc.claim) return doc;
-  const merged = { ...doc.claim, ...patch };
-  return {
-    ...doc,
-    claim: {
-      openedAt: doc.claim.openedAt,
-      lossDate: merged.lossDate && isValidYmd(merged.lossDate) && !isFutureYmd(merged.lossDate, now) ? merged.lossDate : null,
-      cause: merged.cause && (LOSS_CAUSES as readonly string[]).includes(merged.cause) ? merged.cause : null,
-      claimNumber: cleanText(merged.claimNumber, LIMITS.short),
-      description: cleanText(merged.description, LIMITS.notes, true),
-    },
+/** Opens a new, empty claim with the given id (made by the caller, so it can go straight to it). */
+export function addClaim(doc: Doc, claimId: Id, now: number): Doc {
+  if (doc.claims.length >= LIMITS.claims || doc.claims.some((c) => c.id === claimId)) return doc;
+  const claim: Claim = { id: claimId, name: '', openedAt: now, lossDate: null, cause: null, claimNumber: '', description: '', items: [] };
+  return { ...doc, claims: [...doc.claims, claim] };
+}
+
+export function updateClaim(doc: Doc, claimId: Id, patch: Partial<Omit<Claim, 'id' | 'openedAt' | 'items'>>, now: number = Date.now()): Doc {
+  const current = findClaim(doc, claimId);
+  if (!current) return doc;
+  const merged = { ...current, ...patch };
+  const next: Claim = {
+    ...current,
+    name: cleanText(merged.name, LIMITS.short),
+    lossDate: merged.lossDate && isValidYmd(merged.lossDate) && !isFutureYmd(merged.lossDate, now) ? merged.lossDate : null,
+    cause: merged.cause && (LOSS_CAUSES as readonly string[]).includes(merged.cause) ? merged.cause : null,
+    claimNumber: cleanText(merged.claimNumber, LIMITS.short),
+    description: cleanText(merged.description, LIMITS.notes, true),
   };
+  return { ...doc, claims: doc.claims.map((c) => (c.id === claimId ? next : c)) };
 }
 
-/** Marks an item as part of the claim (or takes it out with null). Opens the claim if there isn't one. */
-export function setItemLoss(doc: Doc, itemId: Id, loss: LossStatus | null, note: string | undefined, now: number): Doc {
+/**
+ * Puts an item in a claim with what happened to it, changes that, or takes it
+ * out (null). A note given replaces the old one; leaving it out keeps it.
+ */
+export function setClaimItem(doc: Doc, claimId: Id, itemId: Id, loss: LossStatus | null, note?: string): Doc {
+  const claim = findClaim(doc, claimId);
+  if (!claim || !doc.items.some((i) => i.id === itemId)) return doc;
   if (loss !== null && !(LOSS_STATUSES as readonly string[]).includes(loss)) return doc;
-  const base = loss !== null ? openClaim(doc, now) : doc;
-  return {
-    ...base,
-    items: base.items.map((it) =>
-      it.id === itemId
-        ? { ...it, loss, lossNote: loss === null ? '' : cleanText(note ?? it.lossNote, LIMITS.notes, true), updatedAt: now }
-        : it,
-    ),
-  };
+  const existing = claim.items.find((e) => e.itemId === itemId);
+  let items: ClaimItem[];
+  if (loss === null) items = claim.items.filter((e) => e.itemId !== itemId);
+  else if (existing) items = claim.items.map((e) => (e.itemId === itemId ? { ...e, loss, note: cleanText(note ?? e.note, LIMITS.notes, true) } : e));
+  else items = [...claim.items, { itemId, loss, note: cleanText(note ?? '', LIMITS.notes, true) }];
+  return { ...doc, claims: doc.claims.map((c) => (c.id === claimId ? { ...c, items } : c)) };
 }
 
-/** Ends the claim: the claim details go and every item is unmarked. The items themselves stay. */
-export function closeClaim(doc: Doc, now: number): Doc {
-  if (!doc.claim && !doc.items.some((i) => i.loss)) return doc;
-  return {
-    ...doc,
-    claim: null,
-    items: doc.items.map((it) => (it.loss || it.lossNote ? { ...it, loss: null, lossNote: '', updatedAt: now } : it)),
-  };
+/** Ends a claim: its details and marks go. The items themselves stay, as do any other claims. */
+export function removeClaim(doc: Doc, claimId: Id): Doc {
+  if (!findClaim(doc, claimId)) return doc;
+  return { ...doc, claims: doc.claims.filter((c) => c.id !== claimId) };
 }
 
-/** Items marked for the claim, in room order. */
-export function claimedItems(doc: Doc): Item[] {
+/** Takes deleted items out of every claim. */
+function dropFromClaims(doc: Doc): Doc {
+  if (doc.claims.length === 0) return doc;
+  const ids = new Set(doc.items.map((i) => i.id));
+  if (doc.claims.every((c) => c.items.every((e) => ids.has(e.itemId)))) return doc;
+  return { ...doc, claims: doc.claims.map((c) => ({ ...c, items: c.items.filter((e) => ids.has(e.itemId)) })) };
+}
+
+/** A claim's items, each with what happened to it in that claim, in room order. */
+export function claimedItems(doc: Doc, claimId: Id | null | undefined): ClaimedItem[] {
+  const claim = findClaim(doc, claimId);
+  if (!claim) return [];
+  const entries = new Map(claim.items.map((e) => [e.itemId, e]));
   const order = new Map(doc.rooms.map((r, i) => [r.id, i]));
-  return doc.items.filter((i) => i.loss !== null).sort((a, b) => (order.get(a.roomId) ?? 0) - (order.get(b.roomId) ?? 0));
+  const out: ClaimedItem[] = [];
+  for (const item of doc.items) {
+    const e = entries.get(item.id);
+    if (e) out.push({ ...item, loss: e.loss, lossNote: e.note });
+  }
+  return out.sort((a, b) => (order.get(a.roomId) ?? 0) - (order.get(b.roomId) ?? 0));
+}
+
+/** The claims an item is in, with what happened to it in each. */
+export function claimsOf(doc: Doc, itemId: Id): { claim: Claim; entry: ClaimItem }[] {
+  const out: { claim: Claim; entry: ClaimItem }[] = [];
+  for (const claim of doc.claims) {
+    const entry = claim.items.find((e) => e.itemId === itemId);
+    if (entry) out.push({ claim, entry });
+  }
+  return out;
 }
 
 // The policy kept with a place.

@@ -1,4 +1,5 @@
-import { LOSS_LABELS, LOSS_STATUSES, SERIAL_CATEGORIES, type Doc, type Id, type Item, type LossStatus, type Room } from './types';
+import { displayTime, displayYmd } from './dates';
+import { LOSS_CAUSE_LABELS, LOSS_LABELS, LOSS_STATUSES, SERIAL_CATEGORIES, type Claim, type Doc, type Id, type Item, type LossStatus, type Room } from './types';
 
 /** What one of this item is worth: its stated value, else what was paid. */
 export function unitCents(item: Item): number | null {
@@ -184,19 +185,37 @@ export interface ClaimSummary {
   byStatus: Record<LossStatus, number>;
 }
 
-export function claimSummary(doc: Doc): ClaimSummary {
+/** The totals of one claim. An entry whose item has gone is not counted. */
+export function claimSummary(doc: Doc, claim: Claim | null): ClaimSummary {
   const byStatus: Record<LossStatus, number> = { stolen: 0, damaged: 0, destroyed: 0, lost: 0 };
   let count = 0;
   let totalCents = 0;
   let unvalued = 0;
-  for (const item of doc.items) {
-    if (!item.loss) continue;
-    count += 1;
-    byStatus[item.loss] += 1;
-    if (hasValue(item)) totalCents += itemTotalCents(item);
-    else unvalued += 1;
+  if (claim) {
+    const items = new Map(doc.items.map((i) => [i.id, i]));
+    for (const e of claim.items) {
+      const item = items.get(e.itemId);
+      if (!item) continue;
+      count += 1;
+      byStatus[e.loss] += 1;
+      if (hasValue(item)) totalCents += itemTotalCents(item);
+      else unvalued += 1;
+    }
   }
   return { count, totalCents, unvalued, byStatus };
+}
+
+/**
+ * What a claim is called on screen and in the files: the person's own name for
+ * it, else what happened and when ("Theft or break-in, Nov 14, 2026"), else
+ * the insurer's number, else when it was started.
+ */
+export function claimTitle(claim: Claim): string {
+  if (claim.name) return claim.name;
+  const what = [claim.cause ? LOSS_CAUSE_LABELS[claim.cause] : '', displayYmd(claim.lossDate)].filter(Boolean).join(', ');
+  if (what) return what;
+  if (claim.claimNumber) return `Claim ${claim.claimNumber}`;
+  return `Claim started ${displayTime(claim.openedAt)}`;
 }
 
 /** "2 stolen · 1 damaged", in the order the statuses are listed. */

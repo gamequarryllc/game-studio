@@ -2,12 +2,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ComponentProps, type ComponentRef } from 'react';
 import { Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { updateProfile } from '@/domain/actions';
+import { addClaim, updateProfile } from '@/domain/actions';
 import { displayTime, relativeDay } from '@/domain/dates';
+import { newId } from '@/domain/ids';
 import { formatMoney } from '@/domain/money';
 import { reportTitle } from '@/domain/report';
 import { coverage } from '@/domain/coverage';
-import { backupState, claimSummary, homeSummary, listJoin, plural, roomSummaries } from '@/domain/selectors';
+import { backupState, claimSummary, claimTitle, homeSummary, listJoin, plural, roomSummaries } from '@/domain/selectors';
 import { LIMITS, type Profile } from '@/domain/types';
 import { success } from '@/platform/haptics';
 import { MAKES_PDF } from '@/platform/exporter';
@@ -114,7 +115,6 @@ export default function ReportTab() {
 
   const place = currentPlace(library);
   const cloud = useCloudBackup();
-  const claim = claimSummary(doc);
   const cover = coverage(doc);
   const policyLine =
     cover.state === 'over'
@@ -196,11 +196,21 @@ export default function ReportTab() {
   // Arriving from the "Not backed up" note on the Rooms tab brings the backup section into view.
   const params = useLocalSearchParams<{ show?: string; at?: string }>();
   const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+  // With several claims open, the note on the Rooms tab brings the claims into view instead.
+  const claimsY = useRef(0);
   useEffect(() => {
-    if (params.show !== 'backup') return;
-    const timer = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 250);
+    if (params.show !== 'backup' && params.show !== 'claims') return;
+    const timer = setTimeout(() => {
+      if (params.show === 'backup') scroller.current?.scrollToEnd({ animated: true });
+      else scroller.current?.scrollTo({ y: Math.max(0, claimsY.current - space.m), animated: true });
+    }, 250);
     return () => clearTimeout(timer);
   }, [params.show, params.at]);
+  const startAnotherClaim = () => {
+    const id = newId();
+    store.update((d, now) => addClaim(d, id, now));
+    router.push({ pathname: '/claim/[id]', params: { id } });
+  };
   const switchColors = { trackColor: { true: c.green, false: c.sunk }, ...(Platform.OS === 'web' ? { activeThumbColor: '#fff' } : {}) };
 
   return (
@@ -225,24 +235,38 @@ export default function ReportTab() {
         <Notice icon="phone">In this web preview the report opens in a new tab and files download. On iPhone it becomes a PDF in the share sheet.</Notice>
       )}
 
-      <SectionLabel>Claim and policy</SectionLabel>
+      <View onLayout={(e) => (claimsY.current = e.nativeEvent.layout.y)}>
+      <SectionLabel>{doc.claims.length > 1 ? 'Claims and policy' : 'Claim and policy'}</SectionLabel>
       <Card>
-        <Row
-          testID="open-claim"
-          title={doc.claim ? 'Claim in progress' : 'Make a claim'}
-          subtitle={
-            doc.claim
-              ? claim.count === 0
-                ? 'No items in it yet'
-                : `${plural(claim.count, 'item')} · ${formatMoney(claim.totalCents, doc.settings.currency, { whole: true })} claimed`
-              : 'After a loss: the schedule of loss for your insurer'
-          }
-          chevron
-          onPress={() => router.push('/claim')}
-        />
-        <Divider />
+        {doc.claims.map((cl, i) => {
+          const s = claimSummary(doc, cl);
+          return (
+            <View key={cl.id}>
+              <Row
+                testID={`claim-row-${i}`}
+                title={doc.claims.length === 1 ? 'Claim in progress' : claimTitle(cl)}
+                subtitle={s.count === 0 ? 'No items in it yet' : `${plural(s.count, 'item')} · ${formatMoney(s.totalCents, doc.settings.currency, { whole: true })} claimed`}
+                chevron
+                onPress={() => router.push({ pathname: '/claim/[id]', params: { id: cl.id } })}
+              />
+              <Divider />
+            </View>
+          );
+        })}
+        {doc.claims.length === 0 ? (
+          <>
+            <Row testID="open-claim" title="Make a claim" subtitle="After a loss: the schedule of loss for your insurer" chevron onPress={() => router.push({ pathname: '/claim/[id]', params: { id: 'new' } })} />
+            <Divider />
+          </>
+        ) : doc.claims.length < LIMITS.claims ? (
+          <>
+            <Row testID="claim-new" title="Start another claim" subtitle="For a different loss, with its own items and package" tint onPress={startAnotherClaim} />
+            <Divider />
+          </>
+        ) : null}
         <Row testID="open-policy" title="Policy and coverage" subtitle={policyLine} subtitleTone={cover.state === 'over' || cover.state === 'close' || cover.toSchedule.length > 0 ? 'amber' : 'muted'} chevron onPress={() => router.push('/policy')} />
       </Card>
+      </View>
 
       <SectionLabel>In the report</SectionLabel>
       <Card>
