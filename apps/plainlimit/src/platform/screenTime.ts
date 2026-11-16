@@ -31,7 +31,8 @@ import type { Settings } from '@/domain/types';
 // this file does anything, and the app runs on pretend use from Settings,
 // under Developer.
 //
-// None of this has been tried on a real iPhone yet. NOTES.md lists what to check.
+// Tried on the owner's iPhone since build 15; NOTES.md keeps what each build
+// showed, and the testing checklist what is still to check.
 
 /** True only in a build that carries the Screen Time pieces. */
 export const SCREEN_TIME_AVAILABLE = Platform.OS === 'ios' && DeviceActivity.isAvailable();
@@ -44,6 +45,25 @@ export const SCREEN_TIME_AVAILABLE = Platform.OS === 'ios' && DeviceActivity.isA
 export const DEV_TOOLS = __DEV__ || Platform.OS === 'web' || process.env.EXPO_PUBLIC_PLAYTEST === '1';
 
 export type Permission = 'unknown' | 'denied' | 'approved';
+
+/**
+ * Preview only: "?mock=" in the address stands in for an iPhone's Screen Time,
+ * so the states only a phone reaches can be seen and checked in a browser.
+ * Words, comma-separated: "counting" (counting is on), one counting problem
+ * ("nothingPicked", "accessOff", "notRegistered", "miscounted"), and "held"
+ * (setup's "start tomorrow": nothing locks before the recharge). Never on a phone.
+ */
+const MOCK: ReadonlySet<string> = (() => {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return new Set<string>();
+  try {
+    return new Set((new URLSearchParams(window.location.search).get('mock') ?? '').split(',').filter(Boolean));
+  } catch {
+    return new Set<string>();
+  }
+})();
+
+/** Preview only: the address asks to stand in for a phone that is counting. */
+export const MOCK_PHONE = MOCK.has('counting');
 
 const widgets = Platform.OS === 'ios' ? requireOptionalNativeModule<{ reload(): void; build?(): string }>('PlainlimitWidgets') : null;
 
@@ -65,11 +85,16 @@ export function reloadWidget() {
 let sheetAnswer: Permission | null = null;
 
 export function permission(): Permission {
+  if (MOCK_PHONE) return MOCK.has('accessOff') ? 'denied' : 'approved';
   if (!SCREEN_TIME_AVAILABLE) return 'unknown';
   if (sheetAnswer) return sheetAnswer;
-  const status = DeviceActivity.getAuthorizationStatus();
-  if (status === DeviceActivity.AuthorizationStatus.approved) return 'approved';
-  if (status === DeviceActivity.AuthorizationStatus.denied) return 'denied';
+  try {
+    const status = DeviceActivity.getAuthorizationStatus();
+    if (status === DeviceActivity.AuthorizationStatus.approved) return 'approved';
+    if (status === DeviceActivity.AuthorizationStatus.denied) return 'denied';
+  } catch {
+    // Unknown is the safe answer: the app asks again.
+  }
   return 'unknown';
 }
 
@@ -89,6 +114,7 @@ export async function askPermission(): Promise<Permission> {
 
 /** Whether the day's monitoring is registered with the phone. */
 export function isOn(): boolean {
+  if (MOCK_PHONE) return !MOCK.has('accessOff') && !MOCK.has('notRegistered');
   if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return false;
   try {
     return DeviceActivity.getActivities().includes(ACTIVITY);
@@ -99,6 +125,7 @@ export function isOn(): boolean {
 
 /** How many apps, categories and sites are in one of the person's picks. The app never learns which. */
 export function pickCount(id: typeof COUNTED_ID): number {
+  if (MOCK_PHONE) return MOCK.has('nothingPicked') ? 0 : 128;
   if (!SCREEN_TIME_AVAILABLE) return 0;
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });
@@ -574,6 +601,7 @@ export type Health = 'fine' | 'nothingPicked' | 'accessOff' | 'notRegistered' | 
  * - miscounted: the phone reported a checkpoint too soon to be true (see `miscounted`).
  */
 export function health(settings: Settings, periodStart: Date, watching: boolean): Health {
+  if (MOCK_PHONE) return (['nothingPicked', 'accessOff', 'notRegistered', 'miscounted'] as const).find((h) => MOCK.has(h)) ?? 'fine';
   if (!SCREEN_TIME_AVAILABLE || !watching) return 'fine';
   if (permission() !== 'approved') return 'accessOff';
   try {
@@ -795,6 +823,7 @@ export function lastReportSince(ms: number): number | null {
 
 /** When held locks act again (0 if they aren't held). */
 export function locksHeldUntil(): number {
+  if (MOCK_PHONE && MOCK.has('held')) return Date.now() + 6 * 3600 * 1000;
   if (!SCREEN_TIME_AVAILABLE) return 0;
   const until = holdUntil();
   return until > Date.now() ? until : 0;
@@ -803,8 +832,14 @@ export function locksHeldUntil(): number {
 /** Calls back whenever the phone reports a checkpoint while the app is open. */
 export function onCheckpoint(listener: () => void): () => void {
   if (!SCREEN_TIME_AVAILABLE) return () => {};
-  const subscription = DeviceActivity.onDeviceActivityMonitorEvent(() => listener());
-  return () => subscription.remove();
+  try {
+    const subscription = DeviceActivity.onDeviceActivityMonitorEvent(() => listener());
+    return () => subscription.remove();
+  } catch (error) {
+    // The app still looks every 20 seconds and on every return to it.
+    note('onCheckpoint', error);
+    return () => {};
+  }
 }
 
 /**

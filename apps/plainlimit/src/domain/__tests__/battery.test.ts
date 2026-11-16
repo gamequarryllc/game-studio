@@ -1,4 +1,4 @@
-import { CELLS, cellsLeft, fractionUsed, wordFor } from '../battery';
+import { CELLS, cellWords, cellsLeft, fractionUsed, wordFor } from '../battery';
 import { believable, checkpointsFor, picksSettled, roundName, splitName, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
 import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
 
@@ -209,5 +209,18 @@ describe('waiting for the phone after changing what counts', () => {
     // Build 52: the phone's first reports for the new list took 38 seconds.
     expect(picksSettled(changed + 38_000, changed, null)).toBe(false);
     expect(picksSettled(changed + 60_000, changed, null)).toBe(true);
+  });
+});
+
+describe('cell sizes in words', () => {
+  it('says minutes, half minutes and hours plainly at every quarter-hour goal', () => {
+    expect(cellWords(30)).toBe('5 minutes');
+    expect(cellWords(195)).toBe('32½ minutes');
+    expect(cellWords(270)).toBe('45 minutes');
+    expect(cellWords(360)).toBe('1 hour');
+    expect(cellWords(450)).toBe('1 h 15 min');
+    expect(cellWords(405)).toBe('1 h 7½ min');
+    expect(cellWords(720)).toBe('2 hours');
+    for (let goal = 30; goal <= 720; goal += 15) expect(cellWords(goal)).not.toMatch(/:|NaN|undefined/);
   });
 });

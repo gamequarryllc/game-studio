@@ -37,10 +37,16 @@ export function CountingProblem({ health }: { health: Health }) {
     }
     setBusy(true);
     setProblem(null);
-    const result = health === 'miscounted' ? ((await store.countAgain()) ? 'on' : 'failed') : await store.resumeCounting();
-    setBusy(false);
+    let result: 'on' | 'denied' | 'failed' = 'failed';
+    try {
+      result = health === 'miscounted' ? ((await store.countAgain()) ? 'on' : 'failed') : await store.resumeCounting();
+    } catch {
+      // Shown as "failed" below.
+    } finally {
+      setBusy(false);
+    }
     if (result === 'denied') setProblem('Access was not given. In the Settings app, open Screen Time and allow Plainlimit, then come back.');
-    if (result === 'failed') setProblem('The phone would not start counting. Try again in a moment.');
+    if (result === 'failed') setProblem(health === 'miscounted' ? 'Counting again did not work. Try again in a moment.' : 'The phone would not start counting. Try again in a moment.');
   };
 
   return (

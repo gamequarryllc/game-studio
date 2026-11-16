@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { COUNTED_ID, SCREEN_TIME_AVAILABLE, pickCount, picksBefore } from '@/platform/screenTime';
+import { COUNTED_ID, MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount, picksBefore } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
-import { COUNTS_LEAD, COUNTS_NOTE, COUNTS_STEPS, pickedWords } from '@/ui/countWords';
+import { COUNTS_LEAD, COUNTS_NOTE, countsSteps, pickedWords } from '@/ui/countWords';
 import { BigButton, Card, Lead, Page, Title } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
@@ -26,10 +26,10 @@ export default function WhatCounts() {
     <Page top={8}>
       <Title>What counts</Title>
       <Lead>{COUNTS_LEAD}</Lead>
-      {SCREEN_TIME_AVAILABLE ? (
+      {SCREEN_TIME_AVAILABLE || MOCK_PHONE ? (
         <>
           <Card style={{ paddingVertical: 14, gap: 8 }}>
-            {COUNTS_STEPS.map((line, i) => (
+            {countsSteps(picked).map((line, i) => (
               <View key={line} style={{ flexDirection: 'row', gap: 12 }}>
                 <Text style={{ fontSize: 15, lineHeight: 21, fontWeight: '700', color: c.ink3, width: 12 }}>{i + 1}</Text>
                 <Text style={{ flex: 1, fontSize: 15, lineHeight: 21, color: c.ink }}>{line}</Text>

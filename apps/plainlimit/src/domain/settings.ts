@@ -58,7 +58,7 @@ export function withoutAllowed(allowed: readonly string[], name: string): string
 export function repairSettings(raw: unknown): Settings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const goal = typeof r.goalMinutes === 'number' && Number.isFinite(r.goalMinutes) ? clampGoal(r.goalMinutes) : DEFAULT_SETTINGS.goalMinutes;
-  const recharge = typeof r.rechargeMinute === 'number' && Number.isFinite(r.rechargeMinute) ? wrapMinute(r.rechargeMinute) : DEFAULT_SETTINGS.rechargeMinute;
+  const recharge = typeof r.rechargeMinute === 'number' && Number.isFinite(r.rechargeMinute) ? wrapMinute(Math.round(r.rechargeMinute / RECHARGE_STEP) * RECHARGE_STEP) : DEFAULT_SETTINGS.rechargeMinute;
   const countMode = COUNT_MODES.includes(r.countMode as CountMode) ? (r.countMode as CountMode) : DEFAULT_SETTINGS.countMode;
   const emptyLevel = EMPTY_LEVELS.includes(r.emptyLevel as EmptyLevel) ? (r.emptyLevel as EmptyLevel) : DEFAULT_SETTINGS.emptyLevel;
   let allowed = DEFAULT_SETTINGS.allowed;

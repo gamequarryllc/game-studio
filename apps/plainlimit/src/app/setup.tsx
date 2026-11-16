@@ -12,7 +12,7 @@ import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastRep
 import { store } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { Battery } from '@/ui/Battery';
-import { COUNTS_LEAD, COUNTS_STEPS, pickedWords } from '@/ui/countWords';
+import { COUNTS_LEAD, countsSteps, pickedWords } from '@/ui/countWords';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { TodayTotal, WeekAverage } from '@/ui/UsageReport';
@@ -100,10 +100,15 @@ export default function Setup() {
   const leave = (then: () => void | Promise<unknown>) => async () => {
     if (busy) return;
     setBusy(true);
-    // "I need more time" on a locked app works through a notification.
-    await askToNotify();
-    await then();
-    setBusy(false);
+    try {
+      // "I need more time" on a locked app works through a notification.
+      await askToNotify();
+      await then();
+    } catch {
+      // Today's own checks show anything that did not take; never leave the button stuck.
+    } finally {
+      setBusy(false);
+    }
     router.replace('/');
   };
 
@@ -158,7 +163,7 @@ export default function Setup() {
         {canPick ? (
           <>
             <Card style={{ paddingVertical: 14, gap: 8 }}>
-              {COUNTS_STEPS.map((line, i) => (
+              {countsSteps(picked).map((line, i) => (
                 <Point key={line} n={String(i + 1)} small>
                   {line}
                 </Point>

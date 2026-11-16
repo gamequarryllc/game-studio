@@ -88,7 +88,9 @@ export function weekView(history: readonly DaySummary[], day: DayState, settings
 export function weekLine(week: Week): string {
   if (week.countedDays === 0) return 'Your week fills in as the days go by.';
   if (week.countedDays === 1) return week.underDays === 1 ? 'Under your goal on the one full day so far.' : 'Over your goal on the one full day so far.';
-  const parts = [`Under your goal ${week.underDays} of the last ${week.countedDays} ${week.countedDays === 1 ? 'day' : 'days'}`];
+  // Days counted only in part, or not at all, are left out of the sum; "the last 4 days" would then name the wrong days.
+  const leftOut = week.columns.some((col) => !col.today && (col.state === 'partly' || col.state === 'off'));
+  const parts = [leftOut ? `Under your goal on ${week.underDays} of ${week.countedDays} counted days` : `Under your goal ${week.underDays} of the last ${week.countedDays} days`];
   if (week.streak >= 2) parts.push(`${week.streak} in a row`);
   return `${parts.join(', ')}.`;
 }

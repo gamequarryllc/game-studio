@@ -148,6 +148,8 @@ async function askAgain() {
       await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
     }
     redrawAndLookAgain();
+  } catch {
+    // Nothing to tell anyone: the next return to the app asks again.
   } finally {
     askingAgain = false;
   }
@@ -211,6 +213,25 @@ function checkHealth(doc: Doc): Doc {
 /** How long counting must look wrong before today is marked not fully counted. */
 const WRONG_FOR_MS = 2 * 60 * 1000;
 
+/** The saved copy, brought up to now: closed days, the phone's count, counting's health. */
+function loadedDoc(raw: unknown): Doc {
+  const savedWatching = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).watching : undefined;
+  // A copy saved before the app kept this: counting is on if the phone has the day registered.
+  const watching = typeof savedWatching === 'boolean' ? savedWatching : screenTime.isOn();
+  let doc = repairDoc(raw, new Date(), closingUsed, counts(watching));
+  // Whether reading the saved copy back lost any finished day.
+  const savedHistory = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).history : undefined;
+  if (Array.isArray(savedHistory)) {
+    const kept = new Set(doc.history.map((h) => h.start));
+    const lost = savedHistory.map((h) => (h && typeof h === 'object' ? (h as Record<string, unknown>).start : null)).filter((s): s is string => typeof s === 'string' && !kept.has(new Date(s).toISOString()));
+    if (lost.length > 0) noteLoss(lost, 'loading');
+  } else if (raw) {
+    screenTime.noteHistoryLoss('loaded a saved copy with no history in it');
+  }
+  if (doc.watching === null) doc = { ...doc, watching };
+  return checkHealth({ ...doc, day: withRealUse(doc, doc.day) });
+}
+
 function withSettings(change: (s: Settings) => Settings) {
   if (settingsLocked()) return;
   // A new recharge time can move the start of the current battery.
@@ -231,21 +252,19 @@ export const store = {
   async start() {
     if (snapshot.state === 'ready') return;
     const raw = await readSaved();
-    const savedWatching = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).watching : undefined;
-    // A copy saved before the app kept this: counting is on if the phone has the day registered.
-    const watching = typeof savedWatching === 'boolean' ? savedWatching : screenTime.isOn();
-    let doc = repairDoc(raw, new Date(), closingUsed, counts(watching));
-    // Whether reading the saved copy back lost any finished day.
-    const savedHistory = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).history : undefined;
-    if (Array.isArray(savedHistory)) {
-      const kept = new Set(doc.history.map((h) => h.start));
-      const lost = savedHistory.map((h) => (h && typeof h === 'object' ? (h as Record<string, unknown>).start : null)).filter((s): s is string => typeof s === 'string' && !kept.has(new Date(s).toISOString()));
-      if (lost.length > 0) noteLoss(lost, 'loading');
-    } else if (raw) {
-      screenTime.noteHistoryLoss('loaded a saved copy with no history in it');
+    let doc: Doc;
+    try {
+      doc = loadedDoc(raw);
+    } catch {
+      // Nothing may keep the app on its splash screen: start from the saved
+      // copy alone, without asking the phone anything, and catch up on the next look.
+      try {
+        doc = repairDoc(raw, new Date(), () => null, true);
+      } catch {
+        doc = freshDoc(new Date());
+      }
+      screenTime.noteHistoryLoss('started without the phone after an error while loading');
     }
-    if (doc.watching === null) doc = { ...doc, watching };
-    doc = checkHealth({ ...doc, day: withRealUse(doc, doc.day) });
     loaded = true;
     set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
@@ -264,13 +283,19 @@ export const store = {
   /** Called as time passes: starts a fresh battery once the recharge time has gone by. */
   tick(now: Date) {
     if (snapshot.state !== 'ready') return;
-    coverWhenEarnedTimeIsUp(snapshot.doc, now);
-    const moved = advanced(snapshot.doc, now);
-    const doc = checkHealth({ ...moved, day: withRealUse(moved, moved.day) });
-    if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history) return;
-    set(doc);
-    // The app has just learned something the widget may not have drawn yet.
-    if (screenTime.isOn()) screenTime.reloadWidget();
+    // Runs from timers and the phone's reports: an error here must never become
+    // an uncaught one (fatal in a store build). The next tick tries again.
+    try {
+      coverWhenEarnedTimeIsUp(snapshot.doc, now);
+      const moved = advanced(snapshot.doc, now);
+      const doc = checkHealth({ ...moved, day: withRealUse(moved, moved.day) });
+      if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history) return;
+      set(doc);
+      // The app has just learned something the widget may not have drawn yet.
+      if (screenTime.isOn()) screenTime.reloadWidget();
+    } catch {
+      // Left as it was until the next tick.
+    }
   },
   /**
    * Asks for Screen Time access and, once given, registers the day with the

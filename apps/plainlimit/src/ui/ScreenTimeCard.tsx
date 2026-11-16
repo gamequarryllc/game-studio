@@ -4,7 +4,7 @@ import { Text } from 'react-native';
 
 import { clockLabel } from '@/domain/day';
 import { askToNotify } from '@/platform/notices';
-import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, diagnostics, historyLog, isOn, permission } from '@/platform/screenTime';
+import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, diagnostics, historyLog, isOn, permission } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc, useNow } from '@/state/store';
 import { BigButton, Card, Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
@@ -12,7 +12,7 @@ import { c } from '@/ui/theme';
 /**
  * Settings, on a real iPhone: turning real screen time on and off, and the
  * note that explains why the settings are locked while the battery is empty.
- * Draws nothing in a browser or in Expo Go.
+ * Draws nothing in a browser or in Expo Go (but the preview's "?mock=" stand-in).
  */
 export function ScreenTimeCard() {
   const { settings } = useDoc();
@@ -30,7 +30,7 @@ export function ScreenTimeCard() {
   }, []);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  if (!SCREEN_TIME_AVAILABLE) return null;
+  if (!SCREEN_TIME_AVAILABLE && !MOCK_PHONE) return null;
 
   const on = isOn();
   const denied = permission() === 'denied';
@@ -39,11 +39,16 @@ export function ScreenTimeCard() {
     if (busy) return;
     setBusy(true);
     setProblem(null);
-    const result = await store.turnOnScreenTime();
-    if (result === 'on') await askToNotify();
-    if (result === 'denied') setProblem('Screen Time access was not given. Plainlimit cannot count your day without it.');
-    if (result === 'failed') setProblem('The phone would not start counting. Check that Screen Time is on in the Settings app, then try again.');
-    setBusy(false);
+    try {
+      const result = await store.turnOnScreenTime();
+      if (result === 'on') await askToNotify();
+      if (result === 'denied') setProblem('Screen Time access was not given. Plainlimit cannot count your day without it.');
+      if (result === 'failed') setProblem('The phone would not start counting. Check that Screen Time is on in the Settings app, then try again.');
+    } catch {
+      setProblem('The phone would not start counting. Check that Screen Time is on in the Settings app, then try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (on) {
@@ -58,7 +63,7 @@ export function ScreenTimeCard() {
         )}
         {DEV_TOOLS ? (
           <>
-            <Text style={[body, { color: c.ink3, marginTop: 6 }]}>Test build only: these two are not in the App Store version.</Text>
+            <Text style={[body, { color: c.ink3, marginTop: 6 }]}>Test build only: nothing below this line is in the App Store version.</Text>
             <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
             {settingsLocked() ? <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} /> : null}
             <Text selectable style={{ fontSize: 12, lineHeight: 17, color: c.ink3, marginTop: 4 }}>
@@ -76,7 +81,7 @@ export function ScreenTimeCard() {
       <Text style={body}>
         {denied
           ? 'Screen Time access is off for Plainlimit. Turn it on to have the battery follow your real day.'
-          : 'Let the battery follow your real screen time. The phone does the counting; Plainlimit is only told when a cell is used up, never which apps you opened.'}
+          : 'Let the battery follow your real screen time. The phone does the counting; Plainlimit only hears how much time has gone, never which apps you opened.'}
       </Text>
       <BigButton label={busy ? 'Asking…' : 'Turn on Screen Time'} onPress={() => void turnOn()} />
       {problem ? <Text style={[body, { color: c.ink }]}>{problem}</Text> : null}

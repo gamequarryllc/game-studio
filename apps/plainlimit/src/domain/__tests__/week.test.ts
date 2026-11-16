@@ -26,7 +26,9 @@ describe('the week view', () => {
     const week = weekView([past(1, 100), past(2, 190), past(3, 50, { state: 'partly' }), past(4, 20, { state: 'off' })], today, settings, now, true);
     expect(week.countedDays).toBe(2);
     expect(week.underDays).toBe(1);
-    expect(weekLine(week)).toBe('Under your goal 1 of the last 2 days.');
+    // Two days were left out, so "the last 2 days" would name the wrong days.
+    expect(weekLine(week)).toBe('Under your goal on 1 of 2 counted days.');
+    expect(weekLine(weekView([past(1, 100), past(2, 190)], today, settings, now, true))).toBe('Under your goal 1 of the last 2 days.');
   });
 
   it('counts a streak of days in a row, ending yesterday, broken by a gap, an over day, or one not fully counted', () => {

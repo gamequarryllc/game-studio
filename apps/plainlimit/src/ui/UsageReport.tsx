@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { Text, View } from 'react-native';
 
 import type { Settings } from '@/domain/types';
-import { SCREEN_TIME_AVAILABLE, averageWindow, reportWindow } from '@/platform/screenTime';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, averageWindow, reportWindow } from '@/platform/screenTime';
 import { Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
@@ -24,10 +24,11 @@ const NativeReport = SCREEN_TIME_AVAILABLE ? requireNativeView<NativeProps>('Pla
  * "What used it": the apps that have used the most time since the battery
  * recharged. Apple's Screen Time draws the list inside this box; Plainlimit
  * only says which hours and which apps, and never sees what is drawn.
- * Draws nothing in a browser or in Expo Go.
+ * Draws nothing in a browser or in Expo Go, but for the preview's "?mock="
+ * stand-in, which shows the box as it is before the phone has drawn.
  */
 export function UsageReport({ settings, now }: { settings: Settings; now: Date }) {
-  if (!NativeReport) return null;
+  if (!NativeReport && !MOCK_PHONE) return null;
   const window = reportWindow(settings, now);
   return (
     <View style={{ gap: 10 }}>
@@ -37,7 +38,7 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
       <View pointerEvents="none" style={{ height: 420, alignSelf: 'stretch' }}>
         {/* Shows through only until the phone has drawn the list over it. */}
         <Text style={{ position: 'absolute', top: 14, left: 0, right: 0, fontSize: 16, lineHeight: 22, color: c.ink3 }}>Waiting for the phone&apos;s Screen Time to draw the list…</Text>
-        <NativeReport fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
+        {NativeReport ? <NativeReport fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} /> : null}
         {/* The list is drawn by another process, which would otherwise be handed every touch on it; this almost clear sheet is the app's own and lies on top. */}
         <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
       </View>

@@ -279,7 +279,8 @@ async function main() {
     await tab('Settings');
     await press('Fill the last week');
     await tab('Today');
-    await see('Under your goal 4 of the last 5 days, 3 in a row.');
+    // The pretend week has a day counted only in part, which is left out of the sum.
+    await see('Under your goal on 4 of 5 counted days, 3 in a row.');
     await see('Earned extra time 2 times this week.');
     await see('A faded day was not fully counted, so it is not claimed as under the goal.');
     await page.getByLabel(/^Today: at least 0:00 of 3:00, so far$/).waitFor();

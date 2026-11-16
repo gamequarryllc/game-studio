@@ -4,8 +4,8 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { topUpPlan } from '@/domain/puzzle';
-import { COUNTED_ID, DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
-import { store } from '@/state/store';
+import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
+import { settingsLocked, store } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
 import { TIPS } from '@/ui/tips';
 import { Battery } from '@/ui/Battery';
@@ -17,12 +17,14 @@ export default function Settings() {
   const router = useRouter();
   const { settings, day, cells, accent } = useDay();
   const first = topUpPlan(0);
-  const picked = SCREEN_TIME_AVAILABLE ? pickCount(COUNTED_ID) : -1;
+  const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
   const countedValue = picked < 0 ? 'Your picks' : picked === 0 ? 'Nothing yet' : `${picked} ticked`;
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
   const pretend = DEV_TOOLS && !isOn();
   // On a narrow phone the goal's figures give the two round buttons room.
   const narrow = Math.min(useWindowDimensions().width, 480) < 360;
+  // An empty battery locks these (the Screen Time card says why); they look it, instead of ignoring taps.
+  const locked = settingsLocked();
 
   return (
     <Page top={24} bottom={24}>
@@ -33,11 +35,11 @@ export default function Settings() {
       <Card style={{ paddingTop: 16, paddingBottom: 18, gap: 10 }}>
         <Label>Daily goal</Label>
         <View style={styles.stepper}>
-          <StepButton sign="−" label="Less time" size={narrow ? 46 : 52} onPress={() => store.stepGoal(-1)} />
+          <StepButton sign="−" label="Less time" size={narrow ? 46 : 52} disabled={locked} onPress={() => store.stepGoal(-1)} />
           <Text accessibilityLabel={`Daily goal, ${durationLabel(settings.goalMinutes)}`} style={[styles.goal, { color: accent }, narrow ? { fontSize: 50, lineHeight: 54, letterSpacing: -1.6 } : null]}>
             {durationLabel(settings.goalMinutes)}
           </Text>
-          <StepButton sign="+" label="More time" size={narrow ? 46 : 52} onPress={() => store.stepGoal(1)} />
+          <StepButton sign="+" label="More time" size={narrow ? 46 : 52} disabled={locked} onPress={() => store.stepGoal(1)} />
         </View>
         <View style={styles.cellRow}>
           <View style={{ width: 74 }}>
@@ -52,11 +54,11 @@ export default function Settings() {
           <Text style={styles.rowLabel}>Recharges at</Text>
           {/* On a narrow phone the stepper drops to its own line, still on the right. */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-            <StepButton sign="−" label="Recharge earlier" size={40} onPress={() => store.stepRecharge(-1)} />
+            <StepButton sign="−" label="Recharge earlier" size={40} disabled={locked} onPress={() => store.stepRecharge(-1)} />
             <Text accessibilityLabel={`Recharges at ${clockLabel(settings.rechargeMinute)}`} style={styles.rechargeValue}>
               {clockLabel(settings.rechargeMinute)}
             </Text>
-            <StepButton sign="+" label="Recharge later" size={40} onPress={() => store.stepRecharge(1)} />
+            <StepButton sign="+" label="Recharge later" size={40} disabled={locked} onPress={() => store.stepRecharge(1)} />
           </View>
         </View>
         <LinkRow label="What counts" value={countedValue} onPress={() => router.push('/what-counts')} last />
@@ -64,9 +66,9 @@ export default function Settings() {
 
       <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>
         <Label>When the battery is empty</Label>
-        <Choice title="Warn" line="Red screen, then tap through" chosen={settings.emptyLevel === 'warn'} accent={accent} onPress={() => store.setEmptyLevel('warn')} />
-        <Choice title="Work for it" line={`Solve sums to get ${first.minutes} more minutes`} chosen={settings.emptyLevel === 'work'} accent={accent} onPress={() => store.setEmptyLevel('work')} />
-        <Choice title="Locked" line="Counted apps stay locked until it recharges" chosen={settings.emptyLevel === 'locked'} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
+        <Choice title="Warn" line="Red screen, then tap through" chosen={settings.emptyLevel === 'warn'} disabled={locked} accent={accent} onPress={() => store.setEmptyLevel('warn')} />
+        <Choice title="Work for it" line={`Solve sums to get ${first.minutes} more minutes`} chosen={settings.emptyLevel === 'work'} disabled={locked} accent={accent} onPress={() => store.setEmptyLevel('work')} />
+        <Choice title="Locked" line="Counted apps stay locked until it recharges" chosen={settings.emptyLevel === 'locked'} disabled={locked} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
       </Card>
 
       <Card>

@@ -72,17 +72,19 @@ export function BigButton({ label, onPress, quiet = false }: { label: string; on
 }
 
 /** A round minus or plus. */
-export function StepButton({ sign, label, onPress, size = 48 }: { sign: '−' | '+'; label: string; onPress: () => void; size?: number }) {
+export function StepButton({ sign, label, onPress, size = 48, disabled = false }: { sign: '−' | '+'; label: string; onPress: () => void; size?: number; disabled?: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       hitSlop={6}
       onPress={() => {
         tap();
         onPress();
       }}
-      style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, borderWidth: 1.5, borderColor: c.outline, backgroundColor: pressed ? c.raised : 'transparent', alignItems: 'center', justifyContent: 'center' }]}>
+      style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, borderWidth: 1.5, borderColor: c.outline, backgroundColor: pressed ? c.raised : 'transparent', alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.35 : 1 }]}>
       <Text style={{ color: c.ink, fontSize: size * 0.5, lineHeight: size * 0.6, fontWeight: '400' }}>{sign}</Text>
     </Pressable>
   );
