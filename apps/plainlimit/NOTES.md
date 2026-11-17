@@ -29,7 +29,7 @@ The owner's note on the first build (2026-11-11): a good baseline, but dull. The
 
 - **Today is the battery's colour, edge to edge.** The top of the screen is a field of the day's colour with a large battery, the word at the largest size the phone allows on one line, and the recharge time with a live "in 12 h 13 min". The rest of the app stays on one dark ground (`#0E1011`), so that colour is the only colour on any screen. No light version.
 - **The colour marks what is chosen everywhere else:** the open tab, the chosen level, the goal's figures, the filled part of the day's ruler, finished sums. The deep red of an empty battery is too dark to read on the dark ground, so there it gives way to a lighter red (`accentOnDark` in `src/domain/tone.ts`, held to 4.5 to 1 by a test).
-- **The battery is drawn like a sticker:** a thick casing, a hard shadow under it, a short glint on each lit cell. One drawing (`src/ui/Battery.tsx`) at every size; the icon is the same battery (`art/make_icons.py`).
+- **The battery is drawn like a sticker:** a thick casing, a hard shadow under it, a short glint on each lit cell. One drawing (`src/ui/Battery.tsx`) at every size; the icon is that battery, drawn flat, with a sprout growing out of it (`art/make_icons.py`).
 - **Movement:** a used-up cell fades and shrinks away, the colour eases to the next one over half a second, and the last cell left breathes slowly. All of it stands still when the phone is set to reduce motion (`src/ui/motion.ts`).
 - **The day's ruler** under "Used so far": six stretches, one per cell, filling as the battery empties.
 - Space Grotesk for the word, titles and figures, set large and tight; the system font for everything else.
