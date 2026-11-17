@@ -1,5 +1,7 @@
 // The words the rest of the app is written in.
 
+import type { AskFirst } from './askFirst';
+
 /** Which apps drain the battery. */
 export type CountMode = 'everything' | 'timeWasters' | 'custom';
 
@@ -16,6 +18,8 @@ export interface Settings {
   emptyLevel: EmptyLevel;
   /** No longer used: there is no always-allowed list. Apps left unticked never lock. Kept so older saved copies still read. */
   allowed: string[];
+  /** The "Ask first" list: apps that ask for one sum every time they open (askFirst.ts). Missing in copies saved before it, which read as off. */
+  askFirst?: AskFirst;
 }
 
 /** One battery's worth of time: from one recharge to the next. */

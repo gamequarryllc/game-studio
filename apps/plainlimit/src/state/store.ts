@@ -1,11 +1,13 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
+import { DEFAULT_ASK_FIRST, type AskFirst } from '@/domain/askFirst';
 import { cellsLeft } from '@/domain/battery';
 import { nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
 import { stepGoal, stepRecharge } from '@/domain/settings';
 import type { DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
+import { applyAskFirst, openAsk } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
 
@@ -234,6 +236,31 @@ function loadedDoc(raw: unknown): Doc {
   return checkHealth({ ...doc, day: withRealUse(doc, doc.day) });
 }
 
+/** Whether the battery's own covers are up now: empty, no earned time, not held for setup. */
+function batteryLocked(doc: Doc, now: Date): boolean {
+  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0 && !isUnlocked(doc.day, now) && screenTime.locksHeldUntil() === 0;
+}
+
+/**
+ * Puts the Ask first list on the phone as the settings say (askFirst.ts),
+ * while counting is on. Taking its cover off also uncovers an app on both
+ * lists, so the battery's covers go back up if it is empty.
+ */
+function syncAskFirst() {
+  // Runs at start and on every return to the app: it must never throw.
+  try {
+    const doc = snapshot.doc;
+    if (snapshot.state !== 'ready' || doc.watching !== true || screenTime.permission() !== 'approved') return;
+    void applyAskFirst(doc.settings.askFirst)
+      .then(() => {
+        if (batteryLocked(snapshot.doc, new Date())) screenTime.coverEmptyNow(snapshot.doc.settings, snapshot.doc.day.topUps);
+      })
+      .catch(() => {});
+  } catch {
+    // Tried again on the next return to the app.
+  }
+}
+
 function withSettings(change: (s: Settings) => Settings) {
   if (settingsLocked()) return;
   // A new recharge time can move the start of the current battery.
@@ -274,6 +301,7 @@ export const store = {
     // Picks from before build 71 may list more single apps than iOS will lock.
     if (screenTime.fixOldPicks() === 'fixed') store.picksChanged();
     void askAgain();
+    syncAskFirst();
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
     AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
@@ -281,6 +309,7 @@ export const store = {
       void askAgain();
       for (const wait of [1500, 5000, 10000, 20000]) setTimeout(lookAgain, wait);
       if (snapshot.state === 'ready') screenTime.refreshScreens(snapshot.doc.settings, snapshot.doc.day.topUps);
+      syncAskFirst();
       if (screenTime.isOn()) screenTime.reloadWidget();
     });
   },
@@ -424,6 +453,31 @@ export const store = {
   },
   setEmptyLevel(emptyLevel: EmptyLevel) {
     withSettings((s) => ({ ...s, emptyLevel }));
+  },
+  /**
+   * Ask first's settings. Not closed while the battery is empty: nothing here
+   * can open an app that counts (see `syncAskFirst`).
+   */
+  setAskFirst(change: Partial<AskFirst>) {
+    const settings = snapshot.doc.settings;
+    set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...(settings.askFirst ?? DEFAULT_ASK_FIRST), ...change } } });
+    syncAskFirst();
+  },
+  /** The Ask first picks changed in Apple's list. */
+  askPicksChanged() {
+    syncAskFirst();
+    set({ ...snapshot.doc }, false);
+  },
+  /**
+   * The sum on the Ask first screen was solved: open the list for a while.
+   * While the battery's covers are up, apps that also count stay covered.
+   */
+  async openAskFirst(): Promise<Date | null> {
+    const { settings } = snapshot.doc;
+    const now = new Date();
+    const until = await openAsk(settings.askFirst ?? DEFAULT_ASK_FIRST, nextRecharge(now, settings.rechargeMinute).getTime(), now);
+    if (until && batteryLocked(snapshot.doc, now)) screenTime.coverEmptyNow(settings, snapshot.doc.day.topUps);
+    return until;
   },
   /** Developer: pretend this many more minutes were used. */
   pretendUse(minutes: number) {

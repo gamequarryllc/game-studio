@@ -281,6 +281,43 @@ async function main() {
     await context.close();
   });
 
+  await scenario('Ask first: off by default, turned on from Settings, open time chosen', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting');
+    await tab(page, 'Settings');
+    await page.getByRole('button', { name: /^Ask first/ }).click();
+    await see(page, 'asks for one sum before it opens');
+    if (!(await page.getByRole('radio', { name: /^Off/ }).isChecked())) throw new Error('Ask first was not off by default');
+    await page.getByRole('radio', { name: /^On/ }).click();
+    await page.getByRole('radio', { name: /^15 minutes/ }).click();
+    if (!(await page.getByRole('radio', { name: /^15 minutes/ }).isChecked())) throw new Error('15 minutes did not stay chosen');
+    await see(page, '3 picked');
+    await shot(page, 'q21-ask-first-settings', true);
+    await page.goBack();
+    await see(page, 'On, 15 min');
+    // Not closed while the battery is empty: it can't open an app that counts.
+    await context.close();
+  });
+
+  await scenario('Ask first: one sum opens the list, a wrong answer is told apart, and an empty battery is said', async () => {
+    const saved = doc({ goal: 180, used: 200 });
+    const { page, context } = await open(saved, '?mock=counting');
+    await see(page, 'Empty');
+    await page.goto(url.replace(/\/$/, '') + '/ask?mock=counting');
+    await see(page, 'One sum to open');
+    await see(page, 'Apps that also count stay locked');
+    const input = page.getByRole('textbox').first();
+    await input.fill('99999');
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await see(page, 'Not 9999');
+    const sum = await page.getByText(/^\s*\d+\s*\+\s*\d+\s*$/).first().textContent();
+    const [, a, b] = sum.match(/(\d+)\s*\+\s*(\d+)/);
+    await input.fill(String(Number(a) + Number(b)));
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await see(page, 'open until');
+    await shot(page, 'q22-ask-open');
+    await context.close();
+  });
+
   await scenario('an unknown page offers a way back', async () => {
     const { page, context } = await open(doc(), '');
     await page.goto(url.replace(/\/$/, '') + '/nowhere/at/all');

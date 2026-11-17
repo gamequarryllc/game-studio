@@ -1,6 +1,7 @@
 // The handful of choices a person makes, their limits, and how a saved copy
 // is read back without trusting it.
 
+import { DEFAULT_ASK_FIRST, repairAskFirst } from './askFirst';
 import { wrapMinute } from './day';
 import type { CountMode, EmptyLevel, Settings } from './types';
 
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   countMode: 'everything',
   emptyLevel: 'work',
   allowed: ['Phone', 'Messages', 'Maps'],
+  askFirst: DEFAULT_ASK_FIRST,
 };
 
 export function clampGoal(minutes: number): number {
@@ -68,5 +70,5 @@ export function repairSettings(raw: unknown): Settings {
       if (typeof item === 'string') allowed = withAllowed(allowed, item);
     }
   }
-  return { goalMinutes: goal, rechargeMinute: recharge, countMode, emptyLevel, allowed };
+  return { goalMinutes: goal, rechargeMinute: recharge, countMode, emptyLevel, allowed, askFirst: repairAskFirst(r.askFirst) };
 }
