@@ -130,7 +130,7 @@ async function main() {
   });
 
   for (const [problem, words] of [
-    ['nothingPicked', 'Nothing is ticked in What counts'],
+    ['nothingPicked', 'Your essentials aren’t set yet'],
     ['accessOff', 'Screen Time access for Plainlimit was turned off'],
     ['notRegistered', 'The phone stopped counting'],
     ['miscounted', 'The phone miscounted today'],
@@ -140,7 +140,7 @@ async function main() {
       await see(page, 'Not counting');
       await see(page, words);
       await shot(page, `q04-problem-${problem}`);
-      // Pressing the fix shows its answer, or goes to What counts, and never hangs on "One moment…".
+      // Pressing the fix shows its answer, or goes to Essentials, and never hangs on "One moment…".
       const button = page.getByRole('button').filter({ hasText: /Choose apps|Turn it back on|Count again/ }).first();
       await button.click();
       await page.waitForTimeout(700);
@@ -150,7 +150,7 @@ async function main() {
     });
   }
 
-  await scenario('too many single apps: Today says so, and What counts opens to pick again even while empty', async () => {
+  await scenario('too many single apps: Today says so, and Essentials opens to pick again even while empty', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,tooManyApps');
     await see(page, 'Not locking');
     await see(page, 'iOS locks at most 50 apps ticked one by one');
@@ -181,7 +181,7 @@ async function main() {
     await context.close();
   });
 
-  await scenario('an empty battery locks the settings and What counts', async () => {
+  await scenario('an empty battery locks the settings and Essentials', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting');
     await see(page, 'Empty');
     await shot(page, 'q08-empty-today');
@@ -195,17 +195,17 @@ async function main() {
       if (!(await page.getByRole('radio', { name }).isDisabled())) throw new Error(`${name} is not disabled while locked`);
     }
     await shot(page, 'q09-empty-settings');
-    await page.getByRole('button', { name: /^What counts/ }).click();
+    await page.getByRole('button', { name: /^Essentials/ }).click();
     await see(page, "This can't change while the battery is empty");
-    if ((await page.getByRole('button', { name: 'Change the apps', exact: true }).count()) > 0) throw new Error('What counts offered a change while empty');
+    if ((await page.getByRole('button', { name: 'Change the apps', exact: true }).count()) > 0) throw new Error('Essentials offered a change while empty');
     await shot(page, 'q10-empty-what-counts');
     await context.close();
   });
 
-  await scenario('What counts with cells left offers a change', async () => {
+  await scenario('Essentials with cells left offers a change', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
     await tab(page, 'Settings');
-    await page.getByRole('button', { name: 'What counts, 14 ticked', exact: true }).click();
+    await page.getByRole('button', { name: 'Essentials, Set', exact: true }).click();
     await page.getByRole('button', { name: 'Change the apps', exact: true }).waitFor();
     await shot(page, 'q10b-what-counts-open');
     await context.close();

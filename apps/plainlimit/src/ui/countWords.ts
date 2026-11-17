@@ -1,20 +1,21 @@
-// How What counts is explained, on its own screen and in setup. There is one
-// list: what is ticked uses up the battery and locks when it is empty, and
-// what is left unticked does neither. The idea is to count the time wasters,
-// not what a phone is for (calls, messages, maps).
+// How Essentials is explained, on its own screen and in setup. There is one
+// list in Apple's picker: what is ticked uses up the battery and locks when it
+// is empty, and what is left unticked (the essentials) does neither. The idea:
+// using the phone as a tool (calls, messages, maps) never costs battery.
+// (The screen was called "What counts" until 1.0.1; the picks are the same.)
 
 export const COUNTS_LEAD =
-  'Count the time wasters, not what the phone is for. The apps you tick use up the battery and lock when it’s empty. Anything left unticked never counts and never locks.';
+  'Your essentials never count. Calls, messages, maps: use your phone as a tool without spending battery. Everything else you tick uses it up, and locks when it’s empty.';
 
 /** The steps, the first naming the button as it reads ("Choose apps", "Change the apps", "Pick again"). */
 export const countsSteps = (button: string) => [`Tap ${button}.`, ...COUNTS_STEPS.slice(1)];
 
 export const COUNTS_STEPS = [
   'Tap Choose apps.',
-  'Tap All Apps & Categories at the top, to count everything.',
+  'Tap All Apps & Categories at the top, so everything counts.',
   // Apple's list has no Navigation category: Maps is under Travel (seen in Screen Time on Nov 15, and Maps counted on Nov 16 with Travel ticked).
-  'Untick Travel, so Maps never counts.',
-  'Messages and FaceTime are in Social, with Instagram and Snapchat. To leave them out, untick Social, then open it and tick only the apps that should count.',
+  'Now untick your essentials. Untick Travel, so Maps is free.',
+  'Messages and FaceTime are in Social, with Instagram and Snapchat. To keep them free, untick Social, then open it and tick only the apps that should count.',
 ] as const;
 
 export const COUNTS_NOTE =
@@ -22,5 +23,5 @@ export const COUNTS_NOTE =
 
 export function pickedWords(picked: number): string {
   if (picked === 0) return 'Nothing is ticked yet, so nothing counts.';
-  return picked === 1 ? '1 app or category is ticked.' : `${picked} apps and categories are ticked.`;
+  return `${picked === 1 ? '1 app or category counts' : `${picked} apps and categories count`}. Everything left unticked is an essential, and free.`;
 }

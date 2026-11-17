@@ -18,7 +18,7 @@ export default function Settings() {
   const { settings, day, accent } = useDay();
   const first = topUpPlan(0);
   const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
-  const countedValue = picked < 0 ? 'Your picks' : picked === 0 ? 'Nothing yet' : `${picked} ticked`;
+  const countedValue = picked < 0 ? 'Your picks' : picked === 0 ? 'Not set' : 'Set';
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
   const pretend = DEV_TOOLS && !isOn();
   // On a narrow phone the goal's figures give the two round buttons room.
@@ -61,7 +61,7 @@ export default function Settings() {
             <StepButton sign="+" label="Recharge later" size={40} disabled={locked} onPress={() => store.stepRecharge(1)} />
           </View>
         </View>
-        <LinkRow label="What counts" value={countedValue} onPress={() => router.push('/what-counts')} last />
+        <LinkRow label="Essentials" value={countedValue} onPress={() => router.push('/what-counts')} last />
       </Card>
 
       <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>

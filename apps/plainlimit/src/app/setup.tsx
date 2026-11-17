@@ -158,7 +158,7 @@ export default function Setup() {
   if (step === 'counts') {
     body = (
       <>
-        <Heading>What counts?</Heading>
+        <Heading>Your essentials</Heading>
         <Lead>{COUNTS_LEAD}</Lead>
         {canPick ? (
           <>
@@ -173,7 +173,7 @@ export default function Setup() {
             {picked > 0 ? <BigButton quiet label="Change the apps" onPress={() => setPicking(true)} /> : null}
           </>
         ) : SCREEN_TIME_AVAILABLE ? (
-          <Text style={styles.note}>You can tick apps once Screen Time is allowed, in Settings, under What counts.</Text>
+          <Text style={styles.note}>You can set them once Screen Time is allowed, in Settings, under Essentials.</Text>
         ) : (
           <Text style={styles.note}>On an iPhone you tick them in Apple&apos;s own list of your apps. This preview runs on pretend use.</Text>
         )}
@@ -283,14 +283,14 @@ export default function Setup() {
         <Card>
           <Row label="Daily goal" value={durationLabel(settings.goalMinutes)} />
           <Row label="Recharges at" value={clockLabel(settings.rechargeMinute)} />
-          <Row label="What counts" value={!SCREEN_TIME_AVAILABLE ? 'Your picks' : picked === 0 ? 'Nothing yet' : `${picked} ticked`} last />
+          <Row label="Essentials" value={!SCREEN_TIME_AVAILABLE ? 'Your picks' : picked === 0 ? 'Not set' : 'Set'} last />
         </Card>
         <Lead>
           {!SCREEN_TIME_AVAILABLE
             ? 'In this preview the battery runs on pretend use, from Settings.'
             : !approved
               ? 'Allow Screen Time in Settings when you are ready, and counting starts then.'
-              : 'Tick what counts in Settings, under What counts, and counting starts then.'}
+              : 'Set your essentials in Settings, under Essentials, and counting starts then.'}
         </Lead>
       </>
     );
