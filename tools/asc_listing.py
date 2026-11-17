@@ -489,6 +489,10 @@ class Run:
             self.say(f"availability is set: {on} of {len(rows)} countries and regions, new ones {avail['data']['attributes'].get('availableInNewTerritories')}")
             return
         leave_out = set(EU) if self.listing.get("leave_out_eu") else set()
+        # China mainland needs a security assessment, an AIGC declaration and an
+        # ICP filing before App Review will take a version that is sold there.
+        if self.listing.get("leave_out_china"):
+            leave_out.add("CHN")
         territories = [t["id"] for t in self.c.all("/v1/territories", limit=200)]
         rows, included = [], []
         for i, t in enumerate(territories):
@@ -500,7 +504,8 @@ class Run:
             "included": included,
         }
         sold = len(territories) - len(leave_out & set(territories))
-        self.change(f"sold in {sold} of {len(territories)} countries and regions" + (" (the EU left out)" if leave_out else ""), lambda: self.c.call("POST", "/v2/appAvailabilities", body))
+        left = [name for name, on in (("the EU", self.listing.get("leave_out_eu")), ("China mainland", self.listing.get("leave_out_china"))) if on]
+        self.change(f"sold in {sold} of {len(territories)} countries and regions" + (f" ({' and '.join(left)} left out)" if left else ""), lambda: self.c.call("POST", "/v2/appAvailabilities", body))
 
     def go(self):
         self.section("App", self.find_app)

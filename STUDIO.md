@@ -237,6 +237,7 @@ Loads on a phone from the play link in landscape, touch controls work, the core 
 
 ## Block log (newest first; roll entries older than a week into one summary line)
 
+- 2026-11-17 plainlimit builder: **App Store Connect will not add a version for review while China mainland is ticked** (it wants a security assessment and an AIGC declaration first). Plainlimit left China mainland out by hand; `tools/asc_listing.py` now takes `"leave_out_china": true` in a listing for new apps. Other apps going live should set it or untick China mainland in Pricing and Availability.
 - 2026-11-17 plainlimit builder: tidy-up after 1.0.0 (75) was attached: the guard is worked out once per registration and saved for the app, the locks and the widget; one reader of reports (`src/domain/reports.ts`) with replay tests of real phone days; one table of saved values. Same behaviour; its TestFlight build waits until the owner has checked 75.
 - 2026-11-17 plainlimit builder: held back before Submit. The known-figure guard threw out the phone's real late reports (build 72, 16 Nov) and could hold back a real lock; it now only judges reports in the ten minutes after a registration, in the app and the widget. New release build requested to replace 74 on version 1.0.0.
 - 2026-11-16 plainlimit builder: owner asked to go live free (Pro later). Release check, store listing, five screenshots, Screen Time section in the apps' privacy policy; store_check and asc_listing now allow an app version that sells nothing. Release build requested.
