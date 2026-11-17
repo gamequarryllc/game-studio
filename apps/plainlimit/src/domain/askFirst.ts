@@ -63,11 +63,25 @@ export function opensCountedApps(batteryEmpty: boolean, earnedTimeRunning: boole
  * `{applicationOrDomainDisplayName}` is filled in by the phone. As on the
  * battery's screens, the main button is the safe one (close) and the second
  * is the way through.
+ *
+ * The phone picks this screen over the battery's for an app on both lists,
+ * and the battery usually runs out while Plainlimit is closed, when nothing
+ * can change these words. So the usual words say that the sum needs charge,
+ * and `batteryEmpty` (written when Plainlimit sees the battery empty) says
+ * plainly that apps that count stay locked.
  */
-export function askShieldCopy(openMinutes: number): { title: string; line: string; primary: string; secondary: string } {
+export function askShieldCopy(openMinutes: number, rechargeLabel: string, batteryEmpty = false): { title: string; line: string; primary: string; secondary: string } {
+  if (batteryEmpty) {
+    return {
+      title: "Battery's empty",
+      line: `Apps that count stay locked until ${rechargeLabel}. One sum still opens the Second thought apps that don't count.`,
+      primary: 'Close this app',
+      secondary: 'Solve one sum',
+    };
+  }
   return {
     title: 'Second thought',
-    line: `One sum, then {applicationOrDomainDisplayName} opens for ${openMinutes} minutes.`,
+    line: `One sum, then {applicationOrDomainDisplayName} opens for ${openMinutes} minutes, while your battery has charge.`,
     primary: 'Not now',
     secondary: 'Solve one sum',
   };

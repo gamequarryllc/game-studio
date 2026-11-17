@@ -277,7 +277,7 @@ describe('Ask first', () => {
     expect(ask.applyAskFirst).toHaveBeenCalledTimes(1);
     store.setAskFirst({ on: true, openMinutes: 15 });
     expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
-    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 });
+    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 }, { empty: false, recharge: expect.any(String) });
   });
 
   it('is left alone while counting is off', async () => {

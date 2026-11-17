@@ -19,6 +19,11 @@ export function useRecord(): { view: RecordView; doc: Doc; now: Date; running: b
   return { view: recordView(record, doc.history, today, now, doc.settings.rechargeMinute), doc, now, running: passActive(record, now) };
 }
 
+/** The one mark for a day a pass was used: on the record's grid and on Today's Last 7 days. */
+export function PassDot({ size = 6 }: { size?: number }) {
+  return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: c.ink, borderWidth: 1, borderColor: c.ground }} />;
+}
+
 export function weekday(d: Date): string {
   return d.toLocaleDateString(undefined, { weekday: 'long' });
 }
@@ -26,11 +31,12 @@ export function weekday(d: Date): string {
 export function RecordCard() {
   const router = useRouter();
   const { view } = useRecord();
-  const passes = view.passes === 1 ? 'pass banked' : 'passes banked';
+  const passes = view.passes === 1 ? 'pass saved' : 'passes saved';
+  const weeks = view.streakWeeks === 1 ? 'week' : 'weeks';
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Your record: ${view.streakWeeks} weeks without an emergency pass, ${view.perfectWeeks} perfect weeks, ${view.passes} ${passes}`}
+      accessibilityLabel={`Your record: ${view.streakWeeks} ${weeks} without a pass, ${view.perfectWeeks} perfect weeks, ${view.passes} ${passes}`}
       onPress={() => {
         tap();
         router.push('/record');
@@ -42,16 +48,16 @@ export function RecordCard() {
       </View>
       <View style={styles.row}>
         <View style={styles.stat}>
-          <Text style={styles.big}>{view.streakWeeks} wk</Text>
-          <Text style={styles.small}>without an emergency</Text>
+          <Text style={[styles.big, view.streakWeeks === 0 ? styles.zero : null]}>{view.streakWeeks}</Text>
+          <Text numberOfLines={1} style={styles.small}>{weeks}, no pass</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={[styles.big, { color: '#46CC70' }]}>{view.perfectWeeks}</Text>
-          <Text style={styles.small}>perfect weeks</Text>
+          <Text style={[styles.big, view.perfectWeeks === 0 ? styles.zero : { color: '#46CC70' }]}>{view.perfectWeeks}</Text>
+          <Text numberOfLines={1} style={styles.small}>perfect {view.perfectWeeks === 1 ? 'week' : 'weeks'}</Text>
         </View>
         <View style={styles.stat}>
-          <Text style={styles.big}>{view.passes}</Text>
-          <Text style={styles.small}>{passes}</Text>
+          <Text style={[styles.big, view.passes === 0 ? styles.zero : null]}>{view.passes}</Text>
+          <Text numberOfLines={1} style={styles.small}>{passes}</Text>
         </View>
       </View>
       <Text style={styles.foot}>Next pass on {weekday(view.nextPass)}.</Text>
@@ -67,6 +73,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 10 },
   stat: { flex: 1, gap: 2 },
   big: { fontFamily: display.bold, fontSize: 30, letterSpacing: -0.8, color: c.ink },
+  zero: { color: c.ink3 },
   small: { fontSize: 13, lineHeight: 17, color: c.ink3 },
   foot: { fontSize: 14, lineHeight: 19, color: c.ink2, borderTopWidth: 1, borderTopColor: c.rule, paddingTop: 12 },
 });

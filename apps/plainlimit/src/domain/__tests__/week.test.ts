@@ -61,3 +61,16 @@ describe('the week view', () => {
     expect(weekLine(weekView([], today, settings, now, true))).toBe('Your week fills in as the days go by.');
   });
 });
+
+describe('emergency passes in the week view', () => {
+  it('marks the battery day a pass was used in, a 2 AM pass marking the day before', () => {
+    const uses = [new Date(2026, 10, 11, 20, 0).toISOString(), new Date(2026, 10, 13, 2, 0).toISOString(), new Date(2026, 10, 13, 9, 0).toISOString()];
+    const week = weekView([past(1, 100), past(2, 190)], today, settings, now, true, uses);
+    // Wed evening, Thu 2 AM (before the 6 AM recharge, so Thursday's battery), and today.
+    expect(week.columns.map((c) => c.pass)).toEqual([false, false, false, false, true, true, true]);
+  });
+
+  it('marks nothing with no passes used', () => {
+    expect(weekView([past(1, 100)], today, settings, now, true).columns.some((c) => c.pass)).toBe(false);
+  });
+});

@@ -58,8 +58,8 @@ export function coverAskAgain(askFirst: AskFirst | undefined): void {
   }
 }
 
-function writeScreen(openMinutes: number) {
-  const copy = askShieldCopy(openMinutes);
+function writeScreen(openMinutes: number, battery: AskBattery) {
+  const copy = askShieldCopy(openMinutes, battery.recharge, battery.empty);
   const notice = askNotice();
   const look: ShieldConfiguration = {
     title: copy.title,
@@ -87,12 +87,19 @@ function writeScreen(openMinutes: number) {
   DeviceActivity.userDefaultsSet(BUTTONS_KEY, buttons);
 }
 
+/** What the list's screen needs to know about the battery (askShieldCopy). */
+export interface AskBattery {
+  empty: boolean;
+  /** The recharge time, "6:00 AM". */
+  recharge: string;
+}
+
 /**
  * Puts the list's screen and cover in place, or takes them away when the list
  * is off or empty. Safe to repeat. Taking the cover away also uncovers an app
  * on both lists, so the caller covers the battery's apps again if it is empty.
  */
-export async function applyAskFirst(askFirst: AskFirst | undefined): Promise<void> {
+export async function applyAskFirst(askFirst: AskFirst | undefined, battery: AskBattery): Promise<void> {
   if (!AVAILABLE) return;
   try {
     if (!askActive(askFirst)) {
@@ -103,7 +110,7 @@ export async function applyAskFirst(askFirst: AskFirst | undefined): Promise<voi
       forget('askOpenUntil');
       return;
     }
-    writeScreen((askFirst as AskFirst).openMinutes);
+    writeScreen((askFirst as AskFirst).openMinutes, battery);
     // The phone shows a list's own screen only while an activity named for it runs.
     if (!DeviceActivity.getActivities().includes(ASK_WATCH)) {
       await DeviceActivity.startMonitoring(ASK_WATCH, { intervalStart: { hour: 0, minute: 0 }, intervalEnd: { hour: 23, minute: 59 }, repeats: true }, []);

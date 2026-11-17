@@ -58,15 +58,17 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 }
 
 /** The main action on a screen: light on the dark ground. */
-export function BigButton({ label, onPress, quiet = false }: { label: string; onPress: () => void; quiet?: boolean }) {
+export function BigButton({ label, onPress, quiet = false, disabled = false }: { label: string; onPress: () => void; quiet?: boolean; disabled?: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={() => {
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.big, quiet ? styles.bigQuiet : null, pressed ? { opacity: 0.75 } : null]}>
+      style={({ pressed }) => [styles.big, quiet ? styles.bigQuiet : null, pressed ? { opacity: 0.75 } : null, disabled ? { opacity: 0.4 } : null]}>
       <Text style={[styles.bigText, quiet ? { color: c.ink } : null]}>{label}</Text>
     </Pressable>
   );

@@ -80,7 +80,7 @@ export default function RootLayout() {
             <Stack.Screen name="tips" options={{ title: '' }} />
             <Stack.Screen name="ask-first" options={{ title: '' }} />
             <Stack.Screen name="record" options={{ title: '' }} />
-            <Stack.Screen name="pass" options={{ presentation: 'modal', headerShown: false, title: 'Emergency pass' }} />
+            <Stack.Screen name="pass" options={{ presentation: 'formSheet', sheetAllowedDetents: [0.66, 1], sheetGrabberVisible: true, sheetCornerRadius: 28, headerShown: false, title: 'Emergency pass' }} />
             <Stack.Screen name="ask" options={{ presentation: 'modal', headerShown: false, title: 'Second thought' }} />
             <Stack.Screen name="puzzle" options={{ presentation: 'modal', headerShown: false, title: 'Earn more time' }} />
             <Stack.Screen name="screens/warning" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade', title: 'Warning screen' }} />

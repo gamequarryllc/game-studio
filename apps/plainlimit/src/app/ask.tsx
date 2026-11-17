@@ -39,14 +39,13 @@ export default function Ask() {
       <View style={[styles.page, frame]}>
         <View style={{ gap: 12 }}>
           <Text accessibilityRole="header" style={styles.title}>
-            {openUntil ? 'Open' : 'Not opened'}
+            {openUntil ? `Open for ${ask.openMinutes} minutes` : 'Not opened'}
           </Text>
           <Text style={styles.lead}>
             {openUntil
-              ? `Your Second thought apps are open until ${clockLabelOf(openUntil)}. Go back to the one you wanted.`
+              ? `Your Second thought apps are open until ${clockLabelOf(openUntil)}. Go back to the one you wanted.${opensCounted ? '' : ` Apps that also count stay locked, as the battery is empty.`}`
               : 'The phone didn’t take the timer, so the apps stay covered. Try again in a moment.'}
           </Text>
-          {openUntil && !opensCounted ? <Text style={styles.lead}>Apps that also count stay locked until {clockLabel(settings.rechargeMinute)}.</Text> : null}
         </View>
         <BigButton label="Done" onPress={leave} />
       </View>
@@ -114,7 +113,7 @@ export default function Ask() {
           ) : null}
         </View>
 
-        <BigButton label={busy ? 'One moment…' : 'Open'} onPress={() => void check()} />
+        <BigButton label={busy ? 'One moment…' : 'Open'} disabled={typed === ''} onPress={() => void check()} />
       </View>
 
       <Pressable accessibilityRole="button" onPress={leave} style={({ pressed }) => [styles.stop, pressed ? { opacity: 0.6 } : null]}>

@@ -94,10 +94,10 @@ export default function Today() {
             </View>
           ) : null}
           {empty && !unlocked && held === 0 && passReady ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={`Use an emergency pass, ${passes} in the bank`} onPress={() => router.push('/pass')} style={({ pressed }) => [styles.passRow, pressed ? { opacity: 0.8 } : null]}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Use an emergency pass, ${passes} saved`} onPress={() => router.push('/pass')} style={({ pressed }) => [styles.passRow, pressed ? { opacity: 0.8 } : null]}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={styles.passTitle}>Use an emergency pass</Text>
-                <Text style={styles.passLine}>{passes} in the bank. Everything, settings too, for 15 minutes.</Text>
+                <Text style={styles.passLine}>Opens everything, settings too, for 15 minutes. {passes} saved.</Text>
               </View>
               <Text style={styles.passChevron}>›</Text>
             </Pressable>
@@ -117,7 +117,7 @@ export default function Today() {
             )}
           </View>
 
-          <WeekView week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true)} />
+          <WeekView week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true, doc.record?.uses)} />
           <RecordCard />
 
           {/* Last on the page: Apple's list sits in a box sized for five rows, and spare room at the end is only extra scroll. */}

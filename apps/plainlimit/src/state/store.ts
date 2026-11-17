@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 import { DEFAULT_ASK_FIRST, type AskFirst } from '@/domain/askFirst';
 import { cellsLeft } from '@/domain/battery';
 import { addWeeklyPasses, freshRecord, passActive, passCheck, spendPass } from '@/domain/record';
-import { nextRecharge } from '@/domain/day';
+import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
 import { stepGoal, stepRecharge } from '@/domain/settings';
 import type { DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
@@ -260,7 +260,7 @@ function syncAskFirst() {
   try {
     const doc = snapshot.doc;
     if (snapshot.state !== 'ready' || doc.watching !== true || screenTime.permission() !== 'approved') return;
-    void applyAskFirst(doc.settings.askFirst)
+    void applyAskFirst(doc.settings.askFirst, { empty: batteryLocked(doc, new Date()), recharge: clockLabel(doc.settings.rechargeMinute) })
       .then(() => {
         if (batteryLocked(snapshot.doc, new Date())) screenTime.coverEmptyNow(snapshot.doc.settings, snapshot.doc.day.topUps);
       })

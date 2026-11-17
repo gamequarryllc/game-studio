@@ -42,8 +42,22 @@ describe('Ask first', () => {
       expect(activity.includes(ASK_ID)).toBe(false);
       expect(activity.includes(COUNTED_ID)).toBe(false);
     }
-    expect(askShieldCopy(10).line).toContain('{applicationOrDomainDisplayName}');
-    expect(askShieldCopy(10).line).toContain('10 minutes');
+    expect(askShieldCopy(10, '6:00 AM').line).toContain('{applicationOrDomainDisplayName}');
+    expect(askShieldCopy(10, '6:00 AM').line).toContain('10 minutes');
     expect(askNotice().route).toBe('/ask');
+  });
+});
+
+describe('the Second thought screen while the battery is empty', () => {
+  it('says that apps that count stay locked, and never promises the app opens', () => {
+    const copy = askShieldCopy(10, '6:00 AM', true);
+    expect(copy.title).toBe("Battery's empty");
+    expect(copy.line).toContain('stay locked until 6:00 AM');
+    expect(copy.line).not.toContain('opens for');
+    expect(copy.secondary).toBe('Solve one sum');
+  });
+
+  it('says the sum needs charge on the usual screen, written before the battery runs out', () => {
+    expect(askShieldCopy(10, '6:00 AM').line).toContain('while your battery has charge');
   });
 });

@@ -89,6 +89,14 @@ export function passCheck(r: PassRecord, dayStart: Date, now: Date): 'ok' | 'non
   return r.passes > 0 ? 'ok' : 'none';
 }
 
+/** Why the settings are locked, naming the emergency pass only when one can be used now. */
+export function settingsLockedNotice(rechargeLabel: string, pass: ReturnType<typeof passCheck>): string {
+  const locked = `The battery is empty, so these settings are locked until it recharges at ${rechargeLabel}.`;
+  if (pass === 'ok') return `${locked} An emergency pass, on Today, opens them for ${PASS_MINUTES} minutes.`;
+  if (pass === 'usedToday') return `${locked} Today’s emergency pass has been used.`;
+  return locked;
+}
+
 /** Uses a pass: one out of the bank, open until `now` + 15 minutes, or the recharge if sooner. */
 export function spendPass(r: PassRecord, now: Date, nextRechargeMs: number): PassRecord {
   const until = Math.min(now.getTime() + PASS_MINUTES * 60000, nextRechargeMs);

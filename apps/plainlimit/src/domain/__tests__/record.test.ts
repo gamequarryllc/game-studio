@@ -1,4 +1,4 @@
-import { addWeeklyPasses, freshRecord, nextPassDate, passActive, passCheck, recordView, repairRecord, spendPass, weekKey, type PassRecord } from '../record';
+import { addWeeklyPasses, freshRecord, nextPassDate, passActive, passCheck, recordView, repairRecord, settingsLockedNotice, spendPass, weekKey, type PassRecord } from '../record';
 import type { DaySummary } from '../types';
 
 const at = (m: number, d: number, h = 12, min = 0) => new Date(2026, m - 1, d, h, min);
@@ -95,5 +95,15 @@ describe('the record', () => {
     for (let d = 2; d <= 8; d++) history.push(day(11, d, 100, d === 4 ? 'partly' : 'counted'));
     const view = recordView(freshRecord(at(11, 1)), history, day(11, 18, 40), now);
     expect(view.perfectWeeks).toBe(0);
+  });
+});
+
+describe('the settings-locked notice', () => {
+  it('names the emergency pass only when one can be used now', () => {
+    expect(settingsLockedNotice('6:00 AM', 'ok')).toContain('An emergency pass, on Today, opens them for 15 minutes.');
+    expect(settingsLockedNotice('6:00 AM', 'none')).not.toContain('pass');
+    expect(settingsLockedNotice('6:00 AM', 'usedToday')).toContain('Today’s emergency pass has been used.');
+    expect(settingsLockedNotice('6:00 AM', 'usedToday')).not.toContain('opens them');
+    expect(settingsLockedNotice('6:00 AM', 'running')).toBe('The battery is empty, so these settings are locked until it recharges at 6:00 AM.');
   });
 });
