@@ -9,6 +9,7 @@ import { toneAt } from '@/domain/tone';
 import { askToNotify } from '@/platform/notices';
 import { tickStepMinutes } from '@/domain/checkpoints';
 import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount } from '@/platform/screenTime';
+import { usePro } from '@/pro/pro';
 import { store } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { Battery } from '@/ui/Battery';
@@ -52,6 +53,7 @@ export default function Setup() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { now, settings, day, accent } = useDay();
+  const isPro = usePro().isPro;
   const [at, setAt] = useState(0);
   const [access, setAccess] = useState(() => (SCREEN_TIME_AVAILABLE ? permission() : 'unknown'));
   const [asked, setAsked] = useState(false);
@@ -218,14 +220,22 @@ export default function Setup() {
         <Card style={{ paddingVertical: 12 }}>
           <View style={styles.stepper}>
             <Text style={styles.rowLabel}>Recharges at</Text>
-            <View style={styles.smallStepper}>
-              <StepButton sign="−" label="Recharge earlier" size={40} onPress={() => store.stepRecharge(-1)} />
+            {isPro ? (
+              <View style={styles.smallStepper}>
+                <StepButton sign="−" label="Recharge earlier" size={40} onPress={() => store.stepRecharge(-1)} />
+                <Text accessibilityLabel={`Recharges at ${clockLabel(settings.rechargeMinute)}`} style={styles.rowValueBig}>
+                  {clockLabel(settings.rechargeMinute)}
+                </Text>
+                <StepButton sign="+" label="Recharge later" size={40} onPress={() => store.stepRecharge(1)} />
+              </View>
+            ) : (
               <Text accessibilityLabel={`Recharges at ${clockLabel(settings.rechargeMinute)}`} style={styles.rowValueBig}>
                 {clockLabel(settings.rechargeMinute)}
               </Text>
-              <StepButton sign="+" label="Recharge later" size={40} onPress={() => store.stepRecharge(1)} />
-            </View>
+            )}
           </View>
+          {/* Changing the recharge time is Pro (Settings > Plainlimit Pro). */}
+          {isPro ? null : <Text style={styles.note}>Pro lets you choose another time.</Text>}
         </Card>
       </>
     );

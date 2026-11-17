@@ -3,6 +3,7 @@
 
 import { DEFAULT_ASK_FIRST, repairAskFirst } from './askFirst';
 import { wrapMinute } from './day';
+import { SUM_LEVELS, type SumLevel } from './puzzle';
 import type { CountMode, EmptyLevel, Settings } from './types';
 
 export const GOAL_MIN = 30;
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: Settings = {
   emptyLevel: 'work',
   allowed: ['Phone', 'Messages', 'Maps'],
   askFirst: DEFAULT_ASK_FIRST,
+  sumLevel: 'normal',
 };
 
 export function clampGoal(minutes: number): number {
@@ -70,5 +72,6 @@ export function repairSettings(raw: unknown): Settings {
       if (typeof item === 'string') allowed = withAllowed(allowed, item);
     }
   }
-  return { goalMinutes: goal, rechargeMinute: recharge, countMode, emptyLevel, allowed, askFirst: repairAskFirst(r.askFirst) };
+  const sumLevel = SUM_LEVELS.includes(r.sumLevel as SumLevel) ? (r.sumLevel as SumLevel) : 'normal';
+  return { goalMinutes: goal, rechargeMinute: recharge, countMode, emptyLevel, allowed, askFirst: repairAskFirst(r.askFirst), sumLevel };
 }

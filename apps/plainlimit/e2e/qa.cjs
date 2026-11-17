@@ -71,13 +71,15 @@ async function main() {
   const browser = await chromium.launch();
 
   /** Opens the app at `query` with `saved` in storage (a string is stored as it is), at the given size. */
-  async function open(saved, query = '', size = PHONE) {
+  // Most scenarios pretend Pro is bought, so its settings are there to check; `withPro: false` is the free app.
+  async function open(saved, query = '', size = PHONE, { withPro = true } = {}) {
     const context = await browser.newContext({ viewport: size, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: UA, colorScheme: 'dark', locale: 'en-US' });
     await context.addInitScript(
-      ([key, value]) => {
+      ([key, value, proKey, pro]) => {
         if (value !== null) window.localStorage.setItem(key, value);
+        if (pro) window.localStorage.setItem(proKey, JSON.stringify({ owned: false, pretend: true }));
       },
-      [KEY, saved === null ? null : typeof saved === 'string' ? saved : JSON.stringify(saved)],
+      [KEY, saved === null ? null : typeof saved === 'string' ? saved : JSON.stringify(saved), 'plainlimit.pro.v1', withPro],
     );
     const page = await context.newPage();
     page.setDefaultTimeout(8000);
@@ -227,6 +229,23 @@ async function main() {
     await context.close();
   });
 
+  await scenario('without Pro, a recharge time chosen in 1.0 stays, and Second thought is off', async () => {
+    const saved = doc({ recharge: 420, used: 20 });
+    saved.settings.askFirst = { on: true, openMinutes: 10 };
+    const { page, context } = await open(saved, '', PHONE, { withPro: false });
+    await tab(page, 'Settings');
+    await page.getByRole('button', { name: 'Recharges at, 7:00 AM · Pro', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Advanced, Second thought, sums', exact: true }).click();
+    await page.getByRole('button', { name: 'Second thought, Pro', exact: true }).waitFor();
+    await page.goBack();
+    if ((await page.getByRole('button', { name: 'Recharge later', exact: true }).count()) > 0) throw new Error('the recharge stepper shows without Pro');
+    await shot(page, 'q20-free-settings');
+    await page.getByRole('button', { name: /^Plainlimit Pro/ }).click();
+    await see(page, 'Plainlimit Pro');
+    await shot(page, 'q21-pro-screen');
+    await context.close();
+  });
+
   await scenario('the shortest goal and a midnight recharge', async () => {
     const { page, context } = await open(doc({ goal: 30, recharge: 0, used: 12 }));
     await see(page, '30 minute day');
@@ -281,9 +300,10 @@ async function main() {
     await context.close();
   });
 
-  await scenario('Second thought: off by default, turned on from Settings, open time chosen', async () => {
+  await scenario('Second thought: off by default, turned on from Settings > Advanced, open time chosen', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting');
     await tab(page, 'Settings');
+    await page.getByRole('button', { name: /^Advanced/ }).click();
     await page.getByRole('button', { name: /^Second thought/ }).click();
     await see(page, 'asks for one sum before it opens');
     if (!(await page.getByRole('radio', { name: /^Off/ }).isChecked())) throw new Error('Second thought was not off by default');

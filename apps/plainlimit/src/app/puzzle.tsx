@@ -7,6 +7,7 @@ import { cellsLeft } from '@/domain/battery';
 import { clockLabel, clockLabelOf } from '@/domain/day';
 import { isRight, makeRandom, makeSums, topUpPlan, type Sum } from '@/domain/puzzle';
 import { success, warning } from '@/platform/haptics';
+import { sumLevelFor } from '@/domain/pro';
 import { store } from '@/state/store';
 import { BigButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
@@ -23,7 +24,7 @@ export default function Puzzle() {
   // The plan and the sums are fixed when the screen opens, so earning the
   // time (which raises the count) does not change what is on the screen.
   const [plan] = useState(() => topUpPlan(day.topUps));
-  const [sums] = useState<Sum[]>(() => makeSums(plan.sums, makeRandom(Date.now())));
+  const [sums] = useState<Sum[]>(() => makeSums(plan.sums, makeRandom(Date.now()), sumLevelFor(settings, store.hasPro())));
   const [at, setAt] = useState(0);
   const [typed, setTyped] = useState('');
   const [wrong, setWrong] = useState(false);
@@ -111,7 +112,7 @@ export default function Puzzle() {
           </Text>
         </View>
 
-        <Text accessibilityLabel={`${sum.a} plus ${sum.b}`} style={styles.sum}>
+        <Text accessibilityLabel={`${sum.a} plus ${sum.b}`} numberOfLines={1} adjustsFontSizeToFit style={styles.sum}>
           {sum.a} + {sum.b}
         </Text>
 

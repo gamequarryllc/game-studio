@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 
 import { onNoticeRoute } from '@/platform/notices';
+import { pro } from '@/pro/pro';
 import { store, useStore } from '@/state/store';
 import { c } from '@/ui/theme';
 
@@ -38,6 +39,11 @@ export default function RootLayout() {
 
   useEffect(() => {
     void store.start();
+    // The store hears about Pro from here: bought, restored, refunded, or read at start.
+    const tell = () => store.setPro(pro.snapshot().isPro, pro.snapshot().ready);
+    const stop = pro.subscribe(tell);
+    void pro.start().then(tell);
+    return stop;
   }, []);
 
   const ready = (fontsLoaded || fontError !== null) && loaded;
@@ -80,6 +86,8 @@ export default function RootLayout() {
             <Stack.Screen name="tips" options={{ title: '' }} />
             <Stack.Screen name="ask-first" options={{ title: '' }} />
             <Stack.Screen name="record" options={{ title: '' }} />
+            <Stack.Screen name="pro" options={{ title: '' }} />
+            <Stack.Screen name="advanced" options={{ title: '' }} />
             <Stack.Screen name="pass" options={{ presentation: 'formSheet', sheetAllowedDetents: [0.66, 1], sheetGrabberVisible: true, sheetCornerRadius: 28, headerShown: false, title: 'Emergency pass' }} />
             <Stack.Screen name="ask" options={{ presentation: 'modal', headerShown: false, title: 'Second thought' }} />
             <Stack.Screen name="puzzle" options={{ presentation: 'modal', headerShown: false, title: 'Earn more time' }} />

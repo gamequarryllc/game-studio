@@ -275,6 +275,7 @@ describe('Ask first', () => {
     const { store } = load(phone, saved(30), ask);
     await store.start();
     expect(ask.applyAskFirst).toHaveBeenCalledTimes(1);
+    store.setPro(true, true);
     store.setAskFirst({ on: true, openMinutes: 15 });
     expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
     expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 }, { empty: false, recharge: expect.any(String) });
@@ -351,5 +352,62 @@ describe('emergency passes', () => {
     expect(store.passCheck()).toBe('none');
     expect(store.usePass()).toBe(false);
     expect(phone.grantExtraTime).not.toHaveBeenCalled();
+  });
+});
+
+describe('Pro', () => {
+  const withAsk = (on: boolean) => saved(30, { settings: { goalMinutes: 180, rechargeMinute: 360, countMode: 'custom', emptyLevel: 'work', allowed: [], askFirst: { on, openMinutes: 10 } } });
+
+  it('without it, Second thought cannot be turned on, the recharge time stays, and sums stay normal', async () => {
+    const { store } = load(fakePhone(), saved(30));
+    await store.start();
+    store.setPro(false, true);
+    store.setAskFirst({ on: true });
+    store.stepRecharge(1);
+    store.setSumLevel('hard');
+    expect(store.get().doc.settings.askFirst?.on ?? false).toBe(false);
+    expect(store.get().doc.settings.rechargeMinute).toBe(360);
+    expect(store.get().doc.settings.sumLevel).toBe('normal');
+    // Normal is free, and choices that need nothing still work.
+    store.setAskFirst({ openMinutes: 15 });
+    expect(store.get().doc.settings.askFirst?.openMinutes).toBe(15);
+  });
+
+  it('with it, all three change', async () => {
+    const { store } = load(fakePhone(), saved(30));
+    await store.start();
+    store.setPro(true, true);
+    store.setAskFirst({ on: true });
+    store.stepRecharge(1);
+    store.setSumLevel('hard');
+    expect(store.get().doc.settings.askFirst?.on).toBe(true);
+    expect(store.get().doc.settings.rechargeMinute).toBe(390);
+    expect(store.get().doc.settings.sumLevel).toBe('hard');
+  });
+
+  it('keeps a recharge time chosen before Pro existed', async () => {
+    const { store } = load(fakePhone(), saved(30, { settings: { goalMinutes: 180, rechargeMinute: 420, countMode: 'custom', emptyLevel: 'work', allowed: [] } }));
+    await store.start();
+    store.setPro(false, true);
+    expect(store.get().doc.settings.rechargeMinute).toBe(420);
+  });
+
+  it('turns Second thought off once the phone is known not to have Pro (a refund), and takes its lock screen off', async () => {
+    const ask = fakeAsk();
+    const { store } = load(fakePhone(), withAsk(true), ask);
+    await store.start();
+    // Not settled yet: nothing changes.
+    store.setPro(false, false);
+    expect(store.get().doc.settings.askFirst?.on).toBe(true);
+    store.setPro(false, true);
+    expect(store.get().doc.settings.askFirst?.on).toBe(false);
+    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: false, openMinutes: 10 }, expect.anything());
+  });
+
+  it('leaves Second thought on while Pro is held', async () => {
+    const { store } = load(fakePhone(), withAsk(true));
+    await store.start();
+    store.setPro(true, true);
+    expect(store.get().doc.settings.askFirst?.on).toBe(true);
   });
 });

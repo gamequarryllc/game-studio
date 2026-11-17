@@ -7,6 +7,7 @@ import { addWeeklyPasses, freshRecord, passActive, passCheck, spendPass } from '
 import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
 import { stepGoal, stepRecharge } from '@/domain/settings';
+import type { SumLevel } from '@/domain/puzzle';
 import type { DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
 import { applyAskFirst, openAsk } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
@@ -270,6 +271,22 @@ function syncAskFirst() {
   }
 }
 
+/**
+ * Whether this phone has Pro (src/pro/pro.ts tells the store through `setPro`),
+ * and whether that answer is settled yet. Until it is, nothing is turned off.
+ */
+let proOn = false;
+let proKnown = false;
+
+/** Without Pro, Second thought is off: after a refund its lock screen must not stay on the apps. */
+function dropProOnly() {
+  if (!proKnown || proOn || snapshot.state !== 'ready') return;
+  const settings = snapshot.doc.settings;
+  if (!settings.askFirst?.on) return;
+  set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...settings.askFirst, on: false } } });
+  syncAskFirst();
+}
+
 function withSettings(change: (s: Settings) => Settings) {
   if (settingsLocked()) return;
   // A new recharge time can move the start of the current battery.
@@ -310,6 +327,7 @@ export const store = {
     // Picks from before build 71 may list more single apps than iOS will lock.
     if (screenTime.fixOldPicks() === 'fixed') store.picksChanged();
     void askAgain();
+    dropProOnly();
     syncAskFirst();
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
     AppState.addEventListener('change', (state) => {
@@ -457,17 +475,35 @@ export const store = {
   stepGoal(direction: 1 | -1) {
     withSettings((s) => ({ ...s, goalMinutes: stepGoal(s.goalMinutes, direction) }));
   },
+  /** Changing the recharge time is Pro. A time chosen before Pro existed (1.0) is kept as it is. */
   stepRecharge(direction: 1 | -1) {
+    if (!proOn) return;
     withSettings((s) => ({ ...s, rechargeMinute: stepRecharge(s.rechargeMinute, direction) }));
   },
   setEmptyLevel(emptyLevel: EmptyLevel) {
     withSettings((s) => ({ ...s, emptyLevel }));
+  },
+  /** How hard the sums are. Normal is free; easy and hard are Pro. */
+  setSumLevel(sumLevel: SumLevel) {
+    if (sumLevel !== 'normal' && !proOn) return;
+    withSettings((s) => ({ ...s, sumLevel }));
+  },
+  /** Pro was bought, restored, refunded or read at start (src/pro/pro.ts). `known` is false until the saved answer is read. */
+  setPro(on: boolean, known: boolean) {
+    proOn = on;
+    proKnown = known;
+    dropProOnly();
+  },
+  hasPro(): boolean {
+    return proOn;
   },
   /**
    * Ask first's settings. Not closed while the battery is empty: nothing here
    * can open an app that counts (see `syncAskFirst`).
    */
   setAskFirst(change: Partial<AskFirst>) {
+    // Second thought is Pro.
+    if (change.on === true && !proOn) return;
     const settings = snapshot.doc.settings;
     set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...(settings.askFirst ?? DEFAULT_ASK_FIRST), ...change } } });
     syncAskFirst();
