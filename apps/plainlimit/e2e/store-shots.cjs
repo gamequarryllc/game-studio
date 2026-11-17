@@ -33,18 +33,26 @@ const APP = { width: SCREEN.width, height: SCREEN.height - STATUS };
 const GROUND = '#0E1011';
 const GREEN = '#4AC56E';
 
+// Search results show the first three. What counts is left out: its steps name other companies' apps and read
+// like a manual at this size (the fresh-eyes review, 2026-11-16).
 const SHOTS = [
   { file: '01-today', caption: 'Your screen time,\nas a battery.' },
-  { file: '02-what-counts', caption: 'Count the time wasters,\nnot calls and maps.' },
-  { file: '03-empty', caption: 'When it runs out,\nthose apps lock.' },
+  { file: '02-empty', caption: 'When it runs out,\nthose apps lock.' },
+  { file: '03-settings', caption: 'Set the goal,\nand how firm it is.' },
   { file: '04-sums', caption: 'Need a little more?\nEarn it with sums.' },
-  { file: '05-settings', caption: 'Set the goal,\nand how firm it is.' },
 ];
+
+// The clock the pictures are taken at: 9:41 AM today, as in the status bar, so the countdown to the recharge agrees.
+const NOW = (() => {
+  const d = new Date();
+  d.setHours(9, 41, 0, 0);
+  return d;
+})();
 
 const GOAL = 210;
 
 /** The current battery's start for a recharge minute, as the app works it out. */
-function periodStart(rechargeMinute, now = new Date()) {
+function periodStart(rechargeMinute, now = NOW) {
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Math.floor(rechargeMinute / 60), rechargeMinute % 60);
   if (start > now) start.setDate(start.getDate() - 1);
   return start;
@@ -68,10 +76,11 @@ function week() {
   });
 }
 
-function doc(used, topUps = 0) {
+function doc(used, emptyLevel = 'work') {
+  const topUps = 0;
   return {
     v: 1,
-    settings: { goalMinutes: GOAL, rechargeMinute: 360, countMode: 'custom', emptyLevel: 'work', allowed: [] },
+    settings: { goalMinutes: GOAL, rechargeMinute: 360, countMode: 'custom', emptyLevel, allowed: [] },
     day: { periodStart: periodStart(360).toISOString(), usedMinutes: used, topUps, unlockedUntil: null, uncounted: false },
     watching: true,
     setupDone: true,
@@ -113,6 +122,7 @@ async function main() {
     /** Opens the app with `saved` in storage, standing in for a counting phone. */
     async function open(saved) {
       const context = await browser.newContext({ viewport: APP, deviceScaleFactor: 3, isMobile: true, hasTouch: true, userAgent: UA, colorScheme: 'dark', locale: 'en-US' });
+      await context.clock.install({ time: NOW });
       await context.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [KEY, JSON.stringify(saved)]);
       const page = await context.newPage();
       page.setDefaultTimeout(10000);
@@ -131,33 +141,40 @@ async function main() {
     };
     const tab = (page, name) => page.getByRole('tab', { name, exact: true }).click();
 
-    // 1 and 2: an ordinary afternoon, 47 minutes into a 3 h 30 min day.
+    // 1: an ordinary morning, 47 minutes into a 3 h 30 min day.
     {
       const { page, context } = await open(doc(47));
       await page.getByText('Plenty left').first().waitFor();
       await raw(page, '01-today');
-      await tab(page, 'Settings');
-      await page.getByRole('button', { name: 'What counts, 14 ticked', exact: true }).click();
-      await page.getByText('Count the time wasters', { exact: false }).first().waitFor();
-      await raw(page, '02-what-counts');
       await context.close();
     }
 
-    // 3 and 4: the battery empty, with the default "Work for it", and its sums.
+    // 2: the battery empty with "Locked", so the screen says what the caption says.
     {
-      const { page, context } = await open(doc(GOAL));
-      await page.getByText('Empty', { exact: true }).first().waitFor();
-      await raw(page, '03-empty');
-      await page.getByRole('button', { name: /Solve 3 sums/ }).click();
-      await page.getByText('Sum 1 of 3', { exact: false }).first().waitFor();
-      await raw(page, '04-sums');
+      const { page, context } = await open(doc(GOAL, 'locked'));
+      await page.getByText('Locked until', { exact: false }).first().waitFor();
+      await raw(page, '02-empty');
       await context.close();
     }
+
+    // 3: Settings, with the default "Work for it".
     {
       const { page, context } = await open(doc(95));
       await tab(page, 'Settings');
       await page.getByText('Daily goal', { exact: true }).first().waitFor();
-      await raw(page, '05-settings');
+      await raw(page, '03-settings');
+      await context.close();
+    }
+
+    // 4: "Work for it" when empty: the sums, with the first answer typed in.
+    {
+      const { page, context } = await open(doc(GOAL));
+      await page.getByRole('button', { name: /Solve 3 sums/ }).click();
+      await page.getByText('Sum 1 of 3', { exact: false }).first().waitFor();
+      const sum = await page.getByText(/^\s*\d+\s*[+−-]\s*\d+\s*$/).first().textContent();
+      const [, a, op, b] = sum.match(/(\d+)\s*([+−-])\s*(\d+)/);
+      await page.getByRole('textbox').first().fill(String(op === '+' ? Number(a) + Number(b) : Number(a) - Number(b)));
+      await raw(page, '04-sums');
       await context.close();
     }
 
