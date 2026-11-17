@@ -35,7 +35,7 @@ const GROUND = '#0E1011';
 // Search results show the first three. Essentials is left out: its steps name other companies' apps and read
 // like a manual at this size (the fresh-eyes review, 2026-11-16).
 const SHOTS = [
-  { file: '01-today', caption: 'Calls, texts and maps\nnever count.' },
+  { file: '01-today', caption: 'Pick your essentials.\nThey never count.' },
   { file: '02-empty', caption: 'When it runs out,\nthe scroll locks.' },
   { file: '03-sums', caption: 'Need a little more?\nEarn it with sums.' },
   { file: '04-settings', caption: 'Recharges at 6 AM,\nnot midnight.' },
