@@ -31,15 +31,14 @@ const STATUS = 54;
 const SCREEN = { width: 393, height: 852 };
 const APP = { width: SCREEN.width, height: SCREEN.height - STATUS };
 const GROUND = '#0E1011';
-const GREEN = '#4AC56E';
 
 // Search results show the first three. What counts is left out: its steps name other companies' apps and read
 // like a manual at this size (the fresh-eyes review, 2026-11-16).
 const SHOTS = [
   { file: '01-today', caption: 'Your screen time,\nas a battery.' },
   { file: '02-empty', caption: 'When it runs out,\nthose apps lock.' },
-  { file: '03-settings', caption: 'Set the goal,\nand how firm it is.' },
-  { file: '04-sums', caption: 'Need a little more?\nEarn it with sums.' },
+  { file: '03-sums', caption: 'Need a little more?\nEarn it with sums.' },
+  { file: '04-settings', caption: 'Set the goal,\nand how firm it is.' },
 ];
 
 // The clock the pictures are taken at: 9:41 AM today, as in the status bar, so the countdown to the recharge agrees.
@@ -135,35 +134,7 @@ async function main() {
       await page.waitForTimeout(800);
       return { page, context };
     }
-    // Scrolls the page the least it takes for the tab bar's top edge to fall in
-    // a gap between blocks (or past the end), so no text is cut in half by it.
-    const unclip = (page) =>
-      page.evaluate(() => {
-        const tab = document.querySelector('[role="tab"]');
-        const scroller = [...document.querySelectorAll('*')]
-          .filter((d) => d.scrollHeight > d.clientHeight + 4 && /(auto|scroll)/.test(getComputedStyle(d).overflowY))
-          .sort((a, b) => b.clientHeight - a.clientHeight)[0];
-        if (!tab || !scroller) return 'nothing to scroll';
-        const edge = tab.parentElement.getBoundingClientRect().top - 6;
-        // The page's blocks: the content container's children, or theirs if it has one wrapper.
-        let holder = scroller.firstElementChild;
-        while (holder && holder.children.length === 1) holder = holder.firstElementChild;
-        if (!holder) return 'no blocks';
-        const blocks = [...holder.children].map((b) => b.getBoundingClientRect()).filter((r) => r.height > 0);
-        const max = scroller.scrollHeight - scroller.clientHeight;
-        for (let i = 0; i < blocks.length; i++) {
-          const from = Math.max(0, blocks[i].bottom - edge);
-          const to = i + 1 < blocks.length ? blocks[i + 1].top - edge - 6 : Infinity;
-          if (from <= to && from <= max) {
-            scroller.scrollTop = from;
-            return `scrolled ${Math.round(from)} of ${max} (${blocks.length} blocks)`;
-          }
-        }
-        scroller.scrollTop = max;
-        return `scrolled to the end, ${max}`;
-      });
     const raw = async (page, name) => {
-      console.log(`${name}: ${await unclip(page)}`);
       await page.waitForTimeout(600);
       await page.screenshot({ path: path.join(RAW, `${name}.png`) });
     };
@@ -191,7 +162,7 @@ async function main() {
       const { page, context } = await open(doc(95));
       await tab(page, 'Settings');
       await page.getByText('Daily goal', { exact: true }).first().waitFor();
-      await raw(page, '03-settings');
+      await raw(page, '04-settings');
       await context.close();
     }
 
@@ -203,7 +174,7 @@ async function main() {
       const sum = await page.getByText(/^\s*\d+\s*[+−-]\s*\d+\s*$/).first().textContent();
       const [, a, op, b] = sum.match(/(\d+)\s*([+−-])\s*(\d+)/);
       await page.getByRole('textbox').first().fill(String(op === '+' ? Number(a) + Number(b) : Number(a) - Number(b)));
-      await raw(page, '04-sums');
+      await raw(page, '03-sums');
       await context.close();
     }
 
@@ -219,13 +190,12 @@ async function main() {
         @font-face { font-family: Display; src: url(data:font/ttf;base64,${font}); }
         html, body { margin: 0; width: ${PAGE.width}px; height: ${PAGE.height}px; overflow: hidden;
                      background: radial-gradient(1200px 900px at 50% 1500px, #16231A 0%, ${GROUND} 70%); }
-        .bar { position: absolute; top: 112px; left: 50%; width: 96px; height: 14px; margin-left: -48px; border-radius: 7px; background: ${GREEN}; }
         .caption { position: absolute; top: 170px; left: 0; right: 0; text-align: center; font: 700 96px/108px Display, sans-serif; letter-spacing: -2px; color: #F4F5F2; }
         .phone { position: absolute; top: 450px; left: 50%; transform: translateX(-50%); box-sizing: content-box; border: 22px solid #050606; border-radius: 156px;
                  box-shadow: 0 0 0 4px #3A3E43, 0 0 0 6px #1B1D20, 0 60px 140px rgba(0, 0, 0, 0.55); background: #050606; }
         .btn { position: absolute; width: 9px; border-radius: 4px; background: #34383D; }
         .screen { position: absolute; inset: 0; overflow: hidden; }
-      </style></head><body><div class="bar"></div><div class="caption">${lines}</div>${phoneHtml(img)}</body></html>`);
+      </style></head><body><div class="caption">${lines}</div>${phoneHtml(img)}</body></html>`);
       await sheet.evaluate(() => document.fonts.ready);
       await sheet.waitForTimeout(250);
       await sheet.screenshot({ path: path.join(OUT, `${shot.file}.png`), omitBackground: false });

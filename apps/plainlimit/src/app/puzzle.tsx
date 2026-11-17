@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cellsLeft } from '@/domain/battery';
-import { clockLabelOf } from '@/domain/day';
+import { clockLabel, clockLabelOf } from '@/domain/day';
 import { isRight, makeRandom, makeSums, topUpPlan, type Sum } from '@/domain/puzzle';
 import { success, warning } from '@/platform/haptics';
 import { store } from '@/state/store';
@@ -90,7 +90,7 @@ export default function Puzzle() {
           <Text accessibilityRole="header" style={styles.title}>
             Earn {plan.minutes} minutes
           </Text>
-          <Text style={styles.lead}>{plan.sums} sums, no skipping. The time is added; the battery stays empty.</Text>
+          <Text style={styles.lead}>{plan.sums} sums, no skipping. Adds {plan.minutes} minutes now; your battery still refills at {clockLabel(settings.rechargeMinute)}.</Text>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

@@ -4,9 +4,9 @@ import { Pressable, StyleSheet, Text, View, type PressableProps } from 'react-na
 import { c } from './theme';
 import { useDay } from './useDay';
 
-// The web preview's tab bar, drawn to match the iPhone's (AppTabs.tsx): an
-// icon over a small label for each tab, tinted in the battery's colour when
-// open. The icons stand in for the SF Symbols the phone draws (battery.75percent
+// The web preview's tab bar, drawn to match the iPhone's (AppTabs.tsx): a
+// floating capsule with an icon over a small label for each tab, tinted in the
+// battery's colour when open. The icons stand in for the SF Symbols the phone draws (battery.75percent
 // and gearshape), which the web has no copy of.
 
 function BatteryIcon({ color }: { color: string }) {
@@ -41,7 +41,7 @@ function GearIcon({ color }: { color: string }) {
 function TabButton({ label, icon, accent, isFocused, ...props }: TabTriggerSlotProps & { label: string; icon: 'battery' | 'gear'; accent: string }) {
   const color = isFocused ? accent : c.ink3;
   return (
-    <Pressable {...(props as PressableProps)} accessibilityRole="tab" accessibilityState={{ selected: !!isFocused }} style={styles.button}>
+    <Pressable {...(props as PressableProps)} accessibilityRole="tab" accessibilityState={{ selected: !!isFocused }} style={[styles.button, isFocused ? styles.chosen : null]}>
       {icon === 'battery' ? <BatteryIcon color={color} /> : <GearIcon color={color} />}
       <Text style={{ fontSize: 10.5, fontWeight: '600', letterSpacing: 0.1, color }}>{label}</Text>
     </Pressable>
@@ -70,6 +70,8 @@ export default function AppTabs() {
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.rule, backgroundColor: c.ground, paddingTop: 6, paddingBottom: 26, paddingHorizontal: 40 },
-  button: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  // Floating over the page, as the iPhone's tab bar does: the page runs on underneath.
+  bar: { position: 'absolute', bottom: 26, alignSelf: 'center', width: 232, flexDirection: 'row', padding: 4, borderRadius: 32, backgroundColor: 'rgba(38,40,44,0.92)', borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.14)' },
+  button: { flex: 1, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  chosen: { backgroundColor: 'rgba(255,255,255,0.10)' },
 });

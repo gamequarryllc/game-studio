@@ -13,7 +13,6 @@ import { Battery } from '@/ui/Battery';
 import { CountingProblem } from '@/ui/CountingProblem';
 import { BigButton, Label, StatusBand } from '@/ui/kit';
 import { useEasedColor } from '@/ui/motion';
-import { Ruler } from '@/ui/Ruler';
 import { c, display } from '@/ui/theme';
 import { TodayTotal, UsageReport } from '@/ui/UsageReport';
 import { WeekView } from '@/ui/WeekView';
@@ -25,7 +24,7 @@ import { useDay } from '@/ui/useDay';
 export default function Today() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { now, settings, day, fraction, cells, tone, accent } = useDay();
+  const { now, settings, day, cells, tone, accent } = useDay();
   const { history, watching } = useDoc();
   const problem = store.health();
   // The phone tells the app about use in steps. The figure on screen is drawn
@@ -61,7 +60,7 @@ export default function Today() {
             </Text>
             <View style={styles.rechargeRow}>
               <Text style={[styles.recharge, { color: tone.fg }]}>Recharges at {recharge}</Text>
-              <Text style={[styles.until, { color: tone.fg }]}>{untilLabel(now, nextRecharge(now, settings.rechargeMinute))}</Text>
+              <Text style={[styles.until, { color: tone.fg, opacity: tone.dark ? 0.9 : 0.72 }]}>{untilLabel(now, nextRecharge(now, settings.rechargeMinute))}</Text>
             </View>
           </View>
         </Animated.View>
@@ -99,7 +98,6 @@ export default function Today() {
                 {durationLabel(day.usedMinutes)} <Text style={styles.usedOf}>of {durationLabel(settings.goalMinutes)}</Text>
               </Text>
             )}
-            <Ruler fraction={fraction} color={accent} />
           </View>
 
           <WeekView week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true)} />
@@ -130,11 +128,11 @@ const styles = StyleSheet.create({
   field: { paddingHorizontal: 24, paddingBottom: 30, gap: 26, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   title: { fontFamily: display.bold, fontSize: 22, lineHeight: 26, letterSpacing: -0.3 },
-  goal: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', borderWidth: 1.5, borderRadius: 99, paddingVertical: 5, paddingHorizontal: 11, overflow: 'hidden' },
+  goal: { fontSize: 14, fontWeight: '700', borderWidth: 1.5, borderRadius: 99, paddingVertical: 5, paddingHorizontal: 11, overflow: 'hidden' },
   word: { fontFamily: display.bold, fontSize: 58, lineHeight: 58, letterSpacing: -2.2 },
-  rechargeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 10, rowGap: 2 },
+  rechargeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 10, rowGap: 2, marginTop: 6 },
   recharge: { fontSize: 17, fontWeight: '700' },
-  until: { fontSize: 17, fontWeight: '500', opacity: 0.72 },
+  until: { fontSize: 17, fontWeight: '500' },
   rest: { paddingHorizontal: 24, paddingTop: 28, gap: 26 },
   strip: { borderLeftWidth: 0, borderWidth: 1.5, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
   used: { fontFamily: display.bold, fontSize: 48, lineHeight: 50, letterSpacing: -1.6, color: c.ink },

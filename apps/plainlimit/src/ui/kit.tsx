@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { tap } from '@/platform/haptics';
@@ -15,7 +15,8 @@ export function Page({ children, top = 0, bottom = 32 }: { children: ReactNode; 
     <View style={{ flex: 1, backgroundColor: c.ground }}>
       <ScrollView
         style={{ flex: 1, backgroundColor: c.ground }}
-        contentContainerStyle={{ paddingTop: insets.top + top, paddingBottom: insets.bottom + bottom, paddingHorizontal: 20, gap: 12 }}
+        // On the web the tab bar floats over the page, so the end can scroll clear of it.
+        contentContainerStyle={{ paddingTop: insets.top + top, paddingBottom: insets.bottom + bottom + (Platform.OS === 'web' ? 96 : 0), paddingHorizontal: 20, gap: 12 }}
         keyboardShouldPersistTaps="handled">
         {children}
       </ScrollView>
