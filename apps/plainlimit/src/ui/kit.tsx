@@ -148,18 +148,19 @@ export function Choice({
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.choice, chosen ? { backgroundColor: accent, borderColor: accent } : null, disabled ? { opacity: 0.6 } : null, pressed ? { opacity: 0.8 } : null]}>
+      style={({ pressed }) => [styles.choice, chosen ? { borderColor: accent, borderWidth: 2 } : null, disabled ? { opacity: 0.6 } : null, pressed ? { opacity: 0.8 } : null]}>
       <View style={{ flex: 1, gap: 3 }}>
-        <Text style={{ fontFamily: display.semi, fontSize: 18, lineHeight: 22, color: chosen ? c.onTone : c.ink }}>{title}</Text>
-        {line ? <Text style={{ fontSize: 14, lineHeight: 19, fontWeight: chosen ? '500' : '400', color: chosen ? c.onTone : c.ink3 }}>{line}</Text> : null}
+        <Text style={{ fontFamily: display.semi, fontSize: 18, lineHeight: 22, color: c.ink }}>{title}</Text>
+        {line ? <Text style={{ fontSize: 14, lineHeight: 19, color: chosen ? c.ink2 : c.ink3 }}>{line}</Text> : null}
         {rows?.map(([label, says]) => (
           <View key={label} style={{ marginTop: 6 }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: chosen ? c.onTone : c.ink3, opacity: chosen ? 0.75 : 1 }}>{label}</Text>
-            <Text style={{ fontSize: 15, lineHeight: 20, fontWeight: chosen ? '500' : '400', color: chosen ? c.onTone : c.ink2 }}>{says}</Text>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: c.ink3 }}>{label}</Text>
+            <Text style={{ fontSize: 15, lineHeight: 20, color: c.ink2 }}>{says}</Text>
           </View>
         ))}
       </View>
-      {chosen ? <View style={styles.dot} /> : null}
+      {/* The chosen row: an outline in the day's colour and a checkmark, like a settings list. */}
+      {chosen ? <View style={[styles.check, { borderColor: accent }]} /> : null}
       {tag ? (
         <View style={styles.tag}>
           <Text style={styles.tagText}>{tag}</Text>
@@ -172,7 +173,7 @@ export function Choice({
 const styles = StyleSheet.create({
   title: { fontFamily: display.bold, fontSize: 40, lineHeight: 44, letterSpacing: -1, color: c.ink, marginBottom: 6 },
   lead: { fontSize: 16, lineHeight: 22, color: c.ink2, marginBottom: 6 },
-  label: { fontSize: 12, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase', color: c.ink3 },
+  label: { fontSize: 15, fontWeight: '600', color: c.ink3 },
   card: { borderRadius: 22, backgroundColor: c.card, borderWidth: 1, borderColor: c.rule, paddingHorizontal: 16 },
   big: { minHeight: 58, borderRadius: 29, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
   bigQuiet: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: c.outline },
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
   rowValue: { fontSize: 16, color: c.ink3, flexShrink: 1 },
   choice: { minHeight: 62, borderRadius: 16, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, paddingVertical: 11, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: c.onTone },
+  check: { width: 8, height: 15, borderRightWidth: 2.5, borderBottomWidth: 2.5, transform: [{ rotate: '45deg' }], marginRight: 4, marginTop: -4 },
   tag: { borderWidth: 1, borderColor: c.ink3, borderRadius: 8, paddingVertical: 3, paddingHorizontal: 8 },
   tagText: { fontSize: 12, fontWeight: '600', color: c.ink2 },
 });

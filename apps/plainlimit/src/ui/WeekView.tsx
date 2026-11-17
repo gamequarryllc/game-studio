@@ -1,15 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { cellsLeft } from '@/domain/battery';
+import { CELLS } from '@/domain/battery';
 import { durationLabel } from '@/domain/day';
-import { toneForCells } from '@/domain/tone';
+import { accentOnDark, toneForCells } from '@/domain/tone';
 import { earnedLine, weekLine, type Week, type WeekColumn } from '@/domain/week';
 
 import { Label } from './kit';
 import { c } from './theme';
 
-// The last seven batteries side by side, each filled as far as it was used, in
-// the colour the battery had reached. A full bar is a day that ran out.
+// The last seven batteries side by side, each filled as far as it was used:
+// green if the day stayed under the goal, red if it ran out (a full bar).
 
 const FULL_NAMES: Record<string, string> = { Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday' };
 
@@ -25,7 +25,10 @@ function spoken(col: WeekColumn): string {
 function Column({ col }: { col: WeekColumn }) {
   const shown = col.state !== 'unknown' && col.state !== 'off';
   const fill = Math.max(0, Math.min(1, col.usedMinutes / col.goalMinutes));
-  const colour = toneForCells(cellsLeft(col.usedMinutes, col.goalMinutes)).bg;
+  // Two states only: under the goal in the full battery's green, ran out in a
+  // red light enough to read on the dark ground. How close a day came is the
+  // bar's height; colouring that too painted good days in warning colours.
+  const colour = col.usedMinutes >= col.goalMinutes ? accentOnDark(toneForCells(0)) : toneForCells(CELLS).bg;
   return (
     <View accessible accessibilityLabel={spoken(col)} style={styles.column}>
       <View style={styles.track}>

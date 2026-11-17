@@ -90,7 +90,7 @@ export default function Puzzle() {
           <Text accessibilityRole="header" style={styles.title}>
             Earn {plan.minutes} minutes
           </Text>
-          <Text style={styles.lead}>{plan.sums} sums, no skipping. Your battery is still empty after this.</Text>
+          <Text style={styles.lead}>{plan.sums} sums, no skipping. The time is added; the battery stays empty.</Text>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

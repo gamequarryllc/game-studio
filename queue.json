@@ -1,5 +1,5 @@
 {
-  "_about": "The studio queue. \"apps\" come first (the owner's decision, 2026-11-11), in the owner's order, one at a time; then \"games\". Order = build priority. status: queued | building | first-playable | polishing | ready-to-play | shipped | parked (apps: queued | building | ready-to-test | shipped | parked). The site page and the loop both read this file.",
+  "_about": "The studio queue. \"apps\" come first (the owner's decision, 2026-11-11), in the owner's order, one at a time; then \"games\". Order = build priority. status: queued | building | first-playable | polishing | ready-to-play | shipped | parked (apps: queued | building | ready-to-test | in-review | shipped | parked). The site page and the loop both read this file.",
   "apps": [
     {
       "slug": "plainproof",
@@ -78,8 +78,8 @@
       "title": "Plainlimit",
       "color": "#4ac56e",
       "tagline": "A six-cell battery on the home screen that drains as the day's screen time is used, then recharges at a time you set.",
-      "status": "ready-to-submit",
-      "note": "Outside the list of nine: added by the owner on 2026-11-11 and built in the owner's own conversation. The daily backstop leaves it alone. Version 1.0.0 goes to the App Store free (the owner, 2026-11-16); Pro comes later (apps/plainlimit/NOTES.md, Going live)."
+      "status": "in-review",
+      "note": "Outside the list of nine: added by the owner on 2026-11-11 and built in the owner's own conversation. The daily backstop leaves it alone. Version 1.0.0 (build 75), free, was submitted for App Review on 2026-11-17 with manual release; Pro comes later (apps/plainlimit/NOTES.md, Going live)."
     }
   ],
   "_apps_order_reason": "2026-11-11: the owner's order. Work them top-down, one app at a time, each to 'ready to test' (the bar in STUDIO.md, 'Apps'), ahead of all game work. Titles are working titles until each store name is chosen.",

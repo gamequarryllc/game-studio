@@ -37,7 +37,7 @@ export function oklchToHex(lightness: number, chroma: number, hueDegrees: number
 
 /**
  * The colour for a point in the day, where `t` is the share of the goal used.
- * Green dulls slowly for the first two thirds, turns yellow by five sixths,
+ * Green dulls slowly for the first two thirds, turns yellow by three quarters,
  * orange through the last cell, and deep red from the moment it is empty.
  */
 export function toneAt(t: number): Tone {
@@ -52,7 +52,9 @@ export function toneAt(t: number): Tone {
     light = 76 - 7 * k;
     chroma = 0.18 - 0.04 * k;
   } else if (x <= 0.833) {
-    const k = (x - 0.667) / 0.166;
+    // Green turns to a clear yellow by the middle of the fifth cell, so two
+    // cells left never sits as a lime beside the full battery's green.
+    const k = Math.min(1, ((x - 0.667) / 0.166) * 2);
     hue = 150 - 50 * k;
     light = 69 + 15 * k;
     chroma = 0.14 + 0.03 * k;
@@ -67,7 +69,7 @@ export function toneAt(t: number): Tone {
     light = 72 - 9 * k;
     chroma = 0.18 + 0.02 * k;
   }
-  return { bg: oklchToHex(light / 100, chroma, hue), fg: INK, track: 'rgba(16,18,15,0.22)', dark: false };
+  return { bg: oklchToHex(light / 100, chroma, hue), fg: INK, track: 'rgba(16,18,15,0.32)', dark: false };
 }
 
 /** The colour shown for a number of lit cells: the middle of that cell's stretch of the day. */

@@ -205,6 +205,11 @@ struct AverageReport: DeviceActivityReportScene {
 struct TotalView: View {
   let seconds: TimeInterval
 
+  // The figure keeps to the top 52 points, the height of the app's box for it,
+  // whatever size iOS first gives this view. Centred in the whole view, it was
+  // drawn half below the box when iOS laid the view out taller than the box
+  // before the box had its size (the owner's phone, build 75: "2:06" with its
+  // top half cut off, right a moment later).
   var body: some View {
     HStack(spacing: 0) {
       Text(clockWords(seconds))
@@ -216,7 +221,8 @@ struct TotalView: View {
         .minimumScaleFactor(0.6)
       Spacer(minLength: 0)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    .frame(height: 52, alignment: .leading)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .background(ground)
   }
 }

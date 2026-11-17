@@ -26,6 +26,7 @@ STATUS_LABEL = {
     "polishing": "Polishing",
     "ready-to-play": "Ready to play",
     "ready-to-test": "Ready to test",
+    "in-review": "In App Review",
     "shipped": "On the App Store",
     "parked": "Parked",
 }
@@ -215,7 +216,7 @@ def main():
   .pill {{ padding: 2px 8px; border-radius: 99px; background: #332b22; color: #cfc3b2; font-weight: 600; }}
   .s-building {{ background: #3b2f12; color: #f0c860; }}
   .s-first-playable, .s-polishing {{ background: #13324a; color: #8fd0ff; }}
-  .s-ready-to-play, .s-ready-to-test, .s-shipped {{ background: #163a22; color: #8ee0a6; }}
+  .s-ready-to-play, .s-ready-to-test, .s-in-review, .s-shipped {{ background: #163a22; color: #8ee0a6; }}
   h2 {{ margin: 34px 0 2px; font-size: 22px; letter-spacing: -0.01em; }}
   .hint {{ margin: 0 0 14px; color: #b8ab98; font-size: 14.5px; }}
   h3 {{ margin: 4px 0 2px; font-size: 19px; }}

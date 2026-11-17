@@ -4,13 +4,46 @@ import { Pressable, StyleSheet, Text, View, type PressableProps } from 'react-na
 import { c } from './theme';
 import { useDay } from './useDay';
 
-// The web preview's tab bar, drawn to sit where the iPhone's would.
+// The web preview's tab bar, drawn to match the iPhone's (AppTabs.tsx): an
+// icon over a small label for each tab, tinted in the battery's colour when
+// open. The icons stand in for the SF Symbols the phone draws (battery.75percent
+// and gearshape), which the web has no copy of.
 
-function TabButton({ label, accent, isFocused, ...props }: TabTriggerSlotProps & { label: string; accent: string }) {
+function BatteryIcon({ color }: { color: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, height: 24 }}>
+      <View style={{ width: 24, height: 12, borderRadius: 3.5, borderWidth: 1.6, borderColor: color, padding: 1.6 }}>
+        <View style={{ width: '75%', height: '100%', borderRadius: 1.5, backgroundColor: color }} />
+      </View>
+      <View style={{ width: 2, height: 4.5, borderTopRightRadius: 1.5, borderBottomRightRadius: 1.5, backgroundColor: color }} />
+    </View>
+  );
+}
+
+function GearIcon({ color }: { color: string }) {
+  const size = 22;
+  return (
+    <View style={{ width: size, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size, height: size }}>
+        {Array.from({ length: 8 }, (_, i) => (
+          <View key={i} style={{ position: 'absolute', left: size / 2 - 2.5, top: 0, width: 5, height: size, transform: [{ rotate: `${i * 45}deg` }] }}>
+            <View style={{ width: 5, height: 6, borderRadius: 1.2, backgroundColor: color }} />
+          </View>
+        ))}
+        <View style={{ position: 'absolute', left: 3, top: 3, width: size - 6, height: size - 6, borderRadius: size, backgroundColor: color, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 7, height: 7, borderRadius: 7, backgroundColor: c.ground }} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TabButton({ label, icon, accent, isFocused, ...props }: TabTriggerSlotProps & { label: string; icon: 'battery' | 'gear'; accent: string }) {
+  const color = isFocused ? accent : c.ink3;
   return (
     <Pressable {...(props as PressableProps)} accessibilityRole="tab" accessibilityState={{ selected: !!isFocused }} style={styles.button}>
-      <View style={{ width: 26, height: 4, borderRadius: 2, backgroundColor: isFocused ? accent : 'transparent' }} />
-      <Text style={{ fontSize: 15, fontWeight: isFocused ? '700' : '500', color: isFocused ? c.ink : c.ink3 }}>{label}</Text>
+      {icon === 'battery' ? <BatteryIcon color={color} /> : <GearIcon color={color} />}
+      <Text style={{ fontSize: 10.5, fontWeight: '600', letterSpacing: 0.1, color }}>{label}</Text>
     </Pressable>
   );
 }
@@ -25,10 +58,10 @@ export default function AppTabs() {
         {/* One flat style object: the router's slot can't merge an array of styles. */}
         <View style={StyleSheet.flatten(styles.bar)}>
           <TabTrigger name="index" href="/" asChild>
-            <TabButton label="Today" accent={accent} />
+            <TabButton label="Today" icon="battery" accent={accent} />
           </TabTrigger>
           <TabTrigger name="settings" href="/settings" asChild>
-            <TabButton label="Settings" accent={accent} />
+            <TabButton label="Settings" icon="gear" accent={accent} />
           </TabTrigger>
         </View>
       </TabList>
@@ -37,6 +70,6 @@ export default function AppTabs() {
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: c.rule, backgroundColor: c.ground, paddingTop: 6, paddingBottom: 22, paddingHorizontal: 20 },
-  button: { flex: 1, height: 48, alignItems: 'center', justifyContent: 'center', gap: 7 },
+  bar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.rule, backgroundColor: c.ground, paddingTop: 6, paddingBottom: 26, paddingHorizontal: 40 },
+  button: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center', gap: 3 },
 });

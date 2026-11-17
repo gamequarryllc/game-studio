@@ -76,9 +76,18 @@ class UsageReportView: ExpoView {
     return nil
   }
 
+  private var laidOutSize = CGSize.zero
+
   override func layoutSubviews() {
     super.layoutSubviews()
     host?.view.frame = bounds
+    // When the box gets its real size after the report was first drawn, ask
+    // the report to lay itself out again, so it does not keep the first size.
+    if bounds.size != laidOutSize {
+      laidOutSize = bounds.size
+      host?.view.setNeedsLayout()
+      host?.view.layoutIfNeeded()
+    }
     sheet.frame = bounds
     bringSubviewToFront(sheet)
   }

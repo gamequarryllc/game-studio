@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { cellWords } from '@/domain/battery';
+import { CELLS, cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { topUpPlan } from '@/domain/puzzle';
 import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
@@ -15,7 +15,7 @@ import { useDay } from '@/ui/useDay';
 
 export default function Settings() {
   const router = useRouter();
-  const { settings, day, cells, accent } = useDay();
+  const { settings, day, accent } = useDay();
   const first = topUpPlan(0);
   const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
   const countedValue = picked < 0 ? 'Your picks' : picked === 0 ? 'Nothing yet' : `${picked} ticked`;
@@ -43,7 +43,7 @@ export default function Settings() {
         </View>
         <View style={styles.cellRow}>
           <View style={{ width: 74 }}>
-            <Battery cells={cells} tone={{ fg: c.ink, track: 'rgba(244,245,242,0.22)', bg: c.card }} height={26} flat decorative />
+            <Battery cells={CELLS} tone={{ fg: c.ink, track: 'rgba(244,245,242,0.22)', bg: c.card }} height={26} flat decorative />
           </View>
           <Text style={styles.cellNote}>Six cells of {cellWords(settings.goalMinutes)} each</Text>
         </View>

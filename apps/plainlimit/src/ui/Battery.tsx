@@ -11,7 +11,7 @@ import { usePulse, useReducedMotion } from './motion';
 //
 // It is drawn flat, like a sticker: a hard shadow under the casing, and a
 // short glint on each lit cell. A cell fades and shrinks away when it is
-// used up, and the last one left breathes slowly.
+// used up, leaving an outlined empty slot, and the last one left breathes slowly.
 
 export function Battery({
   cells,
@@ -46,6 +46,7 @@ export function Battery({
   const inset = Math.max(3, Math.round(height * 0.085));
   const radius = Math.round(height * 0.27);
   const cellRadius = Math.max(2, Math.round(height * 0.12));
+  const slotLine = Math.max(1.5, Math.round(height * 0.035 * 2) / 2);
   const drop = flat ? 0 : Math.max(3, Math.round(height * 0.085));
   const capWidth = Math.max(4, Math.round(height * 0.11));
   const capGap = Math.max(2, Math.round(height * 0.06));
@@ -64,7 +65,10 @@ export function Battery({
         {drop > 0 ? <View style={{ position: 'absolute', left: 0, right: 0, top: drop, height, borderRadius: radius, backgroundColor: tone.track }} /> : null}
         <Animated.View style={{ height, borderWidth: border, borderColor: tone.fg, borderRadius: radius, backgroundColor: fill ?? tone.bg, padding: inset, flexDirection: 'row', gap: inset }}>
           {levels.map((level, i) => (
-            <View key={i} style={{ flex: 1, borderRadius: cellRadius, backgroundColor: tone.track, overflow: 'hidden' }}>
+            // A used cell is an empty slot (the ground shows through, outlined), like
+            // the phone's own battery icon: only charge is solid.
+            <View key={i} style={{ flex: 1 }}>
+              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: cellRadius, borderWidth: slotLine, borderColor: tone.track }} />
               <Animated.View
                 style={{
                   flex: 1,

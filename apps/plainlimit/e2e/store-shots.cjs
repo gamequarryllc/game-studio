@@ -135,7 +135,35 @@ async function main() {
       await page.waitForTimeout(800);
       return { page, context };
     }
+    // Scrolls the page the least it takes for the tab bar's top edge to fall in
+    // a gap between blocks (or past the end), so no text is cut in half by it.
+    const unclip = (page) =>
+      page.evaluate(() => {
+        const tab = document.querySelector('[role="tab"]');
+        const scroller = [...document.querySelectorAll('*')]
+          .filter((d) => d.scrollHeight > d.clientHeight + 4 && /(auto|scroll)/.test(getComputedStyle(d).overflowY))
+          .sort((a, b) => b.clientHeight - a.clientHeight)[0];
+        if (!tab || !scroller) return 'nothing to scroll';
+        const edge = tab.parentElement.getBoundingClientRect().top - 6;
+        // The page's blocks: the content container's children, or theirs if it has one wrapper.
+        let holder = scroller.firstElementChild;
+        while (holder && holder.children.length === 1) holder = holder.firstElementChild;
+        if (!holder) return 'no blocks';
+        const blocks = [...holder.children].map((b) => b.getBoundingClientRect()).filter((r) => r.height > 0);
+        const max = scroller.scrollHeight - scroller.clientHeight;
+        for (let i = 0; i < blocks.length; i++) {
+          const from = Math.max(0, blocks[i].bottom - edge);
+          const to = i + 1 < blocks.length ? blocks[i + 1].top - edge - 6 : Infinity;
+          if (from <= to && from <= max) {
+            scroller.scrollTop = from;
+            return `scrolled ${Math.round(from)} of ${max} (${blocks.length} blocks)`;
+          }
+        }
+        scroller.scrollTop = max;
+        return `scrolled to the end, ${max}`;
+      });
     const raw = async (page, name) => {
+      console.log(`${name}: ${await unclip(page)}`);
       await page.waitForTimeout(600);
       await page.screenshot({ path: path.join(RAW, `${name}.png`) });
     };
@@ -149,10 +177,11 @@ async function main() {
       await context.close();
     }
 
-    // 2: the battery empty with "Locked", so the screen says what the caption says.
+    // 2: the battery empty, with "Work for it" (as Settings shows next), so the
+    // screen leads on to the sums.
     {
-      const { page, context } = await open(doc(GOAL, 'locked'));
-      await page.getByText('Locked until', { exact: false }).first().waitFor();
+      const { page, context } = await open(doc(GOAL));
+      await page.getByRole('button', { name: /Solve 3 sums/ }).first().waitFor();
       await raw(page, '02-empty');
       await context.close();
     }

@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   word: { fontFamily: display.bold, fontSize: 58, lineHeight: 58, letterSpacing: -2.2 },
   rechargeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 10, rowGap: 2 },
   recharge: { fontSize: 17, fontWeight: '700' },
-  until: { fontSize: 17, fontWeight: '500' },
+  until: { fontSize: 17, fontWeight: '500', opacity: 0.72 },
   rest: { paddingHorizontal: 24, paddingTop: 28, gap: 26 },
   strip: { borderLeftWidth: 0, borderWidth: 1.5, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
   used: { fontFamily: display.bold, fontSize: 48, lineHeight: 50, letterSpacing: -1.6, color: c.ink },

@@ -43,7 +43,7 @@ extension Color {
 }
 
 // TONES-BEGIN (generated from src/domain/tone.ts; index = cells left)
-let toneBackgrounds: [UInt32] = [0xA50008, 0xF79200, 0x9CC349, 0x50B76C, 0x4DBE6D, 0x4AC56E, 0x46CC70]
+let toneBackgrounds: [UInt32] = [0xA50008, 0xF79200, 0xE5CC1C, 0x50B76C, 0x4DBE6D, 0x4AC56E, 0x46CC70]
 // TONES-END
 
 func tone(forCells cells: Int) -> Tone {
@@ -53,7 +53,7 @@ func tone(forCells cells: Int) -> Tone {
       background: Color(hex: toneBackgrounds[0]), ink: .white, track: Color.white.opacity(0.30))
   }
   let ink = Color(hex: 0x10120F)
-  return Tone(background: Color(hex: toneBackgrounds[index]), ink: ink, track: ink.opacity(0.22))
+  return Tone(background: Color(hex: toneBackgrounds[index]), ink: ink, track: ink.opacity(0.32))
 }
 
 func word(forCells cells: Int) -> String {
@@ -213,9 +213,15 @@ struct BatteryShape: View {
       let nub = height * 0.11
       HStack(spacing: height * 0.05) {
         HStack(spacing: height * 0.07) {
+          // A used cell is an outlined empty slot; only charge is solid (Battery.tsx).
           ForEach(0..<cellCount, id: \.self) { index in
-            RoundedRectangle(cornerRadius: height * 0.09, style: .continuous)
-              .fill(index < cells ? ink : track)
+            if index < cells {
+              RoundedRectangle(cornerRadius: height * 0.09, style: .continuous)
+                .fill(ink)
+            } else {
+              RoundedRectangle(cornerRadius: height * 0.09, style: .continuous)
+                .strokeBorder(track, lineWidth: max(1, height * 0.035))
+            }
           }
         }
         .padding(height * 0.15)
