@@ -3,7 +3,7 @@
 // those screens do. Everything here is plain data; src/platform/screenTime.ts
 // hands it to Apple's Screen Time, and nothing else in the app talks to that.
 
-import { checkpointsFor, minuteTicksFor } from './checkpoints';
+import { checkpointsFor, guardFrom, minuteTicksFor, type Known } from './checkpoints';
 import { wrapMinute } from './day';
 import { topUpPlan } from './puzzle';
 import { emptyCopy, warningCopy, type ShieldCopy } from './shield';
@@ -181,6 +181,21 @@ export function countStart(periodStart: Date, countingSince: number | null): Dat
  */
 export function earliestTrue(countFrom: Date, minutes: number, slackMinutes = 2): Date {
   return new Date(countFrom.getTime() + Math.max(0, minutes - slackMinutes) * 60000);
+}
+
+/**
+ * When the phone may first act on a checkpoint for `minutes`: once it can be
+ * true counting from the day's start, and while the guard is open after a
+ * registration (see `Known`), once it can be true counting from `guardFrom`.
+ * The guard's part never reaches past its close, so a real report that comes
+ * later still locks. (Build 72 told the phone not to lock before 8:52 PM on a
+ * figure that was wrong by 6:58.)
+ */
+export function lockNotBefore(dayStart: Date, known: Known | null, minutes: number): Date {
+  const plain = earliestTrue(dayStart, minutes).getTime();
+  if (!known) return new Date(plain);
+  const guarded = Math.min(earliestTrue(guardFrom(dayStart, known), minutes).getTime(), known.closes);
+  return new Date(Math.max(plain, guarded));
 }
 
 /**

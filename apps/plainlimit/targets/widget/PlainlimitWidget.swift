@@ -17,6 +17,8 @@ let appGroup = "group.com.gamequarry.plainlimit"
 let activityName = "plday"
 let cellCount = 6
 let slackMinutes = 2.0
+// How long after the day is registered the known figure guards it (checkpoints.ts, GUARD_MS).
+let guardMs = 600_000.0
 
 struct BatteryState {
   var isSetUp: Bool
@@ -98,14 +100,19 @@ func readState(now: Date) -> BatteryState {
   let countFrom = (plan["countFrom"] as? NSNumber)?.doubleValue ?? 0
   let start = max(periodStart(now: now, rechargeMinute: recharge).timeIntervalSince1970 * 1000, countFrom)
 
-  // Once the app has known that at most `most` minutes were used by `knownAt`, a
-  // checkpoint arriving after that is judged as if the count began `most`
-  // minutes before `knownAt` (checkpoints.ts, judgedFrom).
+  // For a checkpoint arriving in the few minutes after the day was last
+  // registered, once the app had known before that registration that at most
+  // `most` minutes were used by `knownAt`, it is judged as if the count began
+  // `most` minutes before `knownAt`. Any other checkpoint is judged from the
+  // start (checkpoints.ts, knownFor and judgedFrom).
   let known = defaults.dictionary(forKey: "plainlimit_known")
   let knownAt = (known?["at"] as? NSNumber)?.doubleValue ?? 0
   let knownMost = (known?["most"] as? NSNumber)?.doubleValue ?? 0
+  let registeredAt = defaults.double(forKey: "plainlimit_registered_at")
   func judgedFrom(_ arrivedAt: Double) -> Double {
-    guard knownAt >= start, arrivedAt >= knownAt else { return start }
+    guard known != nil, registeredAt > 0, knownAt <= registeredAt, knownAt >= start,
+      arrivedAt >= registeredAt, arrivedAt <= registeredAt + guardMs
+    else { return start }
     return max(start, knownAt - knownMost * 60_000)
   }
 

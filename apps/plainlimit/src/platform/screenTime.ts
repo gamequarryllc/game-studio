@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { believable, checkpointsFor, guardFrom, picksSettled, roundName, splitName, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known } from '@/domain/checkpoints';
+import { believable, checkpointsFor, GUARD_MS, knownFor, picksSettled, roundName, splitName, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known, type Noted } from '@/domain/checkpoints';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
@@ -12,7 +12,7 @@ import {
   TOPUP_ACTIVITY,
   WIDGET_PLAN_KEY,
   countStart,
-  earliestTrue,
+  lockNotBefore,
   includesEarlierUse,
   monitorPlan,
   puzzleNotice,
@@ -248,16 +248,21 @@ function countingSince(): number | null {
   }
 }
 
-/** Where the last known figure is kept (see `Known` and `mostByNow`). */
+/** Where the last known figure is kept (see `Noted` and `mostByNow`). */
 const KNOWN_KEY = 'plainlimit_known';
 
-function known(): Known | null {
+function noted(): Noted | null {
   try {
-    const value = DeviceActivity.userDefaultsGet<Known>(KNOWN_KEY);
+    const value = DeviceActivity.userDefaultsGet<Noted>(KNOWN_KEY);
     return value && typeof value.at === 'number' && typeof value.most === 'number' ? value : null;
   } catch {
     return null;
   }
+}
+
+/** The guard for the latest registration (see `Known`): open for a few minutes after it. */
+function known(): Known | null {
+  return knownFor(noted(), registeredAt());
 }
 
 /**
@@ -268,19 +273,19 @@ export function noteKnown(settings: Settings, usedFloorNow: number, now = new Da
   if (!SCREEN_TIME_AVAILABLE) return;
   // Right after counting is set up the phone is still sending reports for time
   // already used, so "not reported yet" does not yet mean "not reached yet".
-  if (now.getTime() - registeredAt() < SETTLE_MS) return;
+  // And the figure noted before the registration is the one guarding it.
+  if (now.getTime() - registeredAt() < GUARD_MS) return;
   const most = mostByNow(settings.goalMinutes, usedFloorNow);
   if (most === null) return;
   try {
-    DeviceActivity.userDefaultsSet(KNOWN_KEY, { at: now.getTime(), most } satisfies Known);
+    DeviceActivity.userDefaultsSet(KNOWN_KEY, { at: now.getTime(), most } satisfies Noted);
   } catch {
     // Without it the guard falls back to the time since the recharge.
   }
 }
 
-/** When the day was last registered with the phone, and how long its first reports take to arrive. */
+/** When the day was last registered with the phone. */
 const REGISTERED_KEY = 'plainlimit_registered_at';
-const SETTLE_MS = 3 * 60 * 1000;
 
 function registeredAt(): number {
   try {
@@ -507,16 +512,17 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
 
 /**
  * Tells the phone what to do at each checkpoint, and not to do it before the
- * checkpoint can be true (see `earliestTrue` and `guardFrom`), nor while setup
+ * checkpoint can be true (see `lockNotBefore`), nor while setup
  * holds the locks. This only writes settings; it registers nothing, so it is
  * safe to repeat.
  */
 function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: Settings, now: Date) {
-  const from = guardFrom(dayStartOf(periodStartOf(now, settings.rechargeMinute)), known());
+  const dayStart = dayStartOf(periodStartOf(now, settings.rechargeMinute));
+  const sure = known();
   const held = holdUntil();
   const named = round();
   for (const event of plan.events) {
-    const notBefore = new Date(Math.max(earliestTrue(from, event.minutes).getTime(), held));
+    const notBefore = new Date(Math.max(lockNotBefore(dayStart, sure, event.minutes).getTime(), held));
     DeviceActivity.configureActions({
       activityName: plan.activity,
       callbackName: 'eventDidReachThreshold',
@@ -815,8 +821,11 @@ export function diagnostics(settings: Settings): string[] {
     // So a screenshot shows how old the lines below are.
     lines.push(`Build: ${widgets?.build?.() ?? 'unknown'}. Read at: ${timeOf(Date.now())}`);
     const sureNow = known();
+    const notedNow = noted();
     lines.push(`Counting since: ${countingSince() ? timeOf(countingSince()) : 'the recharge'}`);
-    lines.push(`Known: ${sureNow ? `at most ${Math.round(sureNow.most)} min at ${timeOf(sureNow.at)}` : 'nothing yet'}${holdUntil() > Date.now() ? ' (locks held for setup)' : ''}`);
+    const guarding = sureNow ? ` (guards reports until ${timeOf(sureNow.closes)})` : notedNow ? ' (not guarding: noted after the last registration)' : '';
+    lines.push(`Known: ${notedNow ? `at most ${Math.round(notedNow.most)} min at ${timeOf(notedNow.at)}${guarding}` : 'nothing yet'}${holdUntil() > Date.now() ? ' (locks held for setup)' : ''}`);
+    lines.push(`Registered at: ${timeOf(registeredAt())}`);
     lines.push(`Health: ${health(settings, periodStartOf(new Date(), settings.rechargeMinute), true)}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
     const minutesOf = new Map(checkpointsFor(settings.goalMinutes).map((c) => [c.id as string, c]));

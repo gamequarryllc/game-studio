@@ -59,6 +59,8 @@ function load(phone: Fake, raw: unknown) {
   jest.isolateModules(() => {
     jest.doMock('@/platform/screenTime', () => phone);
     jest.doMock('@/platform/storage', () => ({ readSaved: jest.fn(async () => raw), writeSaved: jest.fn(async () => {}) }));
+    // A fresh copy per test needs require inside isolateModules.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     mod = require('../store');
   });
   return mod as typeof import('../store');

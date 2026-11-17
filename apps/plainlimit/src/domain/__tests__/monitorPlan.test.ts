@@ -1,5 +1,5 @@
 import { wordFor } from '../battery';
-import { checkpointsFor } from '../checkpoints';
+import { checkpointsFor, GUARD_MS, type Known } from '../checkpoints';
 import {
   ACTIVITY,
   COUNTED_ID,
@@ -13,7 +13,7 @@ import {
   puzzleNotice,
   rgbOf,
   spanOf,
-  topUpWindow, earliestTrue } from '../monitorPlan';
+  topUpWindow, earliestTrue, lockNotBefore } from '../monitorPlan';
 import { DEFAULT_SETTINGS } from '../settings';
 import { toneForCells } from '../tone';
 import type { Settings } from '../types';
@@ -151,6 +151,23 @@ describe('the plan handed to the phone', () => {
     }
   });
 
+  test('the guard holds a lock back only in the minutes after registering', () => {
+    // Build 72, 16 November: counted from 6 AM; at 6:47:57 PM the app noted "at most 50".
+    const dayStart = new Date(2026, 10, 16, 6, 0, 0);
+    const clock = (h: number, m = 0, sec = 0) => new Date(2026, 10, 16, h, m, sec).getTime();
+    const registered = clock(19, 0);
+    const known: Known = { at: clock(18, 47, 57), most: 50, opens: registered, closes: registered + GUARD_MS };
+    // With nothing known, as soon as it can be true from the day's start.
+    expect(lockNotBefore(dayStart, null, 180)).toEqual(earliestTrue(dayStart, 180));
+    // A false report right after registering cannot lock...
+    expect(lockNotBefore(dayStart, known, 180).getTime()).toBeGreaterThan(registered + 60_000);
+    // ...but the hold ends with the guard, so the real one later still locks (build 72 held it until 8:52 PM).
+    expect(lockNotBefore(dayStart, known, 180).getTime()).toBe(registered + GUARD_MS);
+    // Never sooner than it could be true from the day's start.
+    const early = new Date(2026, 10, 16, 6, 30);
+    expect(lockNotBefore(early, { ...known, at: clock(6, 40), most: 30 }, 180)).toEqual(earliestTrue(early, 180));
+  });
+
   test('colours are whole numbers from 0 to 255', () => {
     expect(rgbOf('#FF8000')).toEqual({ red: 255, green: 128, blue: 0 });
     for (const shield of monitorPlan(settings()).shields) {
@@ -194,6 +211,9 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain('"plainlimit_known"');
     expect(swift).toContain('known?["at"]');
     expect(swift).toContain('known?["most"]');
+    // Open for the same stretch after the same registration time.
+    expect(swift).toContain('"plainlimit_registered_at"');
+    expect(swift).toContain(`let guardMs = ${GUARD_MS.toLocaleString('en-US').replace(/,/g, '_')}.0`);
     // Checkpoints are read under the current round's names, as in the app.
     expect(swift).toContain('plan["round"]');
     expect(swift).toContain('plan["roundBefore"]');

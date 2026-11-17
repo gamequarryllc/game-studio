@@ -70,12 +70,6 @@ export function isPlausible(checkpoint: Checkpoint, periodStart: Date, arrivedAt
 }
 
 /**
- * The most that can have been used by `at`, in minutes: something the app
- * learned while counting was working (see `mostByNow`). Kept on the phone, so
- * it outlives counting being turned off, Screen Time access being taken away,
- * or the day being registered again after a change to the settings.
- */
-/**
  * Checkpoints are registered under a round name whenever the ticked apps
  * change ("cell-2~mhz3k1"), so a report always says which list it was made
  * for. The phone can deliver reports for the old list well after the change
@@ -106,28 +100,66 @@ export function picksSettled(nowMs: number, picksChangedAt: number, lastReportSi
   return lastReportSince !== null && nowMs - lastReportSince >= PICKS_QUIET_MS;
 }
 
-export interface Known {
+/**
+ * The most that can have been used by `at`, in minutes: something the app
+ * noted while counting was working (see `mostByNow`). Kept on the phone, so
+ * it outlives counting being turned off, Screen Time access being taken away,
+ * or the day being registered again after a change to the settings.
+ */
+export interface Noted {
   at: number;
   most: number;
 }
 
 /**
+ * How long after the day is registered its false reports are guarded against.
+ * iOS 26 sends them within seconds of registering; this leaves room.
+ */
+export const GUARD_MS = 10 * 60 * 1000;
+
+/**
+ * A noted figure, and the reports it judges: only those arriving between
+ * `opens` and `closes`, the few minutes after the day was last registered,
+ * which is when iOS 26 sends false reports. Every other report is judged from
+ * the day's start alone, because a report the phone has not sent yet is no
+ * proof the time was not reached: it can hold reports back for a quarter of an
+ * hour or more. (Build 72, 16 November: the 45 and 60 minute marks had not
+ * come by 6:47 PM, so the app noted "at most 50", then threw out the phone's
+ * real 70 and 105 minute reports at 6:58 and 7:36 as impossible. The same rule
+ * told the phone not to lock before 8:52 PM.)
+ */
+export interface Known extends Noted {
+  opens: number;
+  closes: number;
+}
+
+/**
+ * The guard for the latest registration, at `registeredAt`. Only a figure
+ * noted before it is used: one noted after it says nothing about the reports
+ * that registration brings.
+ */
+export function knownFor(noted: Noted | null, registeredAt: number, guardMs = GUARD_MS): Known | null {
+  if (!noted || !(registeredAt > 0) || noted.at > registeredAt) return null;
+  return { at: noted.at, most: noted.most, opens: registeredAt, closes: registeredAt + guardMs };
+}
+
+/**
  * Where a report that arrived at `arrivedAt` is judged from. Nobody uses more
  * minutes than have passed, so a report for N minutes cannot come sooner than
- * N minutes after the day's count began. And once the app has known that at
- * most `most` minutes were used by `at`, a report arriving after `at` cannot be
- * for more than `most` plus the time since: as if the count had begun `most`
- * minutes before `at`. That is what keeps a false report from the phone (iOS
- * 26 sends them right after counting is set up) from passing for real when
- * counting is set up in the middle of a day: after a change to the settings,
- * after counting is turned back on, after Screen Time access comes back.
+ * N minutes after the day's count began. And for a report arriving just after
+ * the day was registered again (see `Known`), once the app has known that at
+ * most `most` minutes were used by `at`, the report cannot be for more than
+ * `most` plus the time since: as if the count had begun `most` minutes before
+ * `at`. That is what keeps a false report from passing for real when counting
+ * is set up in the middle of a day: after a change to the settings, after
+ * counting is turned back on, after Screen Time access comes back.
  */
 export function judgedFrom(dayStart: Date, known: Known | null, arrivedAt: Date): Date {
-  if (!known || known.at < dayStart.getTime() || arrivedAt.getTime() < known.at) return dayStart;
+  if (!known || known.at < dayStart.getTime() || arrivedAt.getTime() < known.opens || arrivedAt.getTime() > known.closes) return dayStart;
   return new Date(Math.max(dayStart.getTime(), known.at - known.most * 60000));
 }
 
-/** Where every report from now on is judged from, for the phone's "never before" times. */
+/** Where reports arriving while the guard is open are judged from, for the phone's "never before" times. */
 export function guardFrom(dayStart: Date, known: Known | null): Date {
   if (!known || known.at < dayStart.getTime()) return dayStart;
   return new Date(Math.max(dayStart.getTime(), known.at - known.most * 60000));
@@ -141,10 +173,11 @@ export function believable(checkpoint: Checkpoint, dayStart: Date, known: Known 
 /**
  * The most that can have been used right now, while counting works: less than
  * the next checkpoint that has not been reported, since it would have been.
- * Five minutes are added for the phone being slow to report. Nothing is known
- * once the goal is passed, as there are no checkpoints beyond it.
+ * Twenty minutes are added for the phone being slow to report (build 72 was
+ * seen a quarter of an hour behind). Nothing is known once the goal is passed,
+ * as there are no checkpoints beyond it.
  */
-export function mostByNow(goalMinutes: number, usedFloorNow: number, slackMinutes = 5): number | null {
+export function mostByNow(goalMinutes: number, usedFloorNow: number, slackMinutes = 20): number | null {
   const next = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)]
     .map((c) => c.minutes)
     .filter((m) => m > usedFloorNow)
