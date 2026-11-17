@@ -79,7 +79,7 @@ export default function RootLayout() {
             <Stack.Screen name="what-counts" options={{ title: '' }} />
             <Stack.Screen name="tips" options={{ title: '' }} />
             <Stack.Screen name="ask-first" options={{ title: '' }} />
-            <Stack.Screen name="ask" options={{ presentation: 'modal', headerShown: false, title: 'Ask first' }} />
+            <Stack.Screen name="ask" options={{ presentation: 'modal', headerShown: false, title: 'Second thought' }} />
             <Stack.Screen name="puzzle" options={{ presentation: 'modal', headerShown: false, title: 'Earn more time' }} />
             <Stack.Screen name="screens/warning" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade', title: 'Warning screen' }} />
             <Stack.Screen name="screens/empty" options={{ presentation: 'fullScreenModal', headerShown: false, animation: 'fade', title: 'Empty screen' }} />

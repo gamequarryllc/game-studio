@@ -9,7 +9,7 @@ import { BigButton, Card, Choice, Label, Lead, Page, Title } from '@/ui/kit';
 import { c } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
-// Settings > Ask first: a second, optional list of apps that ask for one sum
+// Settings > Second thought (Ask first in the code): a second, optional list of apps that ask for one sum
 // every time they open (src/domain/askFirst.ts).
 
 export default function AskFirstSettings() {
@@ -22,12 +22,12 @@ export default function AskFirstSettings() {
   const phone = SCREEN_TIME_AVAILABLE || MOCK_PHONE;
   return (
     <Page top={8}>
-      <Title>Ask first</Title>
+      <Title>Second thought</Title>
       <Lead>For the apps you open without deciding to. Each one asks for one sum before it opens, whatever the battery says.</Lead>
 
       <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>
         <Choice title="Off" line="Apps open as usual" chosen={!ask.on} accent={accent} onPress={() => store.setAskFirst({ on: false })} />
-        <Choice title="On" line="The apps below ask first" chosen={ask.on} accent={accent} onPress={() => store.setAskFirst({ on: true })} />
+        <Choice title="On" line="The apps below ask for one sum first" chosen={ask.on} accent={accent} onPress={() => store.setAskFirst({ on: true })} />
       </Card>
 
       {phone ? (
@@ -55,7 +55,7 @@ export default function AskFirstSettings() {
       <AppPicker
         id={ASK_ID}
         open={picking}
-        header="Tick the apps that should ask first"
+        header="Tick the apps you open without thinking"
         onClose={() => {
           setPicking(false);
           store.askPicksChanged();

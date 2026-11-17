@@ -43,7 +43,7 @@ export default function Ask() {
           </Text>
           <Text style={styles.lead}>
             {openUntil
-              ? `Your Ask first apps are open until ${clockLabelOf(openUntil)}. Go back to the one you wanted.`
+              ? `Your Second thought apps are open until ${clockLabelOf(openUntil)}. Go back to the one you wanted.`
               : 'The phone didn’t take the timer, so the apps stay covered. Try again in a moment.'}
           </Text>
           {openUntil && !opensCounted ? <Text style={styles.lead}>Apps that also count stay locked until {clockLabel(settings.rechargeMinute)}.</Text> : null}

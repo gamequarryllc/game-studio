@@ -13,10 +13,10 @@ import { c } from './theme';
 // view marks those days instead.
 
 const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string; title?: string }> = {
-  nothingPicked: { line: 'Nothing is ticked in What counts, so nothing is counted or locked.', button: 'Choose apps' },
+  nothingPicked: { line: 'Your essentials aren’t set yet, so nothing is counted or locked.', button: 'Choose apps' },
   tooManyApps: {
     title: 'Not locking',
-    line: 'iOS locks at most 50 apps ticked one by one, and What counts lists more, so most of them won\'t lock. Pick again, ticking whole categories: those have no limit.',
+    line: 'iOS locks at most 50 apps ticked one by one, and more than that are ticked, so most of them won\'t lock. Pick again, ticking whole categories: those have no limit.',
     button: 'Pick again',
   },
   accessOff: {

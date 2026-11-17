@@ -351,11 +351,20 @@ From the store screenshots' second review (verdict "almost") and the owner's pho
 - **Store screenshots** (for 1.0.1's listing; 1.0.0's are already with Apple): the web build's tab bar is a floating capsule with an icon over a small label for each tab, like the iPhone's, and the page runs on under it as it does on the phone (so nothing is cut at a hard edge); the empty-battery shot is in "Work for it" and shows "Solve 3 sums for 15 more minutes"; the order is battery, empty, sums, settings, so the button pays off in the next picture; the green dash over each caption is gone. Also: the goal pill reads "3 h 30 min day" in normal case, a little more room under the headline, the countdown easier to read on the empty red, and the sums screen says "Adds 15 minutes now; your battery still refills at 6:00 AM." Two design reviews (both "almost") were applied; what they raised and was left is listed below.
 - Left for later, from the reviews: Settings as one grouped list with a time picker instead of − and +; one way of writing durations everywhere; the green card running up behind the clock; curly apostrophes; "14 ticked" wording; the sums screen's "Never mind" as a button and the number pad in its screenshot; one red for the empty screen; showing a locked app in the empty screenshot; a mark on the week for a day with earned time; the battery's offset shadow. Not taken: green cells on a dark card (the solid dark cells on the day's colour are the app's look, and read the way the phone's own battery icon does in light mode).
 
+## Positioning from 1.0.1 (the owner, 2026-11-17)
+
+The owner set what the app is about. Core: **your essentials are free** (using the phone as a tool, calls, messages, maps, never costs battery or locks), and **friction, not walls** (an empty battery is got through with sums: 3 for 15 minutes, then 5 for 10, then 7 for 5). Features: the recharge at 6 AM (or a chosen time) instead of midnight, so there is no fresh battery for a late-night scroll; settings locked while the battery is empty (emergency access still to be decided with the owner); and, optional, the one-sum list for reflex apps, named **Second thought** by the owner (built as "Ask first" on its branch).
+
+- The owner named the free apps **Essentials**. In the app, "What counts" is now **Essentials** (Settings row, its screen, setup's step, the counting problems): the same single list in Apple's picker (tick everything, then untick your essentials), only the words changed. The Settings row reads "Set" or "Not set" instead of a count of ticked items, since the count was of what counts, not of the essentials.
+- 1.0.1's listing: subtitle "Your essentials never count" (was "A daily battery for your apps"); promotional text and description lead with essentials and the sums; captions "Calls, texts and maps never count." / "When it runs out, the scroll locks." / "Need a little more? Earn it with sums." / "Recharges at 6 AM, not midnight." 1.0.0's listing, in review, is unchanged; `tools/asc_listing.py` is not run against it.
+
 ## Ideas for later versions (not built)
 
 - **"Ask first" apps (owner's idea, 2026-11-16): built on the branch `plainlimit-ask-first` (2026-11-17), not merged.** See "Ask first (branch)" below.
 
 ## Ask first (branch `plainlimit-ask-first`, 2026-11-17, not merged)
+
+Named **Second thought** by the owner (2026-11-17): the Settings row, its screen, the covering screen, the notification and the sum say "Second thought"; the code keeps the name Ask first (`askFirst`, `plask`). main was merged into the branch at the same time, so it carries the Essentials wording.
 
 The owner asked for it to be built now and merged later. Rules in `src/domain/askFirst.ts`, the phone side in `src/platform/askFirst.ts`, screens `src/app/ask-first.tsx` (Settings > Ask first) and `src/app/ask.tsx` (the sum).
 

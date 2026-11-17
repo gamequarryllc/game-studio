@@ -28,7 +28,7 @@ export default function WhatCounts() {
   const button = tooMany ? 'Pick again' : picked === 0 ? 'Choose apps' : 'Change the apps';
   return (
     <Page top={8}>
-      <Title>What counts</Title>
+      <Title>Essentials</Title>
       <Lead>{COUNTS_LEAD}</Lead>
       {SCREEN_TIME_AVAILABLE || MOCK_PHONE ? (
         <>
@@ -73,7 +73,7 @@ export default function WhatCounts() {
       <AppPicker
         id={COUNTED_ID}
         open={picking}
-        header="Tick what uses up your battery"
+        header="Tick everything, then untick your essentials"
         onClose={() => {
           setPicking(false);
           store.picksChanged();

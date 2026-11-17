@@ -1,5 +1,5 @@
 /**
- * "Ask first": a second, optional list of apps that ask for one sum every time
+ * "Second thought" (called Ask first in the code): a second, optional list of apps that ask for one sum every time
  * they are opened, whatever the battery says. Opening takes a moment of
  * thought instead of a reflex (the first thing many people do on picking up
  * the phone is open Instagram or TikTok without deciding to).
@@ -66,7 +66,7 @@ export function opensCountedApps(batteryEmpty: boolean, earnedTimeRunning: boole
  */
 export function askShieldCopy(openMinutes: number): { title: string; line: string; primary: string; secondary: string } {
   return {
-    title: 'Ask first',
+    title: 'Second thought',
     line: `One sum, then {applicationOrDomainDisplayName} opens for ${openMinutes} minutes.`,
     primary: 'Not now',
     secondary: 'Solve one sum',
@@ -75,11 +75,11 @@ export function askShieldCopy(openMinutes: number): { title: string; line: strin
 
 /** The notification the covering screen's button sends; tapping it opens the sum. */
 export function askNotice(): { title: string; body: string; route: '/ask' } {
-  return { title: 'Ask first', body: 'Tap to solve one sum and open it.', route: '/ask' };
+  return { title: 'Second thought', body: 'Tap to solve one sum and open it.', route: '/ask' };
 }
 
 /** The line under the sum, saying what solving it does. */
 export function askLead(openMinutes: number, opensCounted: boolean, rechargeLabel: string): string {
-  const what = `Your Ask first apps open for ${openMinutes} minutes, then ask again.`;
+  const what = `Your Second thought apps open for ${openMinutes} minutes, then ask again.`;
   return opensCounted ? what : `${what} Apps that also count stay locked until ${rechargeLabel}, as the battery is empty.`;
 }
