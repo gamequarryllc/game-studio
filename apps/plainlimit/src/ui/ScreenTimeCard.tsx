@@ -58,7 +58,7 @@ export function ScreenTimeCard() {
         <Label>Screen Time</Label>
         <Text style={body}>On. The battery follows this phone&apos;s real screen time.</Text>
         {settingsLocked() ? (
-          <Text style={[body, { color: c.ink }]}>The battery is empty, so these settings are locked until it recharges at {clockLabel(settings.rechargeMinute)}.</Text>
+          <Text style={[body, { color: c.ink }]}>The battery is empty, so these settings are locked until it recharges at {clockLabel(settings.rechargeMinute)}. An emergency pass, on Today, opens them for 15 minutes.</Text>
         ) : (
           <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} />
         )}

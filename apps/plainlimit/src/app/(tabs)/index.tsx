@@ -1,11 +1,12 @@
 import { useRouter } from 'expo-router';
-import { Animated, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { wordFor } from '@/domain/battery';
 import { clockLabel, clockLabelOf, durationLabel, goalLabel, nextRecharge, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
+import { passActive } from '@/domain/record';
 import { weekView } from '@/domain/week';
 import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, locksHeldUntil } from '@/platform/screenTime';
 import { store, useDoc } from '@/state/store';
@@ -15,6 +16,7 @@ import { BigButton, Label, StatusBand } from '@/ui/kit';
 import { useEasedColor } from '@/ui/motion';
 import { c, display } from '@/ui/theme';
 import { TodayTotal, UsageReport } from '@/ui/UsageReport';
+import { RecordCard } from '@/ui/RecordCard';
 import { WeekView } from '@/ui/WeekView';
 import { useDay } from '@/ui/useDay';
 
@@ -25,7 +27,8 @@ export default function Today() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { now, settings, day, cells, tone, accent } = useDay();
-  const { history, watching } = useDoc();
+  const doc = useDoc();
+  const { history, watching } = doc;
   const problem = store.health();
   // The phone tells the app about use in steps. The figure on screen is drawn
   // by the phone's Screen Time to the minute; the app's own stepped figure is
@@ -41,6 +44,9 @@ export default function Today() {
   // Setup's "start tomorrow": counting, but nothing locks before the recharge.
   const held = locksHeldUntil();
   const unlocked = isUnlocked(day, now);
+  const passOn = passActive(doc.record, now);
+  const passes = doc.record?.passes ?? 0;
+  const passReady = store.passCheck() === 'ok';
   const next = topUpPlan(day.topUps);
 
   return (
@@ -74,7 +80,9 @@ export default function Today() {
           ) : null}
           {unlocked ? (
             <View style={[styles.strip, { borderColor: accent }]}>
-              <Text style={styles.body}>Earned time runs until {clockLabelOf(new Date(day.unlockedUntil as string))}.</Text>
+              <Text style={styles.body}>
+                {passOn ? `Emergency pass: everything is open until ${clockLabelOf(new Date(day.unlockedUntil as string))}, settings too.` : `Earned time runs until ${clockLabelOf(new Date(day.unlockedUntil as string))}.`}
+              </Text>
             </View>
           ) : null}
           {empty && !unlocked && held === 0 && settings.emptyLevel === 'work' ? (
@@ -84,6 +92,15 @@ export default function Today() {
             <View style={[styles.strip, { borderColor: accent }]}>
               <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>
             </View>
+          ) : null}
+          {empty && !unlocked && held === 0 && passReady ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={`Use an emergency pass, ${passes} in the bank`} onPress={() => router.push('/pass')} style={({ pressed }) => [styles.passRow, pressed ? { opacity: 0.8 } : null]}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.passTitle}>Use an emergency pass</Text>
+                <Text style={styles.passLine}>{passes} in the bank. Everything, settings too, for 15 minutes.</Text>
+              </View>
+              <Text style={styles.passChevron}>›</Text>
+            </Pressable>
           ) : null}
 
           <View style={{ gap: 12 }}>
@@ -101,6 +118,7 @@ export default function Today() {
           </View>
 
           <WeekView week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true)} />
+          <RecordCard />
 
           {/* Last on the page: Apple's list sits in a box sized for five rows, and spare room at the end is only extra scroll. */}
           {counting ? (
@@ -133,6 +151,10 @@ const styles = StyleSheet.create({
   rechargeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 10, rowGap: 2, marginTop: 6 },
   recharge: { fontSize: 17, fontWeight: '700' },
   until: { fontSize: 17, fontWeight: '500' },
+  passRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderWidth: 1.5, borderColor: c.outline, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
+  passTitle: { fontSize: 16, fontWeight: '600', color: c.ink },
+  passLine: { fontSize: 13, lineHeight: 17, color: c.ink3 },
+  passChevron: { fontSize: 22, color: c.ink3 },
   rest: { paddingHorizontal: 24, paddingTop: 28, gap: 26 },
   strip: { borderLeftWidth: 0, borderWidth: 1.5, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
   used: { fontFamily: display.bold, fontSize: 48, lineHeight: 50, letterSpacing: -1.6, color: c.ink },

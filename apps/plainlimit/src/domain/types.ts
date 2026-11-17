@@ -1,6 +1,7 @@
 // The words the rest of the app is written in.
 
 import type { AskFirst } from './askFirst';
+import type { PassRecord } from './record';
 
 /** Which apps drain the battery. */
 export type CountMode = 'everything' | 'timeWasters' | 'custom';
@@ -62,4 +63,6 @@ export interface Doc {
   setupDone: boolean;
   /** Finished days, oldest first, at most HISTORY_DAYS of them. */
   history: DaySummary[];
+  /** Emergency passes and the record (record.ts). Missing in copies saved before it; made on load. */
+  record?: PassRecord;
 }

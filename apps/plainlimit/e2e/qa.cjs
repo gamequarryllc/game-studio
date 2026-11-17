@@ -318,6 +318,30 @@ async function main() {
     await context.close();
   });
 
+  await scenario('emergency pass: offered on an empty battery, opens everything and the settings, once a day; the record opens from Today', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 200, level: 'locked' }), '?mock=counting');
+    await see(page, 'Empty');
+    await page.getByRole('button', { name: /^Use an emergency pass/ }).click();
+    await see(page, 'Use an emergency pass?');
+    await see(page, '1, then 0');
+    await shot(page, 'q23-pass-sheet');
+    await page.getByRole('button', { name: 'Use a pass', exact: true }).click();
+    // Anchored: Today, hidden under the sheet, also says "everything is open until".
+    await page.getByText(/^Open until \d/).first().waitFor({ state: 'visible', timeout: 8000 });
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await see(page, 'Emergency pass: everything is open');
+    if ((await page.getByRole('button', { name: /^Use an emergency pass/ }).count()) > 0) throw new Error('a second pass was offered the same day');
+    await tab(page, 'Settings');
+    if (await page.getByRole('button', { name: 'More time', exact: true }).isDisabled()) throw new Error('settings stayed locked during the pass');
+    await tab(page, 'Today');
+    await toBottom(page);
+    await page.getByRole('button', { name: /^Your record/ }).click();
+    await see(page, 'Last 12 weeks');
+    await see(page, 'Passes used');
+    await shot(page, 'q24-record', true);
+    await context.close();
+  });
+
   await scenario('an unknown page offers a way back', async () => {
     const { page, context } = await open(doc(), '');
     await page.goto(url.replace(/\/$/, '') + '/nowhere/at/all');

@@ -322,3 +322,34 @@ describe('Ask first', () => {
     expect(store.get().state).toBe('ready');
   });
 });
+
+describe('emergency passes', () => {
+  it('a new record starts with one pass; using it opens the settings and everything for 15 minutes, once a day', async () => {
+    const phone = fakePhone();
+    const { store, settingsLocked } = load(phone, saved(180));
+    await store.start();
+    expect(store.get().doc.record?.passes).toBe(1);
+    expect(settingsLocked()).toBe(true);
+    expect(store.passCheck()).toBe('ok');
+    expect(store.usePass()).toBe(true);
+    const doc = store.get().doc;
+    expect(doc.record?.passes).toBe(0);
+    expect(doc.day.unlockedUntil).toBe(doc.record?.passUntil);
+    expect(phone.grantExtraTime).toHaveBeenCalledTimes(1);
+    expect(settingsLocked()).toBe(false);
+    // Not twice in a battery's day, whatever is in the bank.
+    expect(store.usePass()).toBe(false);
+    expect(store.passCheck()).toBe('running');
+  });
+
+  it('with none in the bank, nothing opens', async () => {
+    const phone = fakePhone();
+    const now = new Date();
+    const record = { passes: 0, lastAdded: '2099-01-05', since: now.toISOString(), uses: [], passUntil: null };
+    const { store } = load(phone, saved(180, { record }));
+    await store.start();
+    expect(store.passCheck()).toBe('none');
+    expect(store.usePass()).toBe(false);
+    expect(phone.grantExtraTime).not.toHaveBeenCalled();
+  });
+});

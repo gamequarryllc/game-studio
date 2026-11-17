@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 
 import { DEFAULT_ASK_FIRST, type AskFirst } from '@/domain/askFirst';
 import { cellsLeft } from '@/domain/battery';
+import { addWeeklyPasses, freshRecord, passActive, passCheck, spendPass } from '@/domain/record';
 import { nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
 import { stepGoal, stepRecharge } from '@/domain/settings';
@@ -64,7 +65,14 @@ function planSoon() {
  */
 export function settingsLocked(doc: Doc = snapshot.doc): boolean {
   // While locks are held (setup's "start tomorrow") nothing is enforced, so nothing needs guarding.
-  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0 && screenTime.locksHeldUntil() === 0;
+  // An emergency pass opens the settings for its 15 minutes (record.ts).
+  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0 && screenTime.locksHeldUntil() === 0 && !passActive(doc.record, new Date());
+}
+
+/** The record with this week's pass added, if a Monday has come (record.ts). */
+function withPasses(doc: Doc, now: Date): Doc {
+  const record = addWeeklyPasses(doc.record ?? freshRecord(now), now);
+  return record === doc.record ? doc : { ...doc, record };
 }
 
 /** The day as the phone reports it, when the app is counting real screen time. */
@@ -81,7 +89,8 @@ function withRealUse(doc: Doc, day: Doc['day']): Doc['day'] {
 let coveredAfter: string | null = null;
 function coverWhenEarnedTimeIsUp(doc: Doc, now: Date) {
   const { day, settings } = doc;
-  if (!screenTime.isOn() || settings.emptyLevel !== 'work' || day.unlockedUntil === null) return;
+  // Earned time, or an emergency pass in any mode.
+  if (!screenTime.isOn() || day.unlockedUntil === null) return;
   if (isUnlocked(day, now) || coveredAfter === day.unlockedUntil) return;
   if (cellsLeft(day.usedMinutes, settings.goalMinutes) !== 0) return;
   coveredAfter = day.unlockedUntil;
@@ -283,7 +292,7 @@ export const store = {
     const raw = await readSaved();
     let doc: Doc;
     try {
-      doc = loadedDoc(raw);
+      doc = withPasses(loadedDoc(raw), new Date());
     } catch {
       // Nothing may keep the app on its splash screen: start from the saved
       // copy alone, without asking the phone anything, and catch up on the next look.
@@ -321,8 +330,8 @@ export const store = {
     try {
       coverWhenEarnedTimeIsUp(snapshot.doc, now);
       const moved = advanced(snapshot.doc, now);
-      const doc = checkHealth({ ...moved, day: withRealUse(moved, moved.day) });
-      if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history) return;
+      const doc = withPasses(checkHealth({ ...moved, day: withRealUse(moved, moved.day) }), now);
+      if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history && doc.record === snapshot.doc.record) return;
       set(doc);
       // The app has just learned something the widget may not have drawn yet.
       if (screenTime.isOn()) screenTime.reloadWidget();
@@ -478,6 +487,31 @@ export const store = {
     const until = await openAsk(settings.askFirst ?? DEFAULT_ASK_FIRST, nextRecharge(now, settings.rechargeMinute).getTime(), now);
     if (until && batteryLocked(snapshot.doc, now)) screenTime.coverEmptyNow(settings, snapshot.doc.day.topUps);
     return until;
+  },
+  /** Whether an emergency pass can be used now (record.ts). */
+  passCheck(): 'ok' | 'none' | 'usedToday' | 'running' {
+    const doc = snapshot.doc;
+    return passCheck(doc.record ?? freshRecord(new Date()), new Date(doc.day.periodStart), new Date());
+  },
+  /**
+   * Uses an emergency pass: everything opens for 15 minutes, settings
+   * included, in any mode. The apps open the way earned time opens them, and
+   * the phone covers them again by itself when it ends.
+   */
+  usePass(): boolean {
+    const now = new Date();
+    const doc = snapshot.doc;
+    const record = doc.record ?? freshRecord(now);
+    if (passCheck(record, new Date(doc.day.periodStart), now) !== 'ok') return false;
+    const recharge = nextRecharge(now, doc.settings.rechargeMinute).getTime();
+    const used = spendPass(record, now, recharge);
+    const until = used.passUntil as string;
+    const unlockedUntil = doc.day.unlockedUntil && new Date(doc.day.unlockedUntil) > new Date(until) ? doc.day.unlockedUntil : until;
+    const day = { ...doc.day, unlockedUntil };
+    set({ ...doc, record: used, day });
+    if (screenTime.isOn()) void screenTime.grantExtraTime(new Date(unlockedUntil), doc.settings, day.topUps, now);
+    if (doc.settings.askFirst?.on) void openAsk({ ...doc.settings.askFirst, openMinutes: 15 }, recharge, now);
+    return true;
   },
   /** Developer: pretend this many more minutes were used. */
   pretendUse(minutes: number) {
