@@ -5,7 +5,7 @@
 // (The screen was called "What counts" until 1.0.1; the picks are the same.)
 
 export const COUNTS_LEAD =
-  'Your essentials never count. Calls, messages, maps: use your phone as a tool without spending battery. Everything else you tick uses it up, and locks when it’s empty.';
+  'Your essentials never count, and you choose them: calls, messages, maps, or any app you use as a tool. Everything you tick uses up the battery, and locks when it’s empty.';
 
 /** The steps, the first naming the button as it reads ("Choose apps", "Change the apps", "Pick again"). */
 export const countsSteps = (button: string) => [`Tap ${button}.`, ...COUNTS_STEPS.slice(1)];
