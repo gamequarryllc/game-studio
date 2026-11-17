@@ -1,5 +1,5 @@
 import { wordFor } from '../battery';
-import { checkpointsFor, GUARD_MS, type Known } from '../checkpoints';
+import { checkpointsFor, GUARD_KEY, guardFor } from '../checkpoints';
 import {
   ACTIVITY,
   COUNTED_ID,
@@ -156,16 +156,17 @@ describe('the plan handed to the phone', () => {
     const dayStart = new Date(2026, 10, 16, 6, 0, 0);
     const clock = (h: number, m = 0, sec = 0) => new Date(2026, 10, 16, h, m, sec).getTime();
     const registered = clock(19, 0);
-    const known: Known = { at: clock(18, 47, 57), most: 50, opens: registered, closes: registered + GUARD_MS };
+    const known = guardFor({ at: clock(18, 47, 57), most: 50 }, registered, dayStart);
+    if (!known) throw new Error('no guard');
     // With nothing known, as soon as it can be true from the day's start.
     expect(lockNotBefore(dayStart, null, 180)).toEqual(earliestTrue(dayStart, 180));
     // A false report right after registering cannot lock...
     expect(lockNotBefore(dayStart, known, 180).getTime()).toBeGreaterThan(registered + 60_000);
-    // ...but the hold ends with the guard, so the real one later still locks (build 72 held it until 8:52 PM).
-    expect(lockNotBefore(dayStart, known, 180).getTime()).toBe(registered + GUARD_MS);
+    // ...but the hold ends with the guard, so the real one later still locks (build 72 held it until after 9 PM).
+    expect(lockNotBefore(dayStart, known, 180).getTime()).toBe(known.closes);
     // Never sooner than it could be true from the day's start.
     const early = new Date(2026, 10, 16, 6, 30);
-    expect(lockNotBefore(early, { ...known, at: clock(6, 40), most: 30 }, 180)).toEqual(earliestTrue(early, 180));
+    expect(lockNotBefore(early, guardFor({ at: clock(6, 40), most: 30 }, registered, early), 180)).toEqual(earliestTrue(early, 180));
   });
 
   test('colours are whole numbers from 0 to 255', () => {
@@ -207,13 +208,11 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain('plan["countFrom"]');
     expect(swift).toContain('plan["goalMinutes"]');
     expect(swift).toContain('plan["rechargeMinute"]');
-    // The last known figure, with the same key and fields as the app's guard.
-    expect(swift).toContain('"plainlimit_known"');
-    expect(swift).toContain('known?["at"]');
-    expect(swift).toContain('known?["most"]');
-    // Open for the same stretch after the same registration time.
-    expect(swift).toContain('"plainlimit_registered_at"');
-    expect(swift).toContain(`let guardMs = ${GUARD_MS.toLocaleString('en-US').replace(/,/g, '_')}.0`);
+    // The guard the app saves at each registration, with the same key and fields.
+    expect(swift).toContain(`"${GUARD_KEY}"`);
+    for (const field of ['from', 'opens', 'closes']) expect(swift).toContain(`guardRecord?["${field}"]`);
+    // The widget no longer works the guard out itself.
+    expect(swift).not.toContain('plainlimit_known');
     // Checkpoints are read under the current round's names, as in the app.
     expect(swift).toContain('plan["round"]');
     expect(swift).toContain('plan["roundBefore"]');

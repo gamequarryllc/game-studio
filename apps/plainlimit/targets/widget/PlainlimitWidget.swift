@@ -3,22 +3,20 @@ import WidgetKit
 
 // The battery on the home screen and the lock screen.
 //
-// It draws from two things in the App Group's shared settings:
+// It draws from three things in the App Group's shared settings:
 //   plainlimit_plan                              written by the app: the goal, the recharge time, and when counting began
 //   events_plday_eventDidReachThreshold_<name>   written by the monitor extension each time a
 //                                                checkpoint is reached (milliseconds since 1970)
-//   plainlimit_known                             written by the app while counting works: at most
-//                                                `most` minutes had been used by `at`
+//   plainlimit_guard                             written by the app at each registration: reports
+//                                                between `opens` and `closes` count from `from`
 // A checkpoint counts for today when it was reached after the last recharge.
 // The same rules live in the app's src/domain/ (battery.ts, day.ts, checkpoints.ts, tone.ts);
-// src/domain/__tests__/widget.test.ts checks the two stay in step.
+// src/domain/__tests__/monitorPlan.test.ts checks the two stay in step.
 
 let appGroup = "group.com.gamequarry.plainlimit"
 let activityName = "plday"
 let cellCount = 6
 let slackMinutes = 2.0
-// How long after the day is registered the known figure guards it (checkpoints.ts, GUARD_MS).
-let guardMs = 600_000.0
 
 struct BatteryState {
   var isSetUp: Bool
@@ -100,20 +98,18 @@ func readState(now: Date) -> BatteryState {
   let countFrom = (plan["countFrom"] as? NSNumber)?.doubleValue ?? 0
   let start = max(periodStart(now: now, rechargeMinute: recharge).timeIntervalSince1970 * 1000, countFrom)
 
-  // For a checkpoint arriving in the few minutes after the day was last
-  // registered, once the app had known before that registration that at most
-  // `most` minutes were used by `knownAt`, it is judged as if the count began
-  // `most` minutes before `knownAt`. Any other checkpoint is judged from the
-  // start (checkpoints.ts, knownFor and judgedFrom).
-  let known = defaults.dictionary(forKey: "plainlimit_known")
-  let knownAt = (known?["at"] as? NSNumber)?.doubleValue ?? 0
-  let knownMost = (known?["most"] as? NSNumber)?.doubleValue ?? 0
-  let registeredAt = defaults.double(forKey: "plainlimit_registered_at")
+  // A checkpoint arriving while the guard is open (the few minutes after the
+  // day was last registered, when iOS sends false reports) is judged as if
+  // the count began at the guard's start; any other from the day's start. The
+  // app works the guard out and saves it at each registration, so the widget,
+  // the app and the phone's locks all use the same numbers (checkpoints.ts, Guard).
+  let guardRecord = defaults.dictionary(forKey: "plainlimit_guard")
+  let guardFrom = (guardRecord?["from"] as? NSNumber)?.doubleValue ?? 0
+  let guardOpens = (guardRecord?["opens"] as? NSNumber)?.doubleValue ?? 0
+  let guardCloses = (guardRecord?["closes"] as? NSNumber)?.doubleValue ?? 0
   func judgedFrom(_ arrivedAt: Double) -> Double {
-    guard known != nil, registeredAt > 0, knownAt <= registeredAt, knownAt >= start,
-      arrivedAt >= registeredAt, arrivedAt <= registeredAt + guardMs
-    else { return start }
-    return max(start, knownAt - knownMost * 60_000)
+    guard guardRecord != nil, arrivedAt >= guardOpens, arrivedAt <= guardCloses else { return start }
+    return max(start, guardFrom)
   }
 
   // Checkpoints carry the round they were registered in (checkpoints.ts,

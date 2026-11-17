@@ -3,7 +3,7 @@
 // those screens do. Everything here is plain data; src/platform/screenTime.ts
 // hands it to Apple's Screen Time, and nothing else in the app talks to that.
 
-import { checkpointsFor, guardFrom, minuteTicksFor, type Known } from './checkpoints';
+import { checkpointsFor, guardFrom, minuteTicksFor, type Guard } from './checkpoints';
 import { wrapMinute } from './day';
 import { topUpPlan } from './puzzle';
 import { emptyCopy, warningCopy, type ShieldCopy } from './shield';
@@ -186,15 +186,15 @@ export function earliestTrue(countFrom: Date, minutes: number, slackMinutes = 2)
 /**
  * When the phone may first act on a checkpoint for `minutes`: once it can be
  * true counting from the day's start, and while the guard is open after a
- * registration (see `Known`), once it can be true counting from `guardFrom`.
+ * registration (see `Guard`), once it can be true counting from `guardFrom`.
  * The guard's part never reaches past its close, so a real report that comes
- * later still locks. (Build 72 told the phone not to lock before 8:52 PM on a
- * figure that was wrong by 6:58.)
+ * later still locks. (Build 72 held the empty battery's lock back until after 9 PM
+ * on a figure that was wrong by 6:58 PM.)
  */
-export function lockNotBefore(dayStart: Date, known: Known | null, minutes: number): Date {
+export function lockNotBefore(dayStart: Date, guard: Guard | null, minutes: number): Date {
   const plain = earliestTrue(dayStart, minutes).getTime();
-  if (!known) return new Date(plain);
-  const guarded = Math.min(earliestTrue(guardFrom(dayStart, known), minutes).getTime(), known.closes);
+  if (!guard) return new Date(plain);
+  const guarded = Math.min(earliestTrue(guardFrom(dayStart, guard), minutes).getTime(), guard.closes);
   return new Date(Math.max(plain, guarded));
 }
 

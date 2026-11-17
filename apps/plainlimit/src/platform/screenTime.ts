@@ -3,14 +3,14 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { believable, checkpointsFor, GUARD_MS, knownFor, picksSettled, roundName, splitName, minuteTicksFor, miscounted, mostByNow, usedFloor, type Known, type Noted } from '@/domain/checkpoints';
+import { GUARD_MS, guardFor, roundName, splitName, mostByNow, type Noted } from '@/domain/checkpoints';
+import { countDay, doubtful, miscounted, roundSettled, type Report, type Rounds } from '@/domain/reports';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
   COUNTED_ID,
   TICKS_ACTIVITY,
   TOPUP_ACTIVITY,
-  WIDGET_PLAN_KEY,
   countStart,
   lockNotBefore,
   includesEarlierUse,
@@ -22,6 +22,8 @@ import {
   type PlanShield,
 } from '@/domain/monitorPlan';
 import type { Settings } from '@/domain/types';
+
+import { countingSince, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readString, registeredAt, round, save, SAVED, savedGuard } from './saved';
 
 // The one file that talks to Apple's Screen Time.
 //
@@ -236,35 +238,6 @@ export function coverAgain(cover: boolean, settings: Settings, topUpsSoFar: numb
   if (cover) coverEmptyNow(settings, topUpsSoFar);
 }
 
-/** Where the moment counting was turned on (or started over) is kept, in milliseconds. */
-const SINCE_KEY = 'plainlimit_since';
-
-function countingSince(): number | null {
-  try {
-    const value = DeviceActivity.userDefaultsGet<number>(SINCE_KEY);
-    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Where the last known figure is kept (see `Noted` and `mostByNow`). */
-const KNOWN_KEY = 'plainlimit_known';
-
-function noted(): Noted | null {
-  try {
-    const value = DeviceActivity.userDefaultsGet<Noted>(KNOWN_KEY);
-    return value && typeof value.at === 'number' && typeof value.most === 'number' ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-/** The guard for the latest registration (see `Known`): open for a few minutes after it. */
-function known(): Known | null {
-  return knownFor(noted(), registeredAt());
-}
-
 /**
  * Notes, while counting works, the most that can have been used by now (see
  * `mostByNow`). Nothing is noted once the goal is passed.
@@ -278,78 +251,9 @@ export function noteKnown(settings: Settings, usedFloorNow: number, now = new Da
   const most = mostByNow(settings.goalMinutes, usedFloorNow);
   if (most === null) return;
   try {
-    DeviceActivity.userDefaultsSet(KNOWN_KEY, { at: now.getTime(), most } satisfies Noted);
+    save('noted', { at: now.getTime(), most } satisfies Noted);
   } catch {
     // Without it the guard falls back to the time since the recharge.
-  }
-}
-
-/** When the day was last registered with the phone. */
-const REGISTERED_KEY = 'plainlimit_registered_at';
-
-function registeredAt(): number {
-  try {
-    const value = DeviceActivity.userDefaultsGet<number>(REGISTERED_KEY);
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Locks held back until this time, in milliseconds: setup holds them while it
- * shows the starting figure, so a false report from the phone at that moment
- * cannot lock anything before the person has seen it.
- */
-const HOLD_KEY = 'plainlimit_hold_until';
-
-function holdUntil(): number {
-  try {
-    const value = DeviceActivity.userDefaultsGet<number>(HOLD_KEY);
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * When the ticked apps last changed, in milliseconds. Unticking an app takes
- * its time off today's battery and ticking it again puts it back: reports from
- * before the change were for the old list (countsAfterPicks), and the phone
- * re-reports the day so far for the new one within seconds of registering.
- */
-const PICKS_KEY = 'plainlimit_picks_changed_at';
-/** The ticked list as it was when Apple's picker opened, to tell whether closing it changed anything. */
-const PICKS_BEFORE_KEY = 'plainlimit_picks_before';
-/** The current round of checkpoint names, and the one before it (roundName). */
-const ROUND_KEY = 'plainlimit_round';
-const ROUND_BEFORE_KEY = 'plainlimit_round_before';
-
-function readString(key: string): string {
-  try {
-    const value = DeviceActivity.userDefaultsGet<string>(key);
-    return typeof value === 'string' ? value : '';
-  } catch {
-    return '';
-  }
-}
-
-/** The round of checkpoint names the phone is counting under now. */
-function round(): string {
-  return readString(ROUND_KEY);
-}
-
-/** The goal the previous round's checkpoints were made for: a cell is a share of the goal, so its minutes depend on it. */
-const ROUND_GOAL_BEFORE_KEY = 'plainlimit_round_goal_before';
-/** The goal the day was last registered with. */
-const REGISTERED_GOAL_KEY = 'plainlimit_registered_goal';
-
-function readNumber(key: string): number {
-  try {
-    const value = DeviceActivity.userDefaultsGet<number>(key);
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-  } catch {
-    return 0;
   }
 }
 
@@ -370,26 +274,17 @@ function startRound(now: Date, goalBefore: number) {
   } catch {
     // Tidying only.
   }
-  DeviceActivity.userDefaultsSet(ROUND_BEFORE_KEY, ending);
-  DeviceActivity.userDefaultsSet(ROUND_GOAL_BEFORE_KEY, goalBefore);
-  DeviceActivity.userDefaultsSet(ROUND_KEY, now.getTime().toString(36));
-  DeviceActivity.userDefaultsSet(PICKS_KEY, now.getTime());
-}
-
-function picksChangedAt(): number {
-  try {
-    const value = DeviceActivity.userDefaultsGet<number>(PICKS_KEY);
-    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-  } catch {
-    return 0;
-  }
+  save('roundBefore', ending);
+  save('roundGoalBefore', goalBefore);
+  save('round', now.getTime().toString(36));
+  save('picksChangedAt', now.getTime());
 }
 
 /** Call as Apple's picker opens. */
 export function picksBefore(): void {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
-    DeviceActivity.userDefaultsSet(PICKS_BEFORE_KEY, countedToken() ?? '');
+    save('picksBefore', countedToken() ?? '');
   } catch {
     // Without it, closing the picker changes nothing about today's count.
   }
@@ -399,15 +294,15 @@ export function picksBefore(): void {
 export function picksAfter(goalMinutes: number, now = new Date()): boolean {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
-    const before = DeviceActivity.userDefaultsGet<string>(PICKS_BEFORE_KEY);
-    DeviceActivity.userDefaultsRemove(PICKS_BEFORE_KEY);
-    if (typeof before !== 'string' || before === (countedToken() ?? '')) return false;
+    const before = readString('picksBefore');
+    forget('picksBefore');
+    if (before === '' || before === (countedToken() ?? '')) return false;
     // A new round of names, so reports for the old list can't pass for the new one.
     startRound(now, goalMinutes);
     // The last known figure was for the old list. A newly ticked app can
     // honestly add more than it allowed, so it is dropped; a new one is noted
     // once counting has settled again.
-    DeviceActivity.userDefaultsRemove(KNOWN_KEY);
+    forget('noted');
     return true;
   } catch {
     return false;
@@ -419,14 +314,10 @@ export function picksAfter(goalMinutes: number, now = new Date()): boolean {
  * readout. Build 57 lost Friday between 11:57 AM and 5:57 PM with no code path
  * found that removes a day; this says when it happens and what did it.
  */
-const HISTORY_LOG_KEY = 'plainlimit_history_log';
-
 export function noteHistoryLoss(line: string): void {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
-    const before = DeviceActivity.userDefaultsGet<string[]>(HISTORY_LOG_KEY);
-    const kept = Array.isArray(before) ? before.filter((l) => typeof l === 'string') : [];
-    DeviceActivity.userDefaultsSet(HISTORY_LOG_KEY, [...kept, `${timeOf(Date.now())}: ${line}`].slice(-6));
+    save('historyLog', [...readLines('historyLog'), `${timeOf(Date.now())}: ${line}`].slice(-6));
   } catch {
     // Only a record; never in the way.
   }
@@ -434,12 +325,7 @@ export function noteHistoryLoss(line: string): void {
 
 export function historyLog(): string[] {
   if (!SCREEN_TIME_AVAILABLE) return [];
-  try {
-    const value = DeviceActivity.userDefaultsGet<string[]>(HISTORY_LOG_KEY);
-    return Array.isArray(value) ? value.filter((l) => typeof l === 'string') : [];
-  } catch {
-    return [];
-  }
+  return readLines('historyLog');
 }
 
 /** The start of today's count, for keeping reports to today's. */
@@ -451,11 +337,10 @@ const UNCOVER: Action[] = [{ type: 'disableBlockAllMode' }, { type: 'resetBlocks
 const STOP_EARNED_TIME: Action = { type: 'stopMonitoring', activityNames: [TOPUP_ACTIVITY] };
 
 /** The last thing the phone refused, for the test build's readout. */
-const PROBLEM_KEY = 'plainlimit_problem';
 function note(where: string, error: unknown) {
   const at = new Date().toLocaleTimeString();
   try {
-    DeviceActivity.userDefaultsSet(PROBLEM_KEY, `${where}, ${at}: ${error instanceof Error ? error.message : String(error)}`);
+    save('problem', `${where}, ${at}: ${error instanceof Error ? error.message : String(error)}`);
   } catch {
     // Nothing more to do; this is only for the readout.
   }
@@ -518,11 +403,11 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
  */
 function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: Settings, now: Date) {
   const dayStart = dayStartOf(periodStartOf(now, settings.rechargeMinute));
-  const sure = known();
+  const guard = savedGuard();
   const held = holdUntil();
   const named = round();
   for (const event of plan.events) {
-    const notBefore = new Date(Math.max(lockNotBefore(dayStart, sure, event.minutes).getTime(), held));
+    const notBefore = new Date(Math.max(lockNotBefore(dayStart, guard, event.minutes).getTime(), held));
     DeviceActivity.configureActions({
       activityName: plan.activity,
       callbackName: 'eventDidReachThreshold',
@@ -578,8 +463,6 @@ export function busyRegistering(nowMs = Date.now()): boolean {
   return registering > 0 || nowMs - registerFinishedAt < REGISTER_SETTLE_MS;
 }
 
-const WRONG_SINCE_KEY = 'plainlimit_wrong_since';
-
 /**
  * When counting was first seen not working, in the current run of checks with
  * no "fine" between them. Kept across launches, so a fault that lasts while
@@ -587,10 +470,10 @@ const WRONG_SINCE_KEY = 'plainlimit_wrong_since';
  */
 export function wrongSince(nowMs: number): number {
   if (!SCREEN_TIME_AVAILABLE) return nowMs;
-  const at = readNumber(WRONG_SINCE_KEY);
+  const at = readNumber('wrongSince');
   if (at > 0 && at <= nowMs) return at;
   try {
-    DeviceActivity.userDefaultsSet(WRONG_SINCE_KEY, nowMs);
+    save('wrongSince', nowMs);
   } catch {
     // Only a record.
   }
@@ -599,9 +482,9 @@ export function wrongSince(nowMs: number): number {
 
 /** Counting looked fine again: the run of bad checks is over. */
 export function rightAgain(): void {
-  if (!SCREEN_TIME_AVAILABLE || readNumber(WRONG_SINCE_KEY) === 0) return;
+  if (!SCREEN_TIME_AVAILABLE || readNumber('wrongSince') === 0) return;
   try {
-    DeviceActivity.userDefaultsRemove(WRONG_SINCE_KEY);
+    forget('wrongSince');
   } catch {
     // Only a record.
   }
@@ -629,13 +512,13 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
       return false;
     }
     // Held for two hours at most, in case setup is left half done.
-    if (hold) DeviceActivity.userDefaultsSet(HOLD_KEY, now.getTime() + 2 * 3600 * 1000);
-    else if (fresh) DeviceActivity.userDefaultsRemove(HOLD_KEY);
-    DeviceActivity.userDefaultsSet(REGISTERED_KEY, now.getTime());
+    if (hold) save('holdUntil', now.getTime() + 2 * 3600 * 1000);
+    else if (fresh) forget('holdUntil');
+    save('registeredAt', now.getTime());
     // A different goal gives the same checkpoint names other minutes.
-    const lastGoal = readNumber(REGISTERED_GOAL_KEY);
+    const lastGoal = readNumber('registeredGoal');
     if (!fresh && lastGoal > 0 && lastGoal !== settings.goalMinutes) startRound(now, lastGoal);
-    DeviceActivity.userDefaultsSet(REGISTERED_GOAL_KEY, settings.goalMinutes);
+    save('registeredGoal', settings.goalMinutes);
     if (fresh) {
       // Counting starts (or starts over) now: forget earlier checkpoints and take every cover away.
       DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
@@ -644,9 +527,13 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
       DeviceActivity.userDefaultsClearWithPrefix(`events_${TOPUP_ACTIVITY}`);
       DeviceActivity.disableBlockAllMode('plainlimit');
       DeviceActivity.resetBlocks('plainlimit');
-      DeviceActivity.userDefaultsSet(SINCE_KEY, now.getTime());
+      save('countingSince', now.getTime());
     }
     const since = countingSince();
+    // The guard for this registration, from the figure noted before it (see `Guard`).
+    const guard = guardFor(noted(), now.getTime(), countStart(periodStartOf(now, settings.rechargeMinute), since));
+    if (guard) save('guard', guard);
+    else forget('guard');
     const plan = monitorPlan(settings, topUpsSoFar, since);
     const earlier = includesEarlierUse(periodStartOf(now, settings.rechargeMinute), since);
     for (const shield of plan.shields) writeShield(shield, topUpsSoFar);
@@ -659,7 +546,7 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'intervalDidEnd', actions: [...UNCOVER, STOP_EARNED_TIME] });
 
     const named = round();
-    DeviceActivity.userDefaultsSet(WIDGET_PLAN_KEY, { ...plan.widget, round: named, roundBefore: readString(ROUND_BEFORE_KEY), picksChangedAt: picksChangedAt() });
+    save('widgetPlan', { ...plan.widget, round: named, roundBefore: readString('roundBefore'), picksChangedAt: picksChangedAt() });
 
     await DeviceActivity.startMonitoring(
       plan.activity,
@@ -715,18 +602,23 @@ export function health(settings: Settings, periodStart: Date, watching: boolean)
     if (pickCount(COUNTED_ID) === 0) return 'nothingPicked';
     if (!DeviceActivity.getActivities().includes(ACTIVITY)) return 'notRegistered';
     if (tooManyApps()) return 'tooManyApps';
-    return miscounted(ownReports(), settings.goalMinutes, dayStartOf(periodStart), known()) ? 'miscounted' : 'fine';
+    return miscounted(phoneReports([ACTIVITY]), settings.goalMinutes, round(), dayStartOf(periodStart), savedGuard()) ? 'miscounted' : 'fine';
   } catch {
     return 'fine';
   }
 }
 
-/** This round's reports for the day's checkpoints. */
-function ownReports(): { id: string; name: string; at: Date }[] {
-  const named = round();
-  return DeviceActivity.getEvents(ACTIVITY)
-    .filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName && splitName(e.eventName).round === named)
-    .map((e) => ({ id: splitName(e.eventName as string).id, name: e.eventName as string, at: e.lastCalledAt }));
+/** Every checkpoint report the phone has kept for these activities. */
+function phoneReports(activities: string[] = [ACTIVITY, TICKS_ACTIVITY]): Report[] {
+  return activities
+    .flatMap((activity) => DeviceActivity.getEvents(activity))
+    .filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName)
+    .map((e) => ({ name: e.eventName as string, at: e.lastCalledAt.getTime() }));
+}
+
+/** The day's rounds of checkpoint names, as saved on the phone. */
+function rounds(): Rounds {
+  return { round: round(), roundBefore: readString('roundBefore'), goalBefore: readNumber('roundGoalBefore'), picksChangedAt: picksChangedAt() };
 }
 
 /**
@@ -737,14 +629,8 @@ function ownReports(): { id: string; name: string; at: Date }[] {
 export async function countAgain(settings: Settings, topUpsSoFar: number, periodStart: Date): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
-    const from = dayStartOf(periodStart);
-    const sure = known();
-    const own = new Map(checkpointsFor(settings.goalMinutes).map((c) => [c.id, c]));
-    for (const report of ownReports()) {
-      const checkpoint = own.get(report.id);
-      if (checkpoint && report.at.getTime() >= from.getTime() && !believable(checkpoint, from, sure, report.at)) {
-        DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.name}`);
-      }
+    for (const report of doubtful(phoneReports([ACTIVITY]), settings.goalMinutes, round(), dayStartOf(periodStart), savedGuard())) {
+      DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.name}`);
     }
   } catch (error) {
     note('counting again', error);
@@ -759,8 +645,8 @@ export function turnOff() {
     DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
-    DeviceActivity.userDefaultsRemove(WIDGET_PLAN_KEY);
-    DeviceActivity.userDefaultsRemove(SINCE_KEY);
+    forget('widgetPlan');
+    forget('countingSince');
     reloadWidget();
   } catch {
     // Nothing more to do.
@@ -774,30 +660,15 @@ export function turnOff() {
 export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Date): number | null {
   if (!SCREEN_TIME_AVAILABLE) return null;
   try {
-    const reported = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)].filter(
-      (e) => e.callbackName === 'eventDidReachThreshold' && e.eventName,
-    );
-    const from = dayStartOf(periodStart);
-    const sure = known();
-    // Only the current round's reports count (roundName). Just after the ticked
-    // apps change, the old round's figure stands until the phone has
-    // re-reported the day for the new list.
-    const to = periodEnd?.getTime() ?? Number.POSITIVE_INFINITY;
-    let goal = goalMinutes;
-    let matches = (name: string, id: string) => name === roundName(id, round());
-    // A finished day is closed from the round it ended in, read with today's
-    // goal. (Matching any round read a 3:00 goal's "empty" as the 5:00 goal's.)
-    if (periodEnd === undefined && !roundSettled(reported, from)) {
-      const before = readString(ROUND_BEFORE_KEY);
-      goal = readNumber(ROUND_GOAL_BEFORE_KEY) || goalMinutes;
-      matches = (name, id) => name === roundName(id, before);
-    }
-    const arrived = [...checkpointsFor(goal), ...minuteTicksFor(goal)].filter((checkpoint) => {
-      const report = reported.filter((e) => matches(e.eventName as string, checkpoint.id)).sort((a, b) => b.lastCalledAt.getTime() - a.lastCalledAt.getTime())[0];
-      if (!report) return false;
-      return report.lastCalledAt.getTime() < to && believable(checkpoint, from, sure, report.lastCalledAt);
+    return countDay({
+      reports: phoneReports(),
+      goalMinutes,
+      dayStart: dayStartOf(periodStart).getTime(),
+      periodEnd: periodEnd?.getTime(),
+      rounds: rounds(),
+      guard: savedGuard(),
+      now: Date.now(),
     });
-    return usedFloor(arrived);
   } catch {
     return null;
   }
@@ -820,27 +691,25 @@ export function diagnostics(settings: Settings): string[] {
     const lines: string[] = [];
     // So a screenshot shows how old the lines below are.
     lines.push(`Build: ${widgets?.build?.() ?? 'unknown'}. Read at: ${timeOf(Date.now())}`);
-    const sureNow = known();
+    const guard = savedGuard();
     const notedNow = noted();
     lines.push(`Counting since: ${countingSince() ? timeOf(countingSince()) : 'the recharge'}`);
-    const guarding = sureNow ? ` (guards reports until ${timeOf(sureNow.closes)})` : notedNow ? ' (not guarding: noted after the last registration)' : '';
-    lines.push(`Known: ${notedNow ? `at most ${Math.round(notedNow.most)} min at ${timeOf(notedNow.at)}${guarding}` : 'nothing yet'}${holdUntil() > Date.now() ? ' (locks held for setup)' : ''}`);
-    lines.push(`Registered at: ${timeOf(registeredAt())}`);
+    lines.push(`Known: ${notedNow ? `at most ${Math.round(notedNow.most)} min at ${timeOf(notedNow.at)}` : 'nothing yet'}${holdUntil() > Date.now() ? ' (locks held for setup)' : ''}`);
+    lines.push(`Registered at: ${timeOf(registeredAt())}${guard ? `; reports until ${timeOf(guard.closes)} judged from ${timeOf(guard.from)}` : ''}`);
     lines.push(`Health: ${health(settings, periodStartOf(new Date(), settings.rechargeMinute), true)}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
-    const minutesOf = new Map(checkpointsFor(settings.goalMinutes).map((c) => [c.id as string, c]));
     const from = dayStartOf(periodStartOf(new Date(), settings.rechargeMinute));
+    const ignored = new Set(doubtful(phoneReports([ACTIVITY]), settings.goalMinutes, round(), from, guard).map((r) => r.name));
     const reported = DeviceActivity.getEvents()
       .filter((e) => e.activityName === ACTIVITY || e.activityName === TOPUP_ACTIVITY)
       .map((e) => {
-        const checkpoint = e.activityName === ACTIVITY && e.eventName ? minutesOf.get(splitName(e.eventName).id) : undefined;
-        const early = checkpoint !== undefined && e.lastCalledAt.getTime() >= from.getTime() && !believable(checkpoint, from, sureNow, e.lastCalledAt);
+        const early = e.activityName === ACTIVITY && e.eventName !== undefined && e.eventName !== null && ignored.has(e.eventName);
         return `${e.eventName ?? e.callbackName}: ${timeOf(e.lastCalledAt.getTime())}${early ? ' (too early to be true, ignored)' : ''}`;
       });
     lines.push(reported.length ? `Reported by the phone:\n  ${reported.join('\n  ')}` : 'Reported by the phone: nothing yet');
-    lines.push(`Monitor asked for a widget redraw: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_reload_asked'))}`);
-    const cells = DeviceActivity.userDefaultsGet<number>('plainlimit_widget_cells');
-    lines.push(`Widget last drew: ${timeOf(DeviceActivity.userDefaultsGet<number>('plainlimit_widget_drew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
+    lines.push(`Monitor asked for a widget redraw: ${timeOf(readNumber('reloadAsked'))}`);
+    const cells = DeviceActivity.userDefaultsGet<number>(SAVED.widgetCells);
+    lines.push(`Widget last drew: ${timeOf(readNumber('widgetDrew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
     lines.push(`Picked: ${pickCount(COUNTED_ID)} counted${picksChangedAt() > 0 ? `, last changed ${timeOf(picksChangedAt())} (round ${round() || 'first'})` : ''}`);
     // The library notes who last changed what is covered, and when.
     const last = DeviceActivity.userDefaultsGet<Record<string, unknown>>('lastBlockUpdate');
@@ -851,7 +720,7 @@ export function diagnostics(settings: Settings): string[] {
     } else {
       lines.push('Covers last changed: never');
     }
-    lines.push(`Last problem: ${(DeviceActivity.userDefaultsGet(PROBLEM_KEY) as string | undefined) ?? 'none'}`);
+    lines.push(`Last problem: ${readString('problem') || 'none'}`);
     return lines;
   } catch (error) {
     return [`Could not read: ${String(error)}`];
@@ -877,25 +746,11 @@ export function averageWindow(settings: Settings, now: Date): { fromMs: number; 
   return { fromMs: periodStart.getTime() - 7 * 24 * 3600 * 1000, toMs: periodStart.getTime(), selection: token };
 }
 
-/**
- * Whether the phone has finished reporting the day for the current round
- * (picksSettled). Just after a change it hasn't, and the figure is still the
- * previous round's.
- */
-function roundSettled(reported: { eventName?: string | null; lastCalledAt: Date }[], from: Date): boolean {
-  const changed = picksChangedAt();
-  if (changed < from.getTime()) return true;
-  const named = round();
-  const fresh = reported.filter((e) => e.eventName && splitName(e.eventName).round === named).map((e) => e.lastCalledAt.getTime());
-  return picksSettled(Date.now(), changed, fresh.length > 0 ? Math.max(...fresh) : null);
-}
-
-/** For setup's last screen: whether the day's figure has settled after the latest change. */
+/** For setup's last screen: whether the day's figure has settled after the latest change (see `roundSettled`). */
 export function countSettled(settings: Settings): boolean {
   if (!SCREEN_TIME_AVAILABLE) return true;
   try {
-    const reported = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)].filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName);
-    return roundSettled(reported, dayStartOf(periodStartOf(new Date(), settings.rechargeMinute)));
+    return roundSettled(phoneReports(), rounds(), dayStartOf(periodStartOf(new Date(), settings.rechargeMinute)).getTime(), Date.now());
   } catch {
     return true;
   }
@@ -909,7 +764,7 @@ export function countSettled(settings: Settings): boolean {
 export function holdLocks(untilMs: number, settings: Settings, topUpsSoFar: number) {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
-    DeviceActivity.userDefaultsSet(HOLD_KEY, untilMs);
+    save('holdUntil', untilMs);
     writeCheckpointActions(monitorPlan(settings, topUpsSoFar, countingSince()), settings, new Date());
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
@@ -1012,7 +867,7 @@ export function coverEmptyNow(settings: Settings, topUpsSoFar: number) {
 export function releaseLocks(settings: Settings, topUpsSoFar: number, usedFloorNow: number) {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
-    DeviceActivity.userDefaultsRemove(HOLD_KEY);
+    forget('holdUntil');
     writeCheckpointActions(monitorPlan(settings, topUpsSoFar, countingSince()), settings, new Date());
     if (usedFloorNow >= settings.goalMinutes) coverEmptyNow(settings, topUpsSoFar);
   } catch (error) {

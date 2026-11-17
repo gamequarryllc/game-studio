@@ -1,5 +1,5 @@
 import { CELLS, cellWords, cellsLeft, fractionUsed, wordFor } from '../battery';
-import { believable, checkpointsFor, GUARD_MS, knownFor, picksSettled, roundName, splitName, finalWarningMinutes, guardFrom, isPlausible, judgedFrom, minuteTicksFor, miscounted, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
+import { checkpointsFor, picksSettled, roundName, splitName, finalWarningMinutes, isPlausible, minuteTicksFor, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
 import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
 
 describe('cells', () => {
@@ -136,83 +136,7 @@ describe('minute checkpoints', () => {
   });
 });
 
-describe('a miscounted day', () => {
-  const from = new Date(2026, 10, 11, 6, 0);
-  const at = (minutes: number) => new Date(from.getTime() + minutes * 60000);
-
-  it('is one where a cell, the warning or empty arrived too soon to be true', () => {
-    expect(miscounted([{ id: 'cell-1', at: at(31) }, { id: 'cell-2', at: at(65) }], 180, from)).toBe(false);
-    expect(miscounted([{ id: 'empty', at: at(0.2) }], 180, from)).toBe(true);
-    expect(miscounted([{ id: 'cell-3', at: at(40) }], 180, from)).toBe(true);
-  });
-
-  it('is not judged on reports from before the count began, or on minute checkpoints', () => {
-    expect(miscounted([{ id: 'empty', at: at(-600) }], 180, from)).toBe(false);
-    expect(miscounted([{ id: 'm40', at: at(1) }], 180, from)).toBe(false);
-  });
-});
-
 describe('the last known figure', () => {
-  // Counting from the recharge at 6:00. At 13:58, while counting worked, at most
-  // 45 minutes had been used; at 14:00 the day was registered again.
-  const dayStart = new Date(2026, 10, 11, 6, 0);
-  const clock = (h: number, m = 0) => new Date(2026, 10, 11, h, m);
-  const noted = { at: clock(13, 58).getTime(), most: 45 };
-  const known = knownFor(noted, clock(14).getTime());
-  const cell2 = checkpointsFor(180).find((c) => c.id === 'cell-2');
-
-  it('guards only the minutes after the registration it was noted before', () => {
-    expect(known).toEqual({ ...noted, opens: clock(14).getTime(), closes: clock(14).getTime() + GUARD_MS });
-    // Noted after the registration, or with no registration: no guard.
-    expect(knownFor(noted, clock(13, 50).getTime())).toBeNull();
-    expect(knownFor(noted, 0)).toBeNull();
-    expect(knownFor(null, clock(14).getTime())).toBeNull();
-  });
-
-  it('judges reports just after registering as if the count had begun that many minutes before', () => {
-    expect(judgedFrom(dayStart, known, clock(14, 1))).toEqual(clock(13, 13));
-    expect(guardFrom(dayStart, known)).toEqual(clock(13, 13));
-    // Reports before the registration, after the guard closes, and a figure from yesterday are judged from the recharge.
-    expect(judgedFrom(dayStart, known, clock(13, 59))).toEqual(dayStart);
-    expect(judgedFrom(dayStart, known, clock(14, 11))).toEqual(dayStart);
-    const yesterday = knownFor({ at: clock(5).getTime(), most: 30 }, clock(14).getTime());
-    expect(judgedFrom(dayStart, yesterday, clock(14, 1))).toEqual(dayStart);
-    expect(guardFrom(dayStart, yesterday)).toEqual(dayStart);
-    // Never earlier than the recharge.
-    expect(guardFrom(dayStart, knownFor({ at: clock(6, 10).getTime(), most: 45 }, clock(7).getTime()))).toEqual(dayStart);
-  });
-
-  it('throws away a false report right after counting is set up again in the afternoon', () => {
-    if (!cell2) throw new Error('no second cell');
-    expect(believable(cell2, dayStart, null, clock(14, 1))).toBe(true);
-    expect(believable(cell2, dayStart, known, clock(14, 1))).toBe(false);
-    expect(believable(cell2, dayStart, known, clock(14, 20))).toBe(true);
-    expect(miscounted([{ id: 'cell-2', at: clock(14, 1) }], 180, dayStart, known)).toBe(true);
-    expect(miscounted([{ id: 'cell-2', at: clock(14, 1) }], 180, dayStart)).toBe(false);
-  });
-
-  it('does not throw out real reports the phone was late with (build 72, 16 November)', () => {
-    // Counted from 6 AM, goal 3:30. Last registered in the morning; at 6:47:57 PM
-    // the 45 and 60 minute marks had not come, so "at most 50" was noted.
-    const start = new Date(2026, 10, 16, 6, 0);
-    const at = (h: number, m: number, sec = 0) => new Date(2026, 10, 16, h, m, sec);
-    const late = knownFor({ at: at(18, 47, 57).getTime(), most: 50 }, at(9, 12).getTime());
-    const cells = checkpointsFor(210);
-    const reports = [{ id: 'cell-2', at: at(18, 58, 30) }, { id: 'cell-3', at: at(19, 36, 15) }];
-    for (const r of reports) {
-      const checkpoint = cells.find((c) => c.id === r.id);
-      if (!checkpoint) throw new Error(`no ${r.id}`);
-      expect(believable(checkpoint, start, late, r.at)).toBe(true);
-    }
-    expect(miscounted(reports, 210, start, late)).toBe(false);
-    // Had the day been registered again at 6:50 PM, the 6:58 report would be
-    // judged by the guard, and the twenty minutes for a slow phone let it through.
-    const most = mostByNow(210, 35);
-    expect(most).toBe(65);
-    const soon = knownFor({ at: at(18, 47, 57).getTime(), most: most ?? 0 }, at(18, 50).getTime());
-    expect(believable(cells.find((c) => c.id === 'cell-2') ?? cells[0], start, soon, at(18, 58, 30))).toBe(true);
-  });
-
   it('is the next unreported checkpoint, with twenty minutes for the phone being slow', () => {
     expect(mostByNow(180, 0)).toBe(30);
     expect(mostByNow(180, 30)).toBe(60);
