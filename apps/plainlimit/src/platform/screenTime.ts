@@ -42,7 +42,6 @@ export const SCREEN_TIME_AVAILABLE = Platform.OS === 'ios' && DeviceActivity.isA
  * web preview and in a "playtest" build for TestFlight, which the iPhone build
  * makes by setting EXPO_PUBLIC_PLAYTEST=1. They are never in a store build.
  */
-export const DEV_TOOLS = __DEV__ || Platform.OS === 'web' || process.env.EXPO_PUBLIC_PLAYTEST === '1';
 
 export type Permission = 'unknown' | 'denied' | 'approved';
 
@@ -50,8 +49,10 @@ export type Permission = 'unknown' | 'denied' | 'approved';
  * Preview only: "?mock=" in the address stands in for an iPhone's Screen Time,
  * so the states only a phone reaches can be seen and checked in a browser.
  * Words, comma-separated: "counting" (counting is on), one counting problem
- * ("nothingPicked", "accessOff", "notRegistered", "miscounted"), and "held"
- * (setup's "start tomorrow": nothing locks before the recharge). Never on a phone.
+ * ("nothingPicked", "tooManyApps", "accessOff", "notRegistered", "miscounted"),
+ * "held" (setup's "start tomorrow": nothing locks before the recharge) and
+ * "store" (the App Store screenshots: no test tools, and no box for the list
+ * only a phone can draw). Never on a phone.
  */
 const MOCK: ReadonlySet<string> = (() => {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return new Set<string>();
@@ -64,6 +65,16 @@ const MOCK: ReadonlySet<string> = (() => {
 
 /** Preview only: the address asks to stand in for a phone that is counting. */
 export const MOCK_PHONE = MOCK.has('counting');
+
+/** Preview only: the App Store screenshots are being taken. */
+export const STORE_SHOTS = MOCK.has('store');
+
+/**
+ * The Developer section, the test buttons and the readout: in development, in
+ * the browser preview and in playtest builds; never in an App Store build. The
+ * preview's "?mock=...,store" hides them too, for the App Store screenshots.
+ */
+export const DEV_TOOLS = (__DEV__ || Platform.OS === 'web' || process.env.EXPO_PUBLIC_PLAYTEST === '1') && !MOCK.has('store');
 
 const widgets = Platform.OS === 'ios' ? requireOptionalNativeModule<{ reload(): void; build?(): string }>('PlainlimitWidgets') : null;
 
@@ -125,7 +136,7 @@ export function isOn(): boolean {
 
 /** How many apps, categories and sites are in one of the person's picks. The app never learns which. */
 export function pickCount(id: typeof COUNTED_ID): number {
-  if (MOCK_PHONE) return MOCK.has('nothingPicked') ? 0 : 128;
+  if (MOCK_PHONE) return MOCK.has('nothingPicked') ? 0 : 14;
   if (!SCREEN_TIME_AVAILABLE) return 0;
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });

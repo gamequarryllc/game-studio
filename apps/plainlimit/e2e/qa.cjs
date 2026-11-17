@@ -205,7 +205,7 @@ async function main() {
   await scenario('What counts with cells left offers a change', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
     await tab(page, 'Settings');
-    await page.getByRole('button', { name: 'What counts, 128 ticked', exact: true }).click();
+    await page.getByRole('button', { name: 'What counts, 14 ticked', exact: true }).click();
     await page.getByRole('button', { name: 'Change the apps', exact: true }).waitFor();
     await shot(page, 'q10b-what-counts-open');
     await context.close();

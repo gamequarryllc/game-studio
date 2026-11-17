@@ -4,7 +4,7 @@ import { Text } from 'react-native';
 
 import { clockLabel } from '@/domain/day';
 import { askToNotify } from '@/platform/notices';
-import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, diagnostics, historyLog, isOn, permission } from '@/platform/screenTime';
+import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc, useNow } from '@/state/store';
 import { BigButton, Card, Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
@@ -30,7 +30,8 @@ export function ScreenTimeCard() {
   }, []);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  if (!SCREEN_TIME_AVAILABLE && !MOCK_PHONE) return null;
+  // Left out of the App Store screenshots, so the goal and the empty-battery choices fit on one screen.
+  if ((!SCREEN_TIME_AVAILABLE && !MOCK_PHONE) || STORE_SHOTS) return null;
 
   const on = isOn();
   const denied = permission() === 'denied';

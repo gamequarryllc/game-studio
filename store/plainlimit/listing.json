@@ -1,0 +1,63 @@
+{
+  "_status": "drafted 2026-11-16 for version 1.0.0, free with nothing to buy (the owner: Pro comes in a later version). The app record is named \"Plainlimit\"; the listing tool sets the store name below.",
+  "kind": "app",
+  "bundle_id": "com.gamequarry.plainlimit",
+  "name": "Plainlimit: Screen Time Limit",
+  "subtitle": "A daily battery for your apps",
+  "keywords": "blocker,focus,detox,phone,usage,reduce,doomscroll,habit,lock,addiction,social,media,widget,minimal",
+  "promotional_text": "Six cells a day. The apps you pick drain them, and when the battery is empty those apps lock until it recharges. No account, and nothing leaves your iPhone.",
+  "description": "Plainlimit turns your daily screen time into a battery.\n\nSet a daily goal and pick the apps that count: the time wasters, not what your phone is for. Plainlimit splits the goal into six cells. As you use those apps the cells drain, and when the battery is empty they lock until it recharges in the morning.\n\n- A battery you can read at a glance, on the Today screen and in a Home Screen widget\n- You choose what counts: whole categories or single apps, so calls, messages and maps can stay out\n- A warning screen on your last cell, so the lock never comes as a surprise\n- Choose how firm an empty battery is: a red screen you can tap through, a few sums for a little more time, or locked until it recharges\n- It recharges at the time you choose, 6:00 AM unless you change it\n- Your last seven days, and the apps that used the most today, drawn by Apple's Screen Time\n- Tips for using your phone less, with where to find each setting\n\nPlainlimit counts and locks with Apple's Screen Time, on your iPhone. It never sees which apps you open: it is only told how much of your day has gone. There is no account, no server, no analytics and no ads.\n\nApps that iOS keeps open in its Always Allowed list, such as Phone and Messages, are never locked by any app, Plainlimit included.\n\nPlainlimit is free.",
+  "primary_category": "Productivity",
+  "secondary_category": "Lifestyle",
+  "support_url": "https://gamequarryllc.github.io/game-studio/apps/support/#plainlimit",
+  "privacy_url": "https://gamequarryllc.github.io/game-studio/apps/privacy/",
+  "support": {
+    "_about": "This app's section on the apps' support page (tools/site_pages.py). Every answer must match what the app shows.",
+    "backup": "There is nothing to back up. Plainlimit keeps only your goal, your recharge time and your last seven days, on this iPhone. On a new iPhone, install it and go through setup again: it takes about a minute.",
+    "more": [
+      {
+        "q": "Why didn't an app lock when the battery was empty?",
+        "a": "Check that it is ticked: open Settings, then What counts. Apps in the iPhone's Always Allowed list (Phone, Messages, FaceTime and Maps unless you changed it, in the Settings app under Screen Time) are never locked by any app. iOS also locks at most 50 apps ticked one by one; Plainlimit says so on the Today screen if your list has more, and ticking whole categories instead has no limit."
+      },
+      {
+        "q": "Why is Plainlimit's figure different from Screen Time's?",
+        "a": "Plainlimit counts only the apps you ticked, from the time it recharges (6:00 AM unless you changed it). Screen Time's daily total counts every app from midnight. Use after midnight but before the recharge belongs to the day before. To match Screen Time's day, set Recharges at to 12:00 AM in Settings."
+      },
+      {
+        "q": "How do I change what counts?",
+        "a": "Open Settings, tap What counts, then Change the apps. It can't be changed while the battery is empty, so an app can't be unticked to get around the lock; it opens again when the battery recharges."
+      },
+      {
+        "q": "How do I stop using it?",
+        "a": "Open Settings and tap Turn off under Screen Time: nothing is counted or locked from then on. Deleting the app also removes everything it kept and every lock it set."
+      }
+    ]
+  },
+  "age_rating": {
+    "note": "Draft answers for the age-rating questions; the listing tool fills in any left unanswered.",
+    "everything": "none",
+    "advertising": false,
+    "in_app_purchases": false,
+    "kids_category": false
+  },
+  "privacy_label": {
+    "note": "For App Store Connect > App Privacy: 'Data Not Collected'. No account, no server, no analytics, no ads and no purchase service. Screen Time data stays in Apple's own frameworks on the device: the app gets threshold events (how much time has gone in the picked apps) and opaque app tokens, and the per-app list is drawn by Apple's report extension, which cannot send anything out.",
+    "data_used_to_track_you": [],
+    "data_linked_to_you": [],
+    "data_not_linked_to_you": [],
+    "everything_else": "Not collected. The goal, the recharge time, the picks and the last seven days never leave the device."
+  },
+  "products": [],
+  "products_note": "Version 1.0.0 sells nothing (the owner, 2026-11-16). A later version adds the lifetime Pro unlock, com.gamequarry.plainlimit.pro.",
+  "name_alternatives": [
+    "Plainlimit Screen Time Battery",
+    "Plainlimit: Screen Time Widget",
+    "Plainlimit: Daily Phone Limit"
+  ],
+  "version": "1.0.0",
+  "copyright": "2026 Game Quarry LLC",
+  "screenshot_display_type": "APP_IPHONE_67",
+  "leave_out_eu": true,
+  "leave_out_eu_note": "Same as the studio's other apps: the EU is left out instead of declaring trader status under the Digital Services Act, until the owner says otherwise.",
+  "review_notes": "Plainlimit is a daily screen time limit that a person sets for themselves on their own iPhone (Family Controls with individual authorization, not parental controls). There is no account and no sign-in, nothing to buy, and the app makes no network calls.\n\nTo try it:\n1. Open the app and tap Set it up. On the Screen Time screen tap Allow, then Continue on Apple's sheet.\n2. On What counts, tap Choose apps, tick one category (for example Entertainment or Games) and tap Done, then Next.\n3. On the goal screen, tap the minus button until the goal reads 0:30 (the shortest), then Next, then Start counting.\n4. Use an app from the ticked category. At a 30-minute goal each of the six cells is 5 minutes. After 25 minutes the orange Last cell screen covers the app (Keep going closes it). After 30 minutes the battery is empty and the app shows Battery's empty. With the default setting, Work for it, its I need more time button sends a notification that opens Plainlimit to three sums, which give 15 more minutes (apps can't be opened from that screen directly).\n5. In Plainlimit's Settings tab: Daily goal, Recharges at (the battery refills at that time each day), What counts, and When the battery is empty (Warn, Work for it, or Locked). Settings and What counts are locked while the battery is empty, so an app can't be unticked to get around the lock.\n\nScreen Time data: Plainlimit gets only DeviceActivity threshold events (how much time has gone in the picked apps) and Apple's opaque app tokens; it never learns which apps were used. The day's total and the What used it list on the Today screen are drawn by Apple's DeviceActivityReport extension, which Plainlimit cannot read. Notifications are local only: Nearly out, and the one that opens the sums from the empty screen. The Home Screen widget shows the battery.\n\nApps in iOS's Always Allowed list (Phone, Messages, FaceTime and Maps by default) are never covered, as iOS requires."
+}

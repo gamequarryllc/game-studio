@@ -15,8 +15,9 @@ pages build with and without a contact address (tools/site_pages.py).
 
 A listing with "kind": "app" belongs to an app in apps/<slug>/ (STUDIO.md,
 "Apps"). Apps have their own rules: no ads, exactly one product (the lifetime
-Pro unlock, a non-consumable priced from 2.99 to 9.99), their own privacy and
-support pages, and ids that match what the app itself ships with.
+Pro unlock, a non-consumable priced from 2.99 to 9.99, or none for a version
+that is free with nothing to buy yet), their own privacy and support pages, and
+ids that match what the app itself ships with.
 """
 import glob
 import html
@@ -52,9 +53,11 @@ def check_app(slug, d, root, bad):
     bundle = d.get("bundle_id", "")
     entitlement = slug.replace("-", "_") + "_pro"
     price = None
-    if len(products) != 1:
-        bad(f"an app sells exactly one thing, the lifetime Pro unlock ({len(products)} products listed)")
-    else:
+    # A version that is free with nothing to buy (Plainlimit 1.0.0) lists no product and has no purchase code.
+    free = len(products) == 0
+    if len(products) > 1:
+        bad(f"an app sells at most one thing, the lifetime Pro unlock ({len(products)} products listed)")
+    elif not free:
         p = products[0]
         price = p.get("price_usd", 0)
         if p.get("key") != "pro" or p.get("type") != "non-consumable":
@@ -70,6 +73,10 @@ def check_app(slug, d, root, bad):
 
     support = d.get("support") or {}
     for key in APP_SUPPORT_KEYS:
+        if key == "restore" and free:
+            if support.get(key):
+                bad("support.restore is there, but the app sells nothing")
+            continue
         if not support.get(key):
             bad(f"support.{key} is missing (say where it is in the app)")
     answers = [support.get(k, "") for k in APP_SUPPORT_KEYS]
@@ -96,7 +103,10 @@ def check_app(slug, d, root, bad):
     except (OSError, KeyError, ValueError) as e:
         bad(f"apps/{slug}/app.json could not be read ({e})")
     config = os.path.join(app_dir, "src", "pro", "config.ts")
-    if not os.path.exists(config):
+    if free:
+        if os.path.exists(config):
+            bad(f"apps/{slug}/src/pro/config.ts exists, but the listing sells nothing")
+    elif not os.path.exists(config):
         bad(f"apps/{slug}/src/pro/config.ts is missing (the product id and entitlement the app ships with)")
     else:
         with open(config, encoding="utf-8") as f:

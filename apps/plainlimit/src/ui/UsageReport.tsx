@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { Text, View } from 'react-native';
 
 import type { Settings } from '@/domain/types';
-import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, averageWindow, reportWindow } from '@/platform/screenTime';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, averageWindow, reportWindow } from '@/platform/screenTime';
 import { Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
@@ -28,7 +28,8 @@ const NativeReport = SCREEN_TIME_AVAILABLE ? requireNativeView<NativeProps>('Pla
  * stand-in, which shows the box as it is before the phone has drawn.
  */
 export function UsageReport({ settings, now }: { settings: Settings; now: Date }) {
-  if (!NativeReport && !MOCK_PHONE) return null;
+  // The App Store screenshots leave out the box, which only a phone can fill.
+  if (!NativeReport && (!MOCK_PHONE || STORE_SHOTS)) return null;
   const window = reportWindow(settings, now);
   return (
     <View style={{ gap: 10 }}>

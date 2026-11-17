@@ -206,6 +206,9 @@ class Run:
     # ---- the in-app purchase
 
     def purchase(self):
+        if not self.listing.get("products"):
+            self.say("this version sells nothing: no in-app purchase to set up")
+            return
         p = self.listing["products"][0]
         found = [i for i in self.c.all(f"/v1/apps/{self.app}/inAppPurchasesV2", limit=50) if i["attributes"]["productId"] == p["product_id"]]
         if found:
