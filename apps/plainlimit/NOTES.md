@@ -328,3 +328,7 @@ The owner chose on 2026-11-16 to put Plainlimit on the App Store now, free with 
 
 5. **Left for the owner** (Apple has no API for these, or they are personal): App Privacy, "Data Not Collected"; the contact person for App Review; and Submit for Review. Recommended before or soon after: the `SUPPORT_EMAIL` repository variable, so the support page offers an email address and not only the repo's issue page.
 
+
+## Ideas for later versions (not built)
+
+- **"Ask first" apps (owner's idea, 2026-11-16).** Opening Instagram or TikTok is often a reflex on picking up the phone. A second, optional list in Settings (not in first-run setup): those apps always show a covering screen asking for one sum before they open, whatever the battery says. After the sum they stay open for a set time (10 to 15 minutes; iOS cannot tell when an app is closed), then ask again. The same sums and the same timed re-lock as earned time, so it fits the app's one idea, a little friction to be intentional. Limits: iOS gives the covering screen's button no way to open Plainlimit straight away, so the path is the app, the cover, the notification, one sum, and back to the app by hand (Plainlimit is only given Apple's codes, not which app was tapped, so it cannot send the owner back). An empty battery takes over from it. Apps on this list should be few, well under iOS's 50 single apps. A good first Pro feature (free stays the full daily battery). Medium effort: a second picker, a cover and button text for it, the timed re-lock, Settings, tests, then a real-phone check.
