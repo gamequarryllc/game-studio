@@ -116,7 +116,7 @@ async function main() {
     await press('Unlock Pro · $9.99');
     await see('Nothing can be bought in this build. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.');
     await back();
-    await press('Advanced, Second thought, sums');
+    await press('Advanced, Second thought, more');
     await see('Extras for when the basics aren’t quite enough.');
     await shot('02c-advanced');
     await page.getByRole('radio', { name: /^Hard/ }).click();
@@ -135,10 +135,18 @@ async function main() {
     await see('6:30 AM');
     await press('Recharge earlier');
     await see('6:00 AM');
-    await press('Advanced, Second thought, sums');
+    await press('Advanced, Second thought, more');
     await page.getByRole('radio', { name: /^Hard/ }).click();
     assert.strictEqual(await page.getByRole('radio', { name: /^Hard/ }).getAttribute('aria-checked'), 'true', 'hard sums chosen');
     await page.getByRole('radio', { name: /^Normal/ }).click();
+    await press('Lock message, Off');
+    await press('Text someone you miss.');
+    await page.getByTestId('lock-message-preview').getByText('\u201CText someone you miss.\u201D', { exact: false }).waitFor();
+    await shot('02d-lock-message');
+    // Cleared again, so the empty screens below say only their own words.
+    await page.getByTestId('lock-message-input').fill('');
+    await back();
+    await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
     await press('Second thought, Off');
     await see('For the apps you open without deciding to. Each one asks for one sum before it opens, whatever the battery says.');
     await back();

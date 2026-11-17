@@ -21,6 +21,7 @@ import {
   type PlanAction,
   type PlanShield,
 } from '@/domain/monitorPlan';
+import type { WidgetRecord } from '@/domain/pro';
 import type { Settings } from '@/domain/types';
 
 import { askCoverActions, coverAskAgain, stopAskFirst } from './askFirst';
@@ -82,6 +83,24 @@ export const DEV_TOOLS = (__DEV__ || Platform.OS === 'web' || process.env.EXPO_P
 const widgets = Platform.OS === 'ios' ? requireOptionalNativeModule<{ reload(): void; build?(): string }>('PlainlimitWidgets') : null;
 
 /** Asks iOS to redraw the home screen widget now. */
+/**
+ * Leaves the record and whether Pro is held where the large widget reads them,
+ * as one JSON string. Redraws the widget only when what it shows has changed.
+ */
+let sharedRecord = '';
+export function shareWithWidget(record: WidgetRecord) {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  const text = JSON.stringify(record);
+  if (text === sharedRecord) return;
+  try {
+    save('widgetRecord', text);
+    sharedRecord = text;
+    reloadWidget();
+  } catch (error) {
+    note('the widget record', error);
+  }
+}
+
 export function reloadWidget() {
   try {
     widgets?.reload();

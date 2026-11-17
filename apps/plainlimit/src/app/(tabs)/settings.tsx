@@ -82,7 +82,7 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <LinkRow label="Advanced" value="Second thought, sums" onPress={() => router.push('/advanced')} />
+        <LinkRow label="Advanced" value="Second thought, more" onPress={() => router.push('/advanced')} />
         <LinkRow label="Plainlimit Pro" value={proValue} onPress={() => router.push('/pro')} />
         <LinkRow label="Use your phone less" value={`${TIPS.length} tips`} onPress={() => router.push('/tips')} last />
       </Card>

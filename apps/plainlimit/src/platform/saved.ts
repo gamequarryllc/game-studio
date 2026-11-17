@@ -36,6 +36,8 @@ export const SAVED = {
   wrongSince: 'plainlimit_wrong_since',
   /** What the widget draws from: the goal, the recharge, when counting began, and the rounds. */
   widgetPlan: WIDGET_PLAN_KEY,
+  /** What the large widget draws besides the battery, and whether Pro is held (see `WidgetRecord`). */
+  widgetRecord: 'plainlimit_record',
   /** Records for the test build's readout. */
   historyLog: 'plainlimit_history_log',
   problem: 'plainlimit_problem',

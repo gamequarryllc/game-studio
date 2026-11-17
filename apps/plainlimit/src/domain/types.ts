@@ -24,6 +24,8 @@ export interface Settings {
   askFirst?: AskFirst;
   /** How hard the sums are. Missing in copies saved before it, which read as normal. Anything but normal needs Pro (pro.ts). */
   sumLevel?: SumLevel;
+  /** The person's own words on the empty battery's lock screen (Pro). Missing or empty: none. */
+  lockMessage?: string;
 }
 
 /** One battery's worth of time: from one recharge to the next. */

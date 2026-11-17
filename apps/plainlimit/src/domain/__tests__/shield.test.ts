@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from '../settings';
+import { DEFAULT_SETTINGS, repairSettings } from '../settings';
 import { emptyCopy, goalInWords, warningCopy } from '../shield';
 import type { Settings } from '../types';
 
@@ -42,5 +42,20 @@ describe('the screens that cover an app', () => {
     const copy = emptyCopy({ ...base, emptyLevel: 'locked' }, 0);
     expect(copy.secondary).toBeNull();
     expect(copy.line).toBe("Locked until it recharges at 6:00 AM. Apps that don't count still open.");
+  });
+});
+
+describe('the lock screen message', () => {
+  it('goes above the empty screen\'s words, in quotes, and not on the last-cell warning', () => {
+    const settings = { ...DEFAULT_SETTINGS, emptyLevel: 'locked' as const, lockMessage: 'Go outside.' };
+    expect(emptyCopy(settings, 0).line).toBe('\u201CGo outside.\u201D\n\nLocked until it recharges at 6:00 AM. Apps that don\'t count still open.');
+    expect(warningCopy(settings).line).not.toContain('Go outside.');
+    expect(emptyCopy({ ...settings, lockMessage: '' }, 0).line).toBe('Locked until it recharges at 6:00 AM. Apps that don\'t count still open.');
+  });
+
+  it('is read back as one tidy line of at most 80 characters', () => {
+    expect(repairSettings({ lockMessage: '  Put   it\n down  ' }).lockMessage).toBe('Put it down');
+    expect(repairSettings({ lockMessage: 'x'.repeat(200) }).lockMessage).toHaveLength(80);
+    expect(repairSettings({ lockMessage: 42 }).lockMessage).toBeUndefined();
   });
 });

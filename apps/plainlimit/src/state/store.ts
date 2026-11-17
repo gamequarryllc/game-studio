@@ -3,12 +3,13 @@ import { AppState } from 'react-native';
 
 import { DEFAULT_ASK_FIRST, type AskFirst } from '@/domain/askFirst';
 import { cellsLeft } from '@/domain/battery';
-import { addWeeklyPasses, freshRecord, passActive, passCheck, spendPass } from '@/domain/record';
+import { widgetRecord } from '@/domain/pro';
+import { addWeeklyPasses, freshRecord, passActive, passCheck, recordView, spendPass } from '@/domain/record';
 import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
-import { stepGoal, stepRecharge } from '@/domain/settings';
+import { cleanLockMessage, stepGoal, stepRecharge } from '@/domain/settings';
 import type { SumLevel } from '@/domain/puzzle';
-import type { DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
+import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
 import { applyAskFirst, openAsk } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
@@ -46,6 +47,19 @@ function set(doc: Doc, save = true) {
   snapshot = { state: 'ready', doc };
   listeners.forEach((l) => l());
   if (save) void writeSaved(doc);
+  shareRecord();
+}
+
+/** The large widget's streak, passes and week, and whether Pro is held (pro.ts). */
+function shareRecord() {
+  try {
+    const doc = snapshot.doc;
+    const now = new Date();
+    const today: DaySummary = { start: doc.day.periodStart, goalMinutes: doc.settings.goalMinutes, usedMinutes: doc.day.usedMinutes, topUps: doc.day.topUps, state: doc.day.uncounted ? 'partly' : 'counted' };
+    screenTime.shareWithWidget(widgetRecord(recordView(doc.record ?? freshRecord(now), doc.history, today, now, doc.settings.rechargeMinute), proOn));
+  } catch {
+    // The widget keeps what it last had.
+  }
 }
 
 // On a real phone, a change to the settings is handed to Screen Time a moment
@@ -282,9 +296,13 @@ let proKnown = false;
 function dropProOnly() {
   if (!proKnown || proOn || snapshot.state !== 'ready') return;
   const settings = snapshot.doc.settings;
-  if (!settings.askFirst?.on) return;
-  set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...settings.askFirst, on: false } } });
-  syncAskFirst();
+  const askOn = settings.askFirst?.on === true;
+  if (!askOn && !settings.lockMessage) return;
+  const { lockMessage: _dropped, ...rest } = settings;
+  const next: Settings = { ...rest, ...(settings.askFirst ? { askFirst: { ...settings.askFirst, on: false } } : {}) };
+  set({ ...snapshot.doc, settings: next });
+  if (askOn) syncAskFirst();
+  screenTime.refreshScreens(next, snapshot.doc.day.topUps);
 }
 
 function withSettings(change: (s: Settings) => Settings) {
@@ -488,11 +506,24 @@ export const store = {
     if (sumLevel !== 'normal' && !proOn) return;
     withSettings((s) => ({ ...s, sumLevel }));
   },
+  /**
+   * The lock screen message (Pro). Not closed while the battery is empty:
+   * words cannot open anything. The covering screens are written again at once.
+   */
+  setLockMessage(text: string) {
+    if (!proOn) return;
+    const lockMessage = cleanLockMessage(text);
+    const { lockMessage: _old, ...rest } = snapshot.doc.settings;
+    const settings: Settings = lockMessage ? { ...rest, lockMessage } : rest;
+    set({ ...snapshot.doc, settings });
+    screenTime.refreshScreens(settings, snapshot.doc.day.topUps);
+  },
   /** Pro was bought, restored, refunded or read at start (src/pro/pro.ts). `known` is false until the saved answer is read. */
   setPro(on: boolean, known: boolean) {
     proOn = on;
     proKnown = known;
     dropProOnly();
+    if (loaded) shareRecord();
   },
   hasPro(): boolean {
     return proOn;

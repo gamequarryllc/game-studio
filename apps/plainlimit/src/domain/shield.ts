@@ -33,8 +33,15 @@ export function warningCopy(settings: Settings): ShieldCopy {
   };
 }
 
-/** Shown once the battery is empty; what it offers depends on the level chosen in Settings. */
+/** Shown once the battery is empty, with the person's own message above it when they wrote one (Pro). */
 export function emptyCopy(settings: Settings, topUpsSoFar: number): ShieldCopy {
+  const copy = emptyCopyPlain(settings, topUpsSoFar);
+  const message = settings.lockMessage?.trim();
+  return message ? { ...copy, line: `\u201C${message}\u201D\n\n${copy.line}` } : copy;
+}
+
+/** What the empty screen says; what it offers depends on the level chosen in Settings. */
+function emptyCopyPlain(settings: Settings, topUpsSoFar: number): ShieldCopy {
   const at = clockLabel(settings.rechargeMinute);
   if (settings.emptyLevel === 'warn') {
     return { title: "Battery's empty", line: `You're past your ${goalInWords(settings.goalMinutes)}. It recharges at ${at}.`, primary: 'Close this app', secondary: 'Keep going anyway' };

@@ -11,6 +11,13 @@ export const GOAL_MAX = 12 * 60;
 export const GOAL_STEP = 15;
 export const RECHARGE_STEP = 30;
 export const ALLOWED_MAX = 12;
+/** The longest lock screen message: one or two lines on Apple's lock screen. */
+export const LOCK_MESSAGE_MAX = 80;
+
+/** Tidies a lock screen message: one line, no outer spaces, at most LOCK_MESSAGE_MAX characters. */
+export function cleanLockMessage(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, LOCK_MESSAGE_MAX).trim();
+}
 
 export const DEFAULT_SETTINGS: Settings = {
   goalMinutes: 180,
@@ -73,5 +80,6 @@ export function repairSettings(raw: unknown): Settings {
     }
   }
   const sumLevel = SUM_LEVELS.includes(r.sumLevel as SumLevel) ? (r.sumLevel as SumLevel) : 'normal';
-  return { goalMinutes: goal, rechargeMinute: recharge, countMode, emptyLevel, allowed, askFirst: repairAskFirst(r.askFirst), sumLevel };
+  const lockMessage = typeof r.lockMessage === 'string' ? cleanLockMessage(r.lockMessage) : '';
+  return { goalMinutes: goal, rechargeMinute: recharge, countMode, emptyLevel, allowed, askFirst: repairAskFirst(r.askFirst), sumLevel, ...(lockMessage ? { lockMessage } : {}) };
 }

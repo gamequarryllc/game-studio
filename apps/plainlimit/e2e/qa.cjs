@@ -235,7 +235,7 @@ async function main() {
     const { page, context } = await open(saved, '', PHONE, { withPro: false });
     await tab(page, 'Settings');
     await page.getByRole('button', { name: 'Recharges at, 7:00 AM · Pro', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Advanced, Second thought, sums', exact: true }).click();
+    await page.getByRole('button', { name: 'Advanced, Second thought, more', exact: true }).click();
     await page.getByRole('button', { name: 'Second thought, Pro', exact: true }).waitFor();
     await page.goBack();
     if ((await page.getByRole('button', { name: 'Recharge later', exact: true }).count()) > 0) throw new Error('the recharge stepper shows without Pro');

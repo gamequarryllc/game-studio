@@ -31,6 +31,7 @@ function fakePhone(): Fake {
     refreshScreens: jest.fn(),
     releaseLocks: jest.fn(),
     reloadWidget: jest.fn(),
+    shareWithWidget: jest.fn(),
     rightAgain: jest.fn(),
     turnOff: jest.fn(),
     wrongSince: jest.fn((now: number) => now),
@@ -402,6 +403,22 @@ describe('Pro', () => {
     store.setPro(false, true);
     expect(store.get().doc.settings.askFirst?.on).toBe(false);
     expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: false, openMinutes: 10 }, expect.anything());
+  });
+
+  it('keeps the lock message for Pro, writes the screens again, and drops it after a refund', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(30));
+    await store.start();
+    store.setPro(false, true);
+    store.setLockMessage('Go outside.');
+    expect(store.get().doc.settings.lockMessage).toBeUndefined();
+    store.setPro(true, true);
+    (phone.refreshScreens as jest.Mock).mockClear();
+    store.setLockMessage('  Go   outside. ');
+    expect(store.get().doc.settings.lockMessage).toBe('Go outside.');
+    expect(phone.refreshScreens).toHaveBeenCalledWith(expect.objectContaining({ lockMessage: 'Go outside.' }), 0);
+    store.setPro(false, true);
+    expect(store.get().doc.settings.lockMessage).toBeUndefined();
   });
 
   it('leaves Second thought on while Pro is held', async () => {

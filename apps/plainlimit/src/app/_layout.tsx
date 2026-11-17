@@ -88,6 +88,7 @@ export default function RootLayout() {
             <Stack.Screen name="record" options={{ title: '' }} />
             <Stack.Screen name="pro" options={{ title: '' }} />
             <Stack.Screen name="advanced" options={{ title: '' }} />
+            <Stack.Screen name="lock-message" options={{ title: '' }} />
             <Stack.Screen name="pass" options={{ presentation: 'formSheet', sheetAllowedDetents: [0.66, 1], sheetGrabberVisible: true, sheetCornerRadius: 28, headerShown: false, title: 'Emergency pass' }} />
             <Stack.Screen name="ask" options={{ presentation: 'modal', headerShown: false, title: 'Second thought' }} />
             <Stack.Screen name="puzzle" options={{ presentation: 'modal', headerShown: false, title: 'Earn more time' }} />

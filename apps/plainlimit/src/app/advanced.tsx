@@ -29,7 +29,8 @@ export default function Advanced() {
       <Lead>Extras for when the basics aren’t quite enough.</Lead>
 
       <Card>
-        <LinkRow label="Second thought" value={askValue} onPress={() => router.push(isPro ? '/ask-first' : '/pro')} last />
+        <LinkRow label="Second thought" value={askValue} onPress={() => router.push(isPro ? '/ask-first' : '/pro')} />
+        <LinkRow label="Lock message" value={!isPro ? 'Pro' : settings.lockMessage ? 'On' : 'Off'} onPress={() => router.push(isPro ? '/lock-message' : '/pro')} last />
       </Card>
 
       <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>
