@@ -8,11 +8,16 @@ export interface TopUpPlan {
   minutes: number;
 }
 
-/** What the next top-up costs, given how many were already earned since the recharge. */
+/**
+ * What the next top-up costs, given how many were already earned since the
+ * recharge: 3 sums for 15 minutes, 5 for 10, 7 for 5, then 3 more sums each
+ * time (10, 13, 16...) for 5 minutes, with no end until the recharge starts
+ * it again (the owner, 2026-11-17). Never a wall, always a little harder.
+ */
 export function topUpPlan(alreadyEarned: number): TopUpPlan {
   if (alreadyEarned <= 0) return { sums: 3, minutes: 15 };
   if (alreadyEarned === 1) return { sums: 5, minutes: 10 };
-  return { sums: 7, minutes: 5 };
+  return { sums: 7 + 3 * (Math.floor(alreadyEarned) - 2), minutes: 5 };
 }
 
 export interface Sum {
