@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PRO_FEATURES } from '@/domain/pro';
 import { success } from '@/platform/haptics';
@@ -54,7 +54,15 @@ export default function ProScreen() {
   return (
     <Page top={8}>
       <View testID="pro-screen" style={{ gap: 10 }}>
-        <Title>{state.isPro ? 'Pro is unlocked' : 'Plainlimit Pro'}</Title>
+        {/* Always a way out, also when the screen was opened from the widget and there is nothing to go back to (build 92 had none). */}
+        <View style={styles.head}>
+          <View style={{ flex: 1 }}>
+            <Title>{state.isPro ? 'Pro is unlocked' : 'Plainlimit Pro'}</Title>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" hitSlop={12} onPress={leave} style={({ pressed }) => [styles.close, pressed ? { opacity: 0.6 } : null]}>
+            <Text style={styles.closeText}>✕</Text>
+          </Pressable>
+        </View>
         <Lead>
           {state.isPro
             ? 'Everything below is yours, on this iPhone and any other with your Apple Account.'
@@ -78,6 +86,7 @@ export default function ProScreen() {
           <BigButton label={state.busy ? 'One moment…' : price ? `Unlock Pro · ${price}` : 'Unlock Pro'} disabled={state.busy} onPress={() => void buy()} />
           <BigButton quiet label="Restore purchase" disabled={state.busy} onPress={() => void restore()} />
           <Text style={styles.small}>One payment through the App Store. No subscription.</Text>
+          <BigButton quiet label="Not now" onPress={leave} />
         </View>
       )}
       {said ? (
@@ -90,6 +99,9 @@ export default function ProScreen() {
 }
 
 const styles = StyleSheet.create({
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  close: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: c.card, marginTop: 6 },
+  closeText: { fontSize: 17, fontWeight: '600', color: c.ink },
   feature: { paddingVertical: 14, gap: 3 },
   rule: { borderBottomWidth: 1, borderBottomColor: c.rule },
   featureTitle: { fontFamily: display.semi, fontSize: 18, lineHeight: 22, color: c.ink },

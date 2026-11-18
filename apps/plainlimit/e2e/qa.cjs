@@ -255,6 +255,16 @@ async function main() {
     await context.close();
   });
 
+  await scenario('the Pro screen opened on its own (from the widget) can be closed, and lands on Today', async () => {
+    const { page, context } = await open(doc({ used: 20 }), '', PHONE, { withPro: false });
+    await page.goto(page.url().replace(/\/?(\?.*)?$/, '/pro'));
+    await see(page, 'Plainlimit Pro');
+    await page.getByRole('button', { name: 'Not now', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await see(page, 'Used today');
+    await context.close();
+  });
+
   await scenario('the shortest goal and a midnight recharge', async () => {
     const { page, context } = await open(doc({ goal: 30, recharge: 0, used: 12 }));
     await see(page, '30 minute day');
