@@ -764,6 +764,13 @@ export function diagnostics(settings: Settings): string[] {
     } else {
       lines.push('Covers last changed: never');
     }
+    // What is ticked and what is covered, split by kind: whole categories and
+    // single apps are locked by different means (build 86: categories locked, single apps did not).
+    const kinds = (m: DeviceActivity.ActivitySelectionMetadata | undefined | null) => (m ? `${m.applicationCount} single apps, ${m.categoryCount} categories, ${sitesIn(m)} sites${m.includeEntireCategory ? ', with every app of each category' : ''}` : 'nothing');
+    lines.push(`Ticked: ${kinds(DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID }))}`);
+    lines.push(`Asked to cover: ${kinds(DeviceActivity.activitySelectionMetadata({ currentBlocklist: true }))}`);
+    lines.push(`Kept open whatever is covered: ${kinds(DeviceActivity.activitySelectionMetadata({ currentWhitelist: true }))}`);
+    lines.push(`Phone says covers are up: ${DeviceActivity.isShieldActive() ? 'yes' : 'no'}; extra lock lists in use: ${Number(DeviceActivity.userDefaultsGet<number>('plainlimit_extra_stores') ?? 0)}`);
     lines.push(`Last problem: ${readString('problem') || 'none'}`);
     return lines;
   } catch (error) {
@@ -924,3 +931,22 @@ export function releaseLocks(settings: Settings, topUpsSoFar: number, usedFloorN
 }
 
 export { COUNTED_ID };
+
+/**
+ * Test builds only: puts the empty battery's covers up now, whatever the
+ * battery holds, so the lock can be tried in seconds instead of after a whole
+ * day's use. `testUncover` takes them down again.
+ */
+export function testCover(settings: Settings, topUpsSoFar: number): void {
+  coverEmptyNow(settings, topUpsSoFar);
+}
+
+export function testUncover(): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    DeviceActivity.disableBlockAllMode('plainlimit test');
+    DeviceActivity.resetBlocks('plainlimit test');
+  } catch (error) {
+    note('testUncover', error);
+  }
+}

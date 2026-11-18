@@ -5,7 +5,7 @@ import { Text } from 'react-native';
 import { clockLabel } from '@/domain/day';
 import { settingsLockedNotice } from '@/domain/record';
 import { askToNotify } from '@/platform/notices';
-import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission } from '@/platform/screenTime';
+import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission, testCover, testUncover } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc, useNow } from '@/state/store';
 import { BigButton, Card, Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
@@ -67,6 +67,22 @@ export function ScreenTimeCard() {
           <>
             <Text style={[body, { color: c.ink3, marginTop: 6 }]}>Test build only: nothing below this line is in the App Store version.</Text>
             <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
+            <BigButton
+              quiet
+              label="Lock now (test)"
+              onPress={() => {
+                testCover(settings, store.get().doc.day.topUps);
+                readAgain((n) => n + 1);
+              }}
+            />
+            <BigButton
+              quiet
+              label="Unlock (test)"
+              onPress={() => {
+                testUncover();
+                readAgain((n) => n + 1);
+              }}
+            />
             {settingsLocked() ? <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} /> : null}
             <Text selectable style={{ fontSize: 12, lineHeight: 17, color: c.ink3, marginTop: 4 }}>
               {[...diagnostics(settings), historyLine(store.get().doc.history), ...historyLog().map((l) => `History: ${l}`)].join('\n')}
