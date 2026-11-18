@@ -24,6 +24,18 @@ struct BatteryState {
   var isSetUp: Bool
   var cells: Int
   var rechargeMinute: Int
+  /// The daily goal, for the large widget's "left today" (0 when not known).
+  var goalMinutes: Double = 0
+}
+
+/// "1 h 45 min", "2 h", "35 min".
+func durationLabel(minutes: Double) -> String {
+  let total = max(0, Int(minutes.rounded()))
+  let hours = total / 60
+  let rest = total % 60
+  if hours == 0 { return "\(rest) min" }
+  if rest == 0 { return "\(hours) h" }
+  return "\(hours) h \(rest) min"
 }
 
 struct Tone {
@@ -146,7 +158,7 @@ func readState(now: Date) -> BatteryState {
       break
     }
   }
-  return BatteryState(isSetUp: true, cells: cells, rechargeMinute: recharge)
+  return BatteryState(isSetUp: true, cells: cells, rechargeMinute: recharge, goalMinutes: goal)
 }
 
 func clockLabel(rechargeMinute: Int) -> String {
@@ -191,7 +203,7 @@ struct BatteryEntry: TimelineEntry {
 struct BatteryProvider: TimelineProvider {
   func placeholder(in context: Context) -> BatteryEntry {
     BatteryEntry(
-      date: Date(), state: BatteryState(isSetUp: true, cells: 4, rechargeMinute: 360),
+      date: Date(), state: BatteryState(isSetUp: true, cells: 4, rechargeMinute: 360, goalMinutes: 180),
       record: RecordInfo(pro: true, streak: 5, passes: 2, perfect: 3, week: "uururff"))
   }
 
@@ -223,7 +235,7 @@ struct BatteryProvider: TimelineProvider {
     entries.append(
       BatteryEntry(
         date: recharge,
-        state: BatteryState(isSetUp: true, cells: cellCount, rechargeMinute: state.rechargeMinute)))
+        state: BatteryState(isSetUp: true, cells: cellCount, rechargeMinute: state.rechargeMinute, goalMinutes: state.goalMinutes)))
     // The monitor extension asks for a redraw at every checkpoint, and the app does whenever
     // it is opened. This is the fallback for when neither happens: a look every quarter of an
     // hour. iOS grants a widget only so many of these a day, so some will come later than asked.
@@ -372,7 +384,7 @@ struct BatteryWidgetView: View {
             tile("\(record.passes)", record.passes == 1 ? "pass saved" : "passes saved", colours)
             tile("\(record.perfect)", record.perfect == 1 ? "perfect week" : "perfect weeks", colours)
           }
-          Spacer(minLength: 0)
+          leftToday(state, colours)
           weekRow(record.week, colours)
         } else {
           Spacer(minLength: 0)
@@ -397,6 +409,32 @@ struct BatteryWidgetView: View {
     } else {
       setUpPrompt
     }
+  }
+
+  /// The middle of the large widget: how much of today's goal is left. The
+  /// battery only knows whole cells, so it is "up to" that much.
+  private func leftToday(_ state: BatteryState, _ colours: Tone) -> some View {
+    let left = state.goalMinutes * Double(state.cells) / Double(cellCount)
+    let empty = state.cells <= 0 || state.goalMinutes <= 0
+    return VStack(alignment: .leading, spacing: 4) {
+      Text(empty ? "Nothing left today" : "Up to \(durationLabel(minutes: left)) left")
+        .font(.system(size: 28, weight: .bold, design: .rounded))
+        .foregroundStyle(colours.ink)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+      Text(
+        empty
+          ? "Back at \(clockLabel(rechargeMinute: state.rechargeMinute))"
+          : "of your \(durationLabel(minutes: state.goalMinutes)) day"
+      )
+      .font(.system(size: 14, weight: .semibold))
+      .foregroundStyle(colours.ink.opacity(0.75))
+      .lineLimit(1)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    .padding(.horizontal, 14)
+    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(colours.ink.opacity(0.10)))
+    .accessibilityElement(children: .combine)
   }
 
   private func tile(_ figure: String, _ label: String, _ colours: Tone) -> some View {
