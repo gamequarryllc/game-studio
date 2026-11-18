@@ -454,11 +454,14 @@ export const store = {
   appsShownClosed() {
     screenTime.appsAfter();
     store.picksChanged();
+    redrawAndLookAgain();
   },
   /** Apple's picker closed on the essentials. Returns how many were ticked if that was too many to keep (0 when kept). */
   essentialsClosed(): number {
     const refused = screenTime.essentialsAfter();
     store.picksChanged();
+    // A warning about the older list is settled by this; Today has to hear of it (build 90 kept "Not locking" up).
+    redrawAndLookAgain();
     return refused;
   },
   stepGoal(direction: 1 | -1) {
