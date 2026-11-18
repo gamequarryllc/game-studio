@@ -166,6 +166,16 @@ async function main() {
       await context.close();
     }
 
+    // For App Review, not the listing: the screen where Plainlimit Pro is bought.
+    {
+      const { page, context } = await open(doc(47));
+      await tab(page, 'Settings');
+      await page.getByRole('button', { name: /^Plainlimit Pro/ }).click();
+      await page.getByText('Restore purchase', { exact: true }).first().waitFor();
+      await raw(page, 'pro-screen');
+      await context.close();
+    }
+
     // 4: "Work for it" when empty: the sums, with the first answer typed in.
     {
       const { page, context } = await open(doc(GOAL));
@@ -203,6 +213,7 @@ async function main() {
     for (const stale of fs.readdirSync(OUT)) {
       if (/^\d\d-.*\.png$/.test(stale) && !SHOTS.some((s) => `${s.file}.png` === stale)) fs.unlinkSync(path.join(OUT, stale));
     }
+    fs.copyFileSync(path.join(RAW, 'pro-screen.png'), path.join(OUT, 'iap-review-pro-screen.png'));
     console.log(`Store screenshots: ${OUT}\nRaw screens: ${RAW}`);
   } finally {
     await browser.close();
