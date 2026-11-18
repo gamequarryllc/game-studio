@@ -71,3 +71,27 @@ describe('settings', () => {
     expect(withoutAllowed(['Phone', 'Maps'], 'Phone')).toEqual(['Maps']);
   });
 });
+
+describe('sum difficulty', () => {
+  it('easy is a two-digit number and a digit, hard a three-digit and a two-digit one, each with a carry', () => {
+    const random = makeRandom(11);
+    for (let i = 0; i < 200; i++) {
+      const easy = makeSum(random, 'easy');
+      expect(easy.a).toBeGreaterThanOrEqual(10);
+      expect(easy.a).toBeLessThan(100);
+      expect(easy.b).toBeGreaterThanOrEqual(1);
+      expect(easy.b).toBeLessThan(10);
+      expect((easy.a % 10) + easy.b).toBeGreaterThanOrEqual(10);
+      const hard = makeSum(random, 'hard');
+      expect(hard.a).toBeGreaterThanOrEqual(100);
+      expect(hard.a).toBeLessThan(1000);
+      expect(hard.b).toBeGreaterThanOrEqual(10);
+      expect(hard.b).toBeLessThan(100);
+      expect((hard.a % 10) + (hard.b % 10)).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it('normal is the same sums as before difficulty existed', () => {
+    expect(makeSums(5, makeRandom(7), 'normal')).toEqual(makeSums(5, makeRandom(7)));
+  });
+});

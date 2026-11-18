@@ -31,6 +31,7 @@ function fakePhone(): Fake {
     refreshScreens: jest.fn(),
     releaseLocks: jest.fn(),
     reloadWidget: jest.fn(),
+    shareWithWidget: jest.fn(),
     rightAgain: jest.fn(),
     turnOff: jest.fn(),
     wrongSince: jest.fn((now: number) => now),
@@ -275,6 +276,7 @@ describe('Ask first', () => {
     const { store } = load(phone, saved(30), ask);
     await store.start();
     expect(ask.applyAskFirst).toHaveBeenCalledTimes(1);
+    store.setPro(true, true);
     store.setAskFirst({ on: true, openMinutes: 15 });
     expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
     expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 }, { empty: false, recharge: expect.any(String) });
@@ -351,5 +353,51 @@ describe('emergency passes', () => {
     expect(store.passCheck()).toBe('none');
     expect(store.usePass()).toBe(false);
     expect(phone.grantExtraTime).not.toHaveBeenCalled();
+  });
+});
+
+describe('Pro', () => {
+  const withAsk = (on: boolean) => saved(30, { settings: { goalMinutes: 180, rechargeMinute: 360, countMode: 'custom', emptyLevel: 'work', allowed: [], askFirst: { on, openMinutes: 10 } } });
+
+  it('without it, the recharge time stays and sums stay normal; Second thought and the lock message are free', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(30));
+    await store.start();
+    store.setPro(false, true);
+    store.stepRecharge(1);
+    store.setSumLevel('hard');
+    expect(store.get().doc.settings.rechargeMinute).toBe(360);
+    expect(store.get().doc.settings.sumLevel).toBe('normal');
+    store.setAskFirst({ on: true, openMinutes: 15 });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
+    store.setLockMessage('  Go   outside. ');
+    expect(store.get().doc.settings.lockMessage).toBe('Go outside.');
+    expect(phone.refreshScreens).toHaveBeenCalledWith(expect.objectContaining({ lockMessage: 'Go outside.' }), 0);
+  });
+
+  it('with it, the recharge time and the sums change', async () => {
+    const { store } = load(fakePhone(), saved(30));
+    await store.start();
+    store.setPro(true, true);
+    store.stepRecharge(1);
+    store.setSumLevel('hard');
+    expect(store.get().doc.settings.rechargeMinute).toBe(390);
+    expect(store.get().doc.settings.sumLevel).toBe('hard');
+  });
+
+  it('keeps a recharge time chosen before Pro existed', async () => {
+    const { store } = load(fakePhone(), saved(30, { settings: { goalMinutes: 180, rechargeMinute: 420, countMode: 'custom', emptyLevel: 'work', allowed: [] } }));
+    await store.start();
+    store.setPro(false, true);
+    expect(store.get().doc.settings.rechargeMinute).toBe(420);
+  });
+
+  it('leaves Second thought and the lock message alone when the phone is known not to have Pro', async () => {
+    const { store } = load(fakePhone(), withAsk(true));
+    await store.start();
+    store.setLockMessage('Go outside.');
+    store.setPro(false, true);
+    expect(store.get().doc.settings.askFirst?.on).toBe(true);
+    expect(store.get().doc.settings.lockMessage).toBe('Go outside.');
   });
 });

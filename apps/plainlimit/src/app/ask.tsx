@@ -9,6 +9,7 @@ import { clockLabel, clockLabelOf } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { isRight, makeRandom, makeSums, type Sum } from '@/domain/puzzle';
 import { success, warning } from '@/platform/haptics';
+import { sumLevelFor } from '@/domain/pro';
 import { store } from '@/state/store';
 import { BigButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
@@ -22,7 +23,7 @@ export default function Ask() {
   const insets = useSafeAreaInsets();
   const { settings, day, now } = useDay();
   const ask = settings.askFirst ?? DEFAULT_ASK_FIRST;
-  const [sum] = useState<Sum>(() => makeSums(1, makeRandom(Date.now()))[0]);
+  const [sum] = useState<Sum>(() => makeSums(1, makeRandom(Date.now()), sumLevelFor(settings, store.hasPro()))[0]);
   const [typed, setTyped] = useState('');
   const [wrong, setWrong] = useState(false);
   const [openUntil, setOpenUntil] = useState<Date | null>(null);
@@ -83,7 +84,7 @@ export default function Ask() {
           <Text style={styles.lead}>{askLead(ask.openMinutes, opensCounted, clockLabel(settings.rechargeMinute))}</Text>
         </View>
 
-        <Text accessibilityLabel={`${sum.a} plus ${sum.b}`} style={styles.sum}>
+        <Text accessibilityLabel={`${sum.a} plus ${sum.b}`} numberOfLines={1} adjustsFontSizeToFit style={styles.sum}>
           {sum.a} + {sum.b}
         </Text>
 

@@ -3,11 +3,13 @@ import { AppState } from 'react-native';
 
 import { DEFAULT_ASK_FIRST, type AskFirst } from '@/domain/askFirst';
 import { cellsLeft } from '@/domain/battery';
-import { addWeeklyPasses, freshRecord, passActive, passCheck, spendPass } from '@/domain/record';
+import { widgetRecord } from '@/domain/pro';
+import { addWeeklyPasses, freshRecord, passActive, passCheck, recordView, spendPass } from '@/domain/record';
 import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
-import { stepGoal, stepRecharge } from '@/domain/settings';
-import type { DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
+import { cleanLockMessage, stepGoal, stepRecharge } from '@/domain/settings';
+import type { SumLevel } from '@/domain/puzzle';
+import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
 import { applyAskFirst, openAsk } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
@@ -45,6 +47,19 @@ function set(doc: Doc, save = true) {
   snapshot = { state: 'ready', doc };
   listeners.forEach((l) => l());
   if (save) void writeSaved(doc);
+  shareRecord();
+}
+
+/** The large widget's streak, passes and week, and whether Pro is held (pro.ts). */
+function shareRecord() {
+  try {
+    const doc = snapshot.doc;
+    const now = new Date();
+    const today: DaySummary = { start: doc.day.periodStart, goalMinutes: doc.settings.goalMinutes, usedMinutes: doc.day.usedMinutes, topUps: doc.day.topUps, state: doc.day.uncounted ? 'partly' : 'counted' };
+    screenTime.shareWithWidget(widgetRecord(recordView(doc.record ?? freshRecord(now), doc.history, today, now, doc.settings.rechargeMinute), proOn));
+  } catch {
+    // The widget keeps what it last had.
+  }
 }
 
 // On a real phone, a change to the settings is handed to Screen Time a moment
@@ -270,6 +285,13 @@ function syncAskFirst() {
   }
 }
 
+/**
+ * Whether this phone has Pro (src/pro/pro.ts tells the store through `setPro`).
+ * Losing it (a refund) turns nothing off: the recharge time stays as chosen,
+ * and the sums fall back to normal by themselves (see `sumLevelFor`).
+ */
+let proOn = false;
+
 function withSettings(change: (s: Settings) => Settings) {
   if (settingsLocked()) return;
   // A new recharge time can move the start of the current battery.
@@ -467,11 +489,38 @@ export const store = {
   stepGoal(direction: 1 | -1) {
     withSettings((s) => ({ ...s, goalMinutes: stepGoal(s.goalMinutes, direction) }));
   },
+  /** Changing the recharge time is Pro. A time chosen before Pro existed (1.0) is kept as it is. */
   stepRecharge(direction: 1 | -1) {
+    if (!proOn) return;
     withSettings((s) => ({ ...s, rechargeMinute: stepRecharge(s.rechargeMinute, direction) }));
   },
   setEmptyLevel(emptyLevel: EmptyLevel) {
     withSettings((s) => ({ ...s, emptyLevel }));
+  },
+  /** How hard the sums are. Normal is free; easy and hard are Pro. */
+  setSumLevel(sumLevel: SumLevel) {
+    if (sumLevel !== 'normal' && !proOn) return;
+    withSettings((s) => ({ ...s, sumLevel }));
+  },
+  /**
+   * The lock screen message (free for now; Pro once it has been tested, the
+   * owner, 2026-11-18). Not closed while the battery is empty:
+   * words cannot open anything. The covering screens are written again at once.
+   */
+  setLockMessage(text: string) {
+    const lockMessage = cleanLockMessage(text);
+    const { lockMessage: _old, ...rest } = snapshot.doc.settings;
+    const settings: Settings = lockMessage ? { ...rest, lockMessage } : rest;
+    set({ ...snapshot.doc, settings });
+    screenTime.refreshScreens(settings, snapshot.doc.day.topUps);
+  },
+  /** Pro was bought, restored, refunded or read at start (src/pro/pro.ts). `known` is false until the saved answer is read. */
+  setPro(on: boolean, _known: boolean) {
+    proOn = on;
+    if (loaded) shareRecord();
+  },
+  hasPro(): boolean {
+    return proOn;
   },
   /**
    * Ask first's settings. Not closed while the battery is empty: nothing here

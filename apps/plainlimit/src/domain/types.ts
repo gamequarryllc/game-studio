@@ -1,6 +1,7 @@
 // The words the rest of the app is written in.
 
 import type { AskFirst } from './askFirst';
+import type { SumLevel } from './puzzle';
 import type { PassRecord } from './record';
 
 /** Which apps drain the battery. */
@@ -21,6 +22,10 @@ export interface Settings {
   allowed: string[];
   /** The "Ask first" list: apps that ask for one sum every time they open (askFirst.ts). Missing in copies saved before it, which read as off. */
   askFirst?: AskFirst;
+  /** How hard the sums are. Missing in copies saved before it, which read as normal. Anything but normal needs Pro (pro.ts). */
+  sumLevel?: SumLevel;
+  /** The person's own words on the empty battery's lock screen (Pro). Missing or empty: none. */
+  lockMessage?: string;
 }
 
 /** One battery's worth of time: from one recharge to the next. */

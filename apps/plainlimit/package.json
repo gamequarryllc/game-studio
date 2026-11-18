@@ -10,6 +10,7 @@
     "expo-constants": "~58.0.15",
     "expo-font": "~58.0.11",
     "expo-haptics": "~58.0.7",
+    "expo-iap": "6.4.3",
     "expo-linking": "~58.0.16",
     "expo-notifications": "~58.1.9",
     "expo-router": "~58.0.30",

@@ -9,6 +9,8 @@ import WidgetKit
 //                                                checkpoint is reached (milliseconds since 1970)
 //   plainlimit_guard                             written by the app at each registration: reports
 //                                                between `opens` and `closes` count from `from`
+//   plainlimit_record                            written by the app: whether Pro is held, and the streak,
+//                                                passes, perfect weeks and this week for the large widget (pro.ts)
 // A checkpoint counts for today when it was reached after the last recharge.
 // The same rules live in the app's src/domain/ (battery.ts, day.ts, checkpoints.ts, tone.ts);
 // src/domain/__tests__/monitorPlan.test.ts checks the two stay in step.
@@ -155,14 +157,42 @@ func clockLabel(rechargeMinute: Int) -> String {
   return formatter.string(from: date)
 }
 
+/// The large widget's extras (Pro). `week` is Monday to Sunday, one letter a day:
+/// u under the goal, r ran out, p partly counted, n not counted, f still to come.
+struct RecordInfo {
+  var pro: Bool
+  var streak: Int
+  var passes: Int
+  var perfect: Int
+  var week: String
+}
+
+func readRecord() -> RecordInfo {
+  let none = RecordInfo(pro: false, streak: 0, passes: 0, perfect: 0, week: "fffffff")
+  guard let defaults = UserDefaults(suiteName: appGroup),
+    let text = defaults.string(forKey: "plainlimit_record"),
+    let data = text.data(using: .utf8),
+    let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+  else { return none }
+  return RecordInfo(
+    pro: object["pro"] as? Bool ?? false,
+    streak: (object["streak"] as? NSNumber)?.intValue ?? 0,
+    passes: (object["passes"] as? NSNumber)?.intValue ?? 0,
+    perfect: (object["perfect"] as? NSNumber)?.intValue ?? 0,
+    week: object["week"] as? String ?? none.week)
+}
+
 struct BatteryEntry: TimelineEntry {
   let date: Date
   let state: BatteryState
+  var record: RecordInfo = readRecord()
 }
 
 struct BatteryProvider: TimelineProvider {
   func placeholder(in context: Context) -> BatteryEntry {
-    BatteryEntry(date: Date(), state: BatteryState(isSetUp: true, cells: 4, rechargeMinute: 360))
+    BatteryEntry(
+      date: Date(), state: BatteryState(isSetUp: true, cells: 4, rechargeMinute: 360),
+      record: RecordInfo(pro: true, streak: 5, passes: 2, perfect: 3, week: "uururff"))
   }
 
   func getSnapshot(in context: Context, completion: @escaping (BatteryEntry) -> Void) {
@@ -250,6 +280,8 @@ struct BatteryWidgetView: View {
         lockScreen(state)
       case .systemMedium:
         medium(state, colours)
+      case .systemLarge:
+        large(state, colours, entry.record)
       default:
         small(state, colours)
       }
@@ -311,6 +343,122 @@ struct BatteryWidgetView: View {
     }
   }
 
+  /// Half the Home Screen: the battery, then the streak, passes and week (Pro).
+  /// Without Pro the extras are replaced by one line saying what Pro adds; the battery stays.
+  @ViewBuilder
+  private func large(_ state: BatteryState, _ colours: Tone, _ record: RecordInfo) -> some View {
+    if state.isSetUp {
+      VStack(alignment: .leading, spacing: 14) {
+        HStack(alignment: .center, spacing: 16) {
+          BatteryShape(cells: state.cells, ink: colours.ink, track: colours.track)
+            .frame(width: 150, height: 64)
+          VStack(alignment: .leading, spacing: 4) {
+            Text(word(forCells: state.cells))
+              .font(.system(size: 24, weight: .bold, design: .rounded))
+              .foregroundStyle(colours.ink)
+              .minimumScaleFactor(0.6)
+              .lineLimit(1)
+            Text("Recharges \(clockLabel(rechargeMinute: state.rechargeMinute))")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(colours.ink.opacity(0.75))
+              .lineLimit(1)
+          }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken(state))
+        if record.pro {
+          HStack(spacing: 8) {
+            tile("\(record.streak)", record.streak == 1 ? "week streak" : "weeks streak", colours)
+            tile("\(record.passes)", record.passes == 1 ? "pass saved" : "passes saved", colours)
+            tile("\(record.perfect)", record.perfect == 1 ? "perfect week" : "perfect weeks", colours)
+          }
+          Spacer(minLength: 0)
+          weekRow(record.week, colours)
+        } else {
+          Spacer(minLength: 0)
+          VStack(alignment: .leading, spacing: 6) {
+            Text("PRO")
+              .font(.system(size: 11, weight: .bold))
+              .foregroundStyle(colours.ink)
+              .padding(.horizontal, 7)
+              .padding(.vertical, 2)
+              .overlay(Capsule().strokeBorder(colours.ink.opacity(0.6), lineWidth: 1))
+            Text("Your streak, passes and week, at a glance")
+              .font(.system(size: 20, weight: .bold, design: .rounded))
+              .foregroundStyle(colours.ink)
+              .minimumScaleFactor(0.7)
+            Text("Tap to see Plainlimit Pro. The small and medium widgets stay free.")
+              .font(.system(size: 13, weight: .medium))
+              .foregroundStyle(colours.ink.opacity(0.75))
+          }
+          .widgetURL(URL(string: "plainlimit://pro"))
+        }
+      }
+    } else {
+      setUpPrompt
+    }
+  }
+
+  private func tile(_ figure: String, _ label: String, _ colours: Tone) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(figure)
+        .font(.system(size: 26, weight: .bold, design: .rounded))
+        .foregroundStyle(colours.ink)
+      Text(label)
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(colours.ink.opacity(0.75))
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(10)
+    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(colours.ink.opacity(0.10)))
+    .accessibilityElement(children: .combine)
+  }
+
+  /// This week, Monday to Sunday: a solid dot under the goal, a ringed dot ran out, faint not counted or to come.
+  private func weekRow(_ week: String, _ colours: Tone) -> some View {
+    let letters = Array(week.padding(toLength: 7, withPad: "f", startingAt: 0))
+    let names = ["M", "T", "W", "T", "F", "S", "S"]
+    return HStack(spacing: 0) {
+      ForEach(0..<7, id: \.self) { index in
+        VStack(spacing: 6) {
+          dot(letters[index], colours)
+          Text(names[index])
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(colours.ink.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity)
+      }
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("This week: " + letters.map { spokenDay($0) }.joined(separator: ", "))
+  }
+
+  @ViewBuilder
+  private func dot(_ letter: Character, _ colours: Tone) -> some View {
+    switch letter {
+    case "u":
+      Circle().fill(colours.ink).frame(width: 22, height: 22)
+    case "p":
+      Circle().fill(colours.ink.opacity(0.55)).frame(width: 22, height: 22)
+    case "r":
+      Circle().strokeBorder(colours.ink, lineWidth: 3).frame(width: 22, height: 22)
+    default:
+      Circle().strokeBorder(colours.ink.opacity(0.25), lineWidth: 1.5).frame(width: 22, height: 22)
+    }
+  }
+
+  private func spokenDay(_ letter: Character) -> String {
+    switch letter {
+    case "u": return "under the goal"
+    case "p": return "partly counted"
+    case "r": return "ran out"
+    case "n": return "not counted"
+    default: return "to come"
+    }
+  }
+
   @ViewBuilder
   private func lockScreen(_ state: BatteryState) -> some View {
     if state.isSetUp {
@@ -352,8 +500,8 @@ struct PlainlimitBatteryWidget: Widget {
       BatteryWidgetView(entry: entry)
     }
     .configurationDisplayName("Battery")
-    .description("Your screen time for the day, as a battery.")
-    .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
+    .description("Your screen time for the day, as a battery. The large size adds your streak, passes and week with Pro.")
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
   }
 }
 
