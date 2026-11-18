@@ -84,9 +84,14 @@ class UsageReportView: ExpoView {
     // When the box gets its real size after the report was first drawn, ask
     // the report to lay itself out again, so it does not keep the first size.
     if bounds.size != laidOutSize {
+      let first = laidOutSize == .zero
       laidOutSize = bounds.size
       host?.view.setNeedsLayout()
       host?.view.layoutIfNeeded()
+      // A report first laid out at another size could keep drawing as if it
+      // still had it (build 86: the day's figure half below its box now and
+      // then). Building it again at the real size starts it from that size.
+      if !first, host != nil { refresh() }
     }
     sheet.frame = bounds
     bringSubviewToFront(sheet)
