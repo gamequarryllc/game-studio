@@ -6,7 +6,10 @@ describe('the puzzle', () => {
     expect(topUpPlan(0)).toEqual({ sums: 3, minutes: 15 });
     expect(topUpPlan(1)).toEqual({ sums: 5, minutes: 10 });
     expect(topUpPlan(2)).toEqual({ sums: 7, minutes: 5 });
-    expect(topUpPlan(9)).toEqual({ sums: 7, minutes: 5 });
+    // Then 3 more sums each time, for 5 minutes, until the recharge.
+    expect(topUpPlan(3)).toEqual({ sums: 10, minutes: 5 });
+    expect(topUpPlan(4)).toEqual({ sums: 13, minutes: 5 });
+    expect(topUpPlan(9)).toEqual({ sums: 28, minutes: 5 });
   });
 
   it('always sets two-digit sums that need a carry', () => {

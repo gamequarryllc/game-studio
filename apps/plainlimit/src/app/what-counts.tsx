@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { APP_LOCK_LIMIT, COUNTED_ID, MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount, picksBefore, singleAppCount, tooManyApps } from '@/platform/screenTime';
+import { APP_LOCK_LIMIT, COUNTED_ID, MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount, picksBefore, picksRefused, singleAppCount, tooManyApps } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
-import { COUNTS_LEAD, COUNTS_NOTE, countsSteps, pickedWords, tooManyWords } from '@/ui/countWords';
+import { COUNTS_LEAD, COUNTS_NOTE, TOO_MANY_REFUSED, countsSteps, pickedWords, tooManyWords } from '@/ui/countWords';
 import { BigButton, Card, Lead, Page, Title } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
@@ -19,6 +19,7 @@ import { c } from '@/ui/theme';
 export default function WhatCounts() {
   const [picking, setPicking] = useState(false);
   const [, redraw] = useState(0);
+  const [refusedNote, setRefusedNote] = useState(false);
   const picked = pickCount(COUNTED_ID);
   useDoc();
   const locked = settingsLocked();
@@ -41,6 +42,11 @@ export default function WhatCounts() {
             ))}
           </Card>
           <Text style={{ fontSize: 15, lineHeight: 21, color: picked === 0 ? c.ink : c.ink2, marginTop: 4 }}>{pickedWords(picked)}</Text>
+          {refusedNote ? (
+            <Text accessibilityRole="alert" style={{ fontSize: 15, lineHeight: 21, color: '#F79200' }}>
+              {TOO_MANY_REFUSED(APP_LOCK_LIMIT)}
+            </Text>
+          ) : null}
           {tooMany ? (
             <View accessibilityRole="alert" style={{ borderWidth: 1.5, borderColor: '#F79200', borderRadius: 18, padding: 16, gap: 10 }}>
               <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>
@@ -77,6 +83,7 @@ export default function WhatCounts() {
         onClose={() => {
           setPicking(false);
           store.picksChanged();
+          setRefusedNote(picksRefused());
           redraw((n) => n + 1);
         }}
       />

@@ -34,6 +34,16 @@ function fakePhone(): Fake {
     rightAgain: jest.fn(),
     turnOff: jest.fn(),
     wrongSince: jest.fn((now: number) => now),
+    permission: jest.fn(() => 'approved'),
+  };
+}
+
+/** A fake of Ask first's phone side, with every call recorded. */
+function fakeAsk(): Fake {
+  return {
+    __esModule: true,
+    applyAskFirst: jest.fn(async () => {}),
+    openAsk: jest.fn(async () => new Date(Date.now() + 10 * 60_000)),
   };
 }
 
@@ -54,10 +64,11 @@ function saved(used: number, extra: Record<string, unknown> = {}) {
 }
 
 /** A fresh store module over `phone`, with `raw` as the saved copy. */
-function load(phone: Fake, raw: unknown) {
+function load(phone: Fake, raw: unknown, ask: Fake = fakeAsk()) {
   let mod: typeof import('../store') | undefined;
   jest.isolateModules(() => {
     jest.doMock('@/platform/screenTime', () => phone);
+    jest.doMock('@/platform/askFirst', () => ask);
     jest.doMock('@/platform/storage', () => ({ readSaved: jest.fn(async () => raw), writeSaved: jest.fn(async () => {}) }));
     // A fresh copy per test needs require inside isolateModules.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -254,5 +265,91 @@ describe('turning counting on', () => {
     await store.start();
     expect(await store.turnOnScreenTime()).toBe('failed');
     expect(store.get().doc.watching).toBe(false);
+  });
+});
+
+describe('Ask first', () => {
+  it('is put on the phone at start and when its settings change, and kept with the settings', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    const { store } = load(phone, saved(30), ask);
+    await store.start();
+    expect(ask.applyAskFirst).toHaveBeenCalledTimes(1);
+    store.setAskFirst({ on: true, openMinutes: 15 });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
+    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 }, { empty: false, recharge: expect.any(String) });
+  });
+
+  it('is left alone while counting is off', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    const { store } = load(phone, saved(30, { watching: false }), ask);
+    phone.isOn = jest.fn(() => false);
+    await store.start();
+    store.setAskFirst({ on: true });
+    expect(ask.applyAskFirst).not.toHaveBeenCalled();
+  });
+
+  it('opening it while the battery is empty puts the battery\'s covers back, so counted apps stay locked', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    const { store } = load(phone, saved(180, { settings: { goalMinutes: 180, rechargeMinute: 360, countMode: 'custom', emptyLevel: 'work', allowed: [], askFirst: { on: true, openMinutes: 10 } } }), ask);
+    await store.start();
+    (phone.coverEmptyNow as jest.Mock).mockClear();
+    expect(await store.openAskFirst()).not.toBeNull();
+    expect(ask.openAsk).toHaveBeenCalledWith({ on: true, openMinutes: 10 }, expect.any(Number), expect.any(Date));
+    expect(phone.coverEmptyNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('opening it with charge left touches nothing of the battery\'s', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    const { store } = load(phone, saved(40), ask);
+    await store.start();
+    (phone.coverEmptyNow as jest.Mock).mockClear();
+    await store.openAskFirst();
+    expect(phone.coverEmptyNow).not.toHaveBeenCalled();
+  });
+
+  it('never stops the app from starting, even if the phone throws', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    phone.permission = jest.fn(() => {
+      throw new Error('no');
+    });
+    const { store } = load(phone, saved(30), ask);
+    await store.start();
+    expect(store.get().state).toBe('ready');
+  });
+});
+
+describe('emergency passes', () => {
+  it('a new record starts with one pass; using it opens the settings and everything for 15 minutes, once a day', async () => {
+    const phone = fakePhone();
+    const { store, settingsLocked } = load(phone, saved(180));
+    await store.start();
+    expect(store.get().doc.record?.passes).toBe(1);
+    expect(settingsLocked()).toBe(true);
+    expect(store.passCheck()).toBe('ok');
+    expect(store.usePass()).toBe(true);
+    const doc = store.get().doc;
+    expect(doc.record?.passes).toBe(0);
+    expect(doc.day.unlockedUntil).toBe(doc.record?.passUntil);
+    expect(phone.grantExtraTime).toHaveBeenCalledTimes(1);
+    expect(settingsLocked()).toBe(false);
+    // Not twice in a battery's day, whatever is in the bank.
+    expect(store.usePass()).toBe(false);
+    expect(store.passCheck()).toBe('running');
+  });
+
+  it('with none in the bank, nothing opens', async () => {
+    const phone = fakePhone();
+    const now = new Date();
+    const record = { passes: 0, lastAdded: '2099-01-05', since: now.toISOString(), uses: [], passUntil: null };
+    const { store } = load(phone, saved(180, { record }));
+    await store.start();
+    expect(store.passCheck()).toBe('none');
+    expect(store.usePass()).toBe(false);
+    expect(phone.grantExtraTime).not.toHaveBeenCalled();
   });
 });

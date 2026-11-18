@@ -30,6 +30,8 @@ export const SAVED = {
   round: 'plainlimit_round',
   roundBefore: 'plainlimit_round_before',
   roundGoalBefore: 'plainlimit_round_goal_before',
+  /** While the Ask first list is open after a sum: until then (see askFirst.ts). */
+  askOpenUntil: 'plainlimit_ask_open_until',
   /** When counting was first seen not working, in a run of bad checks. */
   wrongSince: 'plainlimit_wrong_since',
   /** What the widget draws from: the goal, the recharge, when counting began, and the rounds. */

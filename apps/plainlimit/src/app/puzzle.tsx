@@ -94,11 +94,18 @@ export default function Puzzle() {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {sums.map((_, i) => (
-              <View key={i} style={{ width: sums.length > 5 ? 22 : 34, height: 8, borderRadius: 4, backgroundColor: i < at ? accent : i === at ? c.ink : c.raised }} />
-            ))}
-          </View>
+          {sums.length <= 7 ? (
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {sums.map((_, i) => (
+                <View key={i} style={{ width: sums.length > 5 ? 22 : 34, height: 8, borderRadius: 4, backgroundColor: i < at ? accent : i === at ? c.ink : c.raised }} />
+              ))}
+            </View>
+          ) : (
+            // From the fourth unlock on there are 10, 13, 16... sums: one bar, filling.
+            <View style={{ width: 150, height: 8, borderRadius: 4, backgroundColor: c.raised, overflow: 'hidden' }}>
+              <View style={{ width: `${(at / sums.length) * 100}%`, height: 8, borderRadius: 4, backgroundColor: accent }} />
+            </View>
+          )}
           <Text style={styles.count}>
             Sum {at + 1} of {sums.length}
           </Text>

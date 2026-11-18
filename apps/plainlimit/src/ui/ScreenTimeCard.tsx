@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Text } from 'react-native';
 
 import { clockLabel } from '@/domain/day';
+import { settingsLockedNotice } from '@/domain/record';
 import { askToNotify } from '@/platform/notices';
 import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc, useNow } from '@/state/store';
@@ -58,7 +59,7 @@ export function ScreenTimeCard() {
         <Label>Screen Time</Label>
         <Text style={body}>On. The battery follows this phone&apos;s real screen time.</Text>
         {settingsLocked() ? (
-          <Text style={[body, { color: c.ink }]}>The battery is empty, so these settings are locked until it recharges at {clockLabel(settings.rechargeMinute)}.</Text>
+          <Text style={[body, { color: c.ink }]}>{settingsLockedNotice(clockLabel(settings.rechargeMinute), store.passCheck())}</Text>
         ) : (
           <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} />
         )}

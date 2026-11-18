@@ -41,3 +41,6 @@ export function essentialsValue(picked: number): string {
 export function tooManyWords(singleApps: number, limit: number): string {
   return `${singleApps} apps are ticked one by one, and iOS locks at most ${limit}, so most of them won’t lock. Pick again, and untick whole categories where you can.`;
 }
+
+export const TOO_MANY_REFUSED = (limit: number) =>
+  `Too many single apps: iOS locks at most ${limit}, so that list wasn’t kept and your old one still applies. Untick whole categories where you can, then try again.`;

@@ -19,6 +19,8 @@ export interface WeekColumn {
   /** Counted throughout and stayed under the goal. Today never is, until it ends. */
   under: boolean;
   topUps: number;
+  /** An emergency pass was used in this battery's day. */
+  pass: boolean;
 }
 
 export interface Week {
@@ -47,8 +49,14 @@ function isUnder(h: DaySummary): boolean {
   return h.state === 'counted' && h.usedMinutes < h.goalMinutes;
 }
 
-export function weekView(history: readonly DaySummary[], day: DayState, settings: Settings, now: Date, counting: boolean): Week {
+/**
+ * `passUses` are the times emergency passes were used (record.ts). A pass
+ * belongs to the battery's day it was used in: one used at 2 AM, before a
+ * 6 AM recharge, marks the day before.
+ */
+export function weekView(history: readonly DaySummary[], day: DayState, settings: Settings, now: Date, counting: boolean, passUses: readonly string[] = []): Week {
   const byDate = new Map(history.map((h) => [dateKey(new Date(h.start)), h]));
+  const passDays = new Set(passUses.map((u) => dateKey(new Date(new Date(u).getTime() - settings.rechargeMinute * 60000))));
   const todayStart = periodStart(now, settings.rechargeMinute);
   const columns: WeekColumn[] = [];
   for (let k = 6; k >= 0; k--) {
@@ -57,14 +65,14 @@ export function weekView(history: readonly DaySummary[], day: DayState, settings
     const weekday = WEEKDAYS[start.getDay()];
     if (k === 0) {
       const state: WeekState = !counting ? 'off' : day.uncounted ? 'partly' : 'counted';
-      columns.push({ date, weekday, today: true, usedMinutes: day.usedMinutes, goalMinutes: settings.goalMinutes, state, under: false, topUps: day.topUps });
+      columns.push({ date, weekday, today: true, usedMinutes: day.usedMinutes, goalMinutes: settings.goalMinutes, state, under: false, topUps: day.topUps, pass: passDays.has(date) });
       continue;
     }
     const h = byDate.get(date);
     columns.push(
       h
-        ? { date, weekday, today: false, usedMinutes: h.usedMinutes, goalMinutes: h.goalMinutes, state: h.state, under: isUnder(h), topUps: h.topUps }
-        : { date, weekday, today: false, usedMinutes: 0, goalMinutes: settings.goalMinutes, state: 'unknown', under: false, topUps: 0 },
+        ? { date, weekday, today: false, usedMinutes: h.usedMinutes, goalMinutes: h.goalMinutes, state: h.state, under: isUnder(h), topUps: h.topUps, pass: passDays.has(date) }
+        : { date, weekday, today: false, usedMinutes: 0, goalMinutes: settings.goalMinutes, state: 'unknown', under: false, topUps: 0, pass: passDays.has(date) },
     );
   }
 

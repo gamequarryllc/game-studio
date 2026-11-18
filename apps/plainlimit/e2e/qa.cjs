@@ -281,6 +281,101 @@ async function main() {
     await context.close();
   });
 
+  await scenario('Second thought: off by default, turned on from Settings, open time chosen', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting');
+    await tab(page, 'Settings');
+    await page.getByRole('button', { name: /^Second thought/ }).click();
+    await see(page, 'asks for one sum before it opens');
+    if (!(await page.getByRole('radio', { name: /^Off/ }).isChecked())) throw new Error('Second thought was not off by default');
+    await page.getByRole('radio', { name: /^On/ }).click();
+    await page.getByRole('radio', { name: /^15 minutes/ }).click();
+    if (!(await page.getByRole('radio', { name: /^15 minutes/ }).isChecked())) throw new Error('15 minutes did not stay chosen');
+    await see(page, '3 picked');
+    await shot(page, 'q21-ask-first-settings', true);
+    await page.goBack();
+    await see(page, 'On, 15 min');
+    // Not closed while the battery is empty: it can't open an app that counts.
+    await context.close();
+  });
+
+  await scenario('Second thought: one sum opens the list, a wrong answer is told apart, and an empty battery is said', async () => {
+    const saved = doc({ goal: 180, used: 200 });
+    const { page, context } = await open(saved, '?mock=counting');
+    await see(page, 'Empty');
+    await page.goto(url.replace(/\/$/, '') + '/ask?mock=counting');
+    await see(page, 'One sum to open');
+    await see(page, 'Apps that also count stay locked');
+    await shot(page, 'q22a-ask-sum');
+    const input = page.getByRole('textbox').first();
+    await input.fill('99999');
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await see(page, 'Not 9999');
+    const sum = await page.getByText(/^\s*\d+\s*\+\s*\d+\s*$/).first().textContent();
+    const [, a, b] = sum.match(/(\d+)\s*\+\s*(\d+)/);
+    await input.fill(String(Number(a) + Number(b)));
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await see(page, 'open until');
+    await shot(page, 'q22-ask-open');
+    await context.close();
+  });
+
+  await scenario('emergency pass: offered on an empty battery, opens everything and the settings, once a day; the record opens from Today', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 200, level: 'locked' }), '?mock=counting');
+    await see(page, 'Empty');
+    await page.getByRole('button', { name: /^Use an emergency pass/ }).click();
+    await see(page, 'Use an emergency pass?');
+    await see(page, 'Passes left after this');
+    await shot(page, 'q23-pass-sheet');
+    await page.getByRole('button', { name: 'Open everything for 15 minutes', exact: true }).click();
+    // Anchored: Today, hidden under the sheet, also says "everything is open until".
+    await page.getByText(/^Open until \d/).first().waitFor({ state: 'visible', timeout: 8000 });
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await see(page, 'Emergency pass: everything is open');
+    if ((await page.getByRole('button', { name: /^Use an emergency pass/ }).count()) > 0) throw new Error('a second pass was offered the same day');
+    await tab(page, 'Settings');
+    if (await page.getByRole('button', { name: 'More time', exact: true }).isDisabled()) throw new Error('settings stayed locked during the pass');
+    await tab(page, 'Today');
+    await toBottom(page);
+    await page.getByRole('button', { name: /^Your record/ }).click();
+    await page.getByText(/^Last \d+ weeks$/).first().waitFor({ state: 'visible', timeout: 8000 });
+    await see(page, 'Passes used');
+    await shot(page, 'q24-record', true);
+    await context.close();
+  });
+
+  await scenario('a lived-in record: ten weeks of days, passes used, and the pass days marked on Today; settings locked after the day\'s pass is used', async () => {
+    const recharge = 360;
+    const today = periodStart(recharge);
+    const history = [];
+    for (let k = 70; k >= 1; k--) {
+      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - k, 6, 0);
+      const f = [0.5, 0.8, 0.6, 1.2, 0.4, 0.9, 0.7][k % 7];
+      history.push({ start: start.toISOString(), goalMinutes: 180, usedMinutes: Math.round(180 * f), topUps: f > 1 ? 1 : 0, state: 'counted' });
+    }
+    const at = (daysAgo, h) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysAgo, h, 0).toISOString();
+    const saved = {
+      ...doc({ goal: 180, used: 200, level: 'locked', recharge, history }),
+      record: { passes: 3, lastAdded: '2000-01-03', since: at(80, 9), uses: [at(40, 21), at(3, 22), at(0, 7)], passUntil: null },
+    };
+    // lastAdded far back would add passes; keep it on this week instead.
+    const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    saved.record.lastAdded = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    const { page, context } = await open(saved, '?mock=counting');
+    await see(page, 'Empty');
+    if ((await page.getByRole('button', { name: /^Use an emergency pass/ }).count()) > 0) throw new Error('a pass was offered after one was used today');
+    await see(page, 'A dot marks each day you used an emergency pass.');
+    await shot(page, 'q25-today-pass-days', true);
+    await tab(page, 'Settings');
+    await see(page, 'emergency pass has been used');
+    if ((await page.getByText('opens them for 15 minutes').count()) > 0) throw new Error('the locked notice offered a pass that cannot be used');
+    await tab(page, 'Today');
+    await toBottom(page);
+    await page.getByRole('button', { name: /^Your record/ }).click();
+    await page.getByText(/^Last \d+ weeks$/).first().waitFor({ state: 'visible', timeout: 8000 });
+    await shot(page, 'q26-record-lived-in', true);
+    await context.close();
+  });
+
   await scenario('an unknown page offers a way back', async () => {
     const { page, context } = await open(doc(), '');
     await page.goto(url.replace(/\/$/, '') + '/nowhere/at/all');

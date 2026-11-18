@@ -23,6 +23,7 @@ import {
 } from '@/domain/monitorPlan';
 import type { Settings } from '@/domain/types';
 
+import { askCoverActions, coverAskAgain, stopAskFirst } from './askFirst';
 import { countingSince, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readString, registeredAt, round, save, SAVED, savedGuard } from './saved';
 
 // The one file that talks to Apple's Screen Time.
@@ -137,8 +138,8 @@ export function isOn(): boolean {
 }
 
 /** How many apps, categories and sites are in one of the person's picks. The app never learns which. */
-export function pickCount(id: typeof COUNTED_ID): number {
-  if (MOCK_PHONE) return MOCK.has('nothingPicked') ? 0 : 14;
+export function pickCount(id: string): number {
+  if (MOCK_PHONE) return MOCK.has('nothingPicked') ? 0 : id === COUNTED_ID ? 14 : 3;
   if (!SCREEN_TIME_AVAILABLE) return 0;
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });
@@ -248,6 +249,8 @@ export function coverAgain(cover: boolean, settings: Settings, topUpsSoFar: numb
   try {
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
+    // Taking every cover off takes the Ask first list's too; it goes back on unless it is open.
+    coverAskAgain(settings.askFirst);
   } catch (error) {
     note('coverAgain', error);
   }
@@ -296,6 +299,20 @@ function startRound(now: Date, goalBefore: number) {
   save('picksChangedAt', now.getTime());
 }
 
+let refused = false;
+
+/** True once after a new list was turned down for having too many single apps (see `picksAfter`). */
+export function picksRefused(): boolean {
+  const was = refused;
+  refused = false;
+  return was;
+}
+
+function tooManyIn(token: string): boolean {
+  const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionToken: token });
+  return (meta?.applicationCount ?? 0) > APP_LOCK_LIMIT;
+}
+
 /** Call as Apple's picker opens. */
 export function picksBefore(): void {
   if (!SCREEN_TIME_AVAILABLE) return;
@@ -313,6 +330,13 @@ export function picksAfter(goalMinutes: number, now = new Date()): boolean {
     const before = readString('picksBefore');
     forget('picksBefore');
     if (before === '' || before === (countedToken() ?? '')) return false;
+    // A new list with more single apps than iOS will lock is not kept: the old
+    // one goes back, and Essentials says why (the owner's idea, Nov 18).
+    if (tooManyApps() && !tooManyIn(before)) {
+      DeviceActivity.setFamilyActivitySelectionId({ id: COUNTED_ID, familyActivitySelection: before });
+      refused = true;
+      return false;
+    }
     // A new round of names, so reports for the old list can't pass for the new one.
     startRound(now, goalMinutes);
     // The last known figure was for the old list. A newly ticked app can
@@ -543,6 +567,8 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
       DeviceActivity.userDefaultsClearWithPrefix(`events_${TOPUP_ACTIVITY}`);
       DeviceActivity.disableBlockAllMode('plainlimit');
       DeviceActivity.resetBlocks('plainlimit');
+      // Taking every cover off takes the Ask first list's too; it goes back on unless it is open.
+      coverAskAgain(settings.askFirst);
       save('countingSince', now.getTime());
     }
     const since = countingSince();
@@ -559,7 +585,8 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
 
     writeCheckpointActions(plan, settings, now);
     // The screens come off when the day ends, a minute before the next one starts.
-    DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'intervalDidEnd', actions: [...UNCOVER, STOP_EARNED_TIME] });
+    // ...and the Ask first list's cover goes back on (askFirst.ts).
+    DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'intervalDidEnd', actions: [...UNCOVER, STOP_EARNED_TIME, ...askCoverActions(settings.askFirst)] });
 
     const named = round();
     save('widgetPlan', { ...plan.widget, round: named, roundBefore: readString('roundBefore'), picksChangedAt: picksChangedAt() });
@@ -661,6 +688,7 @@ export function turnOff() {
     DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
+    stopAskFirst();
     forget('widgetPlan');
     forget('countingSince');
     reloadWidget();
@@ -784,6 +812,8 @@ export function holdLocks(untilMs: number, settings: Settings, topUpsSoFar: numb
     writeCheckpointActions(monitorPlan(settings, topUpsSoFar, countingSince()), settings, new Date());
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
+    // Taking every cover off takes the Ask first list's too; it goes back on unless it is open.
+    coverAskAgain(settings.askFirst);
   } catch (error) {
     note('holding the locks', error);
   }
@@ -835,6 +865,8 @@ export async function grantExtraTime(until: Date, settings: Settings, topUpsAfte
   try {
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
+    // Taking every cover off takes the Ask first list's too; it goes back on unless it is open.
+    coverAskAgain(settings.askFirst);
 
     const plan = monitorPlan(settings, topUpsAfter, countingSince());
     const empty = plan.shields.find((s) => s.id === 'empty');
