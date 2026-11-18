@@ -162,16 +162,16 @@ function sitesIn(meta: DeviceActivity.ActivitySelectionMetadata): number {
  * was empty and most counted apps still opened). Whole categories are locked
  * as categories and have no such limit, so they don't count towards it.
  */
-export const APP_LOCK_LIMIT = 500;
-// From 1.0.1 (patches/react-native-device-activity+0.6.1.patch) single apps are
-// spread over ten settings stores of 50 each, since iOS's limit is per store.
-// Unticking one app inside a ticked category makes Apple's picker list the rest
-// of that category one by one (seen Nov 18 on build 84: 94 single apps), so the
-// old limit of 50 was easy to pass without knowing.
+export const APP_LOCK_LIMIT = 50;
+// Spreading single apps over several named settings stores does not get round
+// it: build 89 put 50 in the usual store and 36 in a second, and the single
+// apps still opened while the 5 ticked categories locked (the owner's phone,
+// Nov 18). Unticking one app inside a ticked category makes Apple's picker
+// list the rest of that category one by one, so the limit is easy to pass.
 
 /** How many single apps (not whole categories) the counted picks hold. */
 export function singleAppCount(): number {
-  if (MOCK_PHONE) return MOCK.has('tooManyApps') ? 540 : 0;
+  if (MOCK_PHONE) return MOCK.has('tooManyApps') ? 94 : 0;
   if (!SCREEN_TIME_AVAILABLE) return 0;
   try {
     return DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID })?.applicationCount ?? 0;
@@ -770,7 +770,7 @@ export function diagnostics(settings: Settings): string[] {
     lines.push(`Ticked: ${kinds(DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID }))}`);
     lines.push(`Asked to cover: ${kinds(DeviceActivity.activitySelectionMetadata({ currentBlocklist: true }))}`);
     lines.push(`Kept open whatever is covered: ${kinds(DeviceActivity.activitySelectionMetadata({ currentWhitelist: true }))}`);
-    lines.push(`Phone says covers are up: ${DeviceActivity.isShieldActive() ? 'yes' : 'no'}; extra lock lists in use: ${Number(DeviceActivity.userDefaultsGet<number>('plainlimit_extra_stores') ?? 0)}`);
+    lines.push(`Phone says covers are up: ${DeviceActivity.isShieldActive() ? 'yes' : 'no'}`);
     lines.push(`Last problem: ${readString('problem') || 'none'}`);
     return lines;
   } catch (error) {

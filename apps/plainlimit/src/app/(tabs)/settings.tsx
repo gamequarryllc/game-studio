@@ -1,4 +1,5 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { CELLS, cellWords } from '@/domain/battery';
@@ -18,6 +19,11 @@ export default function Settings() {
   const router = useRouter();
   const { settings, day, accent } = useDay();
   const first = topUpPlan(0);
+  // Read the picks again whenever this tab comes back into view: a tab out of
+  // view is not redrawn, and after a change on the Essentials screen the row
+  // kept the old number (build 86 said "11 count" for a list of 95).
+  const [, readAgain] = useState(0);
+  useFocusEffect(useCallback(() => readAgain((n) => n + 1), []));
   const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
   const countedValue = essentialsValue(picked);
   const ask = settings.askFirst;

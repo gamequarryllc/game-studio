@@ -13,8 +13,8 @@ describe('essentialsValue', () => {
 
 describe('too many single apps', () => {
   it('says how many, and how it happened', () => {
-    const line = tooManyWords(940, 500);
-    expect(line).toContain('940 apps are ticked one by one');
-    expect(line).toContain('iOS locks at most 500');
+    const line = tooManyWords(94, 50);
+    expect(line).toContain('94 apps are ticked one by one');
+    expect(line).toContain('iOS locks at most 50');
   });
 });

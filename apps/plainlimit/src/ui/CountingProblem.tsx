@@ -16,7 +16,7 @@ const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string; titl
   nothingPicked: { line: 'Your essentials aren’t set yet, so nothing is counted or locked.', button: 'Choose apps' },
   tooManyApps: {
     title: 'Not locking',
-    line: 'More than 500 apps are ticked one by one, and iOS won\'t lock that many. Pick again, and untick whole categories where you can.',
+    line: 'More than 50 apps are ticked one by one, and iOS won\'t lock that many, so most of them won\'t lock. Pick again, and untick whole categories where you can.',
     button: 'Pick again',
   },
   accessOff: {
