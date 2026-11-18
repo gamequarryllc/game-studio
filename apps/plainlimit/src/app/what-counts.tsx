@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { APP_LOCK_LIMIT, COUNTED_ID, MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount, picksBefore, tooManyApps } from '@/platform/screenTime';
+import { APP_LOCK_LIMIT, COUNTED_ID, MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount, picksBefore, singleAppCount, tooManyApps } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
-import { COUNTS_LEAD, COUNTS_NOTE, countsSteps, pickedWords } from '@/ui/countWords';
+import { COUNTS_LEAD, COUNTS_NOTE, countsSteps, pickedWords, tooManyWords } from '@/ui/countWords';
 import { BigButton, Card, Lead, Page, Title } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
@@ -44,7 +44,7 @@ export default function WhatCounts() {
           {tooMany ? (
             <View accessibilityRole="alert" style={{ borderWidth: 1.5, borderColor: '#F79200', borderRadius: 18, padding: 16, gap: 10 }}>
               <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>
-                iOS locks at most {APP_LOCK_LIMIT} apps ticked one by one, and this list has more, so most of them won&apos;t lock. Pick again and tick whole categories (All Apps &amp; Categories at the top counts everything): categories have no limit.
+                {tooManyWords(singleAppCount(), APP_LOCK_LIMIT)}
               </Text>
               <BigButton
                 label="Pick again"

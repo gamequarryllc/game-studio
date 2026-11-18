@@ -161,7 +161,23 @@ function sitesIn(meta: DeviceActivity.ActivitySelectionMetadata): number {
  * was empty and most counted apps still opened). Whole categories are locked
  * as categories and have no such limit, so they don't count towards it.
  */
-export const APP_LOCK_LIMIT = 50;
+export const APP_LOCK_LIMIT = 500;
+// From 1.0.1 (patches/react-native-device-activity+0.6.1.patch) single apps are
+// spread over ten settings stores of 50 each, since iOS's limit is per store.
+// Unticking one app inside a ticked category makes Apple's picker list the rest
+// of that category one by one (seen Nov 18 on build 84: 94 single apps), so the
+// old limit of 50 was easy to pass without knowing.
+
+/** How many single apps (not whole categories) the counted picks hold. */
+export function singleAppCount(): number {
+  if (MOCK_PHONE) return MOCK.has('tooManyApps') ? 540 : 0;
+  if (!SCREEN_TIME_AVAILABLE) return 0;
+  try {
+    return DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID })?.applicationCount ?? 0;
+  } catch {
+    return 0;
+  }
+}
 
 /** Whether the counted picks hold more single apps than iOS will lock. */
 export function tooManyApps(): boolean {

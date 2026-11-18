@@ -153,10 +153,10 @@ async function main() {
   await scenario('too many single apps: Today says so, and Essentials opens to pick again even while empty', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,tooManyApps');
     await see(page, 'Not locking');
-    await see(page, 'iOS locks at most 50 apps ticked one by one');
+    await see(page, 'More than 500 apps are ticked one by one');
     await shot(page, 'q04b-too-many-today');
     await page.getByRole('button', { name: 'Pick again', exact: true }).click();
-    await see(page, 'this list has more, so most of them won');
+    await see(page, '540 apps are ticked one by one, and iOS locks at most 500');
     await page.getByRole('button', { name: 'Pick again', exact: true }).waitFor();
     await shot(page, 'q04c-too-many-what-counts');
     await context.close();
@@ -205,7 +205,7 @@ async function main() {
   await scenario('Essentials with cells left offers a change', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
     await tab(page, 'Settings');
-    await page.getByRole('button', { name: 'Essentials, Set', exact: true }).click();
+    await page.getByRole('button', { name: 'Essentials, 14 count', exact: true }).click();
     await page.getByRole('button', { name: 'Change the apps', exact: true }).waitFor();
     await shot(page, 'q10b-what-counts-open');
     await context.close();

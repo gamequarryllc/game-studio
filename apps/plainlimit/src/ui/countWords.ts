@@ -36,3 +36,8 @@ export function essentialsValue(picked: number): string {
   if (picked === 0) return 'Not chosen';
   return `${picked} count`;
 }
+
+/** The warning when more single apps are ticked than iOS will lock, and how that usually happens. */
+export function tooManyWords(singleApps: number, limit: number): string {
+  return `${singleApps} apps are ticked one by one, and iOS locks at most ${limit}, so most of them won’t lock. Pick again, and untick whole categories where you can.`;
+}

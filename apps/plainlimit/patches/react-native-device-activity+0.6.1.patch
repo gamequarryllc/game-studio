@@ -1,0 +1,71 @@
+diff --git a/node_modules/react-native-device-activity/ios/Shared.swift b/node_modules/react-native-device-activity/ios/Shared.swift
+index 4839430..03ce6bf 100644
+--- a/node_modules/react-native-device-activity/ios/Shared.swift
++++ b/node_modules/react-native-device-activity/ios/Shared.swift
+@@ -541,14 +541,48 @@ func replacePlaceholders(_ text: String, with placeholders: [String: String?]) -
+ @available(iOS 15.0, *)
+ var store = ManagedSettingsStore()
+ 
++// Plainlimit patch: iOS shields at most 50 single apps per settings store (with
++// more, it shields none of them). Single apps past the first 50 go into extra
++// named stores, 50 each, so a list of up to 500 single apps still locks.
++let APPS_PER_STORE = 50
++
++@available(iOS 15.0, *)
++var extraAppStores: [ManagedSettingsStore] = (1...9).map {
++  ManagedSettingsStore(named: ManagedSettingsStore.Name("plainlimit-apps-\($0)"))
++}
++
++@available(iOS 15.0, *)
++func shieldApplications(_ tokens: Set<ApplicationToken>) {
++  let sorted = Array(tokens)
++  let chunks = stride(from: 0, to: sorted.count, by: APPS_PER_STORE).map {
++    Set(sorted[$0..<min($0 + APPS_PER_STORE, sorted.count)])
++  }
++  store.shield.applications = chunks.first ?? Set()
++  for (index, extra) in extraAppStores.enumerated() {
++    let chunk = index + 1 < chunks.count ? chunks[index + 1] : nil
++    extra.shield.applications = (chunk?.isEmpty ?? true) ? nil : chunk
++  }
++}
++
++@available(iOS 15.0, *)
++func allShieldedApplications() -> Set<ApplicationToken> {
++  var all = store.shield.applications ?? Set()
++  for extra in extraAppStores { all.formUnion(extra.shield.applications ?? Set()) }
++  return all
++}
++
+ @available(iOS 15.0, *)
+ func refreshManagedSettingsStore() {
+   store = ManagedSettingsStore()
++  extraAppStores = (1...9).map {
++    ManagedSettingsStore(named: ManagedSettingsStore.Name("plainlimit-apps-\($0)"))
++  }
+ }
+ 
+ @available(iOS 16.0, *)
+ func clearAllManagedSettingsStoreSettings() {
+   store.clearAllSettings()
++  for extra in extraAppStores { extra.clearAllSettings() }
+ }
+ 
+ enum WebContentFilterPolicyError: Error, LocalizedError {
+@@ -1291,7 +1325,7 @@ func getCurrentWhitelist() -> FamilyActivitySelection {
+ func isShieldActive() -> Bool {
+   let shield = store.shield
+ 
+-  let applications = shield.applications ?? Set()
++  let applications = allShieldedApplications()
+   let webDomains = shield.webDomains ?? Set()
+ 
+   let areAnyApplicationsShielded = applications.count > 0
+@@ -1464,7 +1498,7 @@ func updateBlockInternal(
+     currentWhitelist
+   )
+ 
+-  store.shield.applications = blocklistWithoutWhiteListOverlap.applicationTokens
++  shieldApplications(blocklistWithoutWhiteListOverlap.applicationTokens)
+ 
+   store.shield.webDomains = blocklistWithoutWhiteListOverlap.webDomainTokens
+ 
