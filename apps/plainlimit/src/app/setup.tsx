@@ -12,7 +12,7 @@ import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastRep
 import { store } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { Battery } from '@/ui/Battery';
-import { COUNTS_LEAD, countsSteps, pickedWords } from '@/ui/countWords';
+import { COUNTS_LEAD, countsSteps, essentialsValue, pickedWords } from '@/ui/countWords';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { TodayTotal, WeekAverage } from '@/ui/UsageReport';
@@ -283,7 +283,7 @@ export default function Setup() {
         <Card>
           <Row label="Daily goal" value={durationLabel(settings.goalMinutes)} />
           <Row label="Recharges at" value={clockLabel(settings.rechargeMinute)} />
-          <Row label="Essentials" value={!SCREEN_TIME_AVAILABLE ? 'Your picks' : picked === 0 ? 'Not set' : 'Set'} last />
+          <Row label="Essentials" value={essentialsValue(SCREEN_TIME_AVAILABLE ? picked : -1)} last />
         </Card>
         <Lead>
           {!SCREEN_TIME_AVAILABLE

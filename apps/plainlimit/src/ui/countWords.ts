@@ -25,3 +25,14 @@ export function pickedWords(picked: number): string {
   if (picked === 0) return 'Nothing is ticked yet, so nothing counts.';
   return `${picked === 1 ? '1 app or category counts' : `${picked} apps and categories count`}. Everything left unticked is an essential, and free.`;
 }
+
+/**
+ * The short value beside "Essentials" in Settings and setup. It names how many
+ * picks count, so it can't be read as "not set yet". (1.0.1 first said a bare
+ * "Set", which looked like a button asking to be set up; 1.0.0 said "13 ticked".)
+ */
+export function essentialsValue(picked: number): string {
+  if (picked < 0) return 'Your picks';
+  if (picked === 0) return 'Not chosen';
+  return `${picked} count`;
+}

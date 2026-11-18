@@ -7,6 +7,7 @@ import { topUpPlan } from '@/domain/puzzle';
 import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
 import { settingsLocked, store } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
+import { essentialsValue } from '@/ui/countWords';
 import { TIPS } from '@/ui/tips';
 import { Battery } from '@/ui/Battery';
 import { ScreenTimeCard } from '@/ui/ScreenTimeCard';
@@ -18,7 +19,7 @@ export default function Settings() {
   const { settings, day, accent } = useDay();
   const first = topUpPlan(0);
   const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
-  const countedValue = picked < 0 ? 'Your picks' : picked === 0 ? 'Not set' : 'Set';
+  const countedValue = essentialsValue(picked);
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
   const pretend = DEV_TOOLS && !isOn();
   // On a narrow phone the goal's figures give the two round buttons room.
