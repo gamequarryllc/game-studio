@@ -7,17 +7,18 @@ import { SCREEN_TIME_AVAILABLE } from '@/platform/screenTime';
  * phone under `id`; the app is told how many there are and never which.
  * Draws nothing in a browser or in Expo Go.
  */
-export function AppPicker({ id, open, header, onClose }: { id: string; open: boolean; header: string; onClose: () => void }) {
+export function AppPicker({ id, open, header, onClose, wholeCategories = false }: { id: string; open: boolean; header: string; onClose: () => void; wholeCategories?: boolean }) {
   if (!SCREEN_TIME_AVAILABLE || !open) return null;
   return (
     <DeviceActivitySelectionSheetViewPersisted
       style={{ width: 1, height: 1, position: 'absolute' }}
       familyActivitySelectionId={id}
       headerText={header}
-      // A ticked category stays one category, not every app in it: iOS locks
-      // whole categories without limit but at most 50 single apps (build 68's
-      // picks listed every app of every category, and most never locked).
-      includeEntireCategory={false}
+      // `wholeCategories`: a ticked category also lists every app in it, which
+      // the essentials model needs (it works with the apps one by one). The
+      // older single list kept a category as one category, since iOS locks at
+      // most 50 single apps (build 68 listed every app, and most never locked).
+      includeEntireCategory={wholeCategories}
       onDismissRequest={onClose}
       onSelectionChange={() => {}}
     />

@@ -1,92 +1,43 @@
-import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 
-import { APP_LOCK_LIMIT, COUNTED_ID, MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount, picksBefore, picksRefused, singleAppCount, tooManyApps } from '@/platform/screenTime';
-import { settingsLocked, store, useDoc } from '@/state/store';
-import { AppPicker } from '@/ui/AppPicker';
-import { COUNTS_LEAD, COUNTS_NOTE, TOO_MANY_REFUSED, countsSteps, pickedWords, tooManyWords } from '@/ui/countWords';
-import { BigButton, Card, Lead, Page, Title } from '@/ui/kit';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, COUNTED_ID, pickCount } from '@/platform/screenTime';
+import { settingsLocked, useDoc } from '@/state/store';
+import { COUNTS_LEAD, COUNTS_NOTE, OLD_LIST_NOTE } from '@/ui/countWords';
+import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
+import { Lead, Page, Title } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
-// One list. What is ticked in Apple's list of apps uses up the battery and is
-// covered when it is empty; what is not ticked does neither. (There used to be
-// an "Everything" choice and a separate always-allowed list, which left apps
-// that were allowed but still counted. They are gone.)
+// Essentials: the apps that never use up the battery and never lock. The
+// person ticks only those; everything else counts, and is covered when the
+// battery is empty. (Up to build 89 there was one list the other way round,
+// "tick everything, then untick your essentials"; the file keeps its first
+// name, "what counts".)
 //
-// Like the goal, the list can't change while the battery is empty: unticking
-// an app would be a way round its lock.
+// Like the goal, the essentials can't change while the battery is empty:
+// ticking an app would be a way round its lock. Finishing the two steps for
+// the first time is always open, since until then an older list may not be
+// locking at all.
 
 export default function WhatCounts() {
-  const [picking, setPicking] = useState(false);
-  const [, redraw] = useState(0);
-  const [refusedNote, setRefusedNote] = useState(false);
-  const picked = pickCount(COUNTED_ID);
   useDoc();
-  const locked = settingsLocked();
-  // More single apps than iOS will lock: picking again is open even while the
-  // battery is empty, since the lock isn't working for most of them anyway.
-  const tooMany = tooManyApps();
-  const button = tooMany ? 'Pick again' : picked === 0 ? 'Choose apps' : 'Change the apps';
+  const e = useEssentials();
+  const locked = settingsLocked() && e.ready;
+  const oldList = !e.ready && pickCount(COUNTED_ID) > 0;
   return (
     <Page top={8}>
       <Title>Essentials</Title>
       <Lead>{COUNTS_LEAD}</Lead>
       {SCREEN_TIME_AVAILABLE || MOCK_PHONE ? (
         <>
-          <Card style={{ paddingVertical: 14, gap: 8 }}>
-            {countsSteps(button).map((line, i) => (
-              <View key={line} style={{ flexDirection: 'row', gap: 12 }}>
-                <Text style={{ fontSize: 15, lineHeight: 21, fontWeight: '700', color: c.ink3, width: 12 }}>{i + 1}</Text>
-                <Text style={{ flex: 1, fontSize: 15, lineHeight: 21, color: c.ink }}>{line}</Text>
-              </View>
-            ))}
-          </Card>
-          <Text style={{ fontSize: 15, lineHeight: 21, color: picked === 0 ? c.ink : c.ink2, marginTop: 4 }}>{pickedWords(picked)}</Text>
-          {refusedNote ? (
-            <Text accessibilityRole="alert" style={{ fontSize: 15, lineHeight: 21, color: '#F79200' }}>
-              {TOO_MANY_REFUSED(APP_LOCK_LIMIT)}
-            </Text>
-          ) : null}
-          {tooMany ? (
-            <View accessibilityRole="alert" style={{ borderWidth: 1.5, borderColor: '#F79200', borderRadius: 18, padding: 16, gap: 10 }}>
-              <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>
-                {tooManyWords(singleAppCount(), APP_LOCK_LIMIT)}
-              </Text>
-              <BigButton
-                label="Pick again"
-                onPress={() => {
-                  store.clearPicksToPickAgain();
-                  setPicking(true);
-                }}
-              />
-            </View>
-          ) : locked ? (
-            <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>This can&apos;t change while the battery is empty. It opens again when it recharges.</Text>
-          ) : (
-            <BigButton
-              label={button}
-              onPress={() => {
-                picksBefore();
-                setPicking(true);
-              }}
-            />
-          )}
+          {oldList ? <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>{OLD_LIST_NOTE}</Text> : null}
+          <EssentialsSteps e={e} locked={locked} />
+          {locked ? <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>This can&apos;t change while the battery is empty. It opens again when it recharges.</Text> : null}
           <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>{COUNTS_NOTE}</Text>
         </>
       ) : (
         <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>On an iPhone you tick them in Apple&apos;s own list of your apps. This preview runs on pretend use.</Text>
       )}
-      <AppPicker
-        id={COUNTED_ID}
-        open={picking}
-        header="Tick everything, then untick your essentials"
-        onClose={() => {
-          setPicking(false);
-          store.picksChanged();
-          setRefusedNote(picksRefused());
-          redraw((n) => n + 1);
-        }}
-      />
+      {e.pickers}
     </Page>
   );
 }

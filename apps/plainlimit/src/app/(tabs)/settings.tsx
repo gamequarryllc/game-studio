@@ -5,7 +5,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { CELLS, cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { topUpPlan } from '@/domain/puzzle';
-import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
+import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCount, essentialsMode, isOn, pickCount } from '@/platform/screenTime';
 import { settingsLocked, store } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
 import { essentialsValue } from '@/ui/countWords';
@@ -25,7 +25,7 @@ export default function Settings() {
   const [, readAgain] = useState(0);
   useFocusEffect(useCallback(() => readAgain((n) => n + 1), []));
   const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
-  const countedValue = essentialsValue(picked);
+  const countedValue = essentialsValue(picked, essentialsMode() ? essentialsCount() : null);
   const ask = settings.askFirst;
   const askValue = ask?.on ? `On, ${ask.openMinutes} min` : 'Off';
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.

@@ -149,6 +149,206 @@ export function pickCount(id: string): number {
   }
 }
 
+/**
+ * The essentials model (1.1). The person ticks only their essentials, and the
+ * phone locks everything else by category ("all, except these"), which has no
+ * 50-app limit on what is locked. Two lists are kept besides the counted one:
+ * - ALL_ID: Apple's list with everything ticked once, so Plainlimit holds the
+ *   phone's apps. Apple can count "these apps" but not "all but these".
+ * - ESSENTIALS_ID: the apps that never count and never lock (50 at most: the
+ *   limit now falls on the short list).
+ * The counted list (COUNTED_ID) is worked out from them: every app shown, less
+ * the essentials. Until both exist, a list made by an older version (ticked
+ * apps count and lock) goes on working as it did.
+ */
+export const ALL_ID = 'plall';
+export const ESSENTIALS_ID = 'plkeep';
+/** The most apps iOS will leave out of an "everything" lock. */
+export const ESSENTIALS_LIMIT = 50;
+
+function metaOf(id: string): DeviceActivity.ActivitySelectionMetadata | null {
+  try {
+    return DeviceActivity.activitySelectionMetadata({ activitySelectionId: id }) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function tokenOf(id: string): string {
+  try {
+    const token = DeviceActivity.getFamilyActivitySelectionId(id);
+    return typeof token === 'string' ? token : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Puts a list back as it was ('' means there was none). */
+function putBack(id: string, token: string) {
+  if (token !== '') {
+    DeviceActivity.setFamilyActivitySelectionId({ id, familyActivitySelection: token });
+    return;
+  }
+  const all = DeviceActivity.userDefaultsGet<Record<string, string>>('familyActivitySelectionIds') ?? {};
+  const rest = { ...all };
+  delete rest[id];
+  DeviceActivity.userDefaultsSet('familyActivitySelectionIds', rest);
+}
+
+const MOCK_OLD_LIST = () => MOCK.has('nothingPicked') || MOCK.has('tooManyApps') || MOCK.has('oldList');
+
+/** How many apps the phone has shown Plainlimit (0: not shown yet). */
+export function appsShown(): number {
+  if (MOCK_PHONE) return MOCK_OLD_LIST() ? 0 : 120;
+  if (!SCREEN_TIME_AVAILABLE) return 0;
+  return metaOf(ALL_ID)?.applicationCount ?? 0;
+}
+
+/** How many essentials are ticked. */
+export function essentialsCount(): number {
+  if (MOCK_PHONE) return MOCK_OLD_LIST() ? 0 : 14;
+  if (!SCREEN_TIME_AVAILABLE) return 0;
+  const meta = metaOf(ESSENTIALS_ID);
+  return meta ? meta.applicationCount + sitesIn(meta) : 0;
+}
+
+/** Whether the essentials model is in use: the apps were shown and the essentials chosen (none is a choice too). */
+export function essentialsMode(): boolean {
+  if (MOCK_PHONE) return !MOCK_OLD_LIST();
+  if (!SCREEN_TIME_AVAILABLE) return false;
+  return readNumber('essentialsSet') > 0 && appsShown() > 0;
+}
+
+/** The same picks with no whole categories: only the apps one by one. Null if the phone's format isn't as expected. */
+function appsOnly(token: string): string | null {
+  try {
+    const picks = JSON.parse(atob(token)) as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(picks)) out[key] = /categor/i.test(key) && Array.isArray(value) ? [] : value;
+    return btoa(JSON.stringify(out));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Works out what counts: every app shown, less the essentials, as single apps.
+ * Whole categories are left out on purpose: a category would count the
+ * essentials inside it too (the fault of the first "always allowed" list, up
+ * to build 47). If they can't be left out, the list is kept with them and the
+ * readout says so.
+ */
+function deriveCounted(): boolean {
+  try {
+    if ((metaOf(ALL_ID)?.applicationCount ?? 0) === 0) return false;
+    const rest = DeviceActivity.difference({ activitySelectionId: ALL_ID }, { activitySelectionId: ESSENTIALS_ID }, {});
+    const token = rest?.familyActivitySelection;
+    if (!rest || typeof token !== 'string' || token === '') {
+      note('the counted list', 'the phone gave no list');
+      return false;
+    }
+    let counted = token;
+    const apps = appsOnly(token);
+    const check = apps ? DeviceActivity.activitySelectionMetadata({ activitySelectionToken: apps }) : null;
+    if (apps && check && check.categoryCount === 0 && check.applicationCount === rest.applicationCount) counted = apps;
+    else note('the counted list', 'whole categories could not be left out, so an essential may still count');
+    DeviceActivity.setFamilyActivitySelectionId({ id: COUNTED_ID, familyActivitySelection: counted });
+    // A screen kept for this list by the older model would be shown in place of the current one.
+    DeviceActivity.userDefaultsRemove(`shieldConfigurationForSelection_${COUNTED_ID}`);
+    DeviceActivity.userDefaultsRemove(`shieldActionsForSelection_${COUNTED_ID}`);
+    return true;
+  } catch (error) {
+    note('the counted list', error);
+    return false;
+  }
+}
+
+/**
+ * Tells the phone which apps stay open whatever is locked: the essentials, or
+ * none under the older single list (where what is not ticked never locks).
+ */
+function keepEssentialsOpen(mode: boolean) {
+  try {
+    if (!mode) {
+      DeviceActivity.clearWhitelist();
+      return;
+    }
+    DeviceActivity.clearWhitelist();
+    if (essentialsCount() === 0) {
+      DeviceActivity.clearWhitelistAndUpdateBlock('plainlimit');
+      return;
+    }
+    try {
+      DeviceActivity.addSelectionToWhitelistAndUpdateBlock({ activitySelectionId: ESSENTIALS_ID }, 'plainlimit');
+    } catch {
+      // The library objects, after doing the work, to a list kept without "every app of a category"; ours is kept with it.
+    }
+  } catch (error) {
+    note('the essentials', error);
+  }
+}
+
+/** Call as Apple's picker opens on the phone's whole list of apps. */
+export function appsBefore(): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  picksBefore();
+  try {
+    save('appsBefore', tokenOf(ALL_ID));
+  } catch {
+    // Without it an emptied list can't be put back.
+  }
+}
+
+/** Call as that picker closes. An emptied list is not kept. */
+export function appsAfter(): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    const before = readString('appsBefore');
+    forget('appsBefore');
+    if ((metaOf(ALL_ID)?.applicationCount ?? 0) === 0 && before !== '') putBack(ALL_ID, before);
+    if (readNumber('essentialsSet') > 0) deriveCounted();
+  } catch (error) {
+    note('the app list', error);
+  }
+}
+
+/** Call as Apple's picker opens on the essentials. */
+export function essentialsBefore(): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  picksBefore();
+  try {
+    save('essentialsBefore', tokenOf(ESSENTIALS_ID));
+  } catch {
+    // Without it a list that is too long can't be put back.
+  }
+}
+
+/**
+ * Call as that picker closes. More essentials than iOS can keep open are not
+ * kept: the list from before goes back, and the number ticked is returned so
+ * the screen can say so (0 when the list was kept).
+ */
+export function essentialsAfter(): number {
+  if (!SCREEN_TIME_AVAILABLE) return 0;
+  try {
+    const before = readString('essentialsBefore');
+    forget('essentialsBefore');
+    const ticked = metaOf(ESSENTIALS_ID)?.applicationCount ?? 0;
+    if (ticked > ESSENTIALS_LIMIT) {
+      putBack(ESSENTIALS_ID, before);
+      return ticked;
+    }
+    if (appsShown() === 0) return 0;
+    save('essentialsSet', Date.now());
+    deriveCounted();
+    keepEssentialsOpen(true);
+    return 0;
+  } catch (error) {
+    note('the essentials', error);
+    return 0;
+  }
+}
+
 /** Sites in a selection. The library's type says "webDomainCount"; its native side sends "webdomainCount". */
 function sitesIn(meta: DeviceActivity.ActivitySelectionMetadata): number {
   const raw = meta as unknown as Record<string, unknown>;
@@ -169,21 +369,14 @@ export const APP_LOCK_LIMIT = 50;
 // Nov 18). Unticking one app inside a ticked category makes Apple's picker
 // list the rest of that category one by one, so the limit is easy to pass.
 
-/** How many single apps (not whole categories) the counted picks hold. */
-export function singleAppCount(): number {
-  if (MOCK_PHONE) return MOCK.has('tooManyApps') ? 94 : 0;
-  if (!SCREEN_TIME_AVAILABLE) return 0;
-  try {
-    return DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID })?.applicationCount ?? 0;
-  } catch {
-    return 0;
-  }
-}
-
-/** Whether the counted picks hold more single apps than iOS will lock. */
+/**
+ * Whether the counted picks hold more single apps than iOS will lock. Only a
+ * list from the older model can: with essentials, the lock is by category.
+ */
 export function tooManyApps(): boolean {
   if (MOCK_PHONE) return MOCK.has('tooManyApps');
   if (!SCREEN_TIME_AVAILABLE) return false;
+  if (essentialsMode()) return false;
   try {
     return (DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID })?.applicationCount ?? 0) > APP_LOCK_LIMIT;
   } catch {
@@ -200,7 +393,7 @@ export function tooManyApps(): boolean {
  * again ("pickAgain"). Nothing changes when the picks are fine.
  */
 export function fixOldPicks(): 'fine' | 'fixed' | 'pickAgain' {
-  if (!SCREEN_TIME_AVAILABLE) return 'fine';
+  if (!SCREEN_TIME_AVAILABLE || essentialsMode()) return 'fine';
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID });
     if (!meta || meta.applicationCount <= APP_LOCK_LIMIT) return 'fine';
@@ -221,20 +414,6 @@ export function fixOldPicks(): 'fine' | 'fixed' | 'pickAgain' {
   } catch (error) {
     note('fixOldPicks', error);
     return 'pickAgain';
-  }
-}
-
-/** Forgets the counted picks, so Apple's list opens empty and they are made again (see `fixOldPicks`). */
-export function clearPicks(): void {
-  if (!SCREEN_TIME_AVAILABLE) return;
-  try {
-    picksBefore();
-    const all = DeviceActivity.userDefaultsGet<Record<string, string>>('familyActivitySelectionIds') ?? {};
-    const rest = { ...all };
-    delete rest[COUNTED_ID];
-    DeviceActivity.userDefaultsSet('familyActivitySelectionIds', rest);
-  } catch (error) {
-    note('clearPicks', error);
   }
 }
 
@@ -299,20 +478,6 @@ function startRound(now: Date, goalBefore: number) {
   save('picksChangedAt', now.getTime());
 }
 
-let refused = false;
-
-/** True once after a new list was turned down for having too many single apps (see `picksAfter`). */
-export function picksRefused(): boolean {
-  const was = refused;
-  refused = false;
-  return was;
-}
-
-function tooManyIn(token: string): boolean {
-  const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionToken: token });
-  return (meta?.applicationCount ?? 0) > APP_LOCK_LIMIT;
-}
-
 /** Call as Apple's picker opens. */
 export function picksBefore(): void {
   if (!SCREEN_TIME_AVAILABLE) return;
@@ -330,13 +495,6 @@ export function picksAfter(goalMinutes: number, now = new Date()): boolean {
     const before = readString('picksBefore');
     forget('picksBefore');
     if (before === '' || before === (countedToken() ?? '')) return false;
-    // A new list with more single apps than iOS will lock is not kept: the old
-    // one goes back, and Essentials says why (the owner's idea, Nov 18).
-    if (tooManyApps() && !tooManyIn(before)) {
-      DeviceActivity.setFamilyActivitySelectionId({ id: COUNTED_ID, familyActivitySelection: before });
-      refused = true;
-      return false;
-    }
     // A new round of names, so reports for the old list can't pass for the new one.
     startRound(now, goalMinutes);
     // The last known figure was for the old list. A newly ticked app can
@@ -386,13 +544,18 @@ function note(where: string, error: unknown) {
   }
 }
 
-/** Only the apps that count are ever covered; whatever is left out of What counts stays open. */
-function coverAction(shield: string): Action {
+/**
+ * With essentials: everything is covered except them (the phone holds the
+ * list of what stays open, see `keepEssentialsOpen`). Under the older single
+ * list: only the ticked apps are covered.
+ */
+function coverAction(shield: string, mode = essentialsMode()): Action {
+  if (mode) return { type: 'enableBlockAllMode', shieldId: shield };
   return { type: 'blockSelection', familyActivitySelectionId: COUNTED_ID, shieldId: shield };
 }
 
-function toAction(action: PlanAction): Action {
-  if (action.kind === 'cover') return coverAction(action.shield);
+function toAction(action: PlanAction, mode: boolean): Action {
+  if (action.kind === 'cover') return coverAction(action.shield, mode);
   return { type: 'sendNotification', payload: { title: action.title, body: action.body, sound: 'default', userInfo: action.route ? { route: action.route } : {} } };
 }
 
@@ -446,13 +609,14 @@ function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: 
   const guard = savedGuard();
   const held = holdUntil();
   const named = round();
+  const mode = essentialsMode();
   for (const event of plan.events) {
     const notBefore = new Date(Math.max(lockNotBefore(dayStart, guard, event.minutes).getTime(), held));
     DeviceActivity.configureActions({
       activityName: plan.activity,
       callbackName: 'eventDidReachThreshold',
       eventName: roundName(event.name, named),
-      actions: event.actions.map((a) => ({ ...toAction(a), neverTriggerBefore: notBefore })),
+      actions: event.actions.map((a) => ({ ...toAction(a, mode), neverTriggerBefore: notBefore })),
     });
   }
 }
@@ -580,8 +744,8 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     const earlier = includesEarlierUse(periodStartOf(now, settings.rechargeMinute), since);
     for (const shield of plan.shields) writeShield(shield, topUpsSoFar);
 
-    // There is no always-allowed list any more: what is not ticked never locks.
-    DeviceActivity.clearWhitelist();
+    // The essentials stay open whatever is locked. (Under the older single list nothing needs to: what is not ticked never locks.)
+    keepEssentialsOpen(essentialsMode());
 
     writeCheckpointActions(plan, settings, now);
     // The screens come off when the day ends, a minute before the next one starts.
@@ -759,7 +923,7 @@ export function diagnostics(settings: Settings): string[] {
     const last = DeviceActivity.userDefaultsGet<Record<string, unknown>>('lastBlockUpdate');
     if (last && typeof last === 'object') {
       const at = typeof last.blockedAt === 'string' ? timeOf(new Date(last.blockedAt).getTime()) : 'unknown';
-      const what = last.blockingAllModeEnabled ? 'everything' : `${Number(last.blocklistCategoryCount ?? 0)} categories, ${Number(last.blocklistAppCount ?? 0)} apps`;
+      const what = last.blockingAllModeEnabled ? `everything except ${Number(last.whitelistAppCount ?? 0)} apps` : `${Number(last.blocklistCategoryCount ?? 0)} categories, ${Number(last.blocklistAppCount ?? 0)} apps`;
       lines.push(`Covers last changed: ${at} by ${String(last.triggeredBy ?? 'unknown')} (now covering ${what})`);
     } else {
       lines.push('Covers last changed: never');
@@ -767,7 +931,10 @@ export function diagnostics(settings: Settings): string[] {
     // What is ticked and what is covered, split by kind: whole categories and
     // single apps are locked by different means (build 86: categories locked, single apps did not).
     const kinds = (m: DeviceActivity.ActivitySelectionMetadata | undefined | null) => (m ? `${m.applicationCount} single apps, ${m.categoryCount} categories, ${sitesIn(m)} sites${m.includeEntireCategory ? ', with every app of each category' : ''}` : 'nothing');
-    lines.push(`Ticked: ${kinds(DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID }))}`);
+    lines.push(`Lock: ${essentialsMode() ? 'everything except your essentials' : 'the older ticked list'}`);
+    lines.push(`Apps shown: ${kinds(metaOf(ALL_ID))}`);
+    lines.push(`Essentials: ${kinds(metaOf(ESSENTIALS_ID))}`);
+    lines.push(`Counted: ${kinds(metaOf(COUNTED_ID))}`);
     lines.push(`Asked to cover: ${kinds(DeviceActivity.activitySelectionMetadata({ currentBlocklist: true }))}`);
     lines.push(`Kept open whatever is covered: ${kinds(DeviceActivity.activitySelectionMetadata({ currentWhitelist: true }))}`);
     lines.push(`Phone says covers are up: ${DeviceActivity.isShieldActive() ? 'yes' : 'no'}`);
@@ -907,7 +1074,12 @@ export function coverEmptyNow(settings: Settings, topUpsSoFar: number) {
     const { look, buttons } = shieldParts(empty, topUpsSoFar);
     DeviceActivity.updateShieldWithId(look, buttons, empty.id);
     DeviceActivity.updateShield(look, buttons, 'plainlimit');
-    DeviceActivity.blockSelection({ activitySelectionId: COUNTED_ID }, 'plainlimit');
+    if (essentialsMode()) {
+      keepEssentialsOpen(true);
+      DeviceActivity.enableBlockAllMode('plainlimit');
+    } else {
+      DeviceActivity.blockSelection({ activitySelectionId: COUNTED_ID }, 'plainlimit');
+    }
   } catch {
     // Nothing more to do.
   }

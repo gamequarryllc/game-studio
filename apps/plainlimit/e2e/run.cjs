@@ -67,7 +67,7 @@ async function main() {
     await shot('00-setup-welcome');
     await press('Set it up');
     await see('Your essentials');
-    await see("Your essentials never count, and you choose them: calls, messages, maps, or any app you use as a tool. Everything you tick uses up the battery, and locks when it’s empty.");
+    await see("Your essentials never count and never lock: calls, messages, maps, or any app you use as a tool. Everything else uses up the battery, and locks when it’s empty.");
     await shot('00-setup-counts');
     await press('Next');
     await see('How much a day?');
@@ -118,7 +118,7 @@ async function main() {
   await step('what counts is one list, and there is no always-allowed list', async () => {
     assert.strictEqual(await page.getByRole('button', { name: /^Always allowed/ }).count(), 0, 'the always-allowed list is gone');
     await press('Essentials, Your picks');
-    await see("Your essentials never count, and you choose them: calls, messages, maps, or any app you use as a tool. Everything you tick uses up the battery, and locks when it’s empty.");
+    await see("Your essentials never count and never lock: calls, messages, maps, or any app you use as a tool. Everything else uses up the battery, and locks when it’s empty.");
     assert.strictEqual(await page.getByRole('radio').count(), 0, 'no Everything / Only what I tick choice');
     await shot('03-what-counts');
     await back();

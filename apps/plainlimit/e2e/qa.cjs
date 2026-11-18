@@ -141,7 +141,7 @@ async function main() {
       await see(page, words);
       await shot(page, `q04-problem-${problem}`);
       // Pressing the fix shows its answer, or goes to Essentials, and never hangs on "One moment…".
-      const button = page.getByRole('button').filter({ hasText: /Choose apps|Turn it back on|Count again/ }).first();
+      const button = page.getByRole('button').filter({ hasText: /Set essentials|Turn it back on|Count again/ }).first();
       await button.click();
       await page.waitForTimeout(700);
       if ((await page.getByText('One moment…').count()) > 0) throw new Error('the button stayed on "One moment…"');
@@ -150,14 +150,17 @@ async function main() {
     });
   }
 
-  await scenario('too many single apps: Today says so, and Essentials opens to pick again even while empty', async () => {
+  await scenario('a list from an older version that iOS can not lock: Today says so, and Essentials opens its two steps even while empty', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,tooManyApps');
     await see(page, 'Not locking');
-    await see(page, 'More than 50 apps are ticked one by one');
+    await see(page, 'Your list is from an older version, and iOS can’t lock all of it');
     await shot(page, 'q04b-too-many-today');
-    await page.getByRole('button', { name: 'Pick again', exact: true }).click();
-    await see(page, '94 apps are ticked one by one, and iOS locks at most 50');
-    await page.getByRole('button', { name: 'Pick again', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Set essentials', exact: true }).click();
+    await see(page, 'Your list from before still applies until you finish both steps.');
+    await see(page, 'Tap All Apps & Categories at the top of Apple’s list, then Done.');
+    await page.getByRole('button', { name: 'Show my apps', exact: true }).waitFor();
+    // The second step waits for the first.
+    if (!(await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled())) throw new Error('"Choose essentials" is open before the apps are shown');
     await shot(page, 'q04c-too-many-what-counts');
     await context.close();
   });
@@ -197,7 +200,10 @@ async function main() {
     await shot(page, 'q09-empty-settings');
     await page.getByRole('button', { name: /^Essentials/ }).click();
     await see(page, "This can't change while the battery is empty");
-    if ((await page.getByRole('button', { name: 'Change the apps', exact: true }).count()) > 0) throw new Error('Essentials offered a change while empty');
+    await see(page, '14 essentials stay free');
+    for (const name of ['Change essentials', 'Refresh the app list']) {
+      if ((await page.getByRole('button', { name, exact: true }).count()) > 0) throw new Error(`Essentials offered "${name}" while empty`);
+    }
     await shot(page, 'q10-empty-what-counts');
     await context.close();
   });
@@ -205,8 +211,11 @@ async function main() {
   await scenario('Essentials with cells left offers a change', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
     await tab(page, 'Settings');
-    await page.getByRole('button', { name: 'Essentials, 14 count', exact: true }).click();
-    await page.getByRole('button', { name: 'Change the apps', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Essentials, 14 apps', exact: true }).click();
+    await see(page, '120 apps found.');
+    await see(page, '14 essentials stay free. Everything else counts, and locks when the battery is empty.');
+    await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Refresh the app list', exact: true }).waitFor();
     await shot(page, 'q10b-what-counts-open');
     await context.close();
   });

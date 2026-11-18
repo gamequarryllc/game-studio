@@ -26,6 +26,10 @@ export const SAVED = {
   /** When the ticked apps last changed, and the list as it was when Apple's picker opened. */
   picksChangedAt: 'plainlimit_picks_changed_at',
   picksBefore: 'plainlimit_picks_before',
+  /** When the essentials were last chosen (0: never, so the older single list still applies), and the two lists as they were when Apple's picker opened. */
+  essentialsSet: 'plainlimit_essentials_set',
+  essentialsBefore: 'plainlimit_essentials_before',
+  appsBefore: 'plainlimit_apps_before',
   /** The current round of checkpoint names, the one before it, and the goal that one was made for (see `roundName`). */
   round: 'plainlimit_round',
   roundBefore: 'plainlimit_round_before',

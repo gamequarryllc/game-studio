@@ -10,9 +10,9 @@ import { askToNotify } from '@/platform/notices';
 import { tickStepMinutes } from '@/domain/checkpoints';
 import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount } from '@/platform/screenTime';
 import { store } from '@/state/store';
-import { AppPicker } from '@/ui/AppPicker';
 import { Battery } from '@/ui/Battery';
-import { COUNTS_LEAD, countsSteps, essentialsValue, pickedWords } from '@/ui/countWords';
+import { COUNTS_LEAD, essentialsValue } from '@/ui/countWords';
+import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { TodayTotal, WeekAverage } from '@/ui/UsageReport';
@@ -55,9 +55,7 @@ export default function Setup() {
   const [at, setAt] = useState(0);
   const [access, setAccess] = useState(() => (SCREEN_TIME_AVAILABLE ? permission() : 'unknown'));
   const [asked, setAsked] = useState(false);
-  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [, redraw] = useState(0);
   // The last screen on a phone: reading the day so far, then ready.
   const [phase, setPhase] = useState<'reading' | 'ready' | 'failed'>('reading');
   const [waitedAt, setWaitedAt] = useState<number | null>(null);
@@ -69,6 +67,7 @@ export default function Setup() {
   const approved = access === 'approved';
   const canPick = SCREEN_TIME_AVAILABLE && approved;
   const picked = pickCount(COUNTED_ID);
+  const essentials = useEssentials();
   const figures = canPick && picked > 0;
   // Only a phone with access and something ticked can count; anywhere else the last screen is a summary.
   const checking = step === 'ready' && figures;
@@ -161,17 +160,7 @@ export default function Setup() {
         <Heading>Your essentials</Heading>
         <Lead>{COUNTS_LEAD}</Lead>
         {canPick ? (
-          <>
-            <Card style={{ paddingVertical: 14, gap: 8 }}>
-              {countsSteps(picked === 0 ? 'Choose apps' : 'Change the apps').map((line, i) => (
-                <Point key={line} n={String(i + 1)} small>
-                  {line}
-                </Point>
-              ))}
-            </Card>
-            <Text style={picked === 0 ? styles.ok : styles.body}>{pickedWords(picked)}</Text>
-            {picked > 0 ? <BigButton quiet label="Change the apps" onPress={() => setPicking(true)} /> : null}
-          </>
+          <EssentialsSteps e={essentials} mainInFoot />
         ) : SCREEN_TIME_AVAILABLE ? (
           <Text style={styles.note}>You can set them once Screen Time is allowed, in Settings, under Essentials.</Text>
         ) : (
@@ -179,8 +168,8 @@ export default function Setup() {
         )}
       </>
     );
-    if (canPick && picked === 0) {
-      primary = { label: 'Choose apps', onPress: () => setPicking(true) };
+    if (canPick && !essentials.ready) {
+      primary = essentials.shown === 0 ? { label: 'Show my apps', onPress: essentials.showApps } : { label: 'Choose essentials', onPress: essentials.choose };
       secondary = { label: 'Skip for now', onPress: next };
     }
   }
@@ -283,7 +272,7 @@ export default function Setup() {
         <Card>
           <Row label="Daily goal" value={durationLabel(settings.goalMinutes)} />
           <Row label="Recharges at" value={clockLabel(settings.rechargeMinute)} />
-          <Row label="Essentials" value={essentialsValue(SCREEN_TIME_AVAILABLE ? picked : -1)} last />
+          <Row label="Essentials" value={essentialsValue(SCREEN_TIME_AVAILABLE ? picked : -1, essentials.ready ? essentials.kept : null)} last />
         </Card>
         <Lead>
           {!SCREEN_TIME_AVAILABLE
@@ -326,16 +315,7 @@ export default function Setup() {
           </Pressable>
         ) : null}
       </View>
-      <AppPicker
-        id={COUNTED_ID}
-        open={picking}
-        header="Tick what uses up your battery"
-        onClose={() => {
-          setPicking(false);
-          store.picksChanged();
-          redraw((n) => n + 1);
-        }}
-      />
+      {essentials.pickers}
     </View>
   );
 }
@@ -350,15 +330,6 @@ function Heading({ children }: { children: string }) {
 
 function Lead({ children }: { children: ReactNode }) {
   return <Text style={styles.lead}>{children}</Text>;
-}
-
-function Point({ n, children, small = false }: { n: string; children: string; small?: boolean }) {
-  return (
-    <View style={styles.point}>
-      <Text style={[styles.pointN, small ? styles.pointNSmall : null]}>{n}</Text>
-      <Text style={[styles.pointText, small ? styles.pointTextSmall : null]}>{children}</Text>
-    </View>
-  );
 }
 
 function Row({ label, value, last = false }: { label: string; value: string; last?: boolean }) {
@@ -385,11 +356,6 @@ const styles = StyleSheet.create({
   ok: { fontSize: 16, fontWeight: '600', color: c.ink },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   big: { fontFamily: display.bold, fontSize: 60, lineHeight: 64, letterSpacing: -2.2, color: c.ink },
-  point: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
-  pointN: { fontFamily: display.bold, fontSize: 16, lineHeight: 23, color: c.ink3, width: 14 },
-  pointText: { flex: 1, fontSize: 17, lineHeight: 24, color: c.ink },
-  pointNSmall: { fontSize: 15, lineHeight: 21 },
-  pointTextSmall: { fontSize: 15, lineHeight: 21 },
   figureBox: { borderWidth: 1, borderColor: c.rule, borderRadius: 18, padding: 16 },
   figures: { flexDirection: 'row', gap: 12 },
   figure: { flex: 1, gap: 4 },

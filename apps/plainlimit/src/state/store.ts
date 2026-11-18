@@ -450,9 +450,16 @@ export const store = {
     planSoon();
     set({ ...snapshot.doc }, false);
   },
-  /** Old picks over iOS's 50-app lock limit: forget them, so Apple's list opens empty to pick again. */
-  clearPicksToPickAgain() {
-    screenTime.clearPicks();
+  /** Apple's picker closed on the phone's whole list of apps. */
+  appsShownClosed() {
+    screenTime.appsAfter();
+    store.picksChanged();
+  },
+  /** Apple's picker closed on the essentials. Returns how many were ticked if that was too many to keep (0 when kept). */
+  essentialsClosed(): number {
+    const refused = screenTime.essentialsAfter();
+    store.picksChanged();
+    return refused;
   },
   stepGoal(direction: 1 | -1) {
     withSettings((s) => ({ ...s, goalMinutes: stepGoal(s.goalMinutes, direction) }));
