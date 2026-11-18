@@ -213,7 +213,15 @@ async function main() {
     for (const stale of fs.readdirSync(OUT)) {
       if (/^\d\d-.*\.png$/.test(stale) && !SHOTS.some((s) => `${s.file}.png` === stale)) fs.unlinkSync(path.join(OUT, stale));
     }
-    fs.copyFileSync(path.join(RAW, 'pro-screen.png'), path.join(OUT, 'iap-review-pro-screen.png'));
+    // The Pro screen for App Review, at the store's own picture size (App Store
+    // Connect turns down the bare 1179 x 2394 screen): scaled to fit, on the app's ground.
+    {
+      const img = fs.readFileSync(path.join(RAW, 'pro-screen.png')).toString('base64');
+      await sheet.setContent(`<!doctype html><html><body style="margin:0;width:${PAGE.width}px;height:${PAGE.height}px;overflow:hidden;background:${GROUND}">
+        <img src="data:image/png;base64,${img}" style="width:100%;height:100%;object-fit:contain"></body></html>`);
+      await sheet.waitForTimeout(250);
+      await sheet.screenshot({ path: path.join(OUT, 'iap-review-pro-screen.png') });
+    }
     console.log(`Store screenshots: ${OUT}\nRaw screens: ${RAW}`);
   } finally {
     await browser.close();
