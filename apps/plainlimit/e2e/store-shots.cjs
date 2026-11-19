@@ -3,7 +3,9 @@
 // ("?mock=counting,store": no test tools, no box for the list only a phone can
 // draw), photographs five screens and sets each under a short caption on a
 // 1320 x 2868 page (the 6.9-inch iPhone size App Store Connect asks for), inside a
-// plain phone outline with a status bar.
+// plain phone outline with a status bar. The first picture is drawn instead
+// (e2e/store-essentials.cjs): the essentials beside a full battery, everything
+// else beside a draining one.
 //
 //   APP_BASE_URL=/game-studio/apps/plainlimit EXPO_OFFLINE=1 npx expo export --platform web
 //   node e2e/store-shots.cjs [out folder]      (default: store/plainlimit/screenshots)
@@ -18,11 +20,14 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const { listen } = require('./serve.cjs');
+const { essentialsHtml } = require('./store-essentials.cjs');
 
 const OUT = path.resolve(process.argv[2] || path.join(__dirname, '..', '..', '..', 'store', 'plainlimit', 'screenshots'));
 const RAW = fs.mkdtempSync(path.join(os.tmpdir(), 'plainlimit-store-'));
 const PAGE = { width: 1320, height: 2868 };
-const FONT = path.join(__dirname, '..', 'node_modules', '@expo-google-fonts', 'space-grotesk', '700Bold', 'SpaceGrotesk_700Bold.ttf');
+const FONTS = path.join(__dirname, '..', 'node_modules', '@expo-google-fonts', 'space-grotesk');
+const FONT = path.join(FONTS, '700Bold', 'SpaceGrotesk_700Bold.ttf');
+const FONT_SEMI = path.join(FONTS, '600SemiBold', 'SpaceGrotesk_600SemiBold.ttf');
 const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const KEY = 'plainlimit.doc.v1';
 
@@ -32,13 +37,15 @@ const SCREEN = { width: 393, height: 852 };
 const APP = { width: SCREEN.width, height: SCREEN.height - STATUS };
 const GROUND = '#0E1011';
 
-// Search results show the first three. Essentials is left out: its steps name other companies' apps and read
-// like a manual at this size (the fresh-eyes review, 2026-11-16).
+// Search results show the first three. The Essentials screen itself is left out: its steps name other companies'
+// apps and read like a manual at this size (the fresh-eyes review, 2026-11-16); the drawn first picture says what
+// it is for instead (the owner's pick, 2026-11-19). `raw` names the photographed screen; `drawn` replaces the phone.
 const SHOTS = [
-  { file: '01-today', caption: 'Pick your essentials.\nThey never count.' },
-  { file: '02-empty', caption: 'When it runs out,\nthe scroll locks.' },
-  { file: '03-sums', caption: 'Need a little more?\nEarn it with sums.' },
-  { file: '04-settings', caption: 'Recharges at 6 AM,\nnot midnight.' },
+  { file: '01-essentials', drawn: essentialsHtml, caption: 'Your essentials\nare free.' },
+  { file: '02-today', raw: 'today', caption: 'One battery a day\nfor everything else.' },
+  { file: '03-empty', raw: 'empty', caption: 'When it runs out,\nthe scroll locks.' },
+  { file: '04-sums', raw: 'sums', caption: 'Need a little more?\nEarn it with sums.' },
+  { file: '05-settings', raw: 'settings', caption: 'Recharges at 6 AM,\nnot midnight.' },
 ];
 
 // The clock the pictures are taken at: 9:41 AM today, as in the status bar, so the countdown to the recharge agrees.
@@ -144,7 +151,7 @@ async function main() {
     {
       const { page, context } = await open(doc(47));
       await page.getByText('Plenty left').first().waitFor();
-      await raw(page, '01-today');
+      await raw(page, 'today');
       await context.close();
     }
 
@@ -153,7 +160,7 @@ async function main() {
     {
       const { page, context } = await open(doc(GOAL));
       await page.getByRole('button', { name: /Solve 3 sums/ }).first().waitFor();
-      await raw(page, '02-empty');
+      await raw(page, 'empty');
       await context.close();
     }
 
@@ -162,7 +169,7 @@ async function main() {
       const { page, context } = await open(doc(95));
       await tab(page, 'Settings');
       await page.getByText('Daily goal', { exact: true }).first().waitFor();
-      await raw(page, '04-settings');
+      await raw(page, 'settings');
       await context.close();
     }
 
@@ -184,7 +191,7 @@ async function main() {
       const sum = await page.getByText(/^\s*\d+\s*[+−-]\s*\d+\s*$/).first().textContent();
       const [, a, op, b] = sum.match(/(\d+)\s*([+−-])\s*(\d+)/);
       await page.getByRole('textbox').first().fill(String(op === '+' ? Number(a) + Number(b) : Number(a) - Number(b)));
-      await raw(page, '03-sums');
+      await raw(page, 'sums');
       await context.close();
     }
 
@@ -192,12 +199,14 @@ async function main() {
 
     // Each picture under its caption, on the app's own dark ground.
     const font = fs.readFileSync(FONT).toString('base64');
+    const semi = fs.readFileSync(FONT_SEMI).toString('base64');
     const sheet = await browser.newPage({ viewport: PAGE, deviceScaleFactor: 1 });
     for (const shot of SHOTS) {
-      const img = fs.readFileSync(path.join(RAW, `${shot.file}.png`)).toString('base64');
+      const picture = shot.drawn ? shot.drawn() : phoneHtml(fs.readFileSync(path.join(RAW, `${shot.raw}.png`)).toString('base64'));
       const lines = shot.caption.split('\n').map((l) => `<div>${l}</div>`).join('');
       await sheet.setContent(`<!doctype html><html><head><style>
-        @font-face { font-family: Display; src: url(data:font/ttf;base64,${font}); }
+        @font-face { font-family: Display; font-weight: 700; src: url(data:font/ttf;base64,${font}); }
+        @font-face { font-family: Display; font-weight: 600; src: url(data:font/ttf;base64,${semi}); }
         html, body { margin: 0; width: ${PAGE.width}px; height: ${PAGE.height}px; overflow: hidden;
                      background: radial-gradient(1200px 900px at 50% 1500px, #16231A 0%, ${GROUND} 70%); }
         .caption { position: absolute; top: 170px; left: 0; right: 0; text-align: center; font: 700 96px/108px Display, sans-serif; letter-spacing: -2px; color: #F4F5F2; }
@@ -205,7 +214,7 @@ async function main() {
                  box-shadow: 0 0 0 4px #3A3E43, 0 0 0 6px #1B1D20, 0 60px 140px rgba(0, 0, 0, 0.55); background: #050606; }
         .btn { position: absolute; width: 9px; border-radius: 4px; background: #34383D; }
         .screen { position: absolute; inset: 0; overflow: hidden; }
-      </style></head><body><div class="caption">${lines}</div>${phoneHtml(img)}</body></html>`);
+      </style></head><body><div class="caption">${lines}</div>${picture}</body></html>`);
       await sheet.evaluate(() => document.fonts.ready);
       await sheet.waitForTimeout(250);
       await sheet.screenshot({ path: path.join(OUT, `${shot.file}.png`), omitBackground: false });
