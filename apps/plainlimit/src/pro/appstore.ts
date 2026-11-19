@@ -21,6 +21,12 @@ const SETTLE_MS = 2500;
 let iap: Iap | null = null;
 let price: string | null = null;
 let productFound = false;
+/** What the App Store last said when asked for the product, for the test build's Pro screen. */
+let lastAsk = 'not asked yet';
+
+export function storeReadout(): string {
+  return `Asked the App Store for ${PRODUCT_ID}: ${lastAsk}`;
+}
 let waiting: ((result: BuyResult) => void) | null = null;
 let tellOwned: (owned: boolean) => void = () => {};
 
@@ -48,10 +54,17 @@ async function ownsPro(): Promise<boolean | null> {
 
 async function loadProduct(): Promise<void> {
   if (!iap) return;
-  const found = await iap.fetchProducts({ skus: [PRODUCT_ID], type: 'in-app' });
-  const product = (found ?? []).find((p) => p.id === PRODUCT_ID);
-  productFound = product !== undefined;
-  price = product?.displayPrice ?? null;
+  const at = new Date().toLocaleTimeString();
+  try {
+    const found = await iap.fetchProducts({ skus: [PRODUCT_ID], type: 'in-app' });
+    const product = (found ?? []).find((p) => p.id === PRODUCT_ID);
+    productFound = product !== undefined;
+    price = product?.displayPrice ?? null;
+    lastAsk = `${at}, it answered with ${(found ?? []).length} product(s)${productFound ? `, price ${price ?? 'not given'}` : ', ours not among them'}`;
+  } catch (error) {
+    lastAsk = `${at}, it failed: ${error instanceof Error ? error.message : String(error)}`;
+    throw error;
+  }
 }
 
 async function settle(purchase: Purchase): Promise<void> {

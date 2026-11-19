@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { PRO_FEATURES } from '@/domain/pro';
 import { success } from '@/platform/haptics';
 import { EXPECTED_PRICE } from '@/pro/config';
+import { storeReadout } from '@/pro/appstore';
 import { DEV_TOOLS, pro, usePro } from '@/pro/pro';
 import { BigButton, Card, Lead, Page, Title } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
@@ -89,6 +90,7 @@ export default function ProScreen() {
           <BigButton quiet label="Not now" onPress={leave} />
         </View>
       )}
+      {DEV_TOOLS && state.storeOpen ? <Text style={styles.small}>Test build only. {storeReadout()}</Text> : null}
       {said ? (
         <Text testID="pro-said" accessibilityLiveRegion="polite" style={styles.said}>
           {said}

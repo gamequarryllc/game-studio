@@ -22,3 +22,7 @@ export async function buy(): Promise<BuyResult> {
 export async function restore(): Promise<RestoreResult> {
   return 'failed';
 }
+
+export function storeReadout(): string {
+  return 'No App Store in the browser preview.';
+}
