@@ -70,7 +70,7 @@ module.exports = function withTargets(config) {
   // leaves each target's entitlements file in it, and a build in progress is
   // reading these files.
   const version = require(path.join(library, 'package.json')).version;
-  const stamp = `react-native-device-activity ${version}, patch 4\n`;
+  const stamp = `react-native-device-activity ${version}, patch 5\n`;
   for (const name of EXTENSIONS) {
     const to = path.join(targets, name);
     const marker = path.join(to, '.prepared');
