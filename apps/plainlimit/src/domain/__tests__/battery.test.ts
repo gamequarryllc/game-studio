@@ -1,6 +1,6 @@
 import { CELLS, cellWords, cellsLeft, fractionUsed, wordFor } from '../battery';
 import { checkpointsFor, picksSettled, roundName, splitName, finalWarningMinutes, isPlausible, minuteTicksFor, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
-import { GROUND, accentOnDark, contrast, oklchToHex, toneAt, toneForCells } from '../tone';
+import { GROUND, accentOnDark, contrast, glowAt, glowForCells, oklchToHex, toneAt, toneForCells } from '../tone';
 
 describe('cells', () => {
   it('starts full and empties one cell per sixth of the goal', () => {
@@ -70,6 +70,17 @@ describe('colour', () => {
   it('gives each cell count its own colour, getting no lighter than yellow before turning red', () => {
     const colours = [6, 5, 4, 3, 2, 1, 0].map((n) => toneForCells(n).bg);
     expect(new Set(colours).size).toBe(7);
+  });
+
+  it("shines clearly on the widget's dark ground, a different light for each cell count", () => {
+    for (let t = 0; t <= 1.2; t += 0.01) {
+      const glow = glowAt(t);
+      expect(glow).toMatch(/^#[0-9A-F]{6}$/);
+      expect(contrast(glow, '#151B18')).toBeGreaterThanOrEqual(4.5);
+    }
+    const lights = [6, 5, 4, 3, 2, 1, 0].map((n) => glowForCells(n));
+    expect(new Set(lights).size).toBe(7);
+    expect(glowForCells(0)).toBe(glowAt(1));
   });
 });
 
