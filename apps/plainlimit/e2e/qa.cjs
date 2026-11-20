@@ -152,17 +152,17 @@ async function main() {
     });
   }
 
-  await scenario('a list from an older version that iOS can not lock: Today says so, and Essentials opens its two steps even while empty', async () => {
+  await scenario('a list from an older version that iOS can not lock: Today says so, and Essentials can be chosen even while empty', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,tooManyApps');
     await see(page, 'Not locking');
     await see(page, 'Your list is from an older version, and iOS can’t lock all of it');
     await shot(page, 'q04b-too-many-today');
     await page.getByRole('button', { name: 'Set essentials', exact: true }).click();
-    await see(page, 'Your list from before still applies until you finish both steps.');
-    await see(page, 'Tap All Apps & Categories at the top of Apple’s list, then Done.');
-    await page.getByRole('button', { name: 'Show my apps', exact: true }).waitFor();
-    // The second step waits for the first.
-    if (!(await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled())) throw new Error('"Choose essentials" is open before the apps are shown');
+    await see(page, 'Your list from before still applies until you choose your essentials.');
+    await see(page, 'Apple’s list opens twice. First tap All Apps & Categories, then Done.');
+    // One button, and it is open.
+    if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is not open');
+    if ((await page.getByRole('button', { name: 'Show my apps', exact: true }).count()) > 0) throw new Error('the old first step is still drawn');
     await shot(page, 'q04c-too-many-what-counts');
     await context.close();
   });
@@ -214,8 +214,7 @@ async function main() {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
     await tab(page, 'Settings');
     await page.getByRole('button', { name: 'Essentials, 14 apps', exact: true }).click();
-    await see(page, '120 apps found.');
-    await see(page, '14 essentials stay free. Everything else counts, and locks when the battery is empty.');
+    await see(page, '14 essentials stay free. Everything else counts, and locks when the battery is empty. 120 apps found.');
     await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Refresh the app list', exact: true }).waitFor();
     await shot(page, 'q10b-what-counts-open');

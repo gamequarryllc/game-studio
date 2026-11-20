@@ -8,16 +8,17 @@
 export const COUNTS_LEAD =
   'Your essentials never count and never lock: calls, messages, maps, or any app you use as a tool. Everything else uses up the battery, and locks when it’s empty.';
 
-/** Step 1: the phone shows Plainlimit its apps, once. Apple can only count apps it has been shown. */
-export const SHOW_TITLE = 'Show Plainlimit your apps';
-export const SHOW_HOW = 'Tap All Apps & Categories at the top of Apple’s list, then Done. The list stays on your phone.';
+/**
+ * Before the essentials are chosen. Apple's list opens twice (the phone's apps,
+ * then the essentials), and each time its top line says what to tap.
+ */
+export const CHOOSE_HOW = 'Apple’s list opens twice. First tap All Apps & Categories, then Done. Then tick only the apps that should stay open.';
+/** The first list was closed with nothing ticked. */
+export const MISSED_APPS = 'Nothing was ticked. Tap Choose essentials again, then All Apps & Categories at the top, then Done.';
 export function shownWords(apps: number): string {
   return `${apps === 1 ? '1 app' : `${apps} apps`} found.`;
 }
 
-/** Step 2: the essentials. */
-export const KEEP_TITLE = 'Tick your essentials';
-export const keepHow = (limit: number) => `Tick only the apps that should stay free and open, up to ${limit}. Search at the top finds an app fast.`;
 export function keptWords(kept: number): string {
   if (kept === 0) return 'No essentials: every app counts, and locks when the battery is empty.';
   return `${kept === 1 ? '1 essential stays' : `${kept} essentials stay`} free. Everything else counts, and locks when the battery is empty.`;
@@ -31,8 +32,8 @@ export function tooManyKept(ticked: number, limit: number): string {
 export const COUNTS_NOTE =
   'An app you install later locks with the rest, but only counts once you tap Refresh the app list. iOS keeps Phone and the apps in its own Always Allowed list open whatever you pick.';
 
-/** For a list made by an older version, still in use until both steps are done. */
-export const OLD_LIST_NOTE = 'Your list from before still applies until you finish both steps.';
+/** For a list made by an older version, still in use until the essentials are chosen. */
+export const OLD_LIST_NOTE = 'Your list from before still applies until you choose your essentials.';
 
 /**
  * The short value beside "Essentials" in Settings and setup. `kept` is how

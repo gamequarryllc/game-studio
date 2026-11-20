@@ -17,7 +17,7 @@ describe('essentialsValue', () => {
   });
 });
 
-describe('the two steps', () => {
+describe('choosing the essentials', () => {
   it('says how many apps were found, and how many stay free', () => {
     expect(shownWords(120)).toBe('120 apps found.');
     expect(shownWords(1)).toBe('1 app found.');
