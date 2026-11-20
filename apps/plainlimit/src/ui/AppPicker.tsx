@@ -1,6 +1,10 @@
+import { useEffect, useRef } from 'react';
 import { DeviceActivitySelectionSheetViewPersisted } from 'react-native-device-activity';
 
 import { SCREEN_TIME_AVAILABLE } from '@/platform/screenTime';
+
+/** How long the picks get to be saved after Apple's sheet closes. */
+const SAVE_MS = 600;
 
 /**
  * Apple's own list of the phone's apps, as a sheet. The picks are kept by the
@@ -8,7 +12,22 @@ import { SCREEN_TIME_AVAILABLE } from '@/platform/screenTime';
  * Draws nothing in a browser or in Expo Go.
  */
 export function AppPicker({ id, open, header, onClose, wholeCategories = false }: { id: string; open: boolean; header: string; onClose: () => void; wholeCategories?: boolean }) {
+  const closing = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const done = useRef(onClose);
+  useEffect(() => {
+    done.current = onClose;
+    if (!open) closing.current = null;
+  });
   if (!SCREEN_TIME_AVAILABLE || !open) return null;
+  // Apple's sheet hands over the picks as Done is tapped, and the list is
+  // saved a tenth of a second after that. Closing at once took the list off
+  // the screen before it was saved, so the picks were lost and step 1 never
+  // showed as done (build 95, on a fresh install). The list stays for a
+  // moment after the sheet has gone, and only then is the screen told.
+  const close = () => {
+    if (closing.current) return;
+    closing.current = setTimeout(() => done.current(), SAVE_MS);
+  };
   return (
     <DeviceActivitySelectionSheetViewPersisted
       style={{ width: 1, height: 1, position: 'absolute' }}
@@ -19,7 +38,7 @@ export function AppPicker({ id, open, header, onClose, wholeCategories = false }
       // older single list kept a category as one category, since iOS locks at
       // most 50 single apps (build 68 listed every app, and most never locked).
       includeEntireCategory={wholeCategories}
-      onDismissRequest={onClose}
+      onDismissRequest={close}
       onSelectionChange={() => {}}
     />
   );
