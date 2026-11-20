@@ -1132,11 +1132,13 @@ export function testCover(settings: Settings, topUpsSoFar: number): void {
   coverEmptyNow(settings, topUpsSoFar);
 }
 
-export function testUncover(): void {
+export function testUncover(settings: Settings): void {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
     DeviceActivity.disableBlockAllMode('plainlimit test');
     DeviceActivity.resetBlocks('plainlimit test');
+    // Taking every cover off takes the Second thought list's too; it goes back on unless it is open.
+    coverAskAgain(settings.askFirst);
   } catch (error) {
     note('testUncover', error);
   }

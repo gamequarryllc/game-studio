@@ -79,7 +79,7 @@ export function ScreenTimeCard() {
               quiet
               label="Unlock (test)"
               onPress={() => {
-                testUncover();
+                testUncover(settings);
                 readAgain((n) => n + 1);
               }}
             />
