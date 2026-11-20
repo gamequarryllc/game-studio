@@ -14,7 +14,7 @@ import { c } from '@/ui/theme';
 // name, "what counts".)
 //
 // Like the goal, the essentials can't change while the battery is empty:
-// ticking an app would be a way round its lock. Finishing the two steps for
+// ticking an app would be a way round its lock. Choosing them for
 // the first time is always open, since until then an older list may not be
 // locking at all.
 

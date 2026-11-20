@@ -69,7 +69,8 @@ export default function Setup() {
   const approved = access === 'approved';
   const canPick = SCREEN_TIME_AVAILABLE && approved;
   const picked = pickCount(COUNTED_ID);
-  const essentials = useEssentials();
+  // Once the essentials are saved, setup moves on by itself.
+  const essentials = useEssentials(next);
   const figures = canPick && picked > 0;
   // Only a phone with access and something ticked can count; anywhere else the last screen is a summary.
   const checking = step === 'ready' && figures;
@@ -171,7 +172,7 @@ export default function Setup() {
       </>
     );
     if (canPick && !essentials.ready) {
-      primary = essentials.shown === 0 ? { label: 'Show my apps', onPress: essentials.showApps } : { label: 'Choose essentials', onPress: essentials.choose };
+      primary = { label: 'Choose essentials', onPress: essentials.start };
       secondary = { label: 'Skip for now', onPress: next };
     }
   }
