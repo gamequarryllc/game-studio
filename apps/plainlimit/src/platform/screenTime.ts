@@ -238,12 +238,18 @@ export function essentialsMode(): boolean {
   return readNumber('essentialsSet') > 0 && appsShown() > 0;
 }
 
-/** The same picks with no whole categories: only the apps one by one. Null if the phone's format isn't as expected. */
+/**
+ * The same picks with no whole categories and no websites: only the apps one
+ * by one. Null if the phone's format isn't as expected. (Websites: Apple's
+ * list with everything ticked also holds the sites the phone knows, 23 on the
+ * owner's. Left in, time on them counted in whatever browser showed them, an
+ * essential one too: build 95 counted Brave though it was ticked as one.)
+ */
 function appsOnly(token: string): string | null {
   try {
     const picks = JSON.parse(atob(token)) as Record<string, unknown>;
     const out: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(picks)) out[key] = /categor/i.test(key) && Array.isArray(value) ? [] : value;
+    for (const [key, value] of Object.entries(picks)) out[key] = /categor|webdomain/i.test(key) && Array.isArray(value) ? [] : value;
     return btoa(JSON.stringify(out));
   } catch {
     return null;
@@ -269,8 +275,8 @@ function deriveCounted(): boolean {
     let counted = token;
     const apps = appsOnly(token);
     const check = apps ? DeviceActivity.activitySelectionMetadata({ activitySelectionToken: apps }) : null;
-    if (apps && check && check.categoryCount === 0 && check.applicationCount === rest.applicationCount) counted = apps;
-    else note('the counted list', 'whole categories could not be left out, so an essential may still count');
+    if (apps && check && check.categoryCount === 0 && sitesIn(check) === 0 && check.applicationCount === rest.applicationCount) counted = apps;
+    else note('the counted list', 'whole categories and websites could not be left out, so an essential may still count');
     DeviceActivity.setFamilyActivitySelectionId({ id: COUNTED_ID, familyActivitySelection: counted });
     // A screen kept for this list by the older model would be shown in place of the current one.
     DeviceActivity.userDefaultsRemove(`shieldConfigurationForSelection_${COUNTED_ID}`);
@@ -412,7 +418,19 @@ export function tooManyApps(): boolean {
  * again ("pickAgain"). Nothing changes when the picks are fine.
  */
 export function fixOldPicks(): 'fine' | 'fixed' | 'pickAgain' {
-  if (!SCREEN_TIME_AVAILABLE || essentialsMode()) return 'fine';
+  if (!SCREEN_TIME_AVAILABLE) return 'fine';
+  if (essentialsMode()) {
+    // A counted list worked out by builds 90 to 95 still holds websites: work it out again without them.
+    try {
+      const counted = metaOf(COUNTED_ID);
+      if (!counted || sitesIn(counted) === 0) return 'fine';
+      picksBefore();
+      return deriveCounted() ? 'fixed' : 'fine';
+    } catch (error) {
+      note('fixOldPicks', error);
+      return 'fine';
+    }
+  }
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID });
     if (!meta || meta.applicationCount <= APP_LOCK_LIMIT) return 'fine';
