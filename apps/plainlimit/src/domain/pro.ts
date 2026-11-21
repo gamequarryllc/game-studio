@@ -1,10 +1,10 @@
 // What Plainlimit Pro adds, and how a setting reads for someone without it.
 // The battery, Essentials, sums, the recharge, the settings lock, emergency
 // passes, the widget and the week stay free for good (the owner, 2026-11-17).
-// Pro in 1.1 is three things that have been tried on a phone: the recharge
-// time, sum difficulty and the large widget. Second thought and the lock
-// message are free until they have been too; then they move to Pro (the
-// owner, 2026-11-18).
+// Pro in 1.1 is the recharge time, sum difficulty, the large widget (the
+// owner, 2026-11-18) and a lock message in one's own words (2026-11-21; the
+// ready-made messages stay free). Second thought is free until it has been
+// tried on a phone; then it moves to Pro.
 
 import type { SumLevel } from './puzzle';
 import type { RecordView } from './record';
@@ -15,6 +15,7 @@ export const PRO_FEATURES: readonly { title: string; line: string }[] = [
   { title: 'Your recharge time', line: 'Recharge at 5 AM, 7 AM, midnight or any half hour' },
   { title: 'Sum difficulty', line: 'Easy, normal or hard sums when you earn time' },
   { title: 'Large widget', line: 'Your battery, streak, passes and week on the Home Screen' },
+  { title: 'Your own lock message', line: 'Your words on the screen when an app is locked' },
 ];
 
 /** The sums someone gets: their choice with Pro, normal without it (a refund falls back to normal). */

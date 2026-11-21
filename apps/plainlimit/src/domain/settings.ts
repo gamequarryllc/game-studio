@@ -14,6 +14,17 @@ export const ALLOWED_MAX = 12;
 /** The longest lock screen message: one or two lines on Apple's lock screen. */
 export const LOCK_MESSAGE_MAX = 80;
 
+/**
+ * Ready-made lock screen messages, free for everyone. Words of one's own are
+ * Pro (the owner, 2026-11-21: show the ready-made ones first, then let Pro
+ * change them).
+ */
+export const LOCK_MESSAGE_IDEAS: readonly string[] = ['What were you about to do instead?', 'You set this limit for a reason.', 'Text someone you miss.', 'Go outside. The feed will still be there tomorrow.'];
+
+export function isLockMessageIdea(text: string): boolean {
+  return LOCK_MESSAGE_IDEAS.includes(text);
+}
+
 /** Tidies a lock screen message: one line, no outer spaces, at most LOCK_MESSAGE_MAX characters. */
 export function cleanLockMessage(text: string): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, LOCK_MESSAGE_MAX).trim();

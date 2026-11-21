@@ -7,7 +7,7 @@ import { widgetRecord } from '@/domain/pro';
 import { addWeeklyPasses, freshRecord, passActive, passCheck, recordView, spendPass } from '@/domain/record';
 import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
-import { cleanLockMessage, stepGoal, stepRecharge } from '@/domain/settings';
+import { cleanLockMessage, stepGoal, stepRecharge, isLockMessageIdea } from '@/domain/settings';
 import type { SumLevel } from '@/domain/puzzle';
 import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
 import { applyAskFirst, openAsk } from '@/platform/askFirst';
@@ -509,6 +509,9 @@ export const store = {
    */
   setLockMessage(text: string) {
     const lockMessage = cleanLockMessage(text);
+    // Words of one's own are Pro; the ready-made messages and no message are free.
+    // A message typed before this was Pro stays until it is changed.
+    if (lockMessage && !isLockMessageIdea(lockMessage) && !proOn) return;
     const { lockMessage: _old, ...rest } = snapshot.doc.settings;
     const settings: Settings = lockMessage ? { ...rest, lockMessage } : rest;
     set({ ...snapshot.doc, settings });

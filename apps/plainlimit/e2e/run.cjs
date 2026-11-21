@@ -108,7 +108,7 @@ async function main() {
     await shot('02-settings');
   });
 
-  await step('without Pro, the recharge time and harder sums lead to the Pro screen; Second thought and the lock message are open', async () => {
+  await step('without Pro, the recharge time, harder sums and a lock message of one\'s own lead to the Pro screen; Second thought and the ready-made lock messages are open', async () => {
     await press('Recharges at, 6:00 AM · Pro');
     await see('Plainlimit Pro');
     await see('Your recharge time');
@@ -124,6 +124,16 @@ async function main() {
     await back();
     assert.strictEqual(await page.getByRole('radio', { name: /^Normal/ }).getAttribute('aria-checked'), 'true', 'normal sums stay chosen');
     await page.getByRole('button', { name: 'Second thought, Off', exact: true }).waitFor();
+    // A ready-made lock message is free; words of one's own are Pro.
+    await press('Lock message, Off');
+    await press('You set this limit for a reason.');
+    await page.getByTestId('lock-message-preview').getByText('\u201CYou set this limit for a reason.\u201D', { exact: false }).waitFor();
+    assert.strictEqual(await page.getByTestId('lock-message-input').count(), 0, 'the text box shows without Pro');
+    await press('Write your own, Pro');
+    await see('Your own lock message');
+    await back();
+    await press('No message');
+    await back();
     await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
     await back();
   });
@@ -143,7 +153,9 @@ async function main() {
     await page.getByTestId('lock-message-preview').getByText('\u201CText someone you miss.\u201D', { exact: false }).waitFor();
     await shot('02d-lock-message');
     // Cleared again, so the empty screens below say only their own words.
-    await page.getByTestId('lock-message-input').fill('');
+    await page.getByTestId('lock-message-input').fill('Read a book instead');
+    await page.getByTestId('lock-message-preview').getByText('\u201CRead a book instead\u201D', { exact: false }).waitFor();
+    await press('No message');
     await back();
     await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
     await press('Second thought, Off');
