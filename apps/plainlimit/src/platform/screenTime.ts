@@ -1025,18 +1025,6 @@ export function averageWindow(settings: Settings, now: Date): { fromMs: number; 
 }
 
 /**
- * The same seven days for setup's bars, with the goal riding on the window: it
- * starts one second earlier for each minute of the goal. The phone's report is
- * sealed and can be handed nothing else; it counts the days back from the
- * window's end, so the extra seconds fall outside them
- * (targets/report/PlainlimitReport.swift, WeekReport).
- */
-export function weekWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
-  const week = averageWindow(settings, now);
-  return { ...week, fromMs: week.fromMs - settings.goalMinutes * 1000 };
-}
-
-/**
  * The last seven days up to the end of this hour, every app, for the phone's
  * list of the apps opened first after a pickup (Second thought's suggestions;
  * targets/report/PlainlimitReport.swift, FirstAppsReport). No selection: the
