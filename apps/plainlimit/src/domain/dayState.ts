@@ -1,10 +1,11 @@
 // What the app remembers about the current battery, and how it moves on.
 
+import { goalAfterRecharge, repairNextGoal } from './goal';
 import { freshRecord, repairRecord } from './record';
 import { nextRecharge, periodStart } from './day';
 import { topUpPlan } from './puzzle';
 import type { DayState, DaySummary, Doc, Settings } from './types';
-import { DEFAULT_SETTINGS, repairSettings } from './settings';
+import { DEFAULT_SETTINGS, clampGoal, repairSettings } from './settings';
 
 export function freshDay(now: Date, rechargeMinute: number): DayState {
   return { periodStart: periodStart(now, rechargeMinute).toISOString(), usedMinutes: 0, topUps: 0, unlockedUntil: null, uncounted: false };
@@ -19,11 +20,14 @@ export const HISTORY_DAYS = 98;
  * keeping a summary of the day that ended. `closingUsed` is the phone's own
  * last word on that day, when it has one; the larger of it and what the app
  * last knew is kept. Days in between that the app never saw are not made up.
+ * A higher goal chosen during the day that ended starts now (goal.ts).
  */
 export function advance(doc: Doc, now: Date, closingUsed: number | null = null, counting = doc.watching === true): Doc {
-  const day = rollOver(doc.day, now, doc.settings.rechargeMinute);
-  if (day === doc.day) return doc;
+  const fresh = rollOver(doc.day, now, doc.settings.rechargeMinute);
+  if (fresh === doc.day) return doc;
   const old = doc.day;
+  const next = goalAfterRecharge(old, doc.settings, now);
+  const day: DayState = { ...fresh, ...next.day };
   const summary: DaySummary = {
     start: old.periodStart,
     goalMinutes: doc.settings.goalMinutes,
@@ -32,7 +36,7 @@ export function advance(doc: Doc, now: Date, closingUsed: number | null = null, 
     state: !counting ? 'off' : old.uncounted ? 'partly' : 'counted',
   };
   const history = [...doc.history.filter((h) => h.start !== summary.start), summary].slice(-HISTORY_DAYS);
-  return { ...doc, day, history };
+  return { ...doc, settings: next.settings, day, history };
 }
 
 /** The same day if its battery is still the current one, a fresh one if a recharge has passed. */
@@ -99,7 +103,7 @@ function repairHistory(raw: unknown): DaySummary[] {
  */
 export function repairDoc(raw: unknown, now: Date, closingUsed?: (day: DayState, settings: Settings) => number | null, counting?: boolean): Doc {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const settings: Settings = repairSettings(r.settings);
+  let settings: Settings = repairSettings(r.settings);
   const d = (r.day && typeof r.day === 'object' ? r.day : {}) as Record<string, unknown>;
   let day = freshDay(now, settings.rechargeMinute);
   const start = typeof d.periodStart === 'string' ? new Date(d.periodStart) : null;
@@ -108,7 +112,14 @@ export function repairDoc(raw: unknown, now: Date, closingUsed?: (day: DayState,
     const topUps = typeof d.topUps === 'number' && Number.isFinite(d.topUps) ? Math.max(0, Math.floor(d.topUps)) : 0;
     const until = typeof d.unlockedUntil === 'string' && !Number.isNaN(new Date(d.unlockedUntil).getTime()) ? d.unlockedUntil : null;
     day = { periodStart: start.toISOString(), usedMinutes: used, topUps, unlockedUntil: until, uncounted: d.uncounted === true };
+    // A copy saved before the goal rule (goal.ts) has no start: today's goal is it.
+    const startGoal = typeof d.startGoalMinutes === 'number' && Number.isFinite(d.startGoalMinutes) ? clampGoal(d.startGoalMinutes) : settings.goalMinutes;
+    day.startGoalMinutes = Math.max(startGoal, settings.goalMinutes);
+    if (d.firstDay === true) day.firstDay = true;
   }
+  const savedSettings = (r.settings && typeof r.settings === 'object' ? r.settings : {}) as Record<string, unknown>;
+  const nextGoal = repairNextGoal(savedSettings.nextGoalMinutes, day, settings);
+  if (nextGoal !== undefined) settings = { ...settings, nextGoalMinutes: nextGoal };
   // A copy saved before setup existed belongs to someone already using the app.
   const saved = Boolean(raw && typeof raw === 'object' && r.settings && typeof r.settings === 'object');
   const doc: Doc = {

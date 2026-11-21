@@ -101,8 +101,10 @@ async function main() {
     await press('Less time');
     await press('Less time');
     await see('2:45');
-    for (let i = 0; i < 12; i++) await press('Less time');
+    for (let i = 0; i < 9; i++) await press('Less time');
     await see('0:30');
+    // At a limit the button looks closed rather than doing nothing.
+    if (!(await page.getByRole('button', { name: 'Less time', exact: true }).first().isDisabled())) throw new Error('"Less time" is still open at the shortest goal');
     for (let i = 0; i < 10; i++) await press('More time');
     await see('3:00');
     await shot('02-settings');

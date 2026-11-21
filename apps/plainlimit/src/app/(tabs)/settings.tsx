@@ -4,6 +4,7 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { CELLS, cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
+import { chosenGoal } from '@/domain/goal';
 import { topUpPlan } from '@/domain/puzzle';
 import { EXPECTED_PRICE } from '@/pro/config';
 import { pro, usePro } from '@/pro/pro';
@@ -37,6 +38,10 @@ export default function Settings() {
   const proState = usePro();
   const isPro = proState.isPro;
   const proValue = isPro ? 'Unlocked' : (proState.price ?? (proState.storeOpen ? 'See what it adds' : EXPECTED_PRICE));
+  // A higher goal starts at the next recharge; today keeps its own (goal.ts). The stepper shows the one chosen.
+  const chosen = chosenGoal(settings);
+  const waiting = chosen !== settings.goalMinutes;
+  const recharge = clockLabel(settings.rechargeMinute);
 
   return (
     <Page top={24} bottom={24}>
@@ -47,18 +52,32 @@ export default function Settings() {
       <Card style={{ paddingTop: 16, paddingBottom: 18, gap: 10 }}>
         <Label>Daily goal</Label>
         <View style={styles.stepper}>
-          <StepButton sign="−" label="Less time" size={narrow ? 46 : 52} disabled={locked} onPress={() => store.stepGoal(-1)} />
-          <Text accessibilityLabel={`Daily goal, ${durationLabel(settings.goalMinutes)}`} style={[styles.goal, { color: accent }, narrow ? { fontSize: 50, lineHeight: 54, letterSpacing: -1.6 } : null]}>
-            {durationLabel(settings.goalMinutes)}
+          <StepButton sign="−" label="Less time" size={narrow ? 46 : 52} disabled={!store.canStepGoal(-1)} onPress={() => store.stepGoal(-1)} />
+          <Text accessibilityLabel={`Daily goal, ${durationLabel(chosen)}${waiting ? `, from ${recharge}` : ''}`} style={[styles.goal, { color: accent }, narrow ? { fontSize: 50, lineHeight: 54, letterSpacing: -1.6 } : null]}>
+            {durationLabel(chosen)}
           </Text>
-          <StepButton sign="+" label="More time" size={narrow ? 46 : 52} disabled={locked} onPress={() => store.stepGoal(1)} />
+          <StepButton sign="+" label="More time" size={narrow ? 46 : 52} disabled={!store.canStepGoal(1)} onPress={() => store.stepGoal(1)} />
         </View>
         <View style={styles.cellRow}>
           <View style={{ width: 74 }}>
             <Battery cells={CELLS} tone={{ fg: c.ink, track: 'rgba(244,245,242,0.22)', bg: c.card }} height={26} flat decorative />
           </View>
-          <Text style={styles.cellNote}>Six cells of {cellWords(settings.goalMinutes)} each</Text>
+          <Text style={styles.cellNote}>Six cells of {cellWords(chosen)} each</Text>
         </View>
+        {waiting ? (
+          // Today and the next recharge side by side, so it reads at a glance why Today still shows the old goal.
+          <View style={styles.waiting} accessible accessibilityLabel={`Today stays at ${durationLabel(settings.goalMinutes)}. ${durationLabel(chosen)} starts at ${recharge}.`}>
+            <View style={styles.waitPart}>
+              <Text style={styles.waitLabel}>Today</Text>
+              <Text style={styles.waitValue}>{durationLabel(settings.goalMinutes)}</Text>
+            </View>
+            <Text style={styles.waitArrow}>→</Text>
+            <View style={styles.waitPart}>
+              <Text style={styles.waitLabel}>From {recharge}</Text>
+              <Text style={[styles.waitValue, { color: accent }]}>{durationLabel(chosen)}</Text>
+            </View>
+          </View>
+        ) : null}
       </Card>
 
       <Card>
@@ -135,6 +154,11 @@ const styles = StyleSheet.create({
   goal: { fontFamily: display.bold, fontSize: 64, lineHeight: 66, letterSpacing: -2.4, color: c.ink },
   cellRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2 },
   cellNote: { flex: 1, fontSize: 14, lineHeight: 19, color: c.ink3 },
+  waiting: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(244,245,242,0.07)' },
+  waitPart: { flex: 1, gap: 2 },
+  waitLabel: { fontSize: 13, lineHeight: 17, color: c.ink3 },
+  waitValue: { fontFamily: display.semi, fontSize: 20, lineHeight: 24, color: c.ink },
+  waitArrow: { fontSize: 18, color: c.ink3 },
   rechargeRow: { minHeight: 60, paddingVertical: 10, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 12, rowGap: 8 },
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
   rechargeValue: { fontFamily: display.semi, fontSize: 17, color: c.ink, minWidth: 84, textAlign: 'center' },

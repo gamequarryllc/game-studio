@@ -7,7 +7,8 @@ import { widgetRecord } from '@/domain/pro';
 import { addWeeklyPasses, freshRecord, passActive, passCheck, recordView, spendPass } from '@/domain/record';
 import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
-import { cleanLockMessage, stepGoal, stepRecharge, isLockMessageIdea } from '@/domain/settings';
+import { canStepGoal, goalAtRecharge, stepChosenGoal } from '@/domain/goal';
+import { cleanLockMessage, stepRecharge, isLockMessageIdea } from '@/domain/settings';
 import type { SumLevel } from '@/domain/puzzle';
 import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
 import { applyAskFirst, openAsk } from '@/platform/askFirst';
@@ -266,6 +267,40 @@ function batteryLocked(doc: Doc, now: Date): boolean {
 }
 
 /**
+ * A higher goal starts at the recharge (goal.ts), but the phone's checkpoints
+ * stay the old goal's until the app registers the day again: it cannot do
+ * that by itself. So on the first look after the recharge (and at start, for
+ * one that passed while the app was closed) the day is registered with the
+ * new goal, and any cover the old, lower goal put up since is taken off (put
+ * back at once if the battery is empty under the new one too). Until then the
+ * phone holds to the old goal, which is the stricter one. Once per goal, so a
+ * registration that keeps failing is not tried on every tick.
+ */
+let caughtUpTo: number | null = null;
+function catchUpGoal(doc: Doc, now: Date) {
+  try {
+    if (!screenTime.isOn()) return;
+    const registered = screenTime.registeredGoal();
+    const goal = doc.settings.goalMinutes;
+    if (registered <= 0 || registered === goal || caughtUpTo === goal) return;
+    caughtUpTo = goal;
+    if (goal > registered) screenTime.coverAgain(batteryLocked(doc, now), doc.settings, doc.day.topUps);
+    planSoon();
+  } catch {
+    // Tried again on the next start.
+  }
+}
+
+/**
+ * Setup is through: from now until the next recharge the goal still changes
+ * freely, to get a feel for it (goal.ts).
+ */
+function throughSetup(doc: Doc): Doc {
+  if (doc.setupDone) return doc;
+  return { ...doc, setupDone: true, day: { ...doc.day, firstDay: true } };
+}
+
+/**
  * Puts the Ask first list on the phone as the settings say (askFirst.ts),
  * while counting is on. Taking its cover off also uncovers an app on both
  * lists, so the battery's covers go back up if it is empty.
@@ -328,6 +363,7 @@ export const store = {
     loaded = true;
     set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
+    catchUpGoal(doc, new Date());
     screenTime.onCheckpoint(() => store.tick(new Date()));
     // Picks from before build 71 may list more single apps than iOS will lock.
     if (screenTime.fixOldPicks() === 'fixed') store.picksChanged();
@@ -354,7 +390,9 @@ export const store = {
       const moved = advanced(snapshot.doc, now);
       const doc = withPasses(checkHealth({ ...moved, day: withRealUse(moved, moved.day) }), now);
       if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history && doc.record === snapshot.doc.record) return;
+      const recharged = doc.day.periodStart !== snapshot.doc.day.periodStart;
       set(doc);
+      if (recharged) catchUpGoal(doc, now);
       // The app has just learned something the widget may not have drawn yet.
       if (screenTime.isOn()) screenTime.reloadWidget();
     } catch {
@@ -401,7 +439,7 @@ export const store = {
   },
   /** The first-run setup is finished. */
   finishSetup() {
-    set({ ...snapshot.doc, setupDone: true });
+    set(throughSetup(snapshot.doc));
   },
   /**
    * Setup's last screen: register the day, taking in everything since the
@@ -417,7 +455,7 @@ export const store = {
   startCounting() {
     const doc = snapshot.doc;
     screenTime.releaseLocks(doc.settings, doc.day.topUps, doc.day.usedMinutes);
-    set({ ...doc, watching: true, setupDone: true });
+    set({ ...throughSetup(doc), watching: true });
   },
   /**
    * Setup, when today was already past the goal: counting is on, but nothing
@@ -428,12 +466,14 @@ export const store = {
     const at = new Date(doc.day.periodStart);
     screenTime.holdLocks(nextRecharge(at, doc.settings.rechargeMinute).getTime(), doc.settings, doc.day.topUps);
     screenTime.noteHistoryLoss('today marked not fully counted (started tomorrow in setup)');
-    set({ ...doc, watching: true, setupDone: true, day: { ...doc.day, uncounted: true } });
+    const through = throughSetup(doc);
+    set({ ...through, watching: true, day: { ...through.day, uncounted: true } });
   },
   /** The starting figure looked wrong: count from this moment instead, from zero. */
   async countFromNow(): Promise<boolean> {
     const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps, true);
-    set({ ...snapshot.doc, watching: ok, setupDone: true, day: { ...snapshot.doc.day, usedMinutes: 0 } });
+    const through = throughSetup(snapshot.doc);
+    set({ ...through, watching: ok, day: { ...through.day, usedMinutes: 0 } });
     store.tick(new Date());
     return ok;
   },
@@ -444,9 +484,11 @@ export const store = {
    */
   async startDayOver() {
     const now = new Date();
-    const day = freshDay(now, snapshot.doc.settings.rechargeMinute);
+    // As at a recharge, a goal waiting for it starts.
+    const next = goalAtRecharge(snapshot.doc.settings);
+    const day = { ...freshDay(now, next.settings.rechargeMinute), ...next.day };
     // The fresh day first: while the phone is being told, nothing may act on the old one.
-    set({ ...snapshot.doc, day });
+    set({ ...snapshot.doc, settings: next.settings, day });
     await screenTime.applyPlan(snapshot.doc.settings, 0, true);
     set({ ...snapshot.doc, day: withRealUse(snapshot.doc, snapshot.doc.day) });
   },
@@ -486,8 +528,26 @@ export const store = {
     redrawAndLookAgain();
     return refused;
   },
+  /**
+   * One step on the goal's stepper. Lower, or back up to the goal the day
+   * started with: today, at once. Higher than that: from the next recharge
+   * (goal.ts). The phone is told only when today's goal changes.
+   */
   stepGoal(direction: 1 | -1) {
-    withSettings((s) => ({ ...s, goalMinutes: stepGoal(s.goalMinutes, direction) }));
+    if (settingsLocked()) return;
+    const now = new Date();
+    const before = snapshot.doc.settings.goalMinutes;
+    set(stepChosenGoal(advanced(snapshot.doc, now), direction));
+    const { settings, day } = snapshot.doc;
+    if (settings.goalMinutes === before) return;
+    // Back up after a lowering: the last cell's screen the lower goal put up no longer applies.
+    // (The phone puts it back once it has reported the day for the goal it now has, if it does.)
+    if (settings.goalMinutes > before && screenTime.isOn()) screenTime.coverAgain(batteryLocked(snapshot.doc, now), settings, day.topUps);
+    planSoon();
+  },
+  /** Whether the goal's stepper can go that way: not past its limits, nor below what today has used (goal.ts). */
+  canStepGoal(direction: 1 | -1): boolean {
+    return !settingsLocked() && canStepGoal(snapshot.doc, direction);
   },
   /** Changing the recharge time is Pro. A time chosen before Pro existed (1.0) is kept as it is. */
   stepRecharge(direction: 1 | -1) {
@@ -601,7 +661,8 @@ export const store = {
   },
   /** Developer: a full battery, as if the recharge time had just passed. */
   rechargeNow() {
-    set({ ...snapshot.doc, day: freshDay(new Date(), snapshot.doc.settings.rechargeMinute) });
+    const next = goalAtRecharge(snapshot.doc.settings);
+    set({ ...snapshot.doc, settings: next.settings, day: { ...freshDay(new Date(), next.settings.rechargeMinute), ...next.day } });
   },
   /** The puzzle was solved: start (or extend) the earned time. */
   earnTopUp() {

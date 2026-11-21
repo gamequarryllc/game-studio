@@ -188,6 +188,44 @@ async function main() {
     await context.close();
   });
 
+  await scenario('nearly out, a higher goal waits for the recharge, and the goal cannot be lowered past what is used', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 170 }), '?mock=counting');
+    await see(page, 'Nearly out');
+    await tab(page, 'Settings');
+    for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'More time', exact: true }).click();
+    // The stepper shows the goal chosen; today keeps its own, and says when the new one starts.
+    await page.getByLabel('Daily goal, 4:00, from 6:00 AM').waitFor({ state: 'visible', timeout: 8000 });
+    await page.getByLabel('Today stays at 3:00. 4:00 starts at 6:00 AM.').waitFor({ state: 'visible', timeout: 8000 });
+    await shot(page, 'q27-goal-waits');
+    await tab(page, 'Today');
+    await see(page, 'Nearly out');
+    await see(page, '3 hour day');
+    await tab(page, 'Settings');
+    for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Less time', exact: true }).click();
+    await page.getByLabel('Daily goal, 3:00').waitFor({ state: 'visible', timeout: 8000 });
+    if ((await page.getByText('From 6:00 AM', { exact: true }).count()) !== 0) throw new Error('the waiting goal stayed after going back down');
+    // 2:45 would empty the battery at 2:50 used, and lock the settings with no way back.
+    if (!(await page.getByRole('button', { name: 'Less time', exact: true }).isDisabled())) throw new Error('"Less time" is open with 2:50 of 3:00 used');
+    await context.close();
+  });
+
+  await scenario('lowering the goal mid-day is at once, and so is going back up to the day\'s own goal', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
+    await tab(page, 'Settings');
+    for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'Less time', exact: true }).click();
+    await page.getByLabel('Daily goal, 2:30').waitFor({ state: 'visible', timeout: 8000 });
+    await tab(page, 'Today');
+    await see(page, '2 h 30 min day');
+    await tab(page, 'Settings');
+    for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'More time', exact: true }).click();
+    await page.getByLabel('Daily goal, 3:00').waitFor({ state: 'visible', timeout: 8000 });
+    if ((await page.getByText('From 6:00 AM', { exact: true }).count()) !== 0) throw new Error('going back up to the day\'s own goal waited for the recharge');
+    await page.getByRole('button', { name: 'More time', exact: true }).click();
+    await page.getByLabel('Daily goal, 3:15, from 6:00 AM').waitFor({ state: 'visible', timeout: 8000 });
+    await shot(page, 'q28-goal-back-up');
+    await context.close();
+  });
+
   await scenario('an empty battery locks the settings and Essentials', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting');
     await see(page, 'Empty');

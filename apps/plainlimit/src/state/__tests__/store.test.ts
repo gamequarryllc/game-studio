@@ -14,6 +14,7 @@ function fakePhone(): Fake {
     usedSoFar: jest.fn(() => null),
     health: jest.fn(() => 'fine'),
     applyPlan: jest.fn(async () => true),
+    registeredGoal: jest.fn(() => 180),
     askPermission: jest.fn(async () => 'approved'),
     busyRegistering: jest.fn(() => false),
     clearPicks: jest.fn(),
@@ -191,14 +192,134 @@ describe('locked settings', () => {
     const { store, settingsLocked } = load(phone, saved(240));
     await store.start();
     expect(settingsLocked()).toBe(false);
+    // Open, but a higher goal still waits for the recharge (goal.ts).
+    store.stepGoal(1);
+    expect(store.get().doc.settings).toMatchObject({ goalMinutes: 180, nextGoalMinutes: 195 });
+  });
+
+  it('lets the day setup finished in change the goal at once, "start tomorrow" too', async () => {
+    const phone = fakePhone();
+    phone.locksHeldUntil = jest.fn(() => Date.now() + 3600 * 1000);
+    const raw = saved(240);
+    const { store } = load(phone, { ...raw, day: { ...raw.day, firstDay: true } });
+    await store.start();
     store.stepGoal(1);
     expect(store.get().doc.settings.goalMinutes).toBe(195);
+    expect(store.get().doc.settings.nextGoalMinutes).toBeUndefined();
   });
 
   it('leaves them open with cells left', async () => {
     const { store, settingsLocked } = load(fakePhone(), saved(60));
     await store.start();
     expect(settingsLocked()).toBe(false);
+  });
+});
+
+describe('the daily goal', () => {
+  /** A saved copy from the battery before this morning's recharge, with a 4-hour goal waiting for it. */
+  function waitingSinceYesterday(used: number) {
+    const raw = saved(used);
+    const start = new Date(raw.day.periodStart);
+    start.setDate(start.getDate() - 1);
+    return { ...raw, settings: { ...raw.settings, nextGoalMinutes: 240 }, day: { ...raw.day, periodStart: start.toISOString(), startGoalMinutes: 180 } };
+  }
+  const plans = (phone: Fake) => (phone.applyPlan as jest.Mock).mock.calls.map((call) => (call[0] as { goalMinutes: number }).goalMinutes);
+
+  it('waits for the recharge to raise it, and tells the phone only when today\'s goal changes', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(60));
+    await store.start();
+    jest.advanceTimersByTime(1000);
+    const before = plans(phone).length;
+    store.stepGoal(1);
+    store.stepGoal(1);
+    jest.advanceTimersByTime(1000);
+    expect(store.get().doc.settings).toMatchObject({ goalMinutes: 180, nextGoalMinutes: 210 });
+    expect(plans(phone).length).toBe(before);
+    for (let i = 0; i < 3; i++) store.stepGoal(-1);
+    jest.advanceTimersByTime(1000);
+    expect(store.get().doc.settings.goalMinutes).toBe(165);
+    expect(store.get().doc.settings.nextGoalMinutes).toBeUndefined();
+    expect(plans(phone).slice(before)).toEqual([165]);
+  });
+
+  it('going back up after a lowering takes off the lower goal\'s screens, and never lowers past what is used', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(140));
+    await store.start();
+    expect(store.canStepGoal(-1)).toBe(true);
+    for (let i = 0; i < 5; i++) store.stepGoal(-1);
+    // 2:30 would leave nothing of the battery at 2:20 used.
+    expect(store.get().doc.settings.goalMinutes).toBe(150);
+    expect(store.canStepGoal(-1)).toBe(false);
+    expect(phone.coverAgain).not.toHaveBeenCalled();
+    store.stepGoal(1);
+    expect(store.get().doc.settings.goalMinutes).toBe(165);
+    expect(phone.coverAgain).toHaveBeenCalledWith(false, expect.objectContaining({ goalMinutes: 165 }), 0);
+  });
+
+  it('starts a waiting goal at the recharge, registers the day with it, and takes off what the old goal covered', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, waitingSinceYesterday(170));
+    await store.start();
+    expect(store.get().doc.settings.goalMinutes).toBe(240);
+    expect(store.get().doc.settings.nextGoalMinutes).toBeUndefined();
+    expect(store.get().doc.history[store.get().doc.history.length - 1]).toMatchObject({ goalMinutes: 180, usedMinutes: 170 });
+    expect(phone.coverAgain).toHaveBeenCalledWith(false, expect.objectContaining({ goalMinutes: 240 }), 0);
+    jest.advanceTimersByTime(1000);
+    expect(plans(phone)).toContain(240);
+  });
+
+  it('puts the covers straight back when the battery is empty under the new goal too', async () => {
+    const phone = fakePhone();
+    phone.usedSoFar = jest.fn(() => 250);
+    const { store } = load(phone, waitingSinceYesterday(170));
+    await store.start();
+    expect(phone.coverAgain).toHaveBeenCalledWith(true, expect.objectContaining({ goalMinutes: 240 }), 0);
+  });
+
+  it('leaves the phone alone when it already has the goal', async () => {
+    const phone = fakePhone();
+    phone.registeredGoal = jest.fn(() => 240);
+    const { store } = load(phone, waitingSinceYesterday(170));
+    await store.start();
+    jest.advanceTimersByTime(1000);
+    expect(phone.coverAgain).not.toHaveBeenCalled();
+    expect(plans(phone)).not.toContain(240);
+  });
+
+  it('starts it at the recharge while the app is open', async () => {
+    jest.setSystemTime(new Date(2026, 10, 20, 22, 0));
+    const phone = fakePhone();
+    const { store } = load(phone, saved(170));
+    await store.start();
+    for (let i = 0; i < 4; i++) store.stepGoal(1);
+    expect(store.get().doc.settings).toMatchObject({ goalMinutes: 180, nextGoalMinutes: 240 });
+    jest.setSystemTime(new Date(2026, 10, 21, 6, 1));
+    store.tick(new Date());
+    expect(store.get().doc.settings.goalMinutes).toBe(240);
+    expect(store.get().doc.day.startGoalMinutes).toBe(240);
+    expect(phone.coverAgain).toHaveBeenCalledWith(false, expect.objectContaining({ goalMinutes: 240 }), 0);
+    jest.advanceTimersByTime(1000);
+    expect(plans(phone)).toContain(240);
+  });
+
+  it('changes freely on the day setup finished in', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(170, { setupDone: false }));
+    await store.start();
+    store.startCounting();
+    expect(store.get().doc.day.firstDay).toBe(true);
+    for (let i = 0; i < 4; i++) store.stepGoal(1);
+    expect(store.get().doc.settings.goalMinutes).toBe(240);
+    expect(store.get().doc.settings.nextGoalMinutes).toBeUndefined();
+  });
+
+  it('gives no free day to a phone that was already through setup', async () => {
+    const { store } = load(fakePhone(), saved(30));
+    await store.start();
+    store.finishSetup();
+    expect(store.get().doc.day.firstDay).toBeUndefined();
   });
 });
 

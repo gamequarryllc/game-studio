@@ -11,8 +11,10 @@ export type CountMode = 'everything' | 'timeWasters' | 'custom';
 export type EmptyLevel = 'warn' | 'work' | 'locked';
 
 export interface Settings {
-  /** The daily goal, in minutes of screen time. */
+  /** Today's daily goal, in minutes of screen time: the one the battery, the phone's checkpoints and the widget go by. */
   goalMinutes: number;
+  /** A higher goal chosen today, which starts at the next recharge (goal.ts). Missing when none is waiting. */
+  nextGoalMinutes?: number;
   /** When the battery refills, as minutes after midnight (360 = 6:00 AM). */
   rechargeMinute: number;
   /** No longer used: what counts is the one list ticked in Apple's picker. Kept so older saved copies still read. */
@@ -44,6 +46,10 @@ export interface DayState {
    * as a day under the goal.
    */
   uncounted: boolean;
+  /** The goal this battery started with: today's goal can go back up to it, not past it (goal.ts). Missing reads as today's goal. */
+  startGoalMinutes?: number;
+  /** The battery setup finished in: until the next recharge, the goal changes freely (goal.ts). */
+  firstDay?: boolean;
 }
 
 /** What is kept of a finished day, for the week view. */

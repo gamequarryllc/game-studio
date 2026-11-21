@@ -485,7 +485,7 @@ export function noteKnown(settings: Settings, usedFloorNow: number, now = new Da
   // already used, so "not reported yet" does not yet mean "not reached yet".
   // And the figure noted before the registration is the one guarding it.
   if (now.getTime() - registeredAt() < GUARD_MS) return;
-  const most = mostByNow(settings.goalMinutes, usedFloorNow);
+  const most = mostByNow(roundGoal(settings.goalMinutes), usedFloorNow);
   if (most === null) return;
   try {
     save('noted', { at: now.getTime(), most } satisfies Noted);
@@ -535,7 +535,7 @@ export function picksAfter(goalMinutes: number, now = new Date()): boolean {
     forget('picksBefore');
     if (before === '' || before === (countedToken() ?? '')) return false;
     // A new round of names, so reports for the old list can't pass for the new one.
-    startRound(now, goalMinutes);
+    startRound(now, roundGoal(goalMinutes));
     // The last known figure was for the old list. A newly ticked app can
     // honestly add more than it allowed, so it is dropped; a new one is noted
     // once counting has settled again.
@@ -733,6 +733,27 @@ export function rightAgain(): void {
   }
 }
 
+/**
+ * The goal the day is registered with now, or 0 if it never was. It can
+ * differ from today's goal for a moment after a change, and after a recharge
+ * that starts a higher goal (goal.ts) until the app registers the day again:
+ * the phone's checkpoints are still the old goal's until then.
+ */
+export function registeredGoal(): number {
+  if (!SCREEN_TIME_AVAILABLE) return 0;
+  return readNumber('registeredGoal');
+}
+
+/**
+ * The goal the current round's checkpoints were registered with, which is
+ * what their names mean ("cell-3" is 90 minutes of a 3-hour goal, 120 of a
+ * 4-hour one). Today's goal only when the day was never registered.
+ */
+function roundGoal(todayGoal: number): number {
+  const registered = registeredGoal();
+  return registered > 0 ? registered : todayGoal;
+}
+
 export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh = false, hold = false): Promise<boolean> {
   registering += 1;
   try {
@@ -848,7 +869,7 @@ export function health(settings: Settings, periodStart: Date, watching: boolean)
     if (pickCount(COUNTED_ID) === 0) return 'nothingPicked';
     if (!DeviceActivity.getActivities().includes(ACTIVITY)) return 'notRegistered';
     if (tooManyApps()) return 'tooManyApps';
-    return miscounted(phoneReports([ACTIVITY]), settings.goalMinutes, round(), dayStartOf(periodStart), savedGuard()) ? 'miscounted' : 'fine';
+    return miscounted(phoneReports([ACTIVITY]), roundGoal(settings.goalMinutes), round(), dayStartOf(periodStart), savedGuard()) ? 'miscounted' : 'fine';
   } catch {
     return 'fine';
   }
@@ -875,7 +896,7 @@ function rounds(): Rounds {
 export async function countAgain(settings: Settings, topUpsSoFar: number, periodStart: Date): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
-    for (const report of doubtful(phoneReports([ACTIVITY]), settings.goalMinutes, round(), dayStartOf(periodStart), savedGuard())) {
+    for (const report of doubtful(phoneReports([ACTIVITY]), roundGoal(settings.goalMinutes), round(), dayStartOf(periodStart), savedGuard())) {
       DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.name}`);
     }
   } catch (error) {
@@ -909,7 +930,7 @@ export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Da
   try {
     return countDay({
       reports: phoneReports(),
-      goalMinutes,
+      goalMinutes: roundGoal(goalMinutes),
       dayStart: dayStartOf(periodStart).getTime(),
       periodEnd: periodEnd?.getTime(),
       rounds: rounds(),
@@ -946,7 +967,7 @@ export function diagnostics(settings: Settings): string[] {
     lines.push(`Health: ${health(settings, periodStartOf(new Date(), settings.rechargeMinute), true)}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
     const from = dayStartOf(periodStartOf(new Date(), settings.rechargeMinute));
-    const ignored = new Set(doubtful(phoneReports([ACTIVITY]), settings.goalMinutes, round(), from, guard).map((r) => r.name));
+    const ignored = new Set(doubtful(phoneReports([ACTIVITY]), roundGoal(settings.goalMinutes), round(), from, guard).map((r) => r.name));
     const reported = DeviceActivity.getEvents()
       .filter((e) => e.activityName === ACTIVITY || e.activityName === TOPUP_ACTIVITY)
       .map((e) => {
