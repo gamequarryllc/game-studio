@@ -359,7 +359,7 @@ describe('emergency passes', () => {
 describe('Pro', () => {
   const withAsk = (on: boolean) => saved(30, { settings: { goalMinutes: 180, rechargeMinute: 360, countMode: 'custom', emptyLevel: 'work', allowed: [], askFirst: { on, openMinutes: 10 } } });
 
-  it('without it, the recharge time stays and sums stay normal; Second thought and the lock message are free', async () => {
+  it('without it, the recharge time stays and sums stay normal; Second thought and the ready-made lock messages are free, own words are not', async () => {
     const phone = fakePhone();
     const { store } = load(phone, saved(30));
     await store.start();
@@ -371,8 +371,20 @@ describe('Pro', () => {
     store.setAskFirst({ on: true, openMinutes: 15 });
     expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
     store.setLockMessage('  Go   outside. ');
+    expect(store.get().doc.settings.lockMessage).toBeUndefined();
+    store.setLockMessage('  Text someone   you miss. ');
+    expect(store.get().doc.settings.lockMessage).toBe('Text someone you miss.');
+    expect(phone.refreshScreens).toHaveBeenCalledWith(expect.objectContaining({ lockMessage: 'Text someone you miss.' }), 0);
+    store.setLockMessage('');
+    expect(store.get().doc.settings.lockMessage).toBeUndefined();
+  });
+
+  it('with it, the lock message can be words of one\'s own', async () => {
+    const { store } = load(fakePhone(), saved(30));
+    await store.start();
+    store.setPro(true, true);
+    store.setLockMessage('  Go   outside. ');
     expect(store.get().doc.settings.lockMessage).toBe('Go outside.');
-    expect(phone.refreshScreens).toHaveBeenCalledWith(expect.objectContaining({ lockMessage: 'Go outside.' }), 0);
   });
 
   it('with it, the recharge time and the sums change', async () => {
@@ -395,6 +407,7 @@ describe('Pro', () => {
   it('leaves Second thought and the lock message alone when the phone is known not to have Pro', async () => {
     const { store } = load(fakePhone(), withAsk(true));
     await store.start();
+    store.setPro(true, true);
     store.setLockMessage('Go outside.');
     store.setPro(false, true);
     expect(store.get().doc.settings.askFirst?.on).toBe(true);

@@ -33,7 +33,7 @@
       },
       {
         "q": "What does the free version include?",
-        "a": "Everything that makes Plainlimit work: the battery and its lock, your essentials, sums for more time, the recharge at 6:00 AM, the settings lock and emergency passes. Plainlimit Pro is one payment for choosing your recharge time, easy or hard sums and the large widget. A recharge time chosen before Pro existed stays as it was."
+        "a": "Everything that makes Plainlimit work: the battery and its lock, your essentials, sums for more time, the recharge at 6:00 AM, the settings lock and emergency passes. Plainlimit Pro is one payment for choosing your recharge time, easy or hard sums, the large widget and a lock message in your own words. A recharge time chosen before Pro existed stays as it was."
       }
     ],
     "restore": "Open the Settings tab and tap Plainlimit Pro: Restore purchase is on that screen, under Unlock Pro."
@@ -58,9 +58,9 @@
       "type": "non-consumable",
       "price_usd": 9.99,
       "display_name": "Plainlimit Pro",
-      "description": "Recharge time, sum levels, large widget.",
+      "description": "Recharge time, sums, big widget, lock message",
       "product_id": "com.gamequarry.plainlimit.pro",
-      "review_note": "Unlocks changing the recharge time, easy or hard sums and the large widget. Open the Settings tab and tap Plainlimit Pro to see the purchase screen. Restore purchase is on the same screen.",
+      "review_note": "Unlocks changing the recharge time, easy or hard sums, the large widget and a lock screen message in your own words. Open the Settings tab and tap Plainlimit Pro to see the purchase screen. Restore purchase is on the same screen.",
       "review_screenshot": "iap-review-pro-screen.png"
     }
   ],
