@@ -159,7 +159,7 @@ async function main() {
     await back();
     await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
     await press('Second thought, Off');
-    await see('For the apps you open without deciding to. Each one asks for one sum before it opens, whatever the battery says.');
+    await see('A pause before the apps you open without thinking.');
     await back();
     await back();
   });

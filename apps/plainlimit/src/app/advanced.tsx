@@ -1,8 +1,10 @@
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native';
 
+import { ASK_ID, DEFAULT_ASK_FIRST, askShownOn } from '@/domain/askFirst';
 import { sumLevelFor } from '@/domain/pro';
 import type { SumLevel } from '@/domain/puzzle';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenTime';
 import { usePro } from '@/pro/pro';
 import { settingsLocked, store } from '@/state/store';
 import { Card, Choice, Label, LinkRow, Lead, Page, Title } from '@/ui/kit';
@@ -17,8 +19,9 @@ export default function Advanced() {
   const { settings, accent } = useDay();
   const isPro = usePro().isPro;
   const locked = settingsLocked();
-  const ask = settings.askFirst;
-  const askValue = ask?.on ? `On, ${ask.openMinutes} min` : 'Off';
+  const ask = settings.askFirst ?? DEFAULT_ASK_FIRST;
+  // On only with apps picked, as on the Second thought screen's switch.
+  const askValue = askShownOn(ask, pickCount(ASK_ID), SCREEN_TIME_AVAILABLE || MOCK_PHONE) ? `On, ${ask.openMinutes} min` : 'Off';
   const level = sumLevelFor(settings, isPro);
   // Easy and hard sums are Pro: without it, choosing one shows what Pro adds.
   const choose = (next: SumLevel) => (next === 'normal' || isPro ? store.setSumLevel(next) : router.push('/pro'));

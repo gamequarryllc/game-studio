@@ -1,4 +1,4 @@
-import { ASK_ID, ASK_OPEN, ASK_WATCH, askLead, askNotice, askShieldCopy, DEFAULT_ASK_FIRST, openUntil, opensCountedApps, repairAskFirst } from '../askFirst';
+import { ASK_ID, ASK_OPEN, ASK_WATCH, askLead, askNotice, askShieldCopy, askShownOn, DEFAULT_ASK_FIRST, onAfterPicking, openUntil, opensCountedApps, repairAskFirst } from '../askFirst';
 import { ACTIVITY, COUNTED_ID, TICKS_ACTIVITY, TOPUP_ACTIVITY } from '../monitorPlan';
 import { repairSettings } from '../settings';
 
@@ -59,5 +59,21 @@ describe('the Second thought screen while the battery is empty', () => {
 
   it('says the sum needs charge on the usual screen, written before the battery runs out', () => {
     expect(askShieldCopy(10, '6:00 AM').line).toContain('while your battery has charge');
+  });
+});
+
+describe('the switch', () => {
+  it('turns on when apps are picked, and off when the list is left empty', () => {
+    expect(onAfterPicking(3)).toBe(true);
+    expect(onAfterPicking(1)).toBe(true);
+    expect(onAfterPicking(0)).toBe(false);
+  });
+
+  it('shows on only with apps picked, except where nothing can be picked', () => {
+    expect(askShownOn({ on: true, openMinutes: 10 }, 3, true)).toBe(true);
+    expect(askShownOn({ on: true, openMinutes: 10 }, 0, true)).toBe(false);
+    expect(askShownOn({ on: false, openMinutes: 10 }, 3, true)).toBe(false);
+    expect(askShownOn({ on: true, openMinutes: 10 }, 0, false)).toBe(true);
+    expect(askShownOn({ on: false, openMinutes: 10 }, 0, false)).toBe(false);
   });
 });
