@@ -77,6 +77,6 @@ Known gaps and bugs:
 
 ## Owner actions
 
-1. **Create the app record.** WHAT: App Store Connect > Apps > + > New App: platform iOS, any name (for example `Plainpins: Travel Pin Map`), language English (U.S.), bundle id `com.gamequarry.plainpins`, SKU `plainpins`. If the bundle id is not offered, register it first at developer.apple.com > Account > Certificates, IDs & Profiles > Identifiers (App ID, explicit, no extra capabilities). WHEN: before the first TestFlight upload can succeed. WHERE: appstoreconnect.apple.com.
+1. ~~Create the app record.~~ Done 2026-11-21: the bundle id is registered and the app record exists (name `Plainpins: Travel Pin Map`, SKU `plainpins`).
 2. **Choose the name.** WHEN: before the store listing; the test build can keep the working name. Ideas are in `store/plainpins/listing.json`.
 3. **Create the Pro product.** WHAT: a non-consumable in-app purchase with product id `com.gamequarry.plainpins.pro`, $6.99 (or the price he prefers). WHEN: before testing a real purchase; until then use Settings > Developer > "Pretend Pro is bought". WHERE: App Store Connect > the app > In-App Purchases.
