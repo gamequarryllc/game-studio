@@ -71,13 +71,15 @@ async function main() {
   const browser = await chromium.launch();
 
   /** Opens the app at `query` with `saved` in storage (a string is stored as it is), at the given size. */
-  async function open(saved, query = '', size = PHONE) {
+  // Most scenarios pretend Pro is bought, so its settings are there to check; `withPro: false` is the free app.
+  async function open(saved, query = '', size = PHONE, { withPro = true } = {}) {
     const context = await browser.newContext({ viewport: size, deviceScaleFactor: 2, isMobile: true, hasTouch: true, userAgent: UA, colorScheme: 'dark', locale: 'en-US' });
     await context.addInitScript(
-      ([key, value]) => {
+      ([key, value, proKey, pro]) => {
         if (value !== null) window.localStorage.setItem(key, value);
+        if (pro) window.localStorage.setItem(proKey, JSON.stringify({ owned: false, pretend: true }));
       },
-      [KEY, saved === null ? null : typeof saved === 'string' ? saved : JSON.stringify(saved)],
+      [KEY, saved === null ? null : typeof saved === 'string' ? saved : JSON.stringify(saved), 'plainlimit.pro.v1', withPro],
     );
     const page = await context.newPage();
     page.setDefaultTimeout(8000);
@@ -141,7 +143,7 @@ async function main() {
       await see(page, words);
       await shot(page, `q04-problem-${problem}`);
       // Pressing the fix shows its answer, or goes to Essentials, and never hangs on "One moment…".
-      const button = page.getByRole('button').filter({ hasText: /Choose apps|Turn it back on|Count again/ }).first();
+      const button = page.getByRole('button').filter({ hasText: /Set essentials|Turn it back on|Count again/ }).first();
       await button.click();
       await page.waitForTimeout(700);
       if ((await page.getByText('One moment…').count()) > 0) throw new Error('the button stayed on "One moment…"');
@@ -150,14 +152,17 @@ async function main() {
     });
   }
 
-  await scenario('too many single apps: Today says so, and Essentials opens to pick again even while empty', async () => {
+  await scenario('a list from an older version that iOS can not lock: Today says so, and Essentials can be chosen even while empty', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,tooManyApps');
     await see(page, 'Not locking');
-    await see(page, 'iOS locks at most 50 apps ticked one by one');
+    await see(page, 'Your list is from an older version, and iOS can’t lock all of it');
     await shot(page, 'q04b-too-many-today');
-    await page.getByRole('button', { name: 'Pick again', exact: true }).click();
-    await see(page, 'this list has more, so most of them won');
-    await page.getByRole('button', { name: 'Pick again', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Set essentials', exact: true }).click();
+    await see(page, 'Your list from before still applies until you choose your essentials.');
+    await see(page, 'Apple’s list opens twice. First tap All Apps & Categories, then Done.');
+    // One button, and it is open.
+    if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is not open');
+    if ((await page.getByRole('button', { name: 'Show my apps', exact: true }).count()) > 0) throw new Error('the old first step is still drawn');
     await shot(page, 'q04c-too-many-what-counts');
     await context.close();
   });
@@ -197,7 +202,10 @@ async function main() {
     await shot(page, 'q09-empty-settings');
     await page.getByRole('button', { name: /^Essentials/ }).click();
     await see(page, "This can't change while the battery is empty");
-    if ((await page.getByRole('button', { name: 'Change the apps', exact: true }).count()) > 0) throw new Error('Essentials offered a change while empty');
+    await see(page, '14 essentials stay free');
+    for (const name of ['Change essentials', 'Refresh the app list']) {
+      if ((await page.getByRole('button', { name, exact: true }).count()) > 0) throw new Error(`Essentials offered "${name}" while empty`);
+    }
     await shot(page, 'q10-empty-what-counts');
     await context.close();
   });
@@ -205,8 +213,10 @@ async function main() {
   await scenario('Essentials with cells left offers a change', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
     await tab(page, 'Settings');
-    await page.getByRole('button', { name: 'Essentials, Set', exact: true }).click();
-    await page.getByRole('button', { name: 'Change the apps', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Essentials, 14 apps', exact: true }).click();
+    await see(page, '14 essentials stay free. Everything else counts, and locks when the battery is empty. 120 apps found.');
+    await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Refresh the app list', exact: true }).waitFor();
     await shot(page, 'q10b-what-counts-open');
     await context.close();
   });
@@ -224,6 +234,33 @@ async function main() {
     await toBottom(page);
     await see(page, 'Last 7 days');
     await shot(page, 'q12-week-mixed');
+    await context.close();
+  });
+
+  await scenario('without Pro, a recharge time chosen in 1.0 stays, and Second thought stays on', async () => {
+    const saved = doc({ recharge: 420, used: 20 });
+    saved.settings.askFirst = { on: true, openMinutes: 10 };
+    const { page, context } = await open(saved, '', PHONE, { withPro: false });
+    await tab(page, 'Settings');
+    await page.getByRole('button', { name: 'Recharges at, 7:00 AM · Pro', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Advanced, Second thought, more', exact: true }).click();
+    await page.getByRole('button', { name: 'Second thought, On, 10 min', exact: true }).waitFor();
+    await page.goBack();
+    if ((await page.getByRole('button', { name: 'Recharge later', exact: true }).count()) > 0) throw new Error('the recharge stepper shows without Pro');
+    await shot(page, 'q20-free-settings');
+    await page.getByRole('button', { name: /^Plainlimit Pro/ }).click();
+    await see(page, 'Plainlimit Pro');
+    await shot(page, 'q21-pro-screen');
+    await context.close();
+  });
+
+  await scenario('the Pro screen opened on its own (from the widget) can be closed, and lands on Today', async () => {
+    const { page, context } = await open(doc({ used: 20 }), '', PHONE, { withPro: false });
+    await page.goto(page.url().replace(/\/?(\?.*)?$/, '/pro'));
+    await see(page, 'Plainlimit Pro');
+    await page.getByRole('button', { name: 'Not now', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await see(page, 'Used today');
     await context.close();
   });
 
@@ -278,6 +315,102 @@ async function main() {
     await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
     await shot(page, 'q19-puzzle-wrong');
+    await context.close();
+  });
+
+  await scenario('Second thought: off by default, turned on from Settings > Advanced, open time chosen', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting');
+    await tab(page, 'Settings');
+    await page.getByRole('button', { name: /^Advanced/ }).click();
+    await page.getByRole('button', { name: /^Second thought/ }).click();
+    await see(page, 'asks for one sum before it opens');
+    if (!(await page.getByRole('radio', { name: /^Off/ }).isChecked())) throw new Error('Second thought was not off by default');
+    await page.getByRole('radio', { name: /^On/ }).click();
+    await page.getByRole('radio', { name: /^15 minutes/ }).click();
+    if (!(await page.getByRole('radio', { name: /^15 minutes/ }).isChecked())) throw new Error('15 minutes did not stay chosen');
+    await see(page, '3 picked');
+    await shot(page, 'q21-ask-first-settings', true);
+    await page.goBack();
+    await see(page, 'On, 15 min');
+    // Not closed while the battery is empty: it can't open an app that counts.
+    await context.close();
+  });
+
+  await scenario('Second thought: one sum opens the list, a wrong answer is told apart, and an empty battery is said', async () => {
+    const saved = doc({ goal: 180, used: 200 });
+    const { page, context } = await open(saved, '?mock=counting');
+    await see(page, 'Empty');
+    await page.goto(url.replace(/\/$/, '') + '/ask?mock=counting');
+    await see(page, 'One sum to open');
+    await see(page, 'Apps that also count stay locked');
+    await shot(page, 'q22a-ask-sum');
+    const input = page.getByRole('textbox').first();
+    await input.fill('99999');
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await see(page, 'Not 9999');
+    const sum = await page.getByText(/^\s*\d+\s*\+\s*\d+\s*$/).first().textContent();
+    const [, a, b] = sum.match(/(\d+)\s*\+\s*(\d+)/);
+    await input.fill(String(Number(a) + Number(b)));
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await see(page, 'open until');
+    await shot(page, 'q22-ask-open');
+    await context.close();
+  });
+
+  await scenario('emergency pass: offered on an empty battery, opens everything and the settings, once a day; the record opens from Today', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 200, level: 'locked' }), '?mock=counting');
+    await see(page, 'Empty');
+    await page.getByRole('button', { name: /^Use an emergency pass/ }).click();
+    await see(page, 'Use an emergency pass?');
+    await see(page, 'Passes left after this');
+    await shot(page, 'q23-pass-sheet');
+    await page.getByRole('button', { name: 'Open everything for 15 minutes', exact: true }).click();
+    // Anchored: Today, hidden under the sheet, also says "everything is open until".
+    await page.getByText(/^Open until \d/).first().waitFor({ state: 'visible', timeout: 8000 });
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await see(page, 'Emergency pass: everything is open');
+    if ((await page.getByRole('button', { name: /^Use an emergency pass/ }).count()) > 0) throw new Error('a second pass was offered the same day');
+    await tab(page, 'Settings');
+    if (await page.getByRole('button', { name: 'More time', exact: true }).isDisabled()) throw new Error('settings stayed locked during the pass');
+    await tab(page, 'Today');
+    await toBottom(page);
+    await page.getByRole('button', { name: /^Your record/ }).click();
+    await page.getByText(/^Last \d+ weeks$/).first().waitFor({ state: 'visible', timeout: 8000 });
+    await see(page, 'Passes used');
+    await shot(page, 'q24-record', true);
+    await context.close();
+  });
+
+  await scenario('a lived-in record: ten weeks of days, passes used, and the pass days marked on Today; settings locked after the day\'s pass is used', async () => {
+    const recharge = 360;
+    const today = periodStart(recharge);
+    const history = [];
+    for (let k = 70; k >= 1; k--) {
+      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - k, 6, 0);
+      const f = [0.5, 0.8, 0.6, 1.2, 0.4, 0.9, 0.7][k % 7];
+      history.push({ start: start.toISOString(), goalMinutes: 180, usedMinutes: Math.round(180 * f), topUps: f > 1 ? 1 : 0, state: 'counted' });
+    }
+    const at = (daysAgo, h) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - daysAgo, h, 0).toISOString();
+    const saved = {
+      ...doc({ goal: 180, used: 200, level: 'locked', recharge, history }),
+      record: { passes: 3, lastAdded: '2000-01-03', since: at(80, 9), uses: [at(40, 21), at(3, 22), at(0, 7)], passUntil: null },
+    };
+    // lastAdded far back would add passes; keep it on this week instead.
+    const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    saved.record.lastAdded = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+    const { page, context } = await open(saved, '?mock=counting');
+    await see(page, 'Empty');
+    if ((await page.getByRole('button', { name: /^Use an emergency pass/ }).count()) > 0) throw new Error('a pass was offered after one was used today');
+    await see(page, 'A dot marks each day you used an emergency pass.');
+    await shot(page, 'q25-today-pass-days', true);
+    await tab(page, 'Settings');
+    await see(page, 'emergency pass has been used');
+    if ((await page.getByText('opens them for 15 minutes').count()) > 0) throw new Error('the locked notice offered a pass that cannot be used');
+    await tab(page, 'Today');
+    await toBottom(page);
+    await page.getByRole('button', { name: /^Your record/ }).click();
+    await page.getByText(/^Last \d+ weeks$/).first().waitFor({ state: 'visible', timeout: 8000 });
+    await shot(page, 'q26-record-lived-in', true);
     await context.close();
   });
 

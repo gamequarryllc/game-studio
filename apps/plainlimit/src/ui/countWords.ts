@@ -1,38 +1,49 @@
-// How Essentials is explained, on its own screen and in setup. There is one
-// list in Apple's picker: what is ticked uses up the battery and locks when it
-// is empty, and what is left unticked (the essentials) does neither. The idea:
-// using the phone as a tool (calls, messages, maps) never costs battery.
-// (The screen was called "What counts" until 1.0.1; the picks are the same.)
+// How Essentials is explained, on its own screen and in setup. The person
+// ticks only their essentials: those never use up the battery and never lock.
+// Everything else does both. (Up to build 89 it was the other way round, one
+// list where everything was ticked and the essentials unticked; that put the
+// lock on iOS's one-by-one method, which stops at 50 apps. The screen was
+// called "What counts" until 1.0.1.)
 
 export const COUNTS_LEAD =
-  'Your essentials never count, and you choose them: calls, messages, maps, or any app you use as a tool. Everything you tick uses up the battery, and locks when it’s empty.';
-
-/** The steps, the first naming the button as it reads ("Choose apps", "Change the apps", "Pick again"). */
-export const countsSteps = (button: string) => [`Tap ${button}.`, ...COUNTS_STEPS.slice(1)];
-
-export const COUNTS_STEPS = [
-  'Tap Choose apps.',
-  'Tap All Apps & Categories at the top, so everything counts.',
-  // Apple's list has no Navigation category: Maps is under Travel (seen in Screen Time on Nov 15, and Maps counted on Nov 16 with Travel ticked).
-  'Now untick your essentials. Untick Travel, so Maps is free.',
-  'Messages and FaceTime are in Social, with Instagram and Snapchat. To keep them free, untick Social, then open it and tick only the apps that should count.',
-] as const;
-
-export const COUNTS_NOTE =
-  'Apps you install later in a category ticked one app at a time won’t count until you tick them. Whatever is ticked, iOS keeps the apps in its own Always Allowed list open (Phone, Messages, FaceTime and Maps, unless you changed it).';
-
-export function pickedWords(picked: number): string {
-  if (picked === 0) return 'Nothing is ticked yet, so nothing counts.';
-  return `${picked === 1 ? '1 app or category counts' : `${picked} apps and categories count`}. Everything left unticked is an essential, and free.`;
-}
+  'Your essentials never count and never lock: calls, messages, maps, or any app you use as a tool. Everything else uses up the battery, and locks when it’s empty.';
 
 /**
- * The short value beside "Essentials" in Settings and setup. It names how many
- * picks count, so it can't be read as "not set yet". (1.0.1 first said a bare
- * "Set", which looked like a button asking to be set up; 1.0.0 said "13 ticked".)
+ * Before the essentials are chosen. Apple's list opens twice (the phone's apps,
+ * then the essentials), and each time its top line says what to tap.
  */
-export function essentialsValue(picked: number): string {
+export const CHOOSE_HOW = 'Apple’s list opens twice. First tap All Apps & Categories, then Done. Then tick only the apps that should stay open.';
+/** The first list was closed with nothing ticked. */
+export const MISSED_APPS = 'Nothing was ticked. Tap Choose essentials again, then All Apps & Categories at the top, then Done.';
+export function shownWords(apps: number): string {
+  return `${apps === 1 ? '1 app' : `${apps} apps`} found.`;
+}
+
+export function keptWords(kept: number): string {
+  if (kept === 0) return 'No essentials: every app counts, and locks when the battery is empty.';
+  return `${kept === 1 ? '1 essential stays' : `${kept} essentials stay`} free. Everything else counts, and locks when the battery is empty.`;
+}
+
+/** Said when more essentials were ticked than iOS can keep open: the list is not kept. */
+export function tooManyKept(ticked: number, limit: number): string {
+  return `That was ${ticked} apps, and iOS can keep at most ${limit} open. Your list wasn’t changed. Tick fewer and try again.`;
+}
+
+export const COUNTS_NOTE =
+  'An app you install later locks with the rest, but only counts once you tap Refresh the app list. iOS keeps Phone and the apps in its own Always Allowed list open whatever you pick.';
+
+/** For a list made by an older version, still in use until the essentials are chosen. */
+export const OLD_LIST_NOTE = 'Your list from before still applies until you choose your essentials.';
+
+/**
+ * The short value beside "Essentials" in Settings and setup. `kept` is how
+ * many essentials are ticked, or null while a list from an older version is
+ * still in use (then it names how many picks count, as 1.0.1 did; a bare "Set"
+ * looked like a button asking to be set up).
+ */
+export function essentialsValue(picked: number, kept: number | null = null): string {
   if (picked < 0) return 'Your picks';
+  if (kept !== null) return kept === 0 ? 'None' : kept === 1 ? '1 app' : `${kept} apps`;
   if (picked === 0) return 'Not chosen';
   return `${picked} count`;
 }

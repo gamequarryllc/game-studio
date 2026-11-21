@@ -10,6 +10,7 @@
     "expo-constants": "~58.0.15",
     "expo-font": "~58.0.11",
     "expo-haptics": "~58.0.7",
+    "expo-iap": "6.4.3",
     "expo-linking": "~58.0.16",
     "expo-notifications": "~58.1.9",
     "expo-router": "~58.0.30",
@@ -32,6 +33,7 @@
     "eslint-config-expo": "^58.0.4",
     "jest": "^30.5.2",
     "jest-expo": "^58.0.14",
+    "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -44,7 +46,8 @@
     "export:web": "expo export --platform web",
     "export:ios": "expo export --platform ios --output-dir dist-ios",
     "check": "npm run lint && npm run typecheck && npm test && npm run export:web && npm run export:ios",
-    "check:release": "node scripts/release-check.cjs"
+    "check:release": "node scripts/release-check.cjs",
+    "postinstall": "patch-package"
   },
   "private": true,
   "jest": {

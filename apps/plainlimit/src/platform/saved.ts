@@ -26,14 +26,22 @@ export const SAVED = {
   /** When the ticked apps last changed, and the list as it was when Apple's picker opened. */
   picksChangedAt: 'plainlimit_picks_changed_at',
   picksBefore: 'plainlimit_picks_before',
+  /** When the essentials were last chosen (0: never, so the older single list still applies), and the two lists as they were when Apple's picker opened. */
+  essentialsSet: 'plainlimit_essentials_set',
+  essentialsBefore: 'plainlimit_essentials_before',
+  appsBefore: 'plainlimit_apps_before',
   /** The current round of checkpoint names, the one before it, and the goal that one was made for (see `roundName`). */
   round: 'plainlimit_round',
   roundBefore: 'plainlimit_round_before',
   roundGoalBefore: 'plainlimit_round_goal_before',
+  /** While the Ask first list is open after a sum: until then (see askFirst.ts). */
+  askOpenUntil: 'plainlimit_ask_open_until',
   /** When counting was first seen not working, in a run of bad checks. */
   wrongSince: 'plainlimit_wrong_since',
   /** What the widget draws from: the goal, the recharge, when counting began, and the rounds. */
   widgetPlan: WIDGET_PLAN_KEY,
+  /** What the large widget draws besides the battery, and whether Pro is held (see `WidgetRecord`). */
+  widgetRecord: 'plainlimit_record',
   /** Records for the test build's readout. */
   historyLog: 'plainlimit_history_log',
   problem: 'plainlimit_problem',

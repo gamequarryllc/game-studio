@@ -31,7 +31,7 @@ async function step(name, fn) {
     await fn();
     console.log(`ok   ${String(steps).padStart(2)}  ${name}`);
   } catch (e) {
-    console.log(`FAIL ${String(steps).padStart(2)}  ${name}\n      ${e.message.split('\n')[0]}`);
+    console.log(`FAIL ${String(steps).padStart(2)}  ${name}\n      ${e.message.split("\n").slice(0,6).join(" | ")}`);
     problems.push(`${name}: ${e.message.split('\n')[0]}`);
   }
 }
@@ -67,7 +67,7 @@ async function main() {
     await shot('00-setup-welcome');
     await press('Set it up');
     await see('Your essentials');
-    await see("Your essentials never count, and you choose them: calls, messages, maps, or any app you use as a tool. Everything you tick uses up the battery, and locks when it’s empty.");
+    await see("Your essentials never count and never lock: calls, messages, maps, or any app you use as a tool. Everything else uses up the battery, and locks when it’s empty.");
     await shot('00-setup-counts');
     await press('Next');
     await see('How much a day?');
@@ -108,17 +108,54 @@ async function main() {
     await shot('02-settings');
   });
 
-  await step('the recharge time steps by half hours', async () => {
+  await step('without Pro, the recharge time and harder sums lead to the Pro screen; Second thought and the lock message are open', async () => {
+    await press('Recharges at, 6:00 AM · Pro');
+    await see('Plainlimit Pro');
+    await see('Your recharge time');
+    await shot('02b-pro');
+    await press('Unlock Pro · $9.99');
+    await see('Nothing can be bought in this build. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.');
+    await back();
+    await press('Advanced, Second thought, more');
+    await see('Extras for when the basics aren’t quite enough.');
+    await shot('02c-advanced');
+    await page.getByRole('radio', { name: /^Hard/ }).click();
+    await see('Your recharge time');
+    await back();
+    assert.strictEqual(await page.getByRole('radio', { name: /^Normal/ }).getAttribute('aria-checked'), 'true', 'normal sums stay chosen');
+    await page.getByRole('button', { name: 'Second thought, Off', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
+    await back();
+  });
+
+  await step('with Pro, the recharge time steps by half hours and harder sums can be chosen', async () => {
+    await press('Pretend Pro is bought');
     await press('Recharge later');
     await see('6:30 AM');
     await press('Recharge earlier');
     await see('6:00 AM');
+    await press('Advanced, Second thought, more');
+    await page.getByRole('radio', { name: /^Hard/ }).click();
+    assert.strictEqual(await page.getByRole('radio', { name: /^Hard/ }).getAttribute('aria-checked'), 'true', 'hard sums chosen');
+    await page.getByRole('radio', { name: /^Normal/ }).click();
+    await press('Lock message, Off');
+    await press('Text someone you miss.');
+    await page.getByTestId('lock-message-preview').getByText('\u201CText someone you miss.\u201D', { exact: false }).waitFor();
+    await shot('02d-lock-message');
+    // Cleared again, so the empty screens below say only their own words.
+    await page.getByTestId('lock-message-input').fill('');
+    await back();
+    await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
+    await press('Second thought, Off');
+    await see('For the apps you open without deciding to. Each one asks for one sum before it opens, whatever the battery says.');
+    await back();
+    await back();
   });
 
   await step('what counts is one list, and there is no always-allowed list', async () => {
     assert.strictEqual(await page.getByRole('button', { name: /^Always allowed/ }).count(), 0, 'the always-allowed list is gone');
     await press('Essentials, Your picks');
-    await see("Your essentials never count, and you choose them: calls, messages, maps, or any app you use as a tool. Everything you tick uses up the battery, and locks when it’s empty.");
+    await see("Your essentials never count and never lock: calls, messages, maps, or any app you use as a tool. Everything else uses up the battery, and locks when it’s empty.");
     assert.strictEqual(await page.getByRole('radio').count(), 0, 'no Everything / Only what I tick choice');
     await shot('03-what-counts');
     await back();

@@ -13,11 +13,11 @@ import { c } from './theme';
 // view marks those days instead.
 
 const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string; title?: string }> = {
-  nothingPicked: { line: 'Your essentials aren’t set yet, so nothing is counted or locked.', button: 'Choose apps' },
+  nothingPicked: { line: 'Your essentials aren’t set yet, so nothing is counted or locked.', button: 'Set essentials' },
   tooManyApps: {
     title: 'Not locking',
-    line: 'iOS locks at most 50 apps ticked one by one, and more than that are ticked, so most of them won\'t lock. Pick again, ticking whole categories: those have no limit.',
-    button: 'Pick again',
+    line: 'Your list is from an older version, and iOS can’t lock all of it. Set your essentials again: it takes a minute.',
+    button: 'Set essentials',
   },
   accessOff: {
     line: 'Screen Time access for Plainlimit was turned off in the Settings app, so nothing is being counted or locked.',

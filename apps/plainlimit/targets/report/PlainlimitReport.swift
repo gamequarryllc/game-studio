@@ -153,6 +153,7 @@ struct TopAppsView: View {
       Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .ignoresSafeArea()
     .background(ground)
   }
 }
@@ -224,6 +225,10 @@ struct TotalView: View {
     .frame(height: 52, alignment: .leading)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .background(ground)
+    // This process lays the view out in its own window and can give it a top
+    // inset, which drew the figure about 30 points low and cut it in half
+    // (build 86, "2:45", now and then). No inset here, so it keeps to the top.
+    .ignoresSafeArea()
   }
 }
 

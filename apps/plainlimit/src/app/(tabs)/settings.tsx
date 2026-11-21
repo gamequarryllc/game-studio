@@ -1,10 +1,13 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { CELLS, cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { topUpPlan } from '@/domain/puzzle';
-import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, isOn, pickCount } from '@/platform/screenTime';
+import { EXPECTED_PRICE } from '@/pro/config';
+import { pro, usePro } from '@/pro/pro';
+import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCount, essentialsMode, isOn, pickCount } from '@/platform/screenTime';
 import { settingsLocked, store } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
 import { essentialsValue } from '@/ui/countWords';
@@ -18,14 +21,22 @@ export default function Settings() {
   const router = useRouter();
   const { settings, day, accent } = useDay();
   const first = topUpPlan(0);
+  // Read the picks again whenever this tab comes back into view: a tab out of
+  // view is not redrawn, and after a change on the Essentials screen the row
+  // kept the old number (build 86 said "11 count" for a list of 95).
+  const [, readAgain] = useState(0);
+  useFocusEffect(useCallback(() => readAgain((n) => n + 1), []));
   const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
-  const countedValue = essentialsValue(picked);
+  const countedValue = essentialsValue(picked, essentialsMode() ? essentialsCount() : null);
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
   const pretend = DEV_TOOLS && !isOn();
   // On a narrow phone the goal's figures give the two round buttons room.
   const narrow = Math.min(useWindowDimensions().width, 480) < 360;
   // An empty battery locks these (the Screen Time card says why); they look it, instead of ignoring taps.
   const locked = settingsLocked();
+  const proState = usePro();
+  const isPro = proState.isPro;
+  const proValue = isPro ? 'Unlocked' : (proState.price ?? (proState.storeOpen ? 'See what it adds' : EXPECTED_PRICE));
 
   return (
     <Page top={24} bottom={24}>
@@ -51,7 +62,8 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <View style={[styles.rechargeRow, { borderBottomWidth: 1, borderBottomColor: c.rule }]}>
+        {isPro ? (
+          <View style={[styles.rechargeRow, { borderBottomWidth: 1, borderBottomColor: c.rule }]}>
           <Text style={styles.rowLabel}>Recharges at</Text>
           {/* On a narrow phone the stepper drops to its own line, still on the right. */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
@@ -62,6 +74,10 @@ export default function Settings() {
             <StepButton sign="+" label="Recharge later" size={40} disabled={locked} onPress={() => store.stepRecharge(1)} />
           </View>
         </View>
+        ) : (
+          // Changing the recharge time is Pro. A time chosen before Pro (1.0) stays as it was.
+          <LinkRow label="Recharges at" value={`${clockLabel(settings.rechargeMinute)} · Pro`} onPress={() => router.push('/pro')} />
+        )}
         <LinkRow label="Essentials" value={countedValue} onPress={() => router.push('/what-counts')} last />
       </Card>
 
@@ -73,8 +89,18 @@ export default function Settings() {
       </Card>
 
       <Card>
+        <LinkRow label="Advanced" value="Second thought, more" onPress={() => router.push('/advanced')} />
+        <LinkRow label="Plainlimit Pro" value={proValue} onPress={() => router.push('/pro')} />
         <LinkRow label="Use your phone less" value={`${TIPS.length} tips`} onPress={() => router.push('/tips')} last />
       </Card>
+
+      {DEV_TOOLS ? (
+        <View style={{ marginTop: 14, gap: 10 }}>
+          <Label>Developer: Pro</Label>
+          <Text style={styles.note}>{proState.pretend ? 'Pretending Pro is bought.' : 'Pro is not bought.'} None of this is in the App Store version.</Text>
+          <BigButton quiet label={proState.pretend ? 'Stop pretending Pro' : 'Pretend Pro is bought'} onPress={() => pro.setPretend(!proState.pretend)} />
+        </View>
+      ) : null}
 
       {pretend ? (
         <View style={{ marginTop: 14, gap: 10 }}>

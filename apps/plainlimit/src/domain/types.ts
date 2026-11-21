@@ -1,5 +1,9 @@
 // The words the rest of the app is written in.
 
+import type { AskFirst } from './askFirst';
+import type { SumLevel } from './puzzle';
+import type { PassRecord } from './record';
+
 /** Which apps drain the battery. */
 export type CountMode = 'everything' | 'timeWasters' | 'custom';
 
@@ -16,6 +20,12 @@ export interface Settings {
   emptyLevel: EmptyLevel;
   /** No longer used: there is no always-allowed list. Apps left unticked never lock. Kept so older saved copies still read. */
   allowed: string[];
+  /** The "Ask first" list: apps that ask for one sum every time they open (askFirst.ts). Missing in copies saved before it, which read as off. */
+  askFirst?: AskFirst;
+  /** How hard the sums are. Missing in copies saved before it, which read as normal. Anything but normal needs Pro (pro.ts). */
+  sumLevel?: SumLevel;
+  /** The person's own words on the empty battery's lock screen (Pro). Missing or empty: none. */
+  lockMessage?: string;
 }
 
 /** One battery's worth of time: from one recharge to the next. */
@@ -58,4 +68,6 @@ export interface Doc {
   setupDone: boolean;
   /** Finished days, oldest first, at most HISTORY_DAYS of them. */
   history: DaySummary[];
+  /** Emergency passes and the record (record.ts). Missing in copies saved before it; made on load. */
+  record?: PassRecord;
 }

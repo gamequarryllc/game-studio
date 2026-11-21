@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 // ever sent from a server.
 
 /** The only places a notification may open. */
-const ROUTES = ['/puzzle'] as const;
+const ROUTES = ['/puzzle', '/ask'] as const;
 export type NoticeRoute = (typeof ROUTES)[number];
 
 function routeOf(data: unknown): NoticeRoute | null {

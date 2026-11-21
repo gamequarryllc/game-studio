@@ -73,6 +73,7 @@
           }
         }
       ],
+      "expo-iap",
       "./plugins/withTargets.js",
       [
         "react-native-device-activity",

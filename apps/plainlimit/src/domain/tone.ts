@@ -42,6 +42,12 @@ export function oklchToHex(lightness: number, chroma: number, hueDegrees: number
  */
 export function toneAt(t: number): Tone {
   if (!(t < 1)) return { bg: oklchToHex(0.45, 0.19, 27), fg: '#FFFFFF', track: 'rgba(255,255,255,0.30)', dark: true };
+  const { hue, light, chroma } = stretch(t);
+  return { bg: oklchToHex(light / 100, chroma, hue), fg: INK, track: 'rgba(16,18,15,0.32)', dark: false };
+}
+
+/** Where the colour is at a share `t` of the goal (below 1): hue in degrees, lightness 0 to 100, chroma. */
+function stretch(t: number): { hue: number; light: number; chroma: number } {
   const x = Math.max(0, t);
   let hue: number;
   let light: number;
@@ -69,13 +75,31 @@ export function toneAt(t: number): Tone {
     light = 72 - 9 * k;
     chroma = 0.18 + 0.02 * k;
   }
-  return { bg: oklchToHex(light / 100, chroma, hue), fg: INK, track: 'rgba(16,18,15,0.32)', dark: false };
+  return { hue, light, chroma };
 }
 
 /** The colour shown for a number of lit cells: the middle of that cell's stretch of the day. */
 export function toneForCells(cells: number, totalCells = 6): Tone {
   if (cells <= 0) return toneAt(1);
   return toneAt((totalCells - cells + 0.5) / totalCells);
+}
+
+/**
+ * The day's colour as light on a dark ground: the home screen widget's lit
+ * cells, its words and the glow behind its battery. The same hue as the
+ * battery's colour, lighter and stronger so it shines, and a clear red once
+ * the battery is empty (the deep red would vanish on dark).
+ */
+export function glowAt(t: number): string {
+  if (!(t < 1)) return oklchToHex(0.67, 0.22, 27);
+  const { hue, light, chroma } = stretch(t);
+  return oklchToHex(Math.min(0.89, light / 100 + 0.11), chroma + 0.03, hue);
+}
+
+/** The glow for a number of lit cells, taken at the same point of the day as `toneForCells`. */
+export function glowForCells(cells: number, totalCells = 6): string {
+  if (cells <= 0) return glowAt(1);
+  return glowAt((totalCells - cells + 0.5) / totalCells);
 }
 
 /** Relative luminance of a #RRGGBB colour, for checking that text can be read on it. */

@@ -9,6 +9,8 @@ import WidgetKit
 //                                                checkpoint is reached (milliseconds since 1970)
 //   plainlimit_guard                             written by the app at each registration: reports
 //                                                between `opens` and `closes` count from `from`
+//   plainlimit_record                            written by the app: whether Pro is held, and the streak,
+//                                                passes, perfect weeks and this week for the large widget (pro.ts)
 // A checkpoint counts for today when it was reached after the last recharge.
 // The same rules live in the app's src/domain/ (battery.ts, day.ts, checkpoints.ts, tone.ts);
 // src/domain/__tests__/monitorPlan.test.ts checks the two stay in step.
@@ -22,12 +24,30 @@ struct BatteryState {
   var isSetUp: Bool
   var cells: Int
   var rechargeMinute: Int
+  /// The daily goal, for the large widget's "left today" (0 when not known).
+  var goalMinutes: Double = 0
 }
 
+/// "1 h 45 min", "2 h", "35 min".
+func durationLabel(minutes: Double) -> String {
+  let total = max(0, Int(minutes.rounded()))
+  let hours = total / 60
+  let rest = total % 60
+  if hours == 0 { return "\(rest) min" }
+  if rest == 0 { return "\(hours) h" }
+  return "\(hours) h \(rest) min"
+}
+
+/// The widget's look, Glow (the owner's pick on 2026-11-20): a near-black ground lit from
+/// behind the battery, with the cells and the word shining in the day's colour.
 struct Tone {
-  let background: Color
-  let ink: Color
+  /// Lit cells, the word, and the light behind the battery.
+  let glow: Color
+  /// The battery's outline and nub: white, or the glow once empty so the empty battery reads red.
+  let outline: Color
+  /// Used cells.
   let track: Color
+  let isEmpty: Bool
 }
 
 extension Color {
@@ -42,18 +62,39 @@ extension Color {
   }
 }
 
-// TONES-BEGIN (generated from src/domain/tone.ts; index = cells left)
-let toneBackgrounds: [UInt32] = [0xA50008, 0xF79200, 0xE5CC1C, 0x50B76C, 0x4DBE6D, 0x4AC56E, 0x46CC70]
-// TONES-END
+// GLOWS-BEGIN (glowForCells in src/domain/tone.ts; index = cells left)
+let toneGlows: [UInt32] = [0xFF4943, 0xFFAF00, 0xFADC00, 0x5CDF81, 0x59E783, 0x55EE84, 0x51F585]
+// GLOWS-END
+
+/// The app's light ink, for words on the dark ground.
+let paper = Color(hex: 0xF4F5F2)
+/// The week row's colours, as in the app's week chart: green under the goal, coral ran out.
+let underGoal = Color(hex: toneGlows[cellCount])
+let ranOut = Color(hex: 0xFF7B6B)
 
 func tone(forCells cells: Int) -> Tone {
   let index = min(max(cells, 0), cellCount)
-  if index == 0 {
-    return Tone(
-      background: Color(hex: toneBackgrounds[0]), ink: .white, track: Color.white.opacity(0.30))
+  let glow = Color(hex: toneGlows[index])
+  return Tone(
+    glow: glow, outline: index == 0 ? glow : paper.opacity(0.88), track: Color.white.opacity(0.16),
+    isEmpty: index == 0)
+}
+
+/// The ground: near black, lit in the day's colour from behind the battery.
+struct GlowGround: View {
+  let glow: Color
+  let centre: UnitPoint
+  let radius: CGFloat
+
+  var body: some View {
+    ZStack {
+      LinearGradient(
+        colors: [Color(hex: 0x151B18), Color(hex: 0x090C0B)], startPoint: .top, endPoint: .bottom)
+      RadialGradient(
+        colors: [glow.opacity(0.30), glow.opacity(0)], center: centre, startRadius: 0, endRadius: radius)
+      ContainerRelativeShape().strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+    }
   }
-  let ink = Color(hex: 0x10120F)
-  return Tone(background: Color(hex: toneBackgrounds[index]), ink: ink, track: ink.opacity(0.32))
 }
 
 func word(forCells cells: Int) -> String {
@@ -144,7 +185,7 @@ func readState(now: Date) -> BatteryState {
       break
     }
   }
-  return BatteryState(isSetUp: true, cells: cells, rechargeMinute: recharge)
+  return BatteryState(isSetUp: true, cells: cells, rechargeMinute: recharge, goalMinutes: goal)
 }
 
 func clockLabel(rechargeMinute: Int) -> String {
@@ -155,14 +196,42 @@ func clockLabel(rechargeMinute: Int) -> String {
   return formatter.string(from: date)
 }
 
+/// The large widget's extras (Pro). `week` is Monday to Sunday, one letter a day:
+/// u under the goal, r ran out, p partly counted, n not counted, f still to come.
+struct RecordInfo {
+  var pro: Bool
+  var streak: Int
+  var passes: Int
+  var perfect: Int
+  var week: String
+}
+
+func readRecord() -> RecordInfo {
+  let none = RecordInfo(pro: false, streak: 0, passes: 0, perfect: 0, week: "fffffff")
+  guard let defaults = UserDefaults(suiteName: appGroup),
+    let text = defaults.string(forKey: "plainlimit_record"),
+    let data = text.data(using: .utf8),
+    let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+  else { return none }
+  return RecordInfo(
+    pro: object["pro"] as? Bool ?? false,
+    streak: (object["streak"] as? NSNumber)?.intValue ?? 0,
+    passes: (object["passes"] as? NSNumber)?.intValue ?? 0,
+    perfect: (object["perfect"] as? NSNumber)?.intValue ?? 0,
+    week: object["week"] as? String ?? none.week)
+}
+
 struct BatteryEntry: TimelineEntry {
   let date: Date
   let state: BatteryState
+  var record: RecordInfo = readRecord()
 }
 
 struct BatteryProvider: TimelineProvider {
   func placeholder(in context: Context) -> BatteryEntry {
-    BatteryEntry(date: Date(), state: BatteryState(isSetUp: true, cells: 4, rechargeMinute: 360))
+    BatteryEntry(
+      date: Date(), state: BatteryState(isSetUp: true, cells: 4, rechargeMinute: 360, goalMinutes: 180),
+      record: RecordInfo(pro: true, streak: 5, passes: 2, perfect: 3, week: "uururff"))
   }
 
   func getSnapshot(in context: Context, completion: @escaping (BatteryEntry) -> Void) {
@@ -193,7 +262,7 @@ struct BatteryProvider: TimelineProvider {
     entries.append(
       BatteryEntry(
         date: recharge,
-        state: BatteryState(isSetUp: true, cells: cellCount, rechargeMinute: state.rechargeMinute)))
+        state: BatteryState(isSetUp: true, cells: cellCount, rechargeMinute: state.rechargeMinute, goalMinutes: state.goalMinutes)))
     // The monitor extension asks for a redraw at every checkpoint, and the app does whenever
     // it is opened. This is the fallback for when neither happens: a look every quarter of an
     // hour. iOS grants a widget only so many of these a day, so some will come later than asked.
@@ -206,11 +275,18 @@ struct BatteryShape: View {
   let cells: Int
   let ink: Color
   let track: Color
+  /// The outline and nub; the same as the cells when not given (the lock screen).
+  var outline: Color? = nil
+  /// Lit cells shine in their own colour; the outline too when `outlineGlows`.
+  var glows = false
+  var outlineGlows = false
 
   var body: some View {
     GeometryReader { geometry in
       let height = geometry.size.height
       let nub = height * 0.11
+      let edge = outline ?? ink
+      let blur = height * 0.07
       HStack(spacing: height * 0.05) {
         HStack(spacing: height * 0.07) {
           // A used cell is an outlined empty slot; only charge is solid (Battery.tsx).
@@ -218,6 +294,7 @@ struct BatteryShape: View {
             if index < cells {
               RoundedRectangle(cornerRadius: height * 0.09, style: .continuous)
                 .fill(ink)
+                .shadow(color: glows ? ink.opacity(0.9) : .clear, radius: glows ? blur : 0)
             } else {
               RoundedRectangle(cornerRadius: height * 0.09, style: .continuous)
                 .strokeBorder(track, lineWidth: max(1, height * 0.035))
@@ -227,11 +304,13 @@ struct BatteryShape: View {
         .padding(height * 0.15)
         .overlay(
           RoundedRectangle(cornerRadius: height * 0.24, style: .continuous)
-            .strokeBorder(ink, lineWidth: max(2, height * 0.075))
+            .strokeBorder(edge, lineWidth: max(2, height * 0.075))
+            .shadow(color: outlineGlows ? edge.opacity(0.9) : .clear, radius: outlineGlows ? blur : 0)
         )
         RoundedRectangle(cornerRadius: nub * 0.4, style: .continuous)
-          .fill(ink)
+          .fill(edge)
           .frame(width: nub, height: height * 0.36)
+          .shadow(color: outlineGlows ? edge.opacity(0.9) : .clear, radius: outlineGlows ? blur : 0)
       }
     }
   }
@@ -239,7 +318,11 @@ struct BatteryShape: View {
 
 struct BatteryWidgetView: View {
   @Environment(\.widgetFamily) private var family
+  @Environment(\.widgetRenderingMode) private var renderingMode
   let entry: BatteryEntry
+
+  /// The glow only in full colour; a tinted or clear Home Screen draws the widget in one colour.
+  private var shines: Bool { renderingMode == .fullColor }
 
   var body: some View {
     let state = entry.state
@@ -250,30 +333,61 @@ struct BatteryWidgetView: View {
         lockScreen(state)
       case .systemMedium:
         medium(state, colours)
+      case .systemLarge:
+        large(state, colours, entry.record)
       default:
         small(state, colours)
       }
     }
     .containerBackground(for: .widget) {
-      state.isSetUp ? colours.background : Color(hex: 0x0E1011)
+      GlowGround(glow: colours.glow, centre: glowCentre, radius: glowRadius)
     }
+  }
+
+  /// Behind the battery: at the top of the small and large widgets, on the left of the medium.
+  private var glowCentre: UnitPoint {
+    switch family {
+    case .systemMedium: return UnitPoint(x: 0.3, y: 0.5)
+    case .systemLarge: return UnitPoint(x: 0.3, y: 0.14)
+    default: return UnitPoint(x: 0.5, y: 0.28)
+    }
+  }
+
+  private var glowRadius: CGFloat {
+    switch family {
+    case .systemMedium: return 130
+    case .systemLarge: return 150
+    default: return 90
+    }
+  }
+
+  private func battery(_ state: BatteryState, _ colours: Tone) -> BatteryShape {
+    BatteryShape(
+      cells: state.cells, ink: colours.glow, track: colours.track, outline: colours.outline,
+      glows: shines, outlineGlows: shines && colours.isEmpty)
+  }
+
+  /// The word ("Plenty left"), lit in the day's colour.
+  private func wordLabel(_ state: BatteryState, _ colours: Tone, size: CGFloat) -> some View {
+    Text(word(forCells: state.cells))
+      .font(.system(size: size, weight: .bold, design: .rounded))
+      .foregroundStyle(colours.glow)
+      .shadow(color: shines ? colours.glow.opacity(0.45) : .clear, radius: 9)
   }
 
   @ViewBuilder
   private func small(_ state: BatteryState, _ colours: Tone) -> some View {
     if state.isSetUp {
       VStack(alignment: .leading, spacing: 10) {
-        BatteryShape(cells: state.cells, ink: colours.ink, track: colours.track)
+        battery(state, colours)
           .frame(height: 52)
         Spacer(minLength: 0)
-        Text(word(forCells: state.cells))
-          .font(.system(size: 22, weight: .bold, design: .rounded))
-          .foregroundStyle(colours.ink)
+        wordLabel(state, colours, size: 22)
           .minimumScaleFactor(0.7)
           .lineLimit(1)
         Text("Recharges \(clockLabel(rechargeMinute: state.rechargeMinute))")
           .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(colours.ink.opacity(0.75))
+          .foregroundStyle(paper.opacity(0.62))
           .lineLimit(1)
           .minimumScaleFactor(0.8)
       }
@@ -288,17 +402,15 @@ struct BatteryWidgetView: View {
   private func medium(_ state: BatteryState, _ colours: Tone) -> some View {
     if state.isSetUp {
       HStack(alignment: .center, spacing: 18) {
-        BatteryShape(cells: state.cells, ink: colours.ink, track: colours.track)
+        battery(state, colours)
           .frame(height: 78)
         VStack(alignment: .leading, spacing: 6) {
-          Text(word(forCells: state.cells))
-            .font(.system(size: 26, weight: .bold, design: .rounded))
-            .foregroundStyle(colours.ink)
+          wordLabel(state, colours, size: 26)
             .minimumScaleFactor(0.6)
             .lineLimit(2)
           Text("Recharges \(clockLabel(rechargeMinute: state.rechargeMinute))")
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(colours.ink.opacity(0.75))
+            .foregroundStyle(paper.opacity(0.62))
             .lineLimit(1)
             .minimumScaleFactor(0.8)
         }
@@ -308,6 +420,146 @@ struct BatteryWidgetView: View {
       .accessibilityLabel(spoken(state))
     } else {
       setUpPrompt
+    }
+  }
+
+  /// Half the Home Screen: the battery, then the streak, passes and week (Pro).
+  /// Without Pro the extras are replaced by one line saying what Pro adds; the battery stays.
+  @ViewBuilder
+  private func large(_ state: BatteryState, _ colours: Tone, _ record: RecordInfo) -> some View {
+    if state.isSetUp {
+      VStack(alignment: .leading, spacing: 14) {
+        HStack(alignment: .center, spacing: 16) {
+          battery(state, colours)
+            .frame(width: 150, height: 64)
+          VStack(alignment: .leading, spacing: 4) {
+            wordLabel(state, colours, size: 24)
+              .minimumScaleFactor(0.6)
+              .lineLimit(1)
+            Text("Recharges \(clockLabel(rechargeMinute: state.rechargeMinute))")
+              .font(.system(size: 13, weight: .semibold))
+              .foregroundStyle(paper.opacity(0.62))
+              .lineLimit(1)
+          }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken(state))
+        if record.pro {
+          HStack(spacing: 8) {
+            tile("\(record.streak)", record.streak == 1 ? "week streak" : "weeks streak", colours)
+            tile("\(record.passes)", record.passes == 1 ? "pass saved" : "passes saved", colours)
+            tile("\(record.perfect)", record.perfect == 1 ? "perfect week" : "perfect weeks", colours)
+          }
+          leftToday(state, colours)
+          weekRow(record.week, colours)
+        } else {
+          Spacer(minLength: 0)
+          VStack(alignment: .leading, spacing: 6) {
+            Text("PRO")
+              .font(.system(size: 11, weight: .bold))
+              .foregroundStyle(colours.glow)
+              .padding(.horizontal, 7)
+              .padding(.vertical, 2)
+              .overlay(Capsule().strokeBorder(colours.glow.opacity(0.7), lineWidth: 1))
+            Text("Your streak, passes and week, at a glance")
+              .font(.system(size: 20, weight: .bold, design: .rounded))
+              .foregroundStyle(paper)
+              .minimumScaleFactor(0.7)
+            Text("Tap to see Plainlimit Pro. The small and medium widgets stay free.")
+              .font(.system(size: 13, weight: .medium))
+              .foregroundStyle(paper.opacity(0.62))
+          }
+          .widgetURL(URL(string: "plainlimit://pro"))
+        }
+      }
+    } else {
+      setUpPrompt
+    }
+  }
+
+  /// The middle of the large widget: how much of today's goal is left. The
+  /// battery only knows whole cells, so it is "up to" that much.
+  private func leftToday(_ state: BatteryState, _ colours: Tone) -> some View {
+    let left = state.goalMinutes * Double(state.cells) / Double(cellCount)
+    let empty = state.cells <= 0 || state.goalMinutes <= 0
+    return VStack(alignment: .leading, spacing: 4) {
+      Text(empty ? "Nothing left today" : "Up to \(durationLabel(minutes: left)) left")
+        .font(.system(size: 28, weight: .bold, design: .rounded))
+        .foregroundStyle(paper)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+      Text(
+        empty
+          ? "Back at \(clockLabel(rechargeMinute: state.rechargeMinute))"
+          : "of your \(durationLabel(minutes: state.goalMinutes)) day"
+      )
+      .font(.system(size: 14, weight: .semibold))
+      .foregroundStyle(paper.opacity(0.62))
+      .lineLimit(1)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    .padding(.horizontal, 14)
+    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.07)))
+    .accessibilityElement(children: .combine)
+  }
+
+  private func tile(_ figure: String, _ label: String, _ colours: Tone) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(figure)
+        .font(.system(size: 26, weight: .bold, design: .rounded))
+        .foregroundStyle(paper)
+      Text(label)
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(paper.opacity(0.62))
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(10)
+    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.07)))
+    .accessibilityElement(children: .combine)
+  }
+
+  /// This week, Monday to Sunday: a solid dot under the goal, a ringed dot ran out, faint not counted or to come.
+  private func weekRow(_ week: String, _ colours: Tone) -> some View {
+    let letters = Array(week.padding(toLength: 7, withPad: "f", startingAt: 0))
+    let names = ["M", "T", "W", "T", "F", "S", "S"]
+    return HStack(spacing: 0) {
+      ForEach(0..<7, id: \.self) { index in
+        VStack(spacing: 6) {
+          dot(letters[index], colours)
+          Text(names[index])
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(paper.opacity(0.6))
+        }
+        .frame(maxWidth: .infinity)
+      }
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("This week: " + letters.map { spokenDay($0) }.joined(separator: ", "))
+  }
+
+  @ViewBuilder
+  private func dot(_ letter: Character, _ colours: Tone) -> some View {
+    switch letter {
+    case "u":
+      Circle().fill(underGoal).frame(width: 22, height: 22)
+    case "p":
+      Circle().fill(underGoal.opacity(0.5)).frame(width: 22, height: 22)
+    case "r":
+      Circle().strokeBorder(ranOut, lineWidth: 3).frame(width: 22, height: 22)
+    default:
+      Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 1.5).frame(width: 22, height: 22)
+    }
+  }
+
+  private func spokenDay(_ letter: Character) -> String {
+    switch letter {
+    case "u": return "under the goal"
+    case "p": return "partly counted"
+    case "r": return "ran out"
+    case "n": return "not counted"
+    default: return "to come"
     }
   }
 
@@ -331,12 +583,14 @@ struct BatteryWidgetView: View {
 
   private var setUpPrompt: some View {
     VStack(alignment: .leading, spacing: 8) {
-      BatteryShape(cells: cellCount, ink: Color(hex: 0x46CC70), track: Color.white.opacity(0.2))
+      BatteryShape(
+        cells: cellCount, ink: underGoal, track: Color.white.opacity(0.16), outline: paper.opacity(0.88),
+        glows: shines)
         .frame(height: 40)
       Spacer(minLength: 0)
       Text("Open Plainlimit to set up")
         .font(.system(size: 15, weight: .semibold, design: .rounded))
-        .foregroundStyle(.white)
+        .foregroundStyle(paper)
     }
   }
 
@@ -352,8 +606,8 @@ struct PlainlimitBatteryWidget: Widget {
       BatteryWidgetView(entry: entry)
     }
     .configurationDisplayName("Battery")
-    .description("Your screen time for the day, as a battery.")
-    .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
+    .description("Your screen time for the day, as a battery. The large size adds your streak, passes and week with Pro.")
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge, .accessoryRectangular])
   }
 }
 

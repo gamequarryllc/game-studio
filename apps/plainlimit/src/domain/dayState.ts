@@ -1,5 +1,6 @@
 // What the app remembers about the current battery, and how it moves on.
 
+import { freshRecord, repairRecord } from './record';
 import { nextRecharge, periodStart } from './day';
 import { topUpPlan } from './puzzle';
 import type { DayState, DaySummary, Doc, Settings } from './types';
@@ -10,7 +11,8 @@ export function freshDay(now: Date, rechargeMinute: number): DayState {
 }
 
 /** How many finished days are kept: eight weeks. */
-export const HISTORY_DAYS = 56;
+// Fourteen weeks: the record shows the last twelve, day by day (record.ts).
+export const HISTORY_DAYS = 98;
 
 /**
  * Moves the document on to the current battery if a recharge has passed,
@@ -70,6 +72,7 @@ export function freshDoc(now: Date): Doc {
     watching: false,
     setupDone: false,
     history: [],
+    record: freshRecord(now),
   };
 }
 
@@ -115,6 +118,7 @@ export function repairDoc(raw: unknown, now: Date, closingUsed?: (day: DayState,
     watching: typeof r.watching === 'boolean' ? r.watching : saved ? null : false,
     setupDone: typeof r.setupDone === 'boolean' ? r.setupDone : saved,
     history: repairHistory(r.history),
+    record: repairRecord(r.record, now),
   };
   return advance(doc, now, closingUsed ? closingUsed(day, settings) : null, counting ?? doc.watching === true);
 }

@@ -1,0 +1,18 @@
+diff --git a/node_modules/react-native-device-activity/ios/Shared.swift b/node_modules/react-native-device-activity/ios/Shared.swift
+index 4839430..178aefa 100644
+--- a/node_modules/react-native-device-activity/ios/Shared.swift
++++ b/node_modules/react-native-device-activity/ios/Shared.swift
+@@ -1452,9 +1452,10 @@ func updateBlockInternal(
+     store.shield.applicationCategories = .all(
+       except: currentWhitelist.applicationTokens
+     )
+-    store.shield.webDomainCategories = .all(
+-      except: currentWhitelist.webDomainTokens
+-    )
++    // Plainlimit: websites are not covered as such. Covering every site also
++    // covered the pages inside a browser that is kept open (an essential);
++    // browsers that are not kept open are covered as apps by the line above.
++    store.shield.webDomainCategories = nil
+ 
+     return
+   }

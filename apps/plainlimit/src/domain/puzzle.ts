@@ -8,11 +8,16 @@ export interface TopUpPlan {
   minutes: number;
 }
 
-/** What the next top-up costs, given how many were already earned since the recharge. */
+/**
+ * What the next top-up costs, given how many were already earned since the
+ * recharge: 3 sums for 15 minutes, 5 for 10, 7 for 5, then 3 more sums each
+ * time (10, 13, 16...) for 5 minutes, with no end until the recharge starts
+ * it again (the owner, 2026-11-17). Never a wall, always a little harder.
+ */
 export function topUpPlan(alreadyEarned: number): TopUpPlan {
   if (alreadyEarned <= 0) return { sums: 3, minutes: 15 };
   if (alreadyEarned === 1) return { sums: 5, minutes: 10 };
-  return { sums: 7, minutes: 5 };
+  return { sums: 7 + 3 * (Math.floor(alreadyEarned) - 2), minutes: 5 };
 }
 
 export interface Sum {
@@ -32,23 +37,39 @@ export function makeRandom(seed: number): () => number {
   };
 }
 
+/** How hard the sums are. Normal is the free one; choosing another is Pro (the owner, 2026-11-17). */
+export type SumLevel = 'easy' | 'normal' | 'hard';
+export const SUM_LEVELS: readonly SumLevel[] = ['easy', 'normal', 'hard'];
+
+/** Ones digits that add up past ten, so the answer needs a carry and cannot be read off at a glance. */
+function carryingOnes(random: () => number): [number, number] {
+  const onesA = 2 + Math.floor(random() * 8);
+  const least = Math.max(1, 10 - onesA);
+  const onesB = Math.min(9, least + Math.floor(random() * (10 - least)));
+  return [onesA, onesB];
+}
+
 /**
- * Two two-digit numbers whose ones add up past ten, so the answer needs a
- * carry and cannot be read off at a glance.
+ * One sum. Normal: two two-digit numbers with a carry (47 + 38).
+ * Easy: a two-digit number and a single digit, with a carry (47 + 8).
+ * Hard: a three-digit number and a two-digit one, with a carry (347 + 86).
  */
-export function makeSum(random: () => number): Sum {
+export function makeSum(random: () => number, level: SumLevel = 'normal'): Sum {
   const tensA = 1 + Math.floor(random() * 8);
   const tensB = 1 + Math.floor(random() * 8);
-  const onesA = 2 + Math.floor(random() * 8);
-  const least = 10 - onesA;
-  const onesB = Math.min(9, Math.max(1, least) + Math.floor(random() * (10 - Math.max(1, least))));
+  const [onesA, onesB] = carryingOnes(random);
+  if (level === 'easy') return { a: tensA * 10 + onesA, b: onesB };
+  if (level === 'hard') {
+    const hundreds = 1 + Math.floor(random() * 8);
+    return { a: hundreds * 100 + tensA * 10 + onesA, b: tensB * 10 + onesB };
+  }
   return { a: tensA * 10 + onesA, b: tensB * 10 + onesB };
 }
 
-export function makeSums(count: number, random: () => number): Sum[] {
+export function makeSums(count: number, random: () => number, level: SumLevel = 'normal'): Sum[] {
   const out: Sum[] = [];
   while (out.length < count) {
-    const next = makeSum(random);
+    const next = makeSum(random, level);
     const last = out[out.length - 1];
     if (last && last.a === next.a && last.b === next.b) continue;
     out.push(next);

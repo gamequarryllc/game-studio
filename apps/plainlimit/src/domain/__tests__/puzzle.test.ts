@@ -6,7 +6,10 @@ describe('the puzzle', () => {
     expect(topUpPlan(0)).toEqual({ sums: 3, minutes: 15 });
     expect(topUpPlan(1)).toEqual({ sums: 5, minutes: 10 });
     expect(topUpPlan(2)).toEqual({ sums: 7, minutes: 5 });
-    expect(topUpPlan(9)).toEqual({ sums: 7, minutes: 5 });
+    // Then 3 more sums each time, for 5 minutes, until the recharge.
+    expect(topUpPlan(3)).toEqual({ sums: 10, minutes: 5 });
+    expect(topUpPlan(4)).toEqual({ sums: 13, minutes: 5 });
+    expect(topUpPlan(9)).toEqual({ sums: 28, minutes: 5 });
   });
 
   it('always sets two-digit sums that need a carry', () => {
@@ -66,5 +69,29 @@ describe('settings', () => {
     const full = Array.from({ length: ALLOWED_MAX }, (_, i) => `App ${i}`);
     expect(withAllowed(full, 'One more')).toEqual(full);
     expect(withoutAllowed(['Phone', 'Maps'], 'Phone')).toEqual(['Maps']);
+  });
+});
+
+describe('sum difficulty', () => {
+  it('easy is a two-digit number and a digit, hard a three-digit and a two-digit one, each with a carry', () => {
+    const random = makeRandom(11);
+    for (let i = 0; i < 200; i++) {
+      const easy = makeSum(random, 'easy');
+      expect(easy.a).toBeGreaterThanOrEqual(10);
+      expect(easy.a).toBeLessThan(100);
+      expect(easy.b).toBeGreaterThanOrEqual(1);
+      expect(easy.b).toBeLessThan(10);
+      expect((easy.a % 10) + easy.b).toBeGreaterThanOrEqual(10);
+      const hard = makeSum(random, 'hard');
+      expect(hard.a).toBeGreaterThanOrEqual(100);
+      expect(hard.a).toBeLessThan(1000);
+      expect(hard.b).toBeGreaterThanOrEqual(10);
+      expect(hard.b).toBeLessThan(100);
+      expect((hard.a % 10) + (hard.b % 10)).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it('normal is the same sums as before difficulty existed', () => {
+    expect(makeSums(5, makeRandom(7), 'normal')).toEqual(makeSums(5, makeRandom(7)));
   });
 });

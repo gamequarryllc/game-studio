@@ -15,7 +15,7 @@ import {
   spanOf,
   topUpWindow, earliestTrue, lockNotBefore } from '../monitorPlan';
 import { DEFAULT_SETTINGS } from '../settings';
-import { toneForCells } from '../tone';
+import { glowForCells } from '../tone';
 import type { Settings } from '../types';
 
 const settings = (over: Partial<Settings> = {}): Settings => ({ ...DEFAULT_SETTINGS, allowed: [...DEFAULT_SETTINGS.allowed], ...over });
@@ -189,10 +189,10 @@ describe('the home screen widget agrees with the app', () => {
   const swift = require('fs').readFileSync(require('path').join(__dirname, '../../../targets/widget/PlainlimitWidget.swift'), 'utf8');
 
   test('the same colour for each number of cells', () => {
-    const line = swift.match(/let toneBackgrounds: \[UInt32\] = \[([^\]]+)\]/);
+    const line = swift.match(/let toneGlows: \[UInt32\] = \[([^\]]+)\]/);
     expect(line).not.toBeNull();
     const inSwift = (line as RegExpMatchArray)[1].split(',').map((v) => '#' + v.trim().replace('0x', '').toUpperCase());
-    expect(inSwift).toEqual([0, 1, 2, 3, 4, 5, 6].map((cells) => toneForCells(cells).bg.toUpperCase()));
+    expect(inSwift).toEqual([0, 1, 2, 3, 4, 5, 6].map((cells) => glowForCells(cells).toUpperCase()));
   });
 
   test('the same words', () => {

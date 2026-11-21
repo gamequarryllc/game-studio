@@ -1,11 +1,16 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
+import { DEFAULT_ASK_FIRST, type AskFirst } from '@/domain/askFirst';
 import { cellsLeft } from '@/domain/battery';
-import { nextRecharge } from '@/domain/day';
+import { widgetRecord } from '@/domain/pro';
+import { addWeeklyPasses, freshRecord, passActive, passCheck, recordView, spendPass } from '@/domain/record';
+import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
-import { stepGoal, stepRecharge } from '@/domain/settings';
-import type { DayState, Doc, EmptyLevel, Settings } from '@/domain/types';
+import { cleanLockMessage, stepGoal, stepRecharge } from '@/domain/settings';
+import type { SumLevel } from '@/domain/puzzle';
+import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
+import { applyAskFirst, openAsk } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
 
@@ -42,6 +47,19 @@ function set(doc: Doc, save = true) {
   snapshot = { state: 'ready', doc };
   listeners.forEach((l) => l());
   if (save) void writeSaved(doc);
+  shareRecord();
+}
+
+/** The large widget's streak, passes and week, and whether Pro is held (pro.ts). */
+function shareRecord() {
+  try {
+    const doc = snapshot.doc;
+    const now = new Date();
+    const today: DaySummary = { start: doc.day.periodStart, goalMinutes: doc.settings.goalMinutes, usedMinutes: doc.day.usedMinutes, topUps: doc.day.topUps, state: doc.day.uncounted ? 'partly' : 'counted' };
+    screenTime.shareWithWidget(widgetRecord(recordView(doc.record ?? freshRecord(now), doc.history, today, now, doc.settings.rechargeMinute), proOn));
+  } catch {
+    // The widget keeps what it last had.
+  }
 }
 
 // On a real phone, a change to the settings is handed to Screen Time a moment
@@ -62,7 +80,14 @@ function planSoon() {
  */
 export function settingsLocked(doc: Doc = snapshot.doc): boolean {
   // While locks are held (setup's "start tomorrow") nothing is enforced, so nothing needs guarding.
-  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0 && screenTime.locksHeldUntil() === 0;
+  // An emergency pass opens the settings for its 15 minutes (record.ts).
+  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0 && screenTime.locksHeldUntil() === 0 && !passActive(doc.record, new Date());
+}
+
+/** The record with this week's pass added, if a Monday has come (record.ts). */
+function withPasses(doc: Doc, now: Date): Doc {
+  const record = addWeeklyPasses(doc.record ?? freshRecord(now), now);
+  return record === doc.record ? doc : { ...doc, record };
 }
 
 /** The day as the phone reports it, when the app is counting real screen time. */
@@ -79,7 +104,8 @@ function withRealUse(doc: Doc, day: Doc['day']): Doc['day'] {
 let coveredAfter: string | null = null;
 function coverWhenEarnedTimeIsUp(doc: Doc, now: Date) {
   const { day, settings } = doc;
-  if (!screenTime.isOn() || settings.emptyLevel !== 'work' || day.unlockedUntil === null) return;
+  // Earned time, or an emergency pass in any mode.
+  if (!screenTime.isOn() || day.unlockedUntil === null) return;
   if (isUnlocked(day, now) || coveredAfter === day.unlockedUntil) return;
   if (cellsLeft(day.usedMinutes, settings.goalMinutes) !== 0) return;
   coveredAfter = day.unlockedUntil;
@@ -234,6 +260,38 @@ function loadedDoc(raw: unknown): Doc {
   return checkHealth({ ...doc, day: withRealUse(doc, doc.day) });
 }
 
+/** Whether the battery's own covers are up now: empty, no earned time, not held for setup. */
+function batteryLocked(doc: Doc, now: Date): boolean {
+  return screenTime.isOn() && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) === 0 && !isUnlocked(doc.day, now) && screenTime.locksHeldUntil() === 0;
+}
+
+/**
+ * Puts the Ask first list on the phone as the settings say (askFirst.ts),
+ * while counting is on. Taking its cover off also uncovers an app on both
+ * lists, so the battery's covers go back up if it is empty.
+ */
+function syncAskFirst() {
+  // Runs at start and on every return to the app: it must never throw.
+  try {
+    const doc = snapshot.doc;
+    if (snapshot.state !== 'ready' || doc.watching !== true || screenTime.permission() !== 'approved') return;
+    void applyAskFirst(doc.settings.askFirst, { empty: batteryLocked(doc, new Date()), recharge: clockLabel(doc.settings.rechargeMinute) })
+      .then(() => {
+        if (batteryLocked(snapshot.doc, new Date())) screenTime.coverEmptyNow(snapshot.doc.settings, snapshot.doc.day.topUps);
+      })
+      .catch(() => {});
+  } catch {
+    // Tried again on the next return to the app.
+  }
+}
+
+/**
+ * Whether this phone has Pro (src/pro/pro.ts tells the store through `setPro`).
+ * Losing it (a refund) turns nothing off: the recharge time stays as chosen,
+ * and the sums fall back to normal by themselves (see `sumLevelFor`).
+ */
+let proOn = false;
+
 function withSettings(change: (s: Settings) => Settings) {
   if (settingsLocked()) return;
   // A new recharge time can move the start of the current battery.
@@ -256,7 +314,7 @@ export const store = {
     const raw = await readSaved();
     let doc: Doc;
     try {
-      doc = loadedDoc(raw);
+      doc = withPasses(loadedDoc(raw), new Date());
     } catch {
       // Nothing may keep the app on its splash screen: start from the saved
       // copy alone, without asking the phone anything, and catch up on the next look.
@@ -274,6 +332,7 @@ export const store = {
     // Picks from before build 71 may list more single apps than iOS will lock.
     if (screenTime.fixOldPicks() === 'fixed') store.picksChanged();
     void askAgain();
+    syncAskFirst();
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
     AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
@@ -281,6 +340,7 @@ export const store = {
       void askAgain();
       for (const wait of [1500, 5000, 10000, 20000]) setTimeout(lookAgain, wait);
       if (snapshot.state === 'ready') screenTime.refreshScreens(snapshot.doc.settings, snapshot.doc.day.topUps);
+      syncAskFirst();
       if (screenTime.isOn()) screenTime.reloadWidget();
     });
   },
@@ -292,8 +352,8 @@ export const store = {
     try {
       coverWhenEarnedTimeIsUp(snapshot.doc, now);
       const moved = advanced(snapshot.doc, now);
-      const doc = checkHealth({ ...moved, day: withRealUse(moved, moved.day) });
-      if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history) return;
+      const doc = withPasses(checkHealth({ ...moved, day: withRealUse(moved, moved.day) }), now);
+      if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history && doc.record === snapshot.doc.record) return;
       set(doc);
       // The app has just learned something the widget may not have drawn yet.
       if (screenTime.isOn()) screenTime.reloadWidget();
@@ -412,18 +472,105 @@ export const store = {
     planSoon();
     set({ ...snapshot.doc }, false);
   },
-  /** Old picks over iOS's 50-app lock limit: forget them, so Apple's list opens empty to pick again. */
-  clearPicksToPickAgain() {
-    screenTime.clearPicks();
+  /** Apple's picker closed on the phone's whole list of apps. */
+  appsShownClosed() {
+    screenTime.appsAfter();
+    store.picksChanged();
+    redrawAndLookAgain();
+  },
+  /** Apple's picker closed on the essentials. Returns how many were ticked if that was too many to keep (0 when kept). */
+  essentialsClosed(): number {
+    const refused = screenTime.essentialsAfter();
+    store.picksChanged();
+    // A warning about the older list is settled by this; Today has to hear of it (build 90 kept "Not locking" up).
+    redrawAndLookAgain();
+    return refused;
   },
   stepGoal(direction: 1 | -1) {
     withSettings((s) => ({ ...s, goalMinutes: stepGoal(s.goalMinutes, direction) }));
   },
+  /** Changing the recharge time is Pro. A time chosen before Pro existed (1.0) is kept as it is. */
   stepRecharge(direction: 1 | -1) {
+    if (!proOn) return;
     withSettings((s) => ({ ...s, rechargeMinute: stepRecharge(s.rechargeMinute, direction) }));
   },
   setEmptyLevel(emptyLevel: EmptyLevel) {
     withSettings((s) => ({ ...s, emptyLevel }));
+  },
+  /** How hard the sums are. Normal is free; easy and hard are Pro. */
+  setSumLevel(sumLevel: SumLevel) {
+    if (sumLevel !== 'normal' && !proOn) return;
+    withSettings((s) => ({ ...s, sumLevel }));
+  },
+  /**
+   * The lock screen message (free for now; Pro once it has been tested, the
+   * owner, 2026-11-18). Not closed while the battery is empty:
+   * words cannot open anything. The covering screens are written again at once.
+   */
+  setLockMessage(text: string) {
+    const lockMessage = cleanLockMessage(text);
+    const { lockMessage: _old, ...rest } = snapshot.doc.settings;
+    const settings: Settings = lockMessage ? { ...rest, lockMessage } : rest;
+    set({ ...snapshot.doc, settings });
+    screenTime.refreshScreens(settings, snapshot.doc.day.topUps);
+  },
+  /** Pro was bought, restored, refunded or read at start (src/pro/pro.ts). `known` is false until the saved answer is read. */
+  setPro(on: boolean, _known: boolean) {
+    proOn = on;
+    if (loaded) shareRecord();
+  },
+  hasPro(): boolean {
+    return proOn;
+  },
+  /**
+   * Ask first's settings. Not closed while the battery is empty: nothing here
+   * can open an app that counts (see `syncAskFirst`).
+   */
+  setAskFirst(change: Partial<AskFirst>) {
+    const settings = snapshot.doc.settings;
+    set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...(settings.askFirst ?? DEFAULT_ASK_FIRST), ...change } } });
+    syncAskFirst();
+  },
+  /** The Ask first picks changed in Apple's list. */
+  askPicksChanged() {
+    syncAskFirst();
+    set({ ...snapshot.doc }, false);
+  },
+  /**
+   * The sum on the Ask first screen was solved: open the list for a while.
+   * While the battery's covers are up, apps that also count stay covered.
+   */
+  async openAskFirst(): Promise<Date | null> {
+    const { settings } = snapshot.doc;
+    const now = new Date();
+    const until = await openAsk(settings.askFirst ?? DEFAULT_ASK_FIRST, nextRecharge(now, settings.rechargeMinute).getTime(), now);
+    if (until && batteryLocked(snapshot.doc, now)) screenTime.coverEmptyNow(settings, snapshot.doc.day.topUps);
+    return until;
+  },
+  /** Whether an emergency pass can be used now (record.ts). */
+  passCheck(): 'ok' | 'none' | 'usedToday' | 'running' {
+    const doc = snapshot.doc;
+    return passCheck(doc.record ?? freshRecord(new Date()), new Date(doc.day.periodStart), new Date());
+  },
+  /**
+   * Uses an emergency pass: everything opens for 15 minutes, settings
+   * included, in any mode. The apps open the way earned time opens them, and
+   * the phone covers them again by itself when it ends.
+   */
+  usePass(): boolean {
+    const now = new Date();
+    const doc = snapshot.doc;
+    const record = doc.record ?? freshRecord(now);
+    if (passCheck(record, new Date(doc.day.periodStart), now) !== 'ok') return false;
+    const recharge = nextRecharge(now, doc.settings.rechargeMinute).getTime();
+    const used = spendPass(record, now, recharge);
+    const until = used.passUntil as string;
+    const unlockedUntil = doc.day.unlockedUntil && new Date(doc.day.unlockedUntil) > new Date(until) ? doc.day.unlockedUntil : until;
+    const day = { ...doc.day, unlockedUntil };
+    set({ ...doc, record: used, day });
+    if (screenTime.isOn()) void screenTime.grantExtraTime(new Date(unlockedUntil), doc.settings, day.topUps, now);
+    if (doc.settings.askFirst?.on) void openAsk({ ...doc.settings.askFirst, openMinutes: 15 }, recharge, now);
+    return true;
   },
   /** Developer: pretend this many more minutes were used. */
   pretendUse(minutes: number) {
