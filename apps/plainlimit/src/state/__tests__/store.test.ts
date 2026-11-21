@@ -282,6 +282,25 @@ describe('Ask first', () => {
     expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 }, { empty: false, recharge: expect.any(String) });
   });
 
+  it('turns on when apps are picked in Apple\'s list, keeps the open time, and turns off when the list is emptied', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    const { store } = load(phone, saved(30), ask);
+    await store.start();
+    store.setAskFirst({ openMinutes: 15 });
+    store.askPicksChanged(3);
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
+    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 }, { empty: false, recharge: expect.any(String) });
+    store.setAskFirst({ on: false });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: false, openMinutes: 15 });
+    store.askPicksChanged(0);
+    expect(store.get().doc.settings.askFirst).toEqual({ on: false, openMinutes: 15 });
+    store.askPicksChanged(2);
+    expect(store.get().doc.settings.askFirst?.on).toBe(true);
+    store.askPicksChanged(0);
+    expect(store.get().doc.settings.askFirst?.on).toBe(false);
+  });
+
   it('is left alone while counting is off', async () => {
     const phone = fakePhone();
     const ask = fakeAsk();

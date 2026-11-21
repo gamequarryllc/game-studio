@@ -408,3 +408,10 @@ The owner asked for it to be built now and merged later. Rules in `src/domain/as
 - The colours are `glowForCells` in `src/domain/tone.ts`: the battery's hue, lighter and stronger, and a clear red when empty (the deep red would vanish on dark). The widget's `toneGlows` table is held equal to it by `monitorPlan.test.ts`, and a test holds every glow to 4.5 to 1 on the ground.
 - On a tinted or clear Home Screen (`widgetRenderingMode` not full colour) the shine is left off, since iOS draws the widget in one colour there.
 - The app's own screens keep the day's colour as a field; only the widget changed.
+
+## Second thought screen, reworked (the owner, 2026-11-21)
+- The owner found Settings > Advanced > Second thought below the rest of the app: mostly words, no picture of how or why it works, and Off/On cards that stayed on Off after apps were picked. Three mock-ups were drawn; the owner picked "Three steps".
+- The screen now leads with one line ("A pause before the apps you open without thinking.") and a picture (`src/ui/SecondThoughtPicture.tsx`): a muted app with a lock, one sum, the app open with a timer in the day's colour, and a dashed arrow back ("then it asks again"). The minutes in it follow the chosen open time.
+- A switch replaces the Off/On cards. Closing Apple's list with apps in it turns Second thought on; an empty list turns it off (`onAfterPicking`, the store's `askPicksChanged(picked)`). Switching off keeps the apps. Switching on with nothing picked opens Apple's list. The switch, and the Advanced row, show on only with apps picked (`askShownOn`); the web preview, which can't pick, shows the saved setting.
+- The open time is three pills (`Pills` in `src/ui/kit.tsx`) instead of three cards. The paragraph about iOS not telling the app when another app closes is gone; the picture's loop says the same thing. One line is kept: apps that also count still use the battery, and stay locked when it's empty.
+- The preview's `?mock=counting,noAskPicks` shows the screen with nothing picked.
