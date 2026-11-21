@@ -17,14 +17,14 @@ import {
   updatePolicy,
 } from '../actions';
 import { buildCsv } from '../csv';
-import { coverage } from '../coverage';
+import { OFTEN_LIMITED, coverage } from '../coverage';
 import { emptyDoc, filesInUse, parseDoc } from '../doc';
 import { libraryOf, setCurrentDoc, stampChanges } from '../library';
 import { planReminders } from '../reminders';
 import { buildReportHtml, reportFileName } from '../report';
 import { readReceipt, serialCandidates } from '../scan';
-import { backupState, claimSummary, claimTitle } from '../selectors';
-import { LIMITS, type Doc } from '../types';
+import { backupState, claimSummary, claimTitle, needsSerial } from '../selectors';
+import { CATEGORY_LABELS, LIMITS, type Doc } from '../types';
 
 const NOW = new Date(2026, 10, 15, 9, 0).getTime();
 const DAY = 86_400_000;
@@ -166,7 +166,7 @@ describe('claim mode', () => {
     const rows = buildCsv(doc, { claim: doc.claims[0] }).replace('\uFEFF', '').trimEnd().split('\r\n');
     expect(rows).toHaveLength(2);
     expect(rows[0].startsWith('Loss,What happened,Room,Item')).toBe(true);
-    expect(rows[1].startsWith('Stolen,"From the dresser, with ""box""",Bedroom,Engagement ring,Jewelry and watches')).toBe(true);
+    expect(rows[1].startsWith('Stolen,"From the dresser, with ""box""",Bedroom,Engagement ring,"Jewelry, watches and furs"')).toBe(true);
     expect(buildCsv(doc).replace('\uFEFF', '').split('\r\n')[0].startsWith('Room,')).toBe(true);
   });
 
@@ -227,6 +227,39 @@ describe('the policy and coverage', () => {
 
   it('flags valuable jewelry even with no limit typed in', () => {
     expect(coverage(home()).toSchedule.map((i) => i.name)).toEqual(['Engagement ring']);
+  });
+
+  it('uses the standard policy limits for the kinds insurers cap, and none for sports gear', () => {
+    expect(OFTEN_LIMITED).toEqual(['jewelry', 'firearms', 'silver', 'collectibles', 'business', 'rugs', 'art', 'music']);
+    let doc = home();
+    const bed = doc.rooms[1].id;
+    doc = addItem(doc, { ...emptyDraft(bed), name: 'Shotgun', category: 'firearms', valueCents: 320000 }, NOW).doc;
+    doc = addItem(doc, { ...emptyDraft(bed), name: 'Rifle', category: 'firearms', valueCents: 90000 }, NOW).doc;
+    doc = addItem(doc, { ...emptyDraft(bed), name: 'Road bike', category: 'sports', valueCents: 400000 }, NOW).doc;
+    // Firearms are capped at $2,500 for theft: the $3,200 shotgun is worth asking about, the rifle and the bike are not.
+    expect(coverage(doc).toSchedule.map((i) => i.name)).toEqual(['Engagement ring', 'Shotgun']);
+  });
+
+  it('asks for a firearm’s serial number, and names the new kinds as insurers do', () => {
+    let doc = home();
+    doc = addItem(doc, { ...emptyDraft(doc.rooms[1].id), name: 'Shotgun', category: 'firearms' }, NOW).doc;
+    expect(needsSerial(doc.items.find((i) => i.name === 'Shotgun')!)).toBe(true);
+    expect(CATEGORY_LABELS.jewelry).toBe('Jewelry, watches and furs');
+    expect([CATEGORY_LABELS.silver, CATEGORY_LABELS.collectibles, CATEGORY_LABELS.business, CATEGORY_LABELS.rugs]).toEqual([
+      'Silverware and fine china',
+      'Collectibles',
+      'Business equipment',
+      'Rugs and textiles',
+    ]);
+  });
+
+  it('keeps the new kinds and their limits through a save and a load', () => {
+    let doc = home();
+    doc = addItem(doc, { ...emptyDraft(doc.rooms[1].id), name: 'Baseball cards', category: 'collectibles', valueCents: 50000 }, NOW).doc;
+    doc = updatePolicy(doc, { categoryLimits: { firearms: 250000, collectibles: 200000 } });
+    const back = parseDoc(JSON.parse(JSON.stringify(doc)), NOW);
+    expect(back.items.find((i) => i.name === 'Baseball cards')!.category).toBe('collectibles');
+    expect(back.policy.categoryLimits).toEqual({ firearms: 250000, collectibles: 200000 });
   });
 
   it('keeps policy documents, and they count as files in use', () => {
