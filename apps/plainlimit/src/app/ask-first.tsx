@@ -8,6 +8,7 @@ import { store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { BigButton, Card, Label, Lead, LinkRow, Page, Pills, Title } from '@/ui/kit';
 import { SecondThoughtPicture } from '@/ui/SecondThoughtPicture';
+import { FirstPickupApps } from '@/ui/UsageReport';
 import { c } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
@@ -19,14 +20,15 @@ import { useDay } from '@/ui/useDay';
 // no picture of how it works, and its Off/On cards stayed on Off after apps
 // were picked. Now a picture shows how it works, a switch turns it on and
 // off, picking apps turns it on by itself (switching off keeps them), and the
-// open time is three pills.
+// open time is three pills. Above the switch, the phone lists the apps opened
+// first after a pickup, as suggestions to pick (the owner, the same day).
 
 const OPEN_PILLS = OPEN_CHOICES.map((minutes) => ({ value: minutes, label: `${minutes} min`, spoken: `${minutes} minutes` }));
 
 export default function AskFirstSettings() {
   const [picking, setPicking] = useState(false);
   const doc = useDoc();
-  const { accent } = useDay();
+  const { accent, now } = useDay();
   const ask = doc.settings.askFirst ?? DEFAULT_ASK_FIRST;
   const phone = SCREEN_TIME_AVAILABLE || MOCK_PHONE;
   const picked = pickCount(ASK_ID);
@@ -44,6 +46,15 @@ export default function AskFirstSettings() {
       <Lead>A pause before the apps you open without thinking.</Lead>
 
       <SecondThoughtPicture openMinutes={ask.openMinutes} accent={accent} />
+
+      {/* Suggestions: what the phone says is opened first after a pickup (drawn by the phone; the app can't read or tick them). */}
+      {phone ? (
+        <Card style={{ paddingTop: 14, paddingBottom: 14, gap: 4 }}>
+          <Label>You open these first</Label>
+          <FirstPickupApps now={now} />
+          <Text style={styles.hint}>The first app after you pick up your phone, last 7 days. Good ones to pick.</Text>
+        </Card>
+      ) : null}
 
       <Card style={phone && picked === 0 ? { paddingBottom: 16 } : undefined}>
         <View style={[styles.row, phone && picked > 0 ? styles.rowRule : null]}>

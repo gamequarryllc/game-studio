@@ -17,6 +17,9 @@ import SwiftUI
 //            for setup: the seven days before today as seven bars on an hour
 //            scale of 4, 6, 8 or 12 hours, each with its time. The app picks
 //            the scale and draws the goal's line over the chart itself.
+//   FirstApps for Second thought: the apps opened first after picking up the
+//            phone over the last seven days, as Screen Time's "First Used
+//            After Pickup", so the person sees which apps to pick.
 //
 // The phone runs this in a sealed box: it may draw, and nothing else. The app
 // shows the picture and never learns what is in it.
@@ -41,12 +44,15 @@ extension DeviceActivityReport.Context {
   static let week6 = Self("Week6")
   static let week8 = Self("Week8")
   static let week12 = Self("Week12")
+  static let firstApps = Self("FirstApps")
 }
 
 private let ink = Color(red: 244 / 255, green: 245 / 255, blue: 242 / 255)
 private let quiet = Color(red: 169 / 255, green: 174 / 255, blue: 179 / 255)
 private let rule = Color(red: 37 / 255, green: 40 / 255, blue: 44 / 255)
 private let ground = Color(red: 14 / 255, green: 16 / 255, blue: 17 / 255)
+/// The app's card colour (src/ui/theme.ts, c.card), for a report drawn inside a card.
+private let cardGround = Color(red: 23 / 255, green: 25 / 255, blue: 28 / 255)
 private let green = Color(red: 74 / 255, green: 198 / 255, blue: 111 / 255)
 
 /// The app's display face, shipped inside this extension (the build copies it
@@ -330,6 +336,102 @@ struct WeekBarsView: View {
   }
 }
 
+/// An app and how many times it was the first one opened after a pickup.
+struct PickupApp: Identifiable {
+  let id: String
+  let token: ApplicationToken?
+  let name: String
+  let pickups: Int
+}
+
+struct FirstAppsReport: DeviceActivityReportScene {
+  let context: DeviceActivityReport.Context = .firstApps
+  let content: ([PickupApp]) -> FirstAppsView
+
+  func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
+    -> [PickupApp] {
+    // numberOfPickups: the pickups made straight to this app, the figure
+    // behind Screen Time's "First Used After Pickup". No apps are named in
+    // the filter, so every app is counted, essentials too.
+    var pickups: [String: Int] = [:]
+    var tokens: [String: ApplicationToken] = [:]
+    var names: [String: String] = [:]
+    for await device in data {
+      for await segment in device.activitySegments {
+        for await category in segment.categories {
+          for await app in category.applications where app.numberOfPickups > 0 {
+            let key =
+              app.application.bundleIdentifier ?? app.application.localizedDisplayName ?? "unknown"
+            pickups[key, default: 0] += app.numberOfPickups
+            if let token = app.application.token { tokens[key] = token }
+            if let name = app.application.localizedDisplayName { names[key] = name }
+          }
+        }
+      }
+    }
+    return Array(
+      pickups
+        .map { PickupApp(id: $0.key, token: tokens[$0.key], name: names[$0.key] ?? "An app", pickups: $0.value) }
+        .sorted { $0.pickups > $1.pickups }
+        .prefix(4))
+  }
+}
+
+struct FirstAppsView: View {
+  let apps: [PickupApp]
+
+  private var most: Int { max(1, apps.first?.pickups ?? 1) }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      if apps.isEmpty {
+        Text("No pickups counted in the last 7 days yet.")
+          .font(.system(size: 15))
+          .foregroundStyle(quiet)
+          .padding(.vertical, 12)
+      } else {
+        ForEach(Array(apps.enumerated()), id: \.element.id) { index, app in
+          VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 10) {
+              if let token = app.token {
+                Label(token)
+                  .labelStyle(.titleAndIcon)
+                  .font(.system(size: 16, weight: .medium))
+                  .foregroundStyle(ink)
+                  .lineLimit(1)
+              } else {
+                Text(app.name)
+                  .font(.system(size: 16, weight: .medium))
+                  .foregroundStyle(ink)
+                  .lineLimit(1)
+              }
+              Spacer(minLength: 8)
+              Text("\(app.pickups)")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(quiet)
+                .monospacedDigit()
+            }
+            // As long as the count, against the first app's.
+            Capsule()
+              .fill(green)
+              .frame(maxWidth: .infinity)
+              .frame(height: 5)
+              .scaleEffect(x: CGFloat(app.pickups) / CGFloat(most), y: 1, anchor: .leading)
+          }
+          .frame(height: 56)
+          if index < apps.count - 1 {
+            Rectangle().fill(rule).frame(height: 1)
+          }
+        }
+      }
+      Spacer(minLength: 0)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(cardGround)
+    .ignoresSafeArea()
+  }
+}
+
 struct TotalView: View {
   let seconds: TimeInterval
 
@@ -382,6 +484,9 @@ struct PlainlimitReport: DeviceActivityReportExtension {
     }
     WeekReport(context: .week12, hours: 12) { use in
       WeekBarsView(use: use)
+    }
+    FirstAppsReport { apps in
+      FirstAppsView(apps: apps)
     }
   }
 }
