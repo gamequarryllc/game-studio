@@ -1,4 +1,4 @@
-import { keptScale, weekScale } from '../UsageReport';
+import { WEEK, aboveChart, goalY, weekScale } from '../UsageReport';
 import { GOAL_MAX, GOAL_MIN, GOAL_STEP } from '@/domain/settings';
 
 describe("the 7-day chart's scale", () => {
@@ -9,25 +9,25 @@ describe("the 7-day chart's scale", () => {
     expect(weekScale(GOAL_MAX)).toBe(12);
   });
 
-  it('stays put while the goal moves inside it, so the bars are not drawn again', () => {
-    // Setup opens at 3:00: the 6-hour scale. Down to the least and up to 6:00, never a new scale.
-    for (let goal = GOAL_MIN; goal <= 6 * 60; goal += GOAL_STEP) expect(keptScale(6, goal)).toBe(6);
-  });
-
-  it('grows once the goal passes its top, and never shrinks', () => {
-    expect(keptScale(6, 6 * 60 + GOAL_STEP)).toBe(12);
-    expect(keptScale(4, 4 * 60 + GOAL_STEP)).toBe(8);
-    expect(keptScale(12, GOAL_MIN)).toBe(12);
-    expect(keptScale(8, GOAL_MIN)).toBe(8);
-  });
-
-  it('always has room for the goal', () => {
-    for (const start of [4, 6, 8, 12] as const) {
-      let hours = start;
-      for (let goal = GOAL_MIN; goal <= GOAL_MAX; goal += GOAL_STEP) {
-        hours = keptScale(hours, goal);
-        expect(hours * 60).toBeGreaterThanOrEqual(goal);
-      }
+  it('places every goal the stepper can reach inside the chart, so the bars never have to be drawn again', () => {
+    // Setup opens at 3:00: the 6-hour scale, kept whatever the stepper does.
+    const hours = weekScale(180);
+    for (let goal = GOAL_MIN; goal <= GOAL_MAX; goal += GOAL_STEP) {
+      const y = goalY(goal, hours);
+      expect(y).toBeGreaterThanOrEqual(WEEK.top);
+      expect(y).toBeLessThanOrEqual(WEEK.height - WEEK.bottom);
     }
+  });
+
+  it('keeps a goal past the top at the top, marked as above the chart', () => {
+    expect(aboveChart(6 * 60, 6)).toBe(false);
+    expect(goalY(6 * 60, 6)).toBe(WEEK.top);
+    expect(aboveChart(6 * 60 + GOAL_STEP, 6)).toBe(true);
+    expect(goalY(6 * 60 + GOAL_STEP, 6)).toBe(WEEK.top);
+    expect(goalY(GOAL_MAX, 6)).toBe(WEEK.top);
+  });
+
+  it('moves the line with every step below the top', () => {
+    for (let goal = GOAL_MIN; goal < 6 * 60; goal += GOAL_STEP) expect(goalY(goal + GOAL_STEP, 6)).toBeLessThan(goalY(goal, 6));
   });
 });
