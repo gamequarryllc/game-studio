@@ -122,6 +122,11 @@ export const CATEGORIES = [
   'appliances',
   'furniture',
   'jewelry',
+  'firearms',
+  'silver',
+  'collectibles',
+  'business',
+  'rugs',
   'clothing',
   'tools',
   'kitchenware',
@@ -137,7 +142,12 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   electronics: 'Electronics',
   appliances: 'Appliances',
   furniture: 'Furniture',
-  jewelry: 'Jewelry and watches',
+  jewelry: 'Jewelry, watches and furs',
+  firearms: 'Firearms',
+  silver: 'Silverware and fine china',
+  collectibles: 'Collectibles',
+  business: 'Business equipment',
+  rugs: 'Rugs and textiles',
   clothing: 'Clothing',
   tools: 'Tools',
   kitchenware: 'Kitchenware',
@@ -148,8 +158,8 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   other: 'Other',
 };
 
-/** Things that usually carry a serial number worth writing down. */
-export const SERIAL_CATEGORIES: readonly Category[] = ['electronics', 'appliances', 'tools', 'music', 'sports'];
+/** Things that usually carry a serial number worth writing down. Police need a firearm's serial to report it stolen. */
+export const SERIAL_CATEGORIES: readonly Category[] = ['electronics', 'appliances', 'firearms', 'tools', 'music', 'sports'];
 
 export interface Photo {
   id: Id;

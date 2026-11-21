@@ -119,7 +119,7 @@ function ymd(next: () => number, now: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-const SERIAL_KINDS: Category[] = ['electronics', 'appliances', 'tools', 'music', 'sports'];
+const SERIAL_KINDS: Category[] = ['electronics', 'appliances', 'firearms', 'tools', 'music', 'sports'];
 
 /** About fifty items across eight rooms, with a few gaps left to find. */
 export function sampleHome(now: number): Doc {
