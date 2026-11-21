@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { tap } from '@/platform/haptics';
@@ -32,14 +32,43 @@ let current: { id: number; request: Request; resolve: (value: string | null) => 
 const listeners = new Set<() => void>();
 let serial = 0;
 
+// On iPhone a sheet is a presented view controller, and it can only be presented from the screen
+// on top: a sheet asked for by the root while the item form (itself presented) is up never appears,
+// and the app is left waiting under an invisible sheet. So every presented screen that picks
+// mounts its own host, and only the newest mounted host draws.
+let hosts: number[] = [];
+let hostSerial = 0;
+
+// The answer goes back only once the sheet is gone: an alert asked for straight after (a name for a
+// new room) cannot appear while the sheet is still on its way out.
+let answer: { resolve: (value: string | null) => void; value: string | null; timer: ReturnType<typeof setTimeout> } | null = null;
+
+function settle() {
+  const a = answer;
+  answer = null;
+  if (!a) return;
+  clearTimeout(a.timer);
+  a.resolve(a.value);
+}
+
 function close(value: string | null) {
   const c = current;
   current = null;
   listeners.forEach((l) => l());
-  c?.resolve(value);
+  if (!c) return;
+  if (Platform.OS !== 'ios') {
+    c.resolve(value);
+    return;
+  }
+  settle();
+  // onDismiss says when the sheet has gone; the timer is there in case it never says.
+  answer = { resolve: c.resolve, value, timer: setTimeout(settle, 700) };
 }
 
-/** Asks for one of `choices`; resolves with its key, or null when the sheet is closed without a pick. */
+/**
+ * Asks for one of `choices`; resolves with its key, or null when the sheet is closed without a pick.
+ * A screen presented over the others (presentation 'modal') that calls this must render its own <PickSheetHost />.
+ */
 export function pick<T extends string>(opts: { title: string; message?: string; choices: PickChoice<T>[]; selected?: T | null }): Promise<T | null> {
   return new Promise((resolve) => {
     current?.resolve(null);
@@ -50,6 +79,17 @@ export function pick<T extends string>(opts: { title: string; message?: string; 
 }
 
 export function PickSheetHost() {
+  const [me] = useState(() => ++hostSerial);
+  useEffect(() => {
+    hosts = [...hosts.filter((h) => h !== me), me];
+    listeners.forEach((l) => l());
+    return () => {
+      hosts = hosts.filter((h) => h !== me);
+      // A screen that closes with its sheet open takes the question with it.
+      if (current) close(null);
+      listeners.forEach((l) => l());
+    };
+  }, [me]);
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -58,7 +98,7 @@ export function PickSheetHost() {
       listeners.add(l);
       return () => listeners.delete(l);
     },
-    () => current,
+    () => (hosts[hosts.length - 1] === me ? current : null),
     () => null,
   );
   const request = active?.request;
@@ -72,7 +112,7 @@ export function PickSheetHost() {
   };
 
   return (
-    <Modal visible={!!request} transparent animationType="fade" onRequestClose={() => close(null)} statusBarTranslucent>
+    <Modal visible={!!request} transparent animationType="fade" onRequestClose={() => close(null)} onDismiss={settle} statusBarTranslucent>
       {request ? (
         <View style={[StyleSheet.absoluteFill, styles.wrap, { backgroundColor: c.scrim }]} testID="dialog">
           <Pressable style={StyleSheet.absoluteFill} onPress={() => close(null)} accessibilityLabel="Close" accessibilityRole="button" />
