@@ -104,11 +104,12 @@ export default function Today() {
           ) : null}
 
           <View style={{ gap: 12 }}>
-            <Label>Used today</Label>
+            {/* "Since 6:00 AM", not "today": the iPhone's Screen Time counts from midnight, and the two looked like a miscount side by side (the owner, build 111). */}
+            <Label>{`Used since ${recharge}`}</Label>
             {counting ? (
               <View style={{ gap: 2 }}>
                 <TodayTotal settings={settings} now={now} fallback={<Text style={styles.used}>{durationLabel(day.usedMinutes)}</Text>} />
-                <Text style={styles.usedOfLine}>of {durationLabel(settings.goalMinutes)}, in apps that count</Text>
+                <Text style={styles.usedOfLine}>of {durationLabel(settings.goalMinutes)}, not counting essentials</Text>
               </View>
             ) : (
               <Text style={styles.used}>

@@ -49,6 +49,14 @@ const LONGEST_MS = 30_000;
 
 type Button = { label: string; onPress: () => void };
 
+/**
+ * Why these figures are not the total in the iPhone's own Screen Time: the
+ * owner compared the two on build 111 (5:31 here, 7 h 24 min there) and, as
+ * the developer, wondered if the app was wrong. A new user would delete it.
+ */
+const sinceNote = (recharge: string) =>
+  `Counted since ${recharge}, when your battery recharges, without your essentials. iPhone\u2019s Screen Time counts from midnight and includes everything, so it can show more.`;
+
 export default function Setup() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -185,7 +193,7 @@ export default function Setup() {
           <View style={styles.figureBox}>
             <View style={styles.figures}>
               <View style={styles.figure}>
-                <Text style={styles.figureLabel}>Used today</Text>
+                <Text style={styles.figureLabel}>{`Since ${clockLabel(settings.rechargeMinute)}`}</Text>
                 <TodayTotal settings={settings} now={now} fallback={<WaitingDots />} />
               </View>
               <View style={styles.figure}>
@@ -193,7 +201,7 @@ export default function Setup() {
                 <WeekAverage settings={settings} now={now} fallback={<WaitingDots />} />
               </View>
             </View>
-            <Text style={styles.note}>In the apps you ticked, from Screen Time. The average is over the last 7 days.</Text>
+            <Text style={styles.note}>{sinceNote(clockLabel(settings.rechargeMinute))} The average is over the last 7 days.</Text>
           </View>
         ) : null}
         <Lead>Pick a little under a normal day. You can change it later.</Lead>
@@ -238,6 +246,7 @@ export default function Setup() {
               )}
             </View>
           </View>
+          <Text style={[styles.note, { marginTop: 10 }]}>{sinceNote(recharge)}</Text>
         </View>
         {phase === 'reading' ? <ReadingBar colour={accent} /> : null}
         <Lead>
@@ -246,7 +255,7 @@ export default function Setup() {
             : phase === 'failed'
               ? 'The phone would not start counting. You can turn it on later in Settings.'
               : over
-                ? `You\u2019ve used more than ${durationLabel(settings.goalMinutes)} today, so starting now would lock your counted apps until ${recharge}.`
+                ? `You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock your counted apps until ${recharge}.`
                 : `The two should match, or Plainlimit can be up to ${tickStepMinutes(settings.goalMinutes)} minutes under.`}
         </Lead>
       </>

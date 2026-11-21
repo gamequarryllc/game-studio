@@ -120,7 +120,7 @@ async function main() {
 
   await scenario('a counting phone shows its figure and the list box waiting for the phone', async () => {
     const { page, context } = await open(doc({ goal: 270, used: 97 }), '?mock=counting');
-    await see(page, 'of 4:30, in apps that count');
+    await see(page, 'of 4:30, not counting essentials');
     await shot(page, 'q01-counting-top');
     await toBottom(page);
     await see(page, 'Waiting for the phone');
@@ -262,7 +262,7 @@ async function main() {
     await see(page, 'Plainlimit Pro');
     await page.getByRole('button', { name: 'Not now', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await see(page, 'Used today');
+    await see(page, 'Used since 6:00 AM');
     await context.close();
   });
 
