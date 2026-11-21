@@ -159,9 +159,9 @@ async function main() {
     await shot(page, 'q04b-too-many-today');
     await page.getByRole('button', { name: 'Set essentials', exact: true }).click();
     await see(page, 'Your list from before still applies until you choose your essentials.');
-    await see(page, 'First, tick All Apps, tap Done');
-    await see(page, 'Then tick only your essential apps');
-    await see(page, 'Never counted, never locked.');
+    await see(page, 'Tick All, then Done');
+    await see(page, 'Tick what stays open');
+    await see(page, 'Codes');
     // One button, and it is open.
     if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is not open');
     if ((await page.getByRole('button', { name: 'Show my apps', exact: true }).count()) > 0) throw new Error('the old first step is still drawn');
@@ -320,17 +320,35 @@ async function main() {
     await context.close();
   });
 
-  await scenario('Second thought: off by default, turned on from Settings > Advanced, open time chosen', async () => {
+  await scenario('Second thought: nothing picked shows off with one button; with apps the switch turns it on, and the picture follows the open time', async () => {
+    {
+      const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting,noAskPicks');
+      await tab(page, 'Settings');
+      await page.getByRole('button', { name: /^Advanced/ }).click();
+      await page.getByRole('button', { name: 'Second thought, Off', exact: true }).click();
+      await see(page, 'A pause before the apps you open without thinking.');
+      await see(page, 'Pick apps and it turns on.');
+      await page.getByRole('button', { name: 'Choose apps', exact: true }).waitFor();
+      if (await page.getByRole('switch', { name: 'Second thought' }).isChecked()) throw new Error('the switch was on with nothing picked');
+      await shot(page, 'q21a-ask-first-nothing-picked', true);
+      await context.close();
+    }
     const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting');
     await tab(page, 'Settings');
     await page.getByRole('button', { name: /^Advanced/ }).click();
     await page.getByRole('button', { name: /^Second thought/ }).click();
-    await see(page, 'asks for one sum before it opens');
-    if (!(await page.getByRole('radio', { name: /^Off/ }).isChecked())) throw new Error('Second thought was not off by default');
-    await page.getByRole('radio', { name: /^On/ }).click();
-    await page.getByRole('radio', { name: /^15 minutes/ }).click();
-    if (!(await page.getByRole('radio', { name: /^15 minutes/ }).isChecked())) throw new Error('15 minutes did not stay chosen');
-    await see(page, '3 picked');
+    await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It opens for 10 minutes, then it asks again.', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Apps, 3 picked', exact: true }).waitFor();
+    const toggle = page.getByRole('switch', { name: 'Second thought' });
+    if (await toggle.isChecked()) throw new Error('Second thought was not off by default');
+    await toggle.click();
+    await page.waitForTimeout(200);
+    if (!(await toggle.isChecked())) throw new Error('the switch did not turn it on');
+    await page.getByRole('radio', { name: '15 minutes', exact: true }).click();
+    if (!(await page.getByRole('radio', { name: '15 minutes', exact: true }).isChecked())) throw new Error('15 minutes did not stay chosen');
+    await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It opens for 15 minutes, then it asks again.', exact: true }).waitFor();
+    await see(page, 'Open 15 min, then it asks again');
+    await see(page, 'One sum, then your app opens for 15 minutes.');
     await shot(page, 'q21-ask-first-settings', true);
     await page.goBack();
     await see(page, 'On, 15 min');

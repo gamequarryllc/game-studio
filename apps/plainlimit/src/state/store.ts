@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 
-import { DEFAULT_ASK_FIRST, type AskFirst } from '@/domain/askFirst';
+import { DEFAULT_ASK_FIRST, onAfterPicking, type AskFirst } from '@/domain/askFirst';
 import { cellsLeft } from '@/domain/battery';
 import { widgetRecord } from '@/domain/pro';
 import { addWeeklyPasses, freshRecord, passActive, passCheck, recordView, spendPass } from '@/domain/record';
@@ -534,10 +534,15 @@ export const store = {
     set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...(settings.askFirst ?? DEFAULT_ASK_FIRST), ...change } } });
     syncAskFirst();
   },
-  /** The Ask first picks changed in Apple's list. */
-  askPicksChanged() {
+  /**
+   * Apple's list of Ask first picks was closed with `picked` apps in it.
+   * Picking apps turns the list on and an empty list turns it off, so the
+   * switch never says off beside apps just picked (the owner, 2026-11-21).
+   */
+  askPicksChanged(picked: number) {
+    const settings = snapshot.doc.settings;
+    set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...(settings.askFirst ?? DEFAULT_ASK_FIRST), on: onAfterPicking(picked) } } });
     syncAskFirst();
-    set({ ...snapshot.doc }, false);
   },
   /**
    * The sum on the Ask first screen was solved: open the list for a while.

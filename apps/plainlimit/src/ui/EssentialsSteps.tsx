@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Text, View } from 'react-native';
 
 import { ALL_ID, ESSENTIALS_ID, ESSENTIALS_LIMIT, appsBefore, appsShown, essentialsBefore, essentialsCount, essentialsMode } from '@/platform/screenTime';
@@ -7,7 +8,7 @@ import { store } from '@/state/store';
 import { AppPicker } from './AppPicker';
 import { CHOOSE_HOW, MISSED_APPS, keptWords, shownWords, tooManyKept } from './countWords';
 import { BigButton, Card } from './kit';
-import { c } from './theme';
+import { c, display } from './theme';
 
 // Choosing the essentials, shared by its own screen and setup. To the person
 // it is one button. Behind it Apple's list opens twice, one straight after
@@ -120,7 +121,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
  */
 export function EssentialsSteps({ e, locked = false, mainInFoot = false }: { e: Essentials; locked?: boolean; mainInFoot?: boolean }) {
   return (
-    <Card style={{ paddingVertical: 14, gap: 10 }}>
+    <Card style={{ paddingVertical: e.ready ? 14 : 18, gap: 10 }}>
       {e.ready ? <Text style={how}>{`${keptWords(e.kept)} ${shownWords(e.shown)}`}</Text> : <Pictures firstDone={e.shown > 0} />}
       {e.missed ? (
         <Text accessibilityRole="alert" style={warn}>
@@ -145,50 +146,74 @@ export function EssentialsSteps({ e, locked = false, mainInFoot = false }: { e: 
 }
 
 /**
- * What the two lists will look like, as pictures: few people read a paragraph
- * in setup (the owner, build 107). Read out as one sentence.
+ * The two lists in a few words and two small pictures: few people read a
+ * paragraph in setup (the owner, build 107), and the owner picked this
+ * shorter card from five drafts (build 115). Step 1 is Apple's top row and
+ * its Done button; step 2 is a handful of example essentials. Read out as one
+ * sentence.
  */
 function Pictures({ firstDone }: { firstDone: boolean }) {
   return (
-    <View accessible accessibilityLabel={CHOOSE_HOW} style={{ gap: 14 }}>
-      <Picture n={firstDone ? '✓' : '1'} title="First, tick All Apps, tap Done" why="One-time setup, so every app can be counted." faded={firstDone}>
-        <Row label="All Apps & Categories" ticked strong />
-        <Row label="Social" ticked />
-        <Row label="Games" ticked />
-      </Picture>
-      <Picture n="2" title="Then tick only your essential apps" why="Never counted, never locked.">
-        <Row label="Messages" ticked strong />
-        <Row label="Maps" ticked strong />
-        <Row label="Games" />
-      </Picture>
+    <View accessible accessibilityLabel={CHOOSE_HOW} style={{ gap: 16 }}>
+      <Step n={firstDone ? '✓' : '1'} title="Tick All, then Done" faded={firstDone}>
+        <View style={pic.allRow}>
+          <View style={pic.pill}>
+            <Tick />
+            <Text style={pic.pillText}>All Apps</Text>
+          </View>
+          <Text style={pic.then}>›</Text>
+          <View style={pic.pill}>
+            <Text style={[pic.pillText, { color: APPLE_BLUE }]}>Done</Text>
+          </View>
+        </View>
+      </Step>
+      <View style={pic.rule} />
+      <Step n="2" title="Tick what stays open">
+        <View style={pic.chips}>
+          {EXAMPLES.map((x) => (
+            <View key={x.name} style={pic.chip}>
+              <View style={[pic.icon, { backgroundColor: x.bg }]}>
+                <SymbolView name={x.symbol} size={15} tintColor={x.fg} type="monochrome" fallback={<View style={[pic.dot, { backgroundColor: x.fg }]} />} />
+              </View>
+              <Text style={pic.chipText}>{x.name}</Text>
+            </View>
+          ))}
+        </View>
+      </Step>
     </View>
   );
 }
 
+/** Apps people often keep open, as examples: plain symbols, not the apps' own icons. */
+const EXAMPLES: { name: string; symbol: SymbolViewProps['name']; bg: string; fg: string }[] = [
+  { name: 'Messages', symbol: 'message.fill', bg: '#34C759', fg: '#FFFFFF' },
+  { name: 'Phone', symbol: 'phone.fill', bg: '#34C759', fg: '#FFFFFF' },
+  { name: 'Maps', symbol: 'mappin', bg: '#E4F2DE', fg: '#F0483E' },
+  { name: 'Bank', symbol: 'building.columns.fill', bg: '#2F74EB', fg: '#FFFFFF' },
+  { name: 'Codes', symbol: 'key.fill', bg: '#3F4246', fg: '#FFFFFF' },
+  { name: 'Music', symbol: 'music.note', bg: '#F5405E', fg: '#FFFFFF' },
+];
+
 /** `faded`: this step is done, so the eye goes to the other one. */
-function Picture({ n, title, why, faded = false, children }: { n: string; title: string; why: string; faded?: boolean; children: ReactNode }) {
+function Step({ n, title, faded = false, children }: { n: string; title: string; faded?: boolean; children: ReactNode }) {
   return (
-    <View style={{ gap: 8, opacity: faded ? 0.45 : 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    <View style={{ gap: 12, opacity: faded ? 0.45 : 1 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View style={pic.badge}>
           <Text style={pic.badgeText}>{n}</Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={pic.title}>{title}</Text>
-          <Text style={pic.why}>{why}</Text>
-        </View>
+        <Text style={pic.title}>{title}</Text>
       </View>
-      <View style={pic.list}>{children}</View>
+      <View style={{ paddingLeft: 42 }}>{children}</View>
     </View>
   );
 }
 
-/** A row of Apple's list: its round tick box, then the name. */
-function Row({ label, ticked = false, strong = false }: { label: string; ticked?: boolean; strong?: boolean }) {
+/** The round tick box of Apple's list, ticked. */
+function Tick() {
   return (
-    <View style={pic.row}>
-      <View style={[pic.box, ticked ? pic.boxOn : null]}>{ticked ? <Text style={pic.tick}>✓</Text> : null}</View>
-      <Text style={[pic.label, strong ? { color: c.ink, fontWeight: '600' } : null]}>{label}</Text>
+    <View style={pic.box}>
+      <Text style={pic.tick}>✓</Text>
     </View>
   );
 }
@@ -197,16 +222,21 @@ function Row({ label, ticked = false, strong = false }: { label: string; ticked?
 const APPLE_BLUE = '#0A84FF';
 
 const pic = {
-  badge: { width: 26, height: 26, borderRadius: 13, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { fontSize: 15, fontWeight: '700', color: c.onPaper },
-  title: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: c.ink },
-  why: { fontSize: 14, lineHeight: 19, color: c.ink3 },
-  list: { borderRadius: 14, backgroundColor: c.raised, paddingVertical: 4, paddingHorizontal: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 34 },
-  box: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: c.outline, alignItems: 'center', justifyContent: 'center' },
-  boxOn: { backgroundColor: APPLE_BLUE, borderColor: APPLE_BLUE },
+  badge: { width: 30, height: 30, borderRadius: 15, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontFamily: display.bold, fontSize: 17, color: c.onPaper },
+  title: { flex: 1, fontFamily: display.bold, fontSize: 22, lineHeight: 27, letterSpacing: -0.3, color: c.ink },
+  allRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, borderRadius: 12, backgroundColor: c.raised, paddingHorizontal: 12 },
+  pillText: { fontSize: 15, fontWeight: '600', color: c.ink },
+  then: { fontSize: 22, lineHeight: 24, color: c.ink3 },
+  rule: { height: 1, backgroundColor: c.rule },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, borderRadius: 18, backgroundColor: c.raised, paddingLeft: 5, paddingRight: 12 },
+  chipText: { fontSize: 15, fontWeight: '500', color: c.ink },
+  icon: { width: 26, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 9, height: 9, borderRadius: 5 },
+  box: { width: 20, height: 20, borderRadius: 10, backgroundColor: APPLE_BLUE, alignItems: 'center', justifyContent: 'center' },
   tick: { fontSize: 12, lineHeight: 15, fontWeight: '800', color: '#FFFFFF' },
-  label: { fontSize: 15, color: c.ink3 },
 } as const;
 
 const how = { fontSize: 15, lineHeight: 21, color: c.ink2 } as const;

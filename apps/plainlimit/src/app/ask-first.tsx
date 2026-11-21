@@ -1,56 +1,87 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { StyleSheet, Switch, Text, View } from 'react-native';
 
-import { ASK_ID, DEFAULT_ASK_FIRST, OPEN_CHOICES } from '@/domain/askFirst';
+import { ASK_ID, DEFAULT_ASK_FIRST, OPEN_CHOICES, askShownOn } from '@/domain/askFirst';
+import { tap } from '@/platform/haptics';
 import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenTime';
 import { store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
-import { BigButton, Card, Choice, Label, Lead, Page, Title } from '@/ui/kit';
+import { BigButton, Card, Label, Lead, LinkRow, Page, Pills, Title } from '@/ui/kit';
+import { SecondThoughtPicture } from '@/ui/SecondThoughtPicture';
 import { c } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
-// Settings > Second thought (Ask first in the code): a second, optional list of apps that ask for one sum
-// every time they open (src/domain/askFirst.ts).
+// Settings > Advanced > Second thought (Ask first in the code): a second,
+// optional list of apps that ask for one sum every time they open
+// (src/domain/askFirst.ts).
+//
+// Reworked for 1.1 (the owner, 2026-11-21): the screen was mostly words, had
+// no picture of how it works, and its Off/On cards stayed on Off after apps
+// were picked. Now a picture shows how it works, a switch turns it on and
+// off, picking apps turns it on by itself (switching off keeps them), and the
+// open time is three pills.
+
+const OPEN_PILLS = OPEN_CHOICES.map((minutes) => ({ value: minutes, label: `${minutes} min`, spoken: `${minutes} minutes` }));
 
 export default function AskFirstSettings() {
   const [picking, setPicking] = useState(false);
-  const [, redraw] = useState(0);
   const doc = useDoc();
   const { accent } = useDay();
   const ask = doc.settings.askFirst ?? DEFAULT_ASK_FIRST;
-  const picked = pickCount(ASK_ID);
   const phone = SCREEN_TIME_AVAILABLE || MOCK_PHONE;
+  const picked = pickCount(ASK_ID);
+  const on = askShownOn(ask, picked, phone);
+  const flip = (next: boolean) => {
+    tap();
+    // Nothing to ask first yet: switching on opens Apple's list, and picking turns it on.
+    if (next && phone && picked === 0) setPicking(true);
+    else store.setAskFirst({ on: next });
+  };
+
   return (
     <Page top={8}>
       <Title>Second thought</Title>
-      <Lead>For the apps you open without deciding to. Each one asks for one sum before it opens, whatever the battery says.</Lead>
+      <Lead>A pause before the apps you open without thinking.</Lead>
 
-      <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>
-        <Choice title="Off" line="Apps open as usual" chosen={!ask.on} accent={accent} onPress={() => store.setAskFirst({ on: false })} />
-        <Choice title="On" line="The apps below ask for one sum first" chosen={ask.on} accent={accent} onPress={() => store.setAskFirst({ on: true })} />
-      </Card>
+      <SecondThoughtPicture openMinutes={ask.openMinutes} accent={accent} />
 
-      {phone ? (
-        <>
-          <Text style={{ fontSize: 15, lineHeight: 21, color: picked === 0 ? c.ink : c.ink2, marginTop: 4 }}>
-            {picked === 0 ? 'No apps picked yet.' : `${picked} picked in Apple’s list.`}
+      <Card style={phone && picked === 0 ? { paddingBottom: 16 } : undefined}>
+        <View style={[styles.row, phone && picked > 0 ? styles.rowRule : null]}>
+          <Text nativeID="ask-switch-label" style={styles.rowLabel}>
+            Second thought
           </Text>
-          <BigButton label={picked === 0 ? 'Choose apps' : 'Change the apps'} onPress={() => setPicking(true)} />
-        </>
-      ) : (
-        <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>On an iPhone you pick them in Apple’s own list of your apps.</Text>
-      )}
-
-      <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8, marginTop: 8 }}>
-        <Label>After the sum, open for</Label>
-        {OPEN_CHOICES.map((minutes) => (
-          <Choice key={minutes} title={`${minutes} minutes`} chosen={ask.openMinutes === minutes} accent={accent} onPress={() => store.setAskFirst({ openMinutes: minutes })} />
-        ))}
+          <Switch
+            accessibilityLabel="Second thought"
+            aria-labelledby="ask-switch-label"
+            value={on}
+            onValueChange={flip}
+            trackColor={{ false: '#39393D', true: accent }}
+            thumbColor="#FFFFFF"
+            ios_backgroundColor="#39393D"
+            // The web preview's own colour for the knob when on (the phone uses thumbColor).
+            {...({ activeThumbColor: '#FFFFFF' } as object)}
+          />
+        </View>
+        {phone ? (
+          picked === 0 ? (
+            <View style={{ gap: 12 }}>
+              <Text style={styles.hint}>Pick apps and it turns on.</Text>
+              <BigButton label="Choose apps" onPress={() => setPicking(true)} />
+            </View>
+          ) : (
+            <LinkRow label="Apps" value={`${picked} picked`} onPress={() => setPicking(true)} last />
+          )
+        ) : (
+          <Text style={[styles.hint, { paddingBottom: 14 }]}>On an iPhone you pick the apps in Apple’s own list.</Text>
+        )}
       </Card>
 
-      <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>
-        iOS doesn’t tell Plainlimit when you leave an app, so after the sum the apps stay open for the time above, then ask again. An app that also counts still uses up the battery, and stays locked while the battery is empty.
-      </Text>
+      <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 10 }}>
+        <Label>After the sum, open for</Label>
+        <Pills options={OPEN_PILLS} chosen={ask.openMinutes} accent={accent} onChange={(minutes) => store.setAskFirst({ openMinutes: minutes })} />
+      </Card>
+
+      <Text style={styles.foot}>Apps that also count still use your battery, and stay locked when it’s empty.</Text>
 
       <AppPicker
         id={ASK_ID}
@@ -58,10 +89,17 @@ export default function AskFirstSettings() {
         header="Tick the apps you open without thinking"
         onClose={() => {
           setPicking(false);
-          store.askPicksChanged();
-          redraw((n) => n + 1);
+          store.askPicksChanged(pickCount(ASK_ID));
         }}
       />
     </Page>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { minHeight: 58, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },
+  rowLabel: { fontSize: 17, fontWeight: '600', color: c.ink },
+  hint: { fontSize: 15, lineHeight: 20, color: c.ink3 },
+  foot: { fontSize: 14, lineHeight: 20, color: c.ink3, paddingHorizontal: 2 },
+});

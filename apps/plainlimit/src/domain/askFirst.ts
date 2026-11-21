@@ -34,6 +34,20 @@ export interface AskFirst {
 
 export const DEFAULT_ASK_FIRST: AskFirst = { on: false, openMinutes: 10 };
 
+/** After Apple's list closes with `picked` apps in it: picking apps turns the list on, and an empty list turns it off. */
+export function onAfterPicking(picked: number): boolean {
+  return picked > 0;
+}
+
+/**
+ * What the switch on the Second thought screen shows: on only with something
+ * picked, as nothing asks first otherwise. Where nothing can be picked (the
+ * web preview) it shows the setting as saved.
+ */
+export function askShownOn(ask: AskFirst, picked: number, canPick: boolean): boolean {
+  return ask.on && (picked > 0 || !canPick);
+}
+
 /** A saved copy read back, with anything missing or odd put right. */
 export function repairAskFirst(raw: unknown): AskFirst {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;

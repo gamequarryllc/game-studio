@@ -13,7 +13,7 @@ import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
-import { TodayTotal, WeekAverage } from '@/ui/UsageReport';
+import { TodayTotal, WeekBars } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
 import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
 import { useDay } from '@/ui/useDay';
@@ -181,25 +181,21 @@ export default function Setup() {
   }
 
   if (step === 'goal') {
+    // With the phone's figures: the last seven days as bars against the goal,
+    // and the stepper moves the line (the owner picked these from five
+    // drafts, build 115; it was two figures and a paragraph). Without them,
+    // the words.
     body = (
       <>
         <Heading>How much a day?</Heading>
         {figures ? (
           <View style={styles.figureBox}>
-            <View style={styles.figures}>
-              <View style={styles.figure}>
-                <Text style={styles.figureLabel}>{`Since ${clockLabel(settings.rechargeMinute)}`}</Text>
-                <TodayTotal settings={settings} now={now} fallback={<WaitingDots />} />
-              </View>
-              <View style={styles.figure}>
-                <Text style={styles.figureLabel}>Daily average</Text>
-                <WeekAverage settings={settings} now={now} fallback={<WaitingDots />} />
-              </View>
-            </View>
-            <Text style={styles.note}>{sinceNote(clockLabel(settings.rechargeMinute))} The average is over the last 7 days.</Text>
+            <WeekBars settings={settings} now={now} fallback={<WaitingDots />} />
+            <Text style={styles.note}>{`Since ${clockLabel(settings.rechargeMinute)} each day, essentials not counted.`}</Text>
           </View>
-        ) : null}
-        <Lead>Pick a little under a normal day. You can change it later.</Lead>
+        ) : (
+          <Lead>Pick a little under a normal day. You can change it later.</Lead>
+        )}
         <Card style={{ paddingVertical: 18, gap: 10 }}>
           <View style={styles.stepper}>
             <StepButton sign="−" label="Less time" size={52} onPress={() => store.stepGoal(-1)} />
@@ -208,10 +204,10 @@ export default function Setup() {
             </Text>
             <StepButton sign="+" label="More time" size={52} onPress={() => store.stepGoal(1)} />
           </View>
-          <Text style={styles.note}>Six cells of {cellWords(settings.goalMinutes)} each</Text>
+          <Text style={[styles.note, figures ? { textAlign: 'center' } : null]}>{figures ? 'Moves the line' : `Six cells of ${cellWords(settings.goalMinutes)} each`}</Text>
         </Card>
         {/* The recharge time is not asked here: everyone starts at 6 AM, and changing it is Pro, in Settings (the owner, build 99). */}
-        <Lead>{`It recharges at ${clockLabel(settings.rechargeMinute)} every day.`}</Lead>
+        {figures ? null : <Lead>{`It recharges at ${clockLabel(settings.rechargeMinute)} every day.`}</Lead>}
       </>
     );
   }

@@ -21,6 +21,7 @@ import {
   type PlanAction,
   type PlanShield,
 } from '@/domain/monitorPlan';
+import { ASK_ID } from '@/domain/askFirst';
 import type { WidgetRecord } from '@/domain/pro';
 import type { Settings } from '@/domain/types';
 
@@ -54,7 +55,8 @@ export type Permission = 'unknown' | 'denied' | 'approved';
  * so the states only a phone reaches can be seen and checked in a browser.
  * Words, comma-separated: "counting" (counting is on), one counting problem
  * ("nothingPicked", "tooManyApps", "accessOff", "notRegistered", "miscounted"),
- * "held" (setup's "start tomorrow": nothing locks before the recharge) and
+ * "held" (setup's "start tomorrow": nothing locks before the recharge),
+ * "noAskPicks" (nothing picked yet for Second thought) and
  * "store" (the App Store screenshots: no test tools, and no box for the list
  * only a phone can draw). Never on a phone.
  */
@@ -158,7 +160,7 @@ export function isOn(): boolean {
 
 /** How many apps, categories and sites are in one of the person's picks. The app never learns which. */
 export function pickCount(id: string): number {
-  if (MOCK_PHONE) return MOCK.has('nothingPicked') ? 0 : id === COUNTED_ID ? 14 : 3;
+  if (MOCK_PHONE) return MOCK.has('nothingPicked') || (id === ASK_ID && MOCK.has('noAskPicks')) ? 0 : id === COUNTED_ID ? 14 : 3;
   if (!SCREEN_TIME_AVAILABLE) return 0;
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });
@@ -999,6 +1001,18 @@ export function averageWindow(settings: Settings, now: Date): { fromMs: number; 
   const periodStart = periodStartOf(now, settings.rechargeMinute);
   const token = SCREEN_TIME_AVAILABLE ? countedToken() : null;
   return { fromMs: periodStart.getTime() - 7 * 24 * 3600 * 1000, toMs: periodStart.getTime(), selection: token };
+}
+
+/**
+ * The same seven days for setup's bars, with the goal riding on the window: it
+ * starts one second earlier for each minute of the goal. The phone's report is
+ * sealed and can be handed nothing else; it counts the days back from the
+ * window's end, so the extra seconds fall outside them
+ * (targets/report/PlainlimitReport.swift, WeekReport).
+ */
+export function weekWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
+  const week = averageWindow(settings, now);
+  return { ...week, fromMs: week.fromMs - settings.goalMinutes * 1000 };
 }
 
 /** For setup's last screen: whether the day's figure has settled after the latest change (see `roundSettled`). */

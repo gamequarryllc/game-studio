@@ -67,7 +67,7 @@ async function main() {
     await shot('00-setup-welcome');
     await press('Set it up');
     await see('Your essentials');
-    await see('Essentials never count and never lock. Everything else does.');
+    await see('These never count and never lock.');
     await shot('00-setup-counts');
     await press('Next');
     await see('How much a day?');
@@ -159,7 +159,7 @@ async function main() {
     await back();
     await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
     await press('Second thought, Off');
-    await see('For the apps you open without deciding to. Each one asks for one sum before it opens, whatever the battery says.');
+    await see('A pause before the apps you open without thinking.');
     await back();
     await back();
   });
