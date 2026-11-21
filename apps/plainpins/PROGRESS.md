@@ -16,7 +16,7 @@ Kept current after every finished item, so a run that is cut off can be picked u
 
 ## In progress
 
-- Critic review 2.
+- Critic review 2 fixes are in; a third review after the first phone test.
 - The first TestFlight upload (NOTES.md, "Owner actions": it needs the app record).
 
 ## Next
