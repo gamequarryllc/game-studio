@@ -1,7 +1,7 @@
 // Makes the App Store screenshots: fills the app in a headless browser with a small,
-// believable household (15 things, about $9,000), photographs four screens and the
+// believable household (15 things, about $9,000), photographs five screens and the
 // report itself, and sets each under a short caption on a 1320 x 2868 page (the 6.9-inch
-// iPhone size App Store Connect asks for). The four screens sit inside a plain phone
+// iPhone size App Store Connect asks for). The five screens sit inside a plain phone
 // outline with a status bar, as they would be seen in the hand; the report is shown as
 // the sheet of paper it becomes. Also saves the Pro screen by itself, which the in-app
 // purchase needs for review.
@@ -38,8 +38,9 @@ const SHOTS = [
   { file: '01-rooms', kind: 'phone', caption: 'Know what you own,\nbefore you need to.' },
   { file: '02-item', kind: 'phone', caption: 'A photo, a value,\na serial number.' },
   { file: '03-report', kind: 'sheet', caption: 'A clean report,\nready for your insurer.' },
-  { file: '04-items', kind: 'phone', caption: 'Everything in one list,\nmost valuable first.' },
-  { file: '05-places', kind: 'phone', caption: 'Every place you insure,\neach with its own report.' },
+  { file: '04-claim', kind: 'phone', caption: 'After a loss, the claim\nyour insurer asks for.' },
+  { file: '05-items', kind: 'phone', caption: 'Everything in one list,\nmost valuable first.' },
+  { file: '06-places', kind: 'phone', caption: 'Every place you insure,\neach with its own report.' },
 ];
 
 // name, room, category, value, brand, model, serial, photo
@@ -215,7 +216,7 @@ async function main() {
     await h.tab('Items');
     await h.tap('items-sort');
     await h.choose('Most valuable first');
-    await raw('04-items');
+    await raw('05-items');
 
     // 5. The cabinets, with a second and a third place.
     await h.tab('Rooms');
@@ -237,7 +238,31 @@ async function main() {
     await h.gone('places-screen');
     await h.tap('places');
     await h.visible('places-screen');
-    await raw('05-places');
+    await raw('06-places');
+    await h.tap('places-close');
+    await h.gone('places-screen');
+
+    // 4. A claim after a break-in: what was taken, the details, and the package for the adjuster.
+    // Taken last, so the open claim's note is not on the Rooms tab in the first picture.
+    await h.tab('Report');
+    await h.tap('open-claim');
+    await h.tap('claim-start');
+    await h.tap('claim-choose');
+    await h.visible('claim-items');
+    for (const name of [/^65-inch OLED television/, /^14-inch laptop/, /^Automatic wristwatch/]) {
+      await page.getByRole('checkbox', { name }).click();
+    }
+    await h.tap('claim-items-done');
+    await h.visible('claim-screen');
+    await h.expectText('claim-count', /^3 items · 3 stolen$/);
+    await h.fill('claim-name', 'Weekend break-in');
+    await h.fill('claim-number', 'FM-2026-118204');
+    await h.fill('claim-date', '2026-11-08');
+    await h.tap('claim-cause');
+    await h.choose('Theft or break-in');
+    await h.fill('claim-description', 'Back door forced while we were away for the weekend.');
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await raw('04-claim');
 
     if (errors.length > 0) throw new Error('page errors: ' + errors.join('; '));
 
