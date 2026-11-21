@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cellWords } from '@/domain/battery';
@@ -233,6 +233,7 @@ export default function Setup() {
             </View>
           </View>
         </View>
+        {phase === 'reading' ? <ReadingBar colour={accent} /> : null}
         <Lead>
           {phase === 'reading'
             ? 'Reading today\u2019s Screen Time. This can take up to half a minute, and nothing locks yet.'
@@ -311,6 +312,27 @@ export default function Setup() {
   );
 }
 
+/**
+ * Something moving while the phone reads the day so far. The wait has no real
+ * progress to report (the phone answers when it answers, within half a
+ * minute), so the bar fills quickly at first and ever more slowly, and never
+ * quite gets there; the screen changes when the figure is in. (The owner,
+ * build 99: half a minute of a still screen looks stuck.)
+ */
+function ReadingBar({ colour }: { colour: string }) {
+  const [filled] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    const run = Animated.timing(filled, { toValue: 1, duration: LONGEST_MS + 5000, easing: Easing.out(Easing.cubic), useNativeDriver: false });
+    run.start();
+    return () => run.stop();
+  }, [filled]);
+  return (
+    <View accessible accessibilityRole="progressbar" accessibilityLabel={'Reading today\u2019s Screen Time'} style={styles.bar}>
+      <Animated.View style={[styles.barFill, { backgroundColor: colour, width: filled.interpolate({ inputRange: [0, 1], outputRange: ['4%', '96%'] }) }]} />
+    </View>
+  );
+}
+
 function Heading({ children }: { children: string }) {
   return (
     <Text accessibilityRole="header" style={styles.heading}>
@@ -357,6 +379,8 @@ const styles = StyleSheet.create({
   rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },
   rowLabel: { fontSize: 16, color: c.ink2 },
   rowValue: { fontSize: 16, fontWeight: '600', color: c.ink },
+  bar: { height: 8, borderRadius: 4, backgroundColor: c.raised, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: 4 },
   quiet: { minHeight: 36, alignItems: 'center', justifyContent: 'center' },
   quietText: { fontSize: 14, color: c.ink3, textDecorationLine: 'underline' },
 });
