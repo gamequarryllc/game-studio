@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- The icon: the curve of the Earth at night, with one vermilion pin in it.
+       Flat colour, no gradient and no shadow; the lines are a globe's
+       meridians, drawn as on a desk globe. -->
+  <rect width="1024" height="1024" fill="#101A30"/>
+  <circle cx="512" cy="1180" r="760" fill="#F3EEE2"/>
+  <g fill="none" stroke="#101A30" stroke-opacity="0.16" stroke-width="10">
+    <ellipse cx="512" cy="1180" rx="250" ry="760"/>
+    <ellipse cx="512" cy="1180" rx="520" ry="760"/>
+    <ellipse cx="512" cy="1180" rx="760" ry="520"/>
+  </g>
+  <path d="M512 640 C512 640 300 420 300 286 A212 212 0 1 1 724 286 C724 420 512 640 512 640 Z" fill="#D2432A"/>
+  <circle cx="512" cy="286" r="78" fill="#F3EEE2"/>
+</svg>

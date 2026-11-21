@@ -26,6 +26,14 @@
       "note": "The home and car maintenance log (working slug was upkeep-log; named Plainkeep on 2026-11-12 so its folder, bundle id and store name agree from the first build). Moved ahead of the receipt vault by the owner on 2026-11-12 and built in the owner's Plainkeep conversation. Progress: apps/plainkeep/PROGRESS.md"
     },
     {
+      "slug": "plainpins",
+      "title": "Plainpins",
+      "color": "#D2432A",
+      "tagline": "A map of everywhere you have been: a pin for each place, with its photos, the day, who came along and what you did.",
+      "status": "building",
+      "note": "The travel pin map, asked for by the owner on 2026-11-20 outside the list of nine. Plainpins is a working name; the owner has not settled it (ideas are in store/plainpins/listing.json). Built in the owner's travel map conversation. Progress: apps/plainpins/PROGRESS.md"
+    },
+    {
       "slug": "clean-photo",
       "title": "Photo metadata stripper",
       "color": "#5b5f97",
