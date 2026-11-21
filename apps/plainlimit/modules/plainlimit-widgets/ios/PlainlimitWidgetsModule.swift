@@ -49,11 +49,29 @@ class UsageReportView: ExpoView {
   var fromMs: Double = 0 { didSet { if fromMs != oldValue { refresh() } } }
   var toMs: Double = 0 { didSet { if toMs != oldValue { refresh() } } }
   /// The person's picks, as Apple's picker handed them over; nil means every app.
-  var selection: String? { didSet { if selection != oldValue { refresh() } } }
+  /// Closing the picker can hand over the same picks written another way (a
+  /// set's order is not fixed), so only different picks draw the report again:
+  /// each new drawing is a chance for the phone never to finish it (build 127,
+  /// setup's chart after Back, the essentials and Next).
+  var selection: String? { didSet { if !UsageReportView.samePicks(selection, oldValue) { refresh() } } }
   /// Which report: "TopApps" (the list) or "Total" (the day's figure).
   var context: String = "TopApps" { didSet { if context != oldValue { refresh() } } }
 
   private var host: UIHostingController<AnyView>?
+
+  private static func picks(_ text: String?) -> FamilyActivitySelection? {
+    guard let text, !text.isEmpty, let data = Data(base64Encoded: text) else { return nil }
+    return try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
+  }
+
+  /// Whether two of Apple's selections, as handed over, name the same apps, categories and sites.
+  private static func samePicks(_ a: String?, _ b: String?) -> Bool {
+    if a == b { return true }
+    guard let one = picks(a), let other = picks(b) else { return false }
+    return one.applicationTokens == other.applicationTokens
+      && one.categoryTokens == other.categoryTokens
+      && one.webDomainTokens == other.webDomainTokens
+  }
 
   // The list is drawn by another process. A touch that lands on it is handed
   // to that process by iOS before this app is asked anything, so a finger on

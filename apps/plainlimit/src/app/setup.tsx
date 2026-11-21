@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -66,6 +66,8 @@ export default function Setup() {
   const [phase, setPhase] = useState<'reading' | 'ready' | 'failed'>('reading');
   const [waitedAt, setWaitedAt] = useState<number | null>(null);
   const previewed = useRef(false);
+  // Whether the goal screen's figures have been shown, so they stay for the rest of setup.
+  const [figuresShown, setFiguresShown] = useState(false);
 
   const step = STEPS[at];
   const goTo = (s: Step) => setAt(Math.max(0, STEPS.indexOf(s)));
@@ -180,35 +182,52 @@ export default function Setup() {
     }
   }
 
+  // The goal screen's figures and 7-day chart, drawn by the phone. Once shown
+  // they stay for the rest of setup, parked out of sight on the other screens,
+  // so Back and Next don't ask the phone to draw them again: on build 127 the
+  // second drawing never came (the owner). They are drawn again only when the
+  // essentials change, which changes what they count.
+  const recharge = clockLabel(settings.rechargeMinute);
+  if (step === 'goal' && figures && !figuresShown) setFiguresShown(true);
+  const figureBox =
+    figures && figuresShown ? (
+      <View
+        key="figures"
+        pointerEvents={step === 'goal' ? 'auto' : 'none'}
+        accessibilityElementsHidden={step !== 'goal'}
+        importantForAccessibility={step === 'goal' ? 'auto' : 'no-hide-descendants'}
+        style={[styles.figureBox, { gap: 12 }, step === 'goal' ? null : styles.parked]}>
+        <View style={styles.figures}>
+          <View style={styles.figure}>
+            <Text style={styles.figureLabel}>{`Since ${recharge}`}</Text>
+            <TodayTotal settings={settings} now={now} fallback={<WaitingDots />} />
+          </View>
+          <View style={styles.figure}>
+            <Text style={styles.figureLabel}>Daily average</Text>
+            <WeekAverage settings={settings} now={now} fallback={<WaitingDots />} />
+          </View>
+        </View>
+        <Text style={styles.figureLabel}>Last 7 days</Text>
+        <WeekBars settings={settings} now={now} fallback={<WaitingDots />} />
+        <Text style={styles.note}>{`Days start at ${recharge}. Essentials not counted.`}</Text>
+      </View>
+    ) : null;
+  let afterFigures: ReactNode = null;
+
   if (step === 'goal') {
     // With the phone's figures: today and the daily average, then the last
     // seven days as bars with their times against the goal's line, which the
     // stepper moves (the owner picked the bars from five drafts, build 115,
     // and asked for the times and figures back, build 120). Without them, the
     // words.
-    const recharge = clockLabel(settings.rechargeMinute);
     body = (
       <>
         <Heading>How much a day?</Heading>
-        {figures ? (
-          <View style={[styles.figureBox, { gap: 12 }]}>
-            <View style={styles.figures}>
-              <View style={styles.figure}>
-                <Text style={styles.figureLabel}>{`Since ${recharge}`}</Text>
-                <TodayTotal settings={settings} now={now} fallback={<WaitingDots />} />
-              </View>
-              <View style={styles.figure}>
-                <Text style={styles.figureLabel}>Daily average</Text>
-                <WeekAverage settings={settings} now={now} fallback={<WaitingDots />} />
-              </View>
-            </View>
-            <Text style={styles.figureLabel}>Last 7 days</Text>
-            <WeekBars settings={settings} now={now} fallback={<WaitingDots />} />
-            <Text style={styles.note}>{`Days start at ${recharge}. Essentials not counted.`}</Text>
-          </View>
-        ) : (
-          <Lead>Pick a little under a normal day. You can change it later.</Lead>
-        )}
+        {figures ? null : <Lead>Pick a little under a normal day. You can change it later.</Lead>}
+      </>
+    );
+    afterFigures = (
+      <>
         <Card style={{ paddingVertical: 18, gap: 10 }}>
           <View style={styles.stepper}>
             <StepButton sign="−" label="Less time" size={52} onPress={() => store.stepGoal(-1)} />
@@ -226,7 +245,6 @@ export default function Setup() {
   }
 
   if (step === 'ready' && checking) {
-    const recharge = clockLabel(settings.rechargeMinute);
     // Plainlimit's count stops at the goal: reaching it means today is already past.
     const over = phase === 'ready' && day.usedMinutes >= settings.goalMinutes;
     body = (
@@ -315,7 +333,9 @@ export default function Setup() {
         <View style={styles.back} />
       </View>
       <ScrollView contentContainerStyle={styles.body_} keyboardShouldPersistTaps="handled">
-        {body}
+        <Fragment key="body">{body}</Fragment>
+        {figureBox}
+        <Fragment key="after">{afterFigures}</Fragment>
       </ScrollView>
       <View style={[styles.foot, { paddingBottom: insets.bottom + 16 }]}>
         <BigButton label={primary.label} onPress={primary.onPress} />
@@ -388,6 +408,8 @@ const styles = StyleSheet.create({
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   big: { fontFamily: display.bold, fontSize: 60, lineHeight: 64, letterSpacing: -2.2, color: c.ink },
   figureBox: { borderWidth: 1, borderColor: c.rule, borderRadius: 18, padding: 16 },
+  // Out of sight on the other screens, at the same width, so the phone's drawings keep their size and are not redrawn.
+  parked: { position: 'absolute', top: 18, left: 24, right: 24, opacity: 0 },
   figures: { flexDirection: 'row', gap: 12 },
   figure: { flex: 1, gap: 4 },
   figureLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: c.ink3 },

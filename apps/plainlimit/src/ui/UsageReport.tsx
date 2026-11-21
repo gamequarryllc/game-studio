@@ -105,7 +105,7 @@ export function WeekBars({ settings, now, fallback }: { settings: Settings; now:
   if (!NativeReport || !window || !window.selection) return <View>{fallback}</View>;
   return (
     <View pointerEvents="none" style={{ height: WEEK.height, alignSelf: 'stretch' }}>
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>{fallback}</View>
+      <WeekLoading />
       <NativeReport context={`Week${hours}`} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
       <GoalLine goalMinutes={settings.goalMinutes} hours={hours} />
       <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
@@ -115,6 +115,77 @@ export function WeekBars({ settings, now, fallback }: { settings: Settings; now:
 
 /** The phone's chart: its height and, as in targets/report (weekTop, weekBottom, weekAxis, weekRight), the room over and under the bars, the hour scale's column, and the column on the right for the phone's goal to try. */
 export const WEEK = { height: 150, top: 20, bottom: 22, axis: 30, right: 44 } as const;
+
+/** Rough heights for the stand-in bars, as parts of the chart. */
+const STAND_IN = [0.55, 0.45, 0.28, 0.5, 0.62, 0.34, 0.48];
+
+/** After this long a load is said to be slow, and the goal can be picked without the bars. */
+const SLOW_MS = 12_000;
+
+/**
+ * The chart before the phone has drawn it, laid out as the phone will draw it:
+ * seven gray bars where the bars go, gently pulsing, and a tag in the middle
+ * that says what is loading. It lies under the phone's chart, which covers it
+ * once drawn; the app never learns when that is. Build 127 showed three dots
+ * in the top corner instead, half under the goal's shaded zone (the owner).
+ */
+function WeekLoading() {
+  const reduced = useReducedMotion();
+  const [glow] = useState(() => new Animated.Value(1));
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), SLOW_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    if (reduced) return;
+    const ease = Easing.inOut(Easing.quad);
+    const run = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 0.45, duration: 800, easing: ease, useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 1, duration: 800, easing: ease, useNativeDriver: true }),
+      ]),
+    );
+    run.start();
+    return () => run.stop();
+  }, [glow, reduced]);
+  const plot = WEEK.height - WEEK.top - WEEK.bottom;
+  return (
+    <View style={loading.fill}>
+      <Animated.View style={[loading.bars, { top: WEEK.top, height: plot, opacity: glow }]}>
+        {STAND_IN.map((part, i) => (
+          <View key={i} style={loading.slot}>
+            <View style={[loading.bar, { height: plot * part }]} />
+          </View>
+        ))}
+      </Animated.View>
+      <View style={[loading.base, { top: WEEK.top + plot }]} />
+      {/* Low in the chart: the goal's line, which the app lays over this, opens in the upper two thirds. */}
+      <View style={[loading.low, { top: WEEK.top, height: plot }]}>
+        <View accessible accessibilityRole="progressbar" accessibilityLabel={slow ? 'Still loading your last 7 days. You can pick a goal without them.' : 'Loading your last 7 days'} style={loading.tag}>
+          <View style={loading.tagRow}>
+            <Text style={loading.tagText}>{slow ? 'Still loading' : 'Loading your last 7 days'}</Text>
+            <WaitingDots size={5} height={10} />
+          </View>
+          {slow ? <Text style={loading.slowText}>You can pick a goal without it.</Text> : null}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const loading = StyleSheet.create({
+  fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  bars: { position: 'absolute', left: WEEK.axis, right: WEEK.right, flexDirection: 'row', alignItems: 'flex-end' },
+  slot: { flex: 1, alignItems: 'center' },
+  bar: { width: 20, borderRadius: 6, backgroundColor: c.raised },
+  base: { position: 'absolute', left: WEEK.axis, right: WEEK.right, height: 1, backgroundColor: c.rule },
+  low: { position: 'absolute', left: WEEK.axis, right: WEEK.right, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 8 },
+  tag: { alignItems: 'center', gap: 2, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: c.ground, borderWidth: 1, borderColor: c.rule },
+  tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tagText: { fontSize: 13, fontWeight: '600', color: c.ink2 },
+  slowText: { fontSize: 12, color: c.ink3 },
+});
 
 /**
  * The chart's scales, in hours: the smallest that leaves room above the goal
