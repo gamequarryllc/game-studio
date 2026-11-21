@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { Text, View } from 'react-native';
 
 import type { Settings } from '@/domain/types';
-import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, averageWindow, reportWindow, weekWindow } from '@/platform/screenTime';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, averageWindow, pickupWindow, reportWindow, weekWindow } from '@/platform/screenTime';
 import { Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
 import { WaitingDots } from '@/ui/Waiting';
@@ -14,7 +14,7 @@ interface NativeProps {
   toMs: number;
   selection: string | null;
   /** Which of the extension's reports: the list, or the day's total. */
-  context?: 'TopApps' | 'Total' | 'Average' | 'Week';
+  context?: 'TopApps' | 'Total' | 'Average' | 'Week' | 'FirstApps';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -100,3 +100,29 @@ export function WeekBars({ settings, now, fallback, style }: { settings: Setting
 
 /** The bars' box: their heading, the bars and the day letters under them. */
 const WEEK_BARS_HEIGHT = 190;
+
+/** Four rows of the phone's list of apps opened first after a pickup. */
+export const FIRST_APPS_HEIGHT = 4 * 56 + 3;
+
+/**
+ * The apps opened first after picking up the phone over the last seven days,
+ * with how many times, drawn by the phone like Screen Time's "First Used After
+ * Pickup" (the owner, 2026-11-21: suggestions for Second thought). Plainlimit
+ * never learns which apps they are, so it can only show them, not tick them.
+ * The preview's "?mock=" stand-in shows the box as it is before the phone has
+ * drawn; anywhere else without the phone it draws nothing.
+ */
+export function FirstPickupApps({ now }: { now: Date }) {
+  if (!NativeReport && (!MOCK_PHONE || STORE_SHOTS)) return null;
+  const window = pickupWindow(now);
+  return (
+    <View pointerEvents="none" style={{ height: FIRST_APPS_HEIGHT, alignSelf: 'stretch' }}>
+      <View style={{ position: 'absolute', top: 12, left: 0, right: 0 }}>
+        <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink3 }}>Waiting for the phone&apos;s Screen Time…</Text>
+        <WaitingDots size={8} height={28} />
+      </View>
+      {NativeReport ? <NativeReport context="FirstApps" fromMs={window.fromMs} toMs={window.toMs} selection={null} style={{ flex: 1 }} /> : null}
+      <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
+    </View>
+  );
+}

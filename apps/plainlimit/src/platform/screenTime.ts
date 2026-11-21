@@ -1015,6 +1015,18 @@ export function weekWindow(settings: Settings, now: Date): { fromMs: number; toM
   return { ...week, fromMs: week.fromMs - settings.goalMinutes * 1000 };
 }
 
+/**
+ * The last seven days up to the end of this hour, every app, for the phone's
+ * list of the apps opened first after a pickup (Second thought's suggestions;
+ * targets/report/PlainlimitReport.swift, FirstAppsReport). No selection: the
+ * report names no apps, so it counts them all.
+ */
+export function pickupWindow(now: Date): { fromMs: number; toMs: number; selection: null } {
+  const hour = 3600 * 1000;
+  const toMs = Math.ceil((now.getTime() + 1) / hour) * hour;
+  return { fromMs: toMs - 7 * 24 * hour, toMs, selection: null };
+}
+
 /** For setup's last screen: whether the day's figure has settled after the latest change (see `roundSettled`). */
 export function countSettled(settings: Settings): boolean {
   if (!SCREEN_TIME_AVAILABLE) return true;

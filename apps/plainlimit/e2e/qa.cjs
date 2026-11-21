@@ -339,6 +339,9 @@ async function main() {
     await page.getByRole('button', { name: /^Second thought/ }).click();
     await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It opens for 10 minutes, then it asks again.', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Apps, 3 picked', exact: true }).waitFor();
+    // The phone's list of apps opened first after a pickup: here only its box, waiting for the phone.
+    await see(page, 'You open these first');
+    await see(page, 'The first app after you pick up your phone, last 7 days.');
     const toggle = page.getByRole('switch', { name: 'Second thought' });
     if (await toggle.isChecked()) throw new Error('Second thought was not off by default');
     await toggle.click();
