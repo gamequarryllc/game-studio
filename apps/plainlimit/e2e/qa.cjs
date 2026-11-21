@@ -159,7 +159,8 @@ async function main() {
     await shot(page, 'q04b-too-many-today');
     await page.getByRole('button', { name: 'Set essentials', exact: true }).click();
     await see(page, 'Your list from before still applies until you choose your essentials.');
-    await see(page, 'Apple’s list opens twice. First tap All Apps & Categories, then Done.');
+    await see(page, 'Tick All Apps, tap Done');
+    await see(page, 'Tick only what stays open');
     // One button, and it is open.
     if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is not open');
     if ((await page.getByRole('button', { name: 'Show my apps', exact: true }).count()) > 0) throw new Error('the old first step is still drawn');

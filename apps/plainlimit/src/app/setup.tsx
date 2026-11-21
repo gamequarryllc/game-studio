@@ -11,11 +11,12 @@ import { tickStepMinutes } from '@/domain/checkpoints';
 import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { Battery } from '@/ui/Battery';
-import { COUNTS_LEAD, essentialsValue } from '@/ui/countWords';
+import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { TodayTotal, WeekAverage } from '@/ui/UsageReport';
+import { WaitingDots } from '@/ui/Waiting';
 import { useDay } from '@/ui/useDay';
 
 // The first launch, in five screens: what it is, Screen Time access, what
@@ -159,7 +160,7 @@ export default function Setup() {
     body = (
       <>
         <Heading>Your essentials</Heading>
-        <Lead>{COUNTS_LEAD}</Lead>
+        <Lead>{COUNTS_SHORT}</Lead>
         {canPick ? (
           <EssentialsSteps e={essentials} mainInFoot />
         ) : SCREEN_TIME_AVAILABLE ? (
@@ -170,7 +171,8 @@ export default function Setup() {
       </>
     );
     if (canPick && !essentials.ready) {
-      primary = { label: 'Choose essentials', onPress: essentials.start };
+      // Between Apple's two lists the button waits, so a second tap can't open a list over the one on its way.
+      primary = essentials.busy ? { label: 'One moment…', onPress: () => {} } : { label: 'Choose essentials', onPress: essentials.start };
       secondary = { label: 'Skip for now', onPress: next };
     }
   }
@@ -184,11 +186,11 @@ export default function Setup() {
             <View style={styles.figures}>
               <View style={styles.figure}>
                 <Text style={styles.figureLabel}>Used today</Text>
-                <TodayTotal settings={settings} now={now} fallback={<Text style={styles.figureValue}>…</Text>} />
+                <TodayTotal settings={settings} now={now} fallback={<WaitingDots />} />
               </View>
               <View style={styles.figure}>
                 <Text style={styles.figureLabel}>Daily average</Text>
-                <WeekAverage settings={settings} now={now} fallback={<Text style={styles.figureValue}>…</Text>} />
+                <WeekAverage settings={settings} now={now} fallback={<WaitingDots />} />
               </View>
             </View>
             <Text style={styles.note}>In the apps you ticked, from Screen Time. The average is over the last 7 days.</Text>
@@ -223,13 +225,17 @@ export default function Setup() {
           <View style={styles.figures}>
             <View style={styles.figure}>
               <Text style={styles.figureLabel}>Screen Time</Text>
-              <TodayTotal settings={settings} now={now} fallback={<Text style={styles.figureValue}>…</Text>} />
+              <TodayTotal settings={settings} now={now} fallback={<WaitingDots />} />
             </View>
             <View style={styles.figure}>
               <Text style={styles.figureLabel}>Plainlimit</Text>
-              <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.figureValue, { color: accent }]}>
-                {phase === 'reading' && day.usedMinutes === 0 ? '…' : durationLabel(day.usedMinutes)}
-              </Text>
+              {phase === 'reading' && day.usedMinutes === 0 ? (
+                <WaitingDots />
+              ) : (
+                <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.figureValue, { color: accent }]}>
+                  {durationLabel(day.usedMinutes)}
+                </Text>
+              )}
             </View>
           </View>
         </View>

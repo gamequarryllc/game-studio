@@ -7,6 +7,7 @@ import type { Settings } from '@/domain/types';
 import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, averageWindow, reportWindow } from '@/platform/screenTime';
 import { Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
+import { WaitingDots } from '@/ui/Waiting';
 
 interface NativeProps {
   fromMs: number;
@@ -38,7 +39,10 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
       {/* Sized for five rows, "and N more apps" and up to four lines of note (330 cut the note's third line); it is last on Today, so spare room is only extra scroll at the end. */}
       <View pointerEvents="none" style={{ height: 420, alignSelf: 'stretch' }}>
         {/* Shows through only until the phone has drawn the list over it. */}
-        <Text style={{ position: 'absolute', top: 14, left: 0, right: 0, fontSize: 16, lineHeight: 22, color: c.ink3 }}>Waiting for the phone&apos;s Screen Time to draw the list…</Text>
+        <View style={{ position: 'absolute', top: 14, left: 0, right: 0 }}>
+          <Text style={{ fontSize: 16, lineHeight: 22, color: c.ink3 }}>Waiting for the phone&apos;s Screen Time to draw the list…</Text>
+          <WaitingDots size={8} height={28} />
+        </View>
         {NativeReport ? <NativeReport fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} /> : null}
         {/* The list is drawn by another process, which would otherwise be handed every touch on it; this almost clear sheet is the app's own and lies on top. */}
         <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />

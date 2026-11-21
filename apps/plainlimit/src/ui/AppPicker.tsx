@@ -24,9 +24,21 @@ export function AppPicker({ id, open, header, onClose, wholeCategories = false }
   // the screen before it was saved, so the picks were lost and step 1 never
   // showed as done (build 95, on a fresh install). The list stays for a
   // moment after the sheet has gone, and only then is the screen told.
+  // Build 107 always waited the whole time, which made the gap between the
+  // two lists of Essentials feel long. The library says when it has saved
+  // (`onSelectionChange`), so the screen is told then; the wait is only the
+  // longest it can be, for a list closed with nothing changed.
+  const finish = () => {
+    if (closing.current) clearTimeout(closing.current);
+    closing.current = setTimeout(() => {}, 0);
+    done.current();
+  };
   const close = () => {
     if (closing.current) return;
-    closing.current = setTimeout(() => done.current(), SAVE_MS);
+    closing.current = setTimeout(finish, SAVE_MS);
+  };
+  const saved = () => {
+    if (closing.current) finish();
   };
   return (
     <DeviceActivitySelectionSheetViewPersisted
@@ -39,7 +51,7 @@ export function AppPicker({ id, open, header, onClose, wholeCategories = false }
       // most 50 single apps (build 68 listed every app, and most never locked).
       includeEntireCategory={wholeCategories}
       onDismissRequest={close}
-      onSelectionChange={() => {}}
+      onSelectionChange={saved}
     />
   );
 }

@@ -8,9 +8,13 @@
 export const COUNTS_LEAD =
   'Your essentials never count and never lock: calls, messages, maps, or any app you use as a tool. Everything else uses up the battery, and locks when it’s empty.';
 
+/** The same in few words, for setup, where the pictures say the rest. */
+export const COUNTS_SHORT = 'Essentials never count and never lock. Everything else does.';
+
 /**
  * Before the essentials are chosen. Apple's list opens twice (the phone's apps,
- * then the essentials), and each time its top line says what to tap.
+ * then the essentials), and each time its top line says what to tap. The
+ * screen shows this as two pictures; these words are what is read out.
  */
 export const CHOOSE_HOW = 'Apple’s list opens twice. First tap All Apps & Categories, then Done. Then tick only the apps that should stay open.';
 /** The first list was closed with nothing ticked. */

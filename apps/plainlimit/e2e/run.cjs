@@ -67,7 +67,7 @@ async function main() {
     await shot('00-setup-welcome');
     await press('Set it up');
     await see('Your essentials');
-    await see("Your essentials never count and never lock: calls, messages, maps, or any app you use as a tool. Everything else uses up the battery, and locks when it’s empty.");
+    await see('Essentials never count and never lock. Everything else does.');
     await shot('00-setup-counts');
     await press('Next');
     await see('How much a day?');
