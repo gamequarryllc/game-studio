@@ -1,25 +1,22 @@
 #!/usr/bin/env python3
 """Draws the app's icon, favicon and splash mark.
 
-The icon and favicon are the sprout: the six-cell battery with two leaves growing
-out of it. The splash mark is the plain battery.
+The icon and favicon are Glow: the home-screen widget's lit six-cell battery,
+four cells left, glowing green on a dark ground. The splash mark is the plain battery.
 
     python3 art/make_icons.py        (from apps/plainlimit/)
 
-Needs Pillow. The colours are the app's own: the green of a nearly full
-battery and the near-black ink used on it, on a warm cream ground.
+Needs Pillow. The icon's colours are the Glow widget's: its neon green, a white
+casing and a near-black ground.
 """
 import os
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
-GREEN = (74, 197, 110)
-INK = (16, 18, 15)
-TRACK = (16, 18, 15, 56)
-GROUND = (16, 18, 20)
 PAPER = (242, 243, 241)
-CREAM_TOP = (251, 248, 236)
-CREAM_BOTTOM = (237, 230, 207)
+GLOW_GREEN = (75, 245, 141)
+GLOW_TOP = (25, 33, 29)
+GLOW_BOTTOM = (6, 9, 8)
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "images")
 
 
@@ -45,70 +42,80 @@ def battery(size, lit, fg, track, scale=4):
     return img.resize((size, int(size * 0.42)), Image.LANCZOS)
 
 
-def _bezier(p0, p1, p2, p3, steps=40):
-    """Points along one cubic curve."""
-    pts = []
-    for i in range(steps + 1):
-        t = i / steps
-        u = 1 - t
-        pts.append(
-            (
-                u**3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t**3 * p3[0],
-                u**3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t**3 * p3[1],
-            )
-        )
-    return pts
+def _layer(w, rgb):
+    """A transparent layer that is `rgb` all over, so blurring it never darkens the edges."""
+    return Image.new("RGBA", (w, w), rgb + (0,))
 
 
-def _leaf(d, k, base, c1, tip, c2, c3, c4, width):
-    """One leaf: out from the stem to its tip and back, filled green with an ink edge."""
-    pts = _bezier(base, c1, c2, tip) + _bezier(tip, c3, c4, base)
-    pts = [(x * k, y * k) for x, y in pts]
-    d.polygon(pts, fill=GREEN)
-    d.line(pts + pts[:2], fill=INK, width=int(width * k), joint="curve")
-    r = width * k / 2
-    for x, y in (pts[0], pts[len(pts) // 2]):
-        d.ellipse([x - r, y - r, x + r, y + r], fill=INK)
+def _fade(img, opacity):
+    """`img` with its alpha multiplied by `opacity`."""
+    img.putalpha(img.getchannel("A").point(lambda a: round(a * opacity)))
+    return img
+
+
+def _glow(cells, k):
+    """The lit cells with the widget's halo: a tight glow twice over a wide soft bloom."""
+    tight = cells.filter(ImageFilter.GaussianBlur(14 * k))
+    bloom = _fade(cells.filter(ImageFilter.GaussianBlur(42 * k)), 0.55)
+    for top in (tight, tight, cells):
+        bloom.alpha_composite(top)
+    return bloom
 
 
 def icon(size, scale=4):
-    """The sprout icon: the six-cell battery, four cells left, with two leaves growing out of it.
+    """The Glow icon: the home-screen widget's lit battery, four cells left, on a dark ground.
 
-    Drawn on a 1024 grid, large, then shrunk for clean edges.
+    Same colours and battery proportions as the Glow widget (BatteryShape in
+    targets/widget/PlainlimitWidget.swift). Drawn on a 1024 grid, large, then shrunk.
     """
-    k = size * scale / 1024
     w = size * scale
-    img = Image.new("RGBA", (w, w), CREAM_TOP + (255,))
-    d = ImageDraw.Draw(img)
-    for y in range(w):
-        t = y / (w - 1)
-        d.line([(0, y), (w, y)], fill=tuple(round(a + (b - a) * t) for a, b in zip(CREAM_TOP, CREAM_BOTTOM)) + (255,))
+    k = w / 1024
 
     def box(x0, y0, x1, y1):
         return [x0 * k, y0 * k, x1 * k, y1 * k]
 
-    top = 445  # top edge of the casing; everything else hangs off it
-    # the casing and its cap
-    d.rounded_rectangle(box(120, top, 850, top + 380), radius=120 * k, outline=INK, width=int(40 * k))
-    d.rounded_rectangle(box(852, top + 124, 904, top + 256), radius=24 * k, fill=INK)
-    # six cells: four left, two used
-    cells, gap, x0, span = 6, 20, 206, 558
-    cell_w = (span - (cells - 1) * gap) / cells
-    faint = Image.new("RGBA", (w, w), (0, 0, 0, 0))
-    fd = ImageDraw.Draw(faint)
-    for i in range(cells):
-        cx = x0 + i * (cell_w + gap)
-        b = box(cx, top + 86, cx + cell_w, top + 294)
+    # the ground: near-black, a touch of green at the top, with a pool of green light behind the battery
+    t = Image.linear_gradient("L").resize((w, w), Image.BICUBIC)
+    img = Image.merge("RGB", [t.point(lambda v, a=a, b=b: round(a + (b - a) * v / 255)) for a, b in zip(GLOW_TOP, GLOW_BOTTOM)]).convert("RGBA")
+
+    def pool(v):  # radial_gradient's value is the distance from the centre times 1.41 (181 at the edge)
+        d = min(v / 181, 1)
+        a = 0.32 + (0.112 - 0.32) * d / 0.55 if d < 0.55 else 0.112 * (1 - d) / 0.45
+        return round(max(a, 0) * 255)
+
+    r = round(470 * k)
+    light = Image.new("RGBA", (2 * r, 2 * r), GLOW_GREEN + (0,))
+    light.putalpha(Image.radial_gradient("L").resize((2 * r, 2 * r), Image.BICUBIC).point(pool))
+    img.alpha_composite(light, (round(512 * k) - r, round(512 * k) - r))
+
+    # the battery, in the widget's proportions
+    x, y, bw, h = 122, 333, 780, 358
+    nub_w, nub_h, gap = h * 0.11, h * 0.36, h * 0.05
+    body = bw - nub_w - gap
+    sw, pad, space = h * 0.075, h * 0.15, h * 0.07
+    cell_w, cell_h, cell_r = (body - 2 * pad - 5 * space) / 6, h - 2 * pad, h * 0.09
+    track_w = h * 0.035
+
+    casing = _layer(w, (255, 255, 255))
+    ImageDraw.Draw(casing).rounded_rectangle(box(x, y, x + body, y + h), radius=h * 0.24 * k, outline=(255, 255, 255, 255), width=round(sw * k))
+    img.alpha_composite(_fade(casing, 0.9))
+
+    lit = _layer(w, GLOW_GREEN)
+    used = _layer(w, (255, 255, 255))
+    for i in range(6):
+        cx = x + pad + i * (cell_w + space)
+        b = box(cx, y + pad, cx + cell_w, y + pad + cell_h)
         if i < 4:
-            d.rounded_rectangle(b, radius=28 * k, fill=GREEN)
+            ImageDraw.Draw(lit).rounded_rectangle(b, radius=cell_r * k, fill=GLOW_GREEN + (255,))
         else:
-            fd.rounded_rectangle(b, radius=28 * k, outline=INK + (77,), width=int(10 * k))
-    img.alpha_composite(faint)
-    # the sprout: a stem out of the top of the casing and two leaves
-    sx = 485
-    d.line([(sx * k, (top + 20) * k), (sx * k, (top - 100) * k)], fill=INK, width=int(30 * k))
-    _leaf(d, k, (sx, top - 80), (sx, top - 180), (300, top - 200), (380, top - 210), (300, top - 110), (380, top - 70), 26)
-    _leaf(d, k, (sx, top - 100), (sx, top - 220), (690, top - 250), (600, top - 260), (690, top - 150), (600, top - 100), 26)
+            ImageDraw.Draw(used).rounded_rectangle(b, radius=(cell_r + track_w / 2) * k, outline=(255, 255, 255, 255), width=round(track_w * k))
+    img.alpha_composite(_glow(lit, k))
+    img.alpha_composite(_fade(used, 0.17))
+
+    cap = _layer(w, (255, 255, 255))
+    nx, ny = x + body + gap, y + (h - nub_h) / 2
+    ImageDraw.Draw(cap).rounded_rectangle(box(nx, ny, nx + nub_w, ny + nub_h), radius=nub_w * 0.4 * k, fill=(255, 255, 255, 255))
+    img.alpha_composite(_fade(cap, 0.9))
     return img.resize((size, size), Image.LANCZOS).convert("RGB")
 
 
