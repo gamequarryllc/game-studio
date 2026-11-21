@@ -3,8 +3,9 @@ import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { CELLS, cellWords } from '@/domain/battery';
-import { clockLabel, durationLabel } from '@/domain/day';
+import { clockLabel, clockLabelOf, durationLabel } from '@/domain/day';
 import { chosenGoal } from '@/domain/goal';
+import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import { topUpPlan } from '@/domain/puzzle';
 import { EXPECTED_PRICE } from '@/pro/config';
 import { pro, usePro } from '@/pro/pro';
@@ -41,7 +42,11 @@ export default function Settings() {
   // A higher goal starts at the next recharge; today keeps its own (goal.ts). The stepper shows the one chosen.
   const chosen = chosenGoal(settings);
   const waiting = chosen !== settings.goalMinutes;
-  const recharge = clockLabel(settings.rechargeMinute);
+  // When the next battery starts: the recharge, or a little later when a new recharge time is waiting (recharge.ts).
+  const recharge = clockLabelOf(batteryEnd(day, settings));
+  // A new recharge time waits for this battery to end; the stepper shows the one chosen.
+  const chosenTime = clockLabel(chosenRecharge(settings));
+  const timeWaiting = chosenRecharge(settings) !== settings.rechargeMinute;
 
   return (
     <Page top={24} bottom={24}>
@@ -87,15 +92,19 @@ export default function Settings() {
           {/* On a narrow phone the stepper drops to its own line, still on the right. */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
             <StepButton sign="−" label="Recharge earlier" size={40} disabled={locked} onPress={() => store.stepRecharge(-1)} />
-            <Text accessibilityLabel={`Recharges at ${clockLabel(settings.rechargeMinute)}`} style={styles.rechargeValue}>
-              {clockLabel(settings.rechargeMinute)}
+            <Text accessibilityLabel={`Recharges at ${chosenTime}${timeWaiting ? ', after this battery' : ''}`} style={[styles.rechargeValue, timeWaiting ? { color: accent } : null]}>
+              {chosenTime}
             </Text>
             <StepButton sign="+" label="Recharge later" size={40} disabled={locked} onPress={() => store.stepRecharge(1)} />
           </View>
+          {timeWaiting ? (
+            // Later: this battery runs on to the new time. Earlier: one more recharge as planned, counted from the new time.
+            <Text style={styles.rechargeNote}>{recharge === chosenTime ? `This battery runs on until ${chosenTime}.` : `One more recharge at ${recharge}, then at ${chosenTime}.`}</Text>
+          ) : null}
         </View>
         ) : (
           // Changing the recharge time is Pro. A time chosen before Pro (1.0) stays as it was.
-          <LinkRow label="Recharges at" value={`${clockLabel(settings.rechargeMinute)} · Pro`} onPress={() => router.push('/pro')} />
+          <LinkRow label="Recharges at" value={`${chosenTime} · Pro`} onPress={() => router.push('/pro')} />
         )}
         <LinkRow label="Essentials" value={countedValue} onPress={() => router.push('/what-counts')} last />
       </Card>
@@ -162,5 +171,6 @@ const styles = StyleSheet.create({
   rechargeRow: { minHeight: 60, paddingVertical: 10, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 12, rowGap: 8 },
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
   rechargeValue: { fontFamily: display.semi, fontSize: 17, color: c.ink, minWidth: 84, textAlign: 'center' },
+  rechargeNote: { flexBasis: '100%', fontSize: 14, lineHeight: 19, color: c.ink3 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
 });

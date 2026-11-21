@@ -26,7 +26,7 @@ import type { WidgetRecord } from '@/domain/pro';
 import type { Settings } from '@/domain/types';
 
 import { askCoverActions, coverAskAgain, stopAskFirst } from './askFirst';
-import { countingSince, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readString, registeredAt, round, save, SAVED, savedGuard } from './saved';
+import { countingSince, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readNumberOrNull, readString, registeredAt, round, save, SAVED, savedGuard } from './saved';
 
 // The one file that talks to Apple's Screen Time.
 //
@@ -745,6 +745,17 @@ export function registeredGoal(): number {
 }
 
 /**
+ * The recharge time the day is registered with now, or null if unknown (never
+ * registered, or registered before this was kept). It differs from today's
+ * after a recharge that starts a new time (recharge.ts) until the app
+ * registers the day again.
+ */
+export function registeredRecharge(): number | null {
+  if (!SCREEN_TIME_AVAILABLE) return null;
+  return readNumberOrNull('registeredRecharge');
+}
+
+/**
  * The goal the current round's checkpoints were registered with, which is
  * what their names mean ("cell-3" is 90 minutes of a 3-hour goal, 120 of a
  * 4-hour one). Today's goal only when the day was never registered.
@@ -779,10 +790,15 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     if (hold) save('holdUntil', now.getTime() + 2 * 3600 * 1000);
     else if (fresh) forget('holdUntil');
     save('registeredAt', now.getTime());
-    // A different goal gives the same checkpoint names other minutes.
+    // A different goal gives the same checkpoint names other minutes, and a
+    // different recharge time counts them from another moment.
     const lastGoal = readNumber('registeredGoal');
-    if (!fresh && lastGoal > 0 && lastGoal !== settings.goalMinutes) startRound(now, lastGoal);
+    const lastRecharge = readNumberOrNull('registeredRecharge');
+    const goalMoved = lastGoal > 0 && lastGoal !== settings.goalMinutes;
+    const rechargeMoved = lastRecharge !== null && lastRecharge !== settings.rechargeMinute;
+    if (!fresh && (goalMoved || rechargeMoved)) startRound(now, lastGoal > 0 ? lastGoal : settings.goalMinutes);
     save('registeredGoal', settings.goalMinutes);
+    save('registeredRecharge', settings.rechargeMinute);
     if (fresh) {
       // Counting starts (or starts over) now: forget earlier checkpoints and take every cover away.
       DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);

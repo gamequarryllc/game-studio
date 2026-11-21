@@ -8,7 +8,8 @@ import { addWeeklyPasses, freshRecord, passActive, passCheck, recordView, spendP
 import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
 import { canStepGoal, goalAtRecharge, stepChosenGoal } from '@/domain/goal';
-import { cleanLockMessage, stepRecharge, isLockMessageIdea } from '@/domain/settings';
+import { stepChosenRecharge } from '@/domain/recharge';
+import { cleanLockMessage, isLockMessageIdea } from '@/domain/settings';
 import type { SumLevel } from '@/domain/puzzle';
 import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
 import { applyAskFirst, openAsk } from '@/platform/askFirst';
@@ -267,24 +268,30 @@ function batteryLocked(doc: Doc, now: Date): boolean {
 }
 
 /**
- * A higher goal starts at the recharge (goal.ts), but the phone's checkpoints
- * stay the old goal's until the app registers the day again: it cannot do
- * that by itself. So on the first look after the recharge (and at start, for
- * one that passed while the app was closed) the day is registered with the
- * new goal, and any cover the old, lower goal put up since is taken off (put
- * back at once if the battery is empty under the new one too). Until then the
- * phone holds to the old goal, which is the stricter one. Once per goal, so a
- * registration that keeps failing is not tried on every tick.
+ * A higher goal (goal.ts) or a new recharge time (recharge.ts) starts at the
+ * recharge, but the phone keeps the old ones until the app registers the day
+ * again: it cannot do that by itself. So on the first look after the
+ * recharge (and at start, for one that passed while the app was closed) the
+ * day is registered with the new ones, and any cover put up since under the
+ * old ones is taken off (put back at once if the battery is empty under the
+ * new ones too). Until then the phone holds to the old goal, the stricter
+ * one, and the old recharge time. Once per change, so a registration that
+ * keeps failing is not tried on every tick.
  */
-let caughtUpTo: number | null = null;
-function catchUpGoal(doc: Doc, now: Date) {
+let caughtUpTo: string | null = null;
+function catchUpPhone(doc: Doc, now: Date) {
   try {
     if (!screenTime.isOn()) return;
-    const registered = screenTime.registeredGoal();
-    const goal = doc.settings.goalMinutes;
-    if (registered <= 0 || registered === goal || caughtUpTo === goal) return;
-    caughtUpTo = goal;
-    if (goal > registered) screenTime.coverAgain(batteryLocked(doc, now), doc.settings, doc.day.topUps);
+    const { goalMinutes, rechargeMinute } = doc.settings;
+    const goal = screenTime.registeredGoal();
+    const recharge = screenTime.registeredRecharge();
+    const goalMoved = goal > 0 && goal !== goalMinutes;
+    // Unknown for a day registered before this was kept: then nothing is assumed.
+    const rechargeMoved = recharge !== null && recharge !== rechargeMinute;
+    const change = `${goalMinutes}/${rechargeMinute}`;
+    if ((!goalMoved && !rechargeMoved) || caughtUpTo === change) return;
+    caughtUpTo = change;
+    if (rechargeMoved || goalMinutes > goal) screenTime.coverAgain(batteryLocked(doc, now), doc.settings, doc.day.topUps);
     planSoon();
   } catch {
     // Tried again on the next start.
@@ -363,7 +370,7 @@ export const store = {
     loaded = true;
     set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
-    catchUpGoal(doc, new Date());
+    catchUpPhone(doc, new Date());
     screenTime.onCheckpoint(() => store.tick(new Date()));
     // Picks from before build 71 may list more single apps than iOS will lock.
     if (screenTime.fixOldPicks() === 'fixed') store.picksChanged();
@@ -392,7 +399,7 @@ export const store = {
       if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history && doc.record === snapshot.doc.record) return;
       const recharged = doc.day.periodStart !== snapshot.doc.day.periodStart;
       set(doc);
-      if (recharged) catchUpGoal(doc, now);
+      if (recharged) catchUpPhone(doc, now);
       // The app has just learned something the widget may not have drawn yet.
       if (screenTime.isOn()) screenTime.reloadWidget();
     } catch {
@@ -549,10 +556,18 @@ export const store = {
   canStepGoal(direction: 1 | -1): boolean {
     return !settingsLocked() && canStepGoal(snapshot.doc, direction);
   },
-  /** Changing the recharge time is Pro. A time chosen before Pro existed (1.0) is kept as it is. */
+  /**
+   * Changing the recharge time is Pro. A time chosen before Pro existed (1.0)
+   * is kept as it is. A new time waits for this battery to end, except on
+   * setup's own day (recharge.ts); only then are the battery and the phone
+   * changed now.
+   */
   stepRecharge(direction: 1 | -1) {
-    if (!proOn) return;
-    withSettings((s) => ({ ...s, rechargeMinute: stepRecharge(s.rechargeMinute, direction) }));
+    if (!proOn || settingsLocked()) return;
+    const doc = advanced(snapshot.doc, new Date());
+    const change = stepChosenRecharge(doc, direction);
+    if (change.now) withSettings(() => change.settings);
+    else set({ ...doc, settings: change.settings });
   },
   setEmptyLevel(emptyLevel: EmptyLevel) {
     withSettings((s) => ({ ...s, emptyLevel }));

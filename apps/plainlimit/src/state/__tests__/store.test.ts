@@ -15,6 +15,7 @@ function fakePhone(): Fake {
     health: jest.fn(() => 'fine'),
     applyPlan: jest.fn(async () => true),
     registeredGoal: jest.fn(() => 180),
+    registeredRecharge: jest.fn(() => 360),
     askPermission: jest.fn(async () => 'approved'),
     busyRegistering: jest.fn(() => false),
     clearPicks: jest.fn(),
@@ -533,8 +534,65 @@ describe('Pro', () => {
     store.setPro(true, true);
     store.stepRecharge(1);
     store.setSumLevel('hard');
+    // The new time waits for this battery to end (recharge.ts).
+    expect(store.get().doc.settings).toMatchObject({ rechargeMinute: 360, nextRechargeMinute: 390, sumLevel: 'hard' });
+  });
+
+  it('a new recharge time waits for this battery to end, without telling the phone, and starts after it', async () => {
+    jest.setSystemTime(new Date(2026, 10, 20, 15, 0));
+    const phone = fakePhone();
+    const { store } = load(phone, saved(30));
+    await store.start();
+    store.setPro(true, true);
+    jest.advanceTimersByTime(1000);
+    const before = (phone.applyPlan as jest.Mock).mock.calls.length;
+    const start = store.get().doc.day.periodStart;
+    // 6:00 to 4:00 AM: the next battery starts at 6:00 as planned, counted from 4:00.
+    for (let i = 0; i < 4; i++) store.stepRecharge(-1);
+    jest.advanceTimersByTime(1000);
+    expect(store.get().doc.settings).toMatchObject({ rechargeMinute: 360, nextRechargeMinute: 240 });
+    expect(store.get().doc.day.periodStart).toBe(start);
+    expect((phone.applyPlan as jest.Mock).mock.calls.length).toBe(before);
+    jest.setSystemTime(new Date(2026, 10, 21, 6, 5));
+    store.tick(new Date());
+    expect(store.get().doc.settings.rechargeMinute).toBe(240);
+    expect(store.get().doc.settings.nextRechargeMinute).toBeUndefined();
+    expect(store.get().doc.day.periodStart).toBe(new Date(2026, 10, 21, 4, 0).toISOString());
+    expect(store.get().doc.history[store.get().doc.history.length - 1].start).toBe(start);
+    expect(phone.coverAgain).toHaveBeenCalledWith(false, expect.objectContaining({ rechargeMinute: 240 }), 0);
+    jest.advanceTimersByTime(1000);
+    expect((phone.applyPlan as jest.Mock).mock.calls.slice(before).map((c) => (c[0] as { rechargeMinute: number }).rechargeMinute)).toContain(240);
+  });
+
+  it('a later recharge time lets this battery run on to it', async () => {
+    jest.setSystemTime(new Date(2026, 10, 20, 15, 0));
+    const phone = fakePhone();
+    const { store } = load(phone, saved(30));
+    await store.start();
+    store.setPro(true, true);
+    for (let i = 0; i < 4; i++) store.stepRecharge(1);
+    expect(store.get().doc.settings.nextRechargeMinute).toBe(480);
+    jest.setSystemTime(new Date(2026, 10, 21, 6, 5));
+    store.tick(new Date());
+    // Still the same battery, now counted from 8:00 the day before, until 8:00.
+    expect(store.get().doc.settings.rechargeMinute).toBe(480);
+    expect(store.get().doc.day.periodStart).toBe(new Date(2026, 10, 20, 8, 0).toISOString());
+    expect(store.get().doc.history).toEqual([]);
+    jest.setSystemTime(new Date(2026, 10, 21, 8, 1));
+    store.tick(new Date());
+    expect(store.get().doc.day.periodStart).toBe(new Date(2026, 10, 21, 8, 0).toISOString());
+    expect(store.get().doc.history).toHaveLength(1);
+  });
+
+  it('on setup\'s own day, a new recharge time is at once', async () => {
+    const phone = fakePhone();
+    const raw = saved(30);
+    const { store } = load(phone, { ...raw, day: { ...raw.day, firstDay: true } });
+    await store.start();
+    store.setPro(true, true);
+    store.stepRecharge(1);
     expect(store.get().doc.settings.rechargeMinute).toBe(390);
-    expect(store.get().doc.settings.sumLevel).toBe('hard');
+    expect(store.get().doc.settings.nextRechargeMinute).toBeUndefined();
   });
 
   it('keeps a recharge time chosen before Pro existed', async () => {

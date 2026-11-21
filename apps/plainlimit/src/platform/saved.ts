@@ -21,6 +21,8 @@ export const SAVED = {
   /** When the day was last registered with the phone, and with which goal. */
   registeredAt: 'plainlimit_registered_at',
   registeredGoal: 'plainlimit_registered_goal',
+  /** The recharge time the day was last registered with. Missing for a registration made before it was kept. */
+  registeredRecharge: 'plainlimit_registered_recharge',
   /** Locks held back until then: setup holds them while it shows the starting figure. */
   holdUntil: 'plainlimit_hold_until',
   /** When the ticked apps last changed, and the list as it was when Apple's picker opened. */
@@ -65,6 +67,12 @@ function get(key: Saved): unknown {
 export function readNumber(key: Saved): number {
   const value = get(key);
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+/** A saved number, or null if there is none (for values where 0 means something, like midnight). */
+export function readNumberOrNull(key: Saved): number | null {
+  const value = get(key);
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 /** A saved string, or '' if there is none. */

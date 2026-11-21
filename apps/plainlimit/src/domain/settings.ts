@@ -81,6 +81,7 @@ export function repairSettings(raw: unknown): Settings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const goal = typeof r.goalMinutes === 'number' && Number.isFinite(r.goalMinutes) ? clampGoal(r.goalMinutes) : DEFAULT_SETTINGS.goalMinutes;
   const recharge = typeof r.rechargeMinute === 'number' && Number.isFinite(r.rechargeMinute) ? wrapMinute(Math.round(r.rechargeMinute / RECHARGE_STEP) * RECHARGE_STEP) : DEFAULT_SETTINGS.rechargeMinute;
+  const nextRecharge = typeof r.nextRechargeMinute === 'number' && Number.isFinite(r.nextRechargeMinute) ? wrapMinute(Math.round(r.nextRechargeMinute / RECHARGE_STEP) * RECHARGE_STEP) : recharge;
   const countMode = COUNT_MODES.includes(r.countMode as CountMode) ? (r.countMode as CountMode) : DEFAULT_SETTINGS.countMode;
   const emptyLevel = EMPTY_LEVELS.includes(r.emptyLevel as EmptyLevel) ? (r.emptyLevel as EmptyLevel) : DEFAULT_SETTINGS.emptyLevel;
   let allowed = DEFAULT_SETTINGS.allowed;
@@ -92,5 +93,15 @@ export function repairSettings(raw: unknown): Settings {
   }
   const sumLevel = SUM_LEVELS.includes(r.sumLevel as SumLevel) ? (r.sumLevel as SumLevel) : 'normal';
   const lockMessage = typeof r.lockMessage === 'string' ? cleanLockMessage(r.lockMessage) : '';
-  return { goalMinutes: goal, rechargeMinute: recharge, countMode, emptyLevel, allowed, askFirst: repairAskFirst(r.askFirst), sumLevel, ...(lockMessage ? { lockMessage } : {}) };
+  return {
+    goalMinutes: goal,
+    rechargeMinute: recharge,
+    ...(nextRecharge !== recharge ? { nextRechargeMinute: nextRecharge } : {}),
+    countMode,
+    emptyLevel,
+    allowed,
+    askFirst: repairAskFirst(r.askFirst),
+    sumLevel,
+    ...(lockMessage ? { lockMessage } : {}),
+  };
 }

@@ -3,10 +3,11 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimen
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { wordFor } from '@/domain/battery';
-import { clockLabel, clockLabelOf, durationLabel, goalLabel, nextRecharge, untilLabel } from '@/domain/day';
+import { clockLabelOf, durationLabel, goalLabel, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
 import { passActive } from '@/domain/record';
+import { batteryEnd } from '@/domain/recharge';
 import { weekView } from '@/domain/week';
 import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, locksHeldUntil } from '@/platform/screenTime';
 import { store, useDoc } from '@/state/store';
@@ -39,7 +40,9 @@ export default function Today() {
   const width = Math.min(useWindowDimensions().width, 480);
   const wordSize = Math.min(58, Math.floor((width - 48) / 5.7));
 
-  const recharge = clockLabel(settings.rechargeMinute);
+  // When the next battery starts: the recharge, or a little later when a new recharge time is waiting (recharge.ts).
+  const ends = batteryEnd(day, settings);
+  const recharge = clockLabelOf(ends);
   const empty = cells === 0;
   // Setup's "start tomorrow": counting, but nothing locks before the recharge.
   const held = locksHeldUntil();
@@ -66,7 +69,7 @@ export default function Today() {
             </Text>
             <View style={styles.rechargeRow}>
               <Text style={[styles.recharge, { color: tone.fg }]}>Recharges at {recharge}</Text>
-              <Text style={[styles.until, { color: tone.fg, opacity: tone.dark ? 0.9 : 0.72 }]}>{untilLabel(now, nextRecharge(now, settings.rechargeMinute))}</Text>
+              <Text style={[styles.until, { color: tone.fg, opacity: tone.dark ? 0.9 : 0.72 }]}>{untilLabel(now, ends)}</Text>
             </View>
           </View>
         </Animated.View>

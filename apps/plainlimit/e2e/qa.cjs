@@ -226,6 +226,28 @@ async function main() {
     await context.close();
   });
 
+  await scenario('with Pro, a new recharge time waits for this battery: later runs it on, earlier recharges once more first', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 120 }), '?mock=counting');
+    await tab(page, 'Settings');
+    for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Recharge later', exact: true }).click();
+    await page.getByLabel('Recharges at 8:00 AM, after this battery').waitFor({ state: 'visible', timeout: 8000 });
+    await see(page, 'This battery runs on until 8:00 AM.');
+    await shot(page, 'q29-recharge-later', true);
+    await tab(page, 'Today');
+    await see(page, 'Recharges at 8:00 AM');
+    await tab(page, 'Settings');
+    for (let i = 0; i < 8; i++) await page.getByRole('button', { name: 'Recharge earlier', exact: true }).click();
+    await page.getByLabel('Recharges at 4:00 AM, after this battery').waitFor({ state: 'visible', timeout: 8000 });
+    await see(page, 'One more recharge at 6:00 AM, then at 4:00 AM.');
+    await tab(page, 'Today');
+    await see(page, 'Recharges at 6:00 AM');
+    // Back to today's time: nothing waits.
+    await tab(page, 'Settings');
+    for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Recharge later', exact: true }).click();
+    await page.getByLabel('Recharges at 6:00 AM', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
+    await context.close();
+  });
+
   await scenario('an empty battery locks the settings and Essentials', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting');
     await see(page, 'Empty');

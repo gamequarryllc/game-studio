@@ -1,6 +1,7 @@
 // What the app remembers about the current battery, and how it moves on.
 
 import { goalAfterRecharge, repairNextGoal } from './goal';
+import { startWaitingRecharge } from './recharge';
 import { freshRecord, repairRecord } from './record';
 import { nextRecharge, periodStart } from './day';
 import { topUpPlan } from './puzzle';
@@ -20,9 +21,14 @@ export const HISTORY_DAYS = 98;
  * keeping a summary of the day that ended. `closingUsed` is the phone's own
  * last word on that day, when it has one; the larger of it and what the app
  * last knew is kept. Days in between that the app never saw are not made up.
- * A higher goal chosen during the day that ended starts now (goal.ts).
+ * A higher goal chosen during the day that ended starts now (goal.ts), and
+ * so does a new recharge time (recharge.ts).
  */
-export function advance(doc: Doc, now: Date, closingUsed: number | null = null, counting = doc.watching === true): Doc {
+export function advance(given: Doc, now: Date, closingUsed: number | null = null, counting = given.watching === true): Doc {
+  // A recharge time waiting for this battery's end starts now (recharge.ts); the battery may run on to it.
+  const waiting = startWaitingRecharge(given, now);
+  if (waiting.runsOn) return waiting.doc;
+  const doc = waiting.doc;
   const fresh = rollOver(doc.day, now, doc.settings.rechargeMinute);
   if (fresh === doc.day) return doc;
   const old = doc.day;

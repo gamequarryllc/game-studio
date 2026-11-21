@@ -17,6 +17,8 @@ export interface Settings {
   nextGoalMinutes?: number;
   /** When the battery refills, as minutes after midnight (360 = 6:00 AM). */
   rechargeMinute: number;
+  /** A new recharge time chosen during this battery (Pro), which starts once it ends (recharge.ts). Missing when none is waiting. */
+  nextRechargeMinute?: number;
   /** No longer used: what counts is the one list ticked in Apple's picker. Kept so older saved copies still read. */
   countMode: CountMode;
   emptyLevel: EmptyLevel;
