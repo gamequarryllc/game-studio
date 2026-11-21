@@ -160,6 +160,7 @@ const line = StyleSheet.create({
   zoneText: { position: 'absolute', left: 6, top: 3, fontSize: 11, fontWeight: '700', color: '#FF7B6B' },
   dashes: { position: 'absolute', left: WEEK.axis, right: 0, height: 2, flexDirection: 'row', gap: 5, overflow: 'hidden' },
   dash: { width: 6, height: 2, borderRadius: 1, backgroundColor: c.ink },
-  pill: { position: 'absolute', right: 0, height: 22, borderRadius: 11, paddingHorizontal: 8, backgroundColor: c.ink, justifyContent: 'center' },
-  pillText: { fontFamily: display.bold, fontSize: 14, color: c.onPaper },
+  // Over the hour scale's column, where it hides no bar's time.
+  pill: { position: 'absolute', left: 0, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: c.ink, justifyContent: 'center' },
+  pillText: { fontFamily: display.bold, fontSize: 13, color: c.onPaper },
 });
