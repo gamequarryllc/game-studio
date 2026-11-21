@@ -16,7 +16,7 @@ export const COUNTS_SHORT = 'Essentials never count and never lock. Everything e
  * then the essentials), and each time its top line says what to tap. The
  * screen shows this as two pictures; these words are what is read out.
  */
-export const CHOOSE_HOW = 'Apple’s list opens twice. First tap All Apps & Categories, then Done. Then tick only the apps that should stay open.';
+export const CHOOSE_HOW = 'Apple’s list opens twice. First, as one-time setup, tap All Apps & Categories, then Done. Then tick only your essential apps: they are never counted and never locked.';
 /** The first list was closed with nothing ticked. */
 export const MISSED_APPS = 'Nothing was ticked. Tap Choose essentials again, then All Apps & Categories at the top, then Done.';
 export function shownWords(apps: number): string {

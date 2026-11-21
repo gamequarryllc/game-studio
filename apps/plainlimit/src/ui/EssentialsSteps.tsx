@@ -63,7 +63,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
         id={ALL_ID}
         wholeCategories
         open={open === 'apps'}
-        header="Step 1 of 2: tap All Apps & Categories, then Done"
+        header="Step 1 of 2 (one-time setup): tap All Apps & Categories, then Done"
         onClose={() => {
           setOpen(null);
           store.appsShownClosed();
@@ -80,7 +80,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
         id={ESSENTIALS_ID}
         wholeCategories
         open={open === 'keep'}
-        header={`Step 2 of 2: tick only the apps that stay open (up to ${ESSENTIALS_LIMIT}), then Done`}
+        header={`Step 2 of 2: tick only your essential apps (up to ${ESSENTIALS_LIMIT}), then Done. They are never counted or locked.`}
         onClose={() => {
           setOpen(null);
           const tooMany = store.essentialsClosed();
@@ -151,12 +151,12 @@ export function EssentialsSteps({ e, locked = false, mainInFoot = false }: { e: 
 function Pictures({ firstDone }: { firstDone: boolean }) {
   return (
     <View accessible accessibilityLabel={CHOOSE_HOW} style={{ gap: 14 }}>
-      <Picture n={firstDone ? '✓' : '1'} title="Tick All Apps, tap Done" faded={firstDone}>
+      <Picture n={firstDone ? '✓' : '1'} title="First, tick All Apps, tap Done" why="One-time setup, so every app can be counted." faded={firstDone}>
         <Row label="All Apps & Categories" ticked strong />
         <Row label="Social" ticked />
         <Row label="Games" ticked />
       </Picture>
-      <Picture n="2" title="Tick only what stays open">
+      <Picture n="2" title="Then tick only your essential apps" why="Never counted, never locked.">
         <Row label="Messages" ticked strong />
         <Row label="Maps" ticked strong />
         <Row label="Games" />
@@ -166,14 +166,17 @@ function Pictures({ firstDone }: { firstDone: boolean }) {
 }
 
 /** `faded`: this step is done, so the eye goes to the other one. */
-function Picture({ n, title, faded = false, children }: { n: string; title: string; faded?: boolean; children: ReactNode }) {
+function Picture({ n, title, why, faded = false, children }: { n: string; title: string; why: string; faded?: boolean; children: ReactNode }) {
   return (
     <View style={{ gap: 8, opacity: faded ? 0.45 : 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <View style={pic.badge}>
           <Text style={pic.badgeText}>{n}</Text>
         </View>
-        <Text style={pic.title}>{title}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={pic.title}>{title}</Text>
+          <Text style={pic.why}>{why}</Text>
+        </View>
       </View>
       <View style={pic.list}>{children}</View>
     </View>
@@ -196,7 +199,8 @@ const APPLE_BLUE = '#0A84FF';
 const pic = {
   badge: { width: 26, height: 26, borderRadius: 13, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 15, fontWeight: '700', color: c.onPaper },
-  title: { flex: 1, fontSize: 17, lineHeight: 22, fontWeight: '600', color: c.ink },
+  title: { fontSize: 17, lineHeight: 22, fontWeight: '600', color: c.ink },
+  why: { fontSize: 14, lineHeight: 19, color: c.ink3 },
   list: { borderRadius: 14, backgroundColor: c.raised, paddingVertical: 4, paddingHorizontal: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 34 },
   box: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: c.outline, alignItems: 'center', justifyContent: 'center' },
