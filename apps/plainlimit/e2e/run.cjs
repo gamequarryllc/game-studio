@@ -72,7 +72,7 @@ async function main() {
     await press('Next');
     await see('How much a day?');
     await see('Six cells of 30 minutes each');
-    await see('Recharges at');
+    await see('It recharges at 6:00 AM every day.');
     await shot('00-setup-goal');
     await press('Back');
     await see('Your essentials');

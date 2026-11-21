@@ -128,18 +128,25 @@ class UsageReportView: ExpoView {
   }
 
   /// Props arrive one at a time; build the report once they have all landed.
-  private var refreshQueued = false
   /// Bumped on every rebuild. The phone's report does not redraw when only its
   /// filter changes (build 51: unticking an app left it in the list until the
   /// app was reopened), so each rebuild gets a new identity.
   private var generation = 0
 
+  /// Counts the asks, so only the last of a burst builds the report.
+  private var asked = 0
+
+  // The first report is built as soon as its props have landed. Later ones
+  // wait for half a second of quiet: tapping a stepper (the recharge time)
+  // asked for a new report on every tap, and after a burst of those the phone
+  // stopped drawing at all and left the dots showing (build 99, setup's
+  // "Used today" and "Daily average").
   private func refresh() {
-    guard !refreshQueued else { return }
-    refreshQueued = true
-    DispatchQueue.main.async { [weak self] in
-      guard let self else { return }
-      self.refreshQueued = false
+    asked += 1
+    let mine = asked
+    let wait: DispatchTimeInterval = host == nil ? .milliseconds(0) : .milliseconds(500)
+    DispatchQueue.main.asyncAfter(deadline: .now() + wait) { [weak self] in
+      guard let self, self.asked == mine else { return }
       self.rebuild()
     }
   }

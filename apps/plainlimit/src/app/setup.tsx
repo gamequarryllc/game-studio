@@ -9,7 +9,6 @@ import { toneAt } from '@/domain/tone';
 import { askToNotify } from '@/platform/notices';
 import { tickStepMinutes } from '@/domain/checkpoints';
 import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount } from '@/platform/screenTime';
-import { usePro } from '@/pro/pro';
 import { store } from '@/state/store';
 import { Battery } from '@/ui/Battery';
 import { COUNTS_LEAD, essentialsValue } from '@/ui/countWords';
@@ -53,7 +52,6 @@ export default function Setup() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { now, settings, day, accent } = useDay();
-  const isPro = usePro().isPro;
   const [at, setAt] = useState(0);
   const [access, setAccess] = useState(() => (SCREEN_TIME_AVAILABLE ? permission() : 'unknown'));
   const [asked, setAsked] = useState(false);
@@ -207,26 +205,8 @@ export default function Setup() {
           </View>
           <Text style={styles.note}>Six cells of {cellWords(settings.goalMinutes)} each</Text>
         </Card>
-        <Card style={{ paddingVertical: 12 }}>
-          <View style={styles.stepper}>
-            <Text style={styles.rowLabel}>Recharges at</Text>
-            {isPro ? (
-              <View style={styles.smallStepper}>
-                <StepButton sign="−" label="Recharge earlier" size={40} onPress={() => store.stepRecharge(-1)} />
-                <Text accessibilityLabel={`Recharges at ${clockLabel(settings.rechargeMinute)}`} style={styles.rowValueBig}>
-                  {clockLabel(settings.rechargeMinute)}
-                </Text>
-                <StepButton sign="+" label="Recharge later" size={40} onPress={() => store.stepRecharge(1)} />
-              </View>
-            ) : (
-              <Text accessibilityLabel={`Recharges at ${clockLabel(settings.rechargeMinute)}`} style={styles.rowValueBig}>
-                {clockLabel(settings.rechargeMinute)}
-              </Text>
-            )}
-          </View>
-          {/* Changing the recharge time is Pro (Settings > Plainlimit Pro). */}
-          {isPro ? null : <Text style={styles.note}>Pro lets you choose another time.</Text>}
-        </Card>
+        {/* The recharge time is not asked here: everyone starts at 6 AM, and changing it is Pro, in Settings (the owner, build 99). */}
+        <Lead>{`It recharges at ${clockLabel(settings.rechargeMinute)} every day.`}</Lead>
       </>
     );
   }
@@ -377,8 +357,6 @@ const styles = StyleSheet.create({
   rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },
   rowLabel: { fontSize: 16, color: c.ink2 },
   rowValue: { fontSize: 16, fontWeight: '600', color: c.ink },
-  rowValueBig: { fontFamily: display.semi, fontSize: 20, color: c.ink, minWidth: 92, textAlign: 'center' },
-  smallStepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   quiet: { minHeight: 36, alignItems: 'center', justifyContent: 'center' },
   quietText: { fontSize: 14, color: c.ink3, textDecorationLine: 'underline' },
 });
