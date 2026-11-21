@@ -23,7 +23,7 @@ import { store, useLibrary } from '@/state/store';
 import { CabinetArt } from '@/ui/CabinetArt';
 import { ask, choose, confirm } from '@/ui/dialogs';
 import { Icon, type IconName } from '@/ui/Icon';
-import { pick } from '@/ui/PickSheet';
+import { PickSheetHost, pick } from '@/ui/PickSheet';
 import { BarButton } from '@/ui/kit';
 import { space, type, useTheme } from '@/ui/theme';
 
@@ -168,6 +168,8 @@ export default function PlacesScreen() {
           </View>
         </View>
       </ScrollView>
+      {/* This screen is presented over the others, so its pickers are presented from it. */}
+      <PickSheetHost />
     </View>
   );
 }

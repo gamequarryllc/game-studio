@@ -20,7 +20,7 @@ import { DateField } from '@/ui/DateField';
 import { ask, choose, confirm, notify } from '@/ui/dialogs';
 import { FormRow, PhotoStrip, PickRow, Stepper, TextRow } from '@/ui/form';
 import { categoryIconName, roomIconName } from '@/ui/Icon';
-import { pick } from '@/ui/PickSheet';
+import { PickSheetHost, pick } from '@/ui/PickSheet';
 import { BarButton, Button, Card, Divider, Footnote, Row, SectionLabel } from '@/ui/kit';
 import { NO_OUTLINE, space, type, useTheme } from '@/ui/theme';
 
@@ -440,6 +440,8 @@ export default function ItemForm() {
           {editing ? null : <Button testID="form-save-another" label="Save and add another" kind="soft" onPress={() => save(true)} />}
         </View>
       </ScrollView>
+      {/* This screen is presented over the others, so its pickers are presented from it. */}
+      <PickSheetHost />
     </KeyboardAvoidingView>
   );
 }
