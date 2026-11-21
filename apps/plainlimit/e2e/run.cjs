@@ -96,6 +96,8 @@ async function main() {
   await step('the goal steps by quarter hours and stops at its limits', async () => {
     await tab('Settings');
     await see('3:00');
+    // Setup's own day: every change starts now, and the note says what comes after.
+    await see('Your first day: changes start now');
     await press('More time');
     await see('3:15');
     await press('Less time');

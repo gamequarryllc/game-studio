@@ -1,12 +1,12 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Text, View } from 'react-native';
 
 import { clockLabel } from '@/domain/day';
 import { settingsLockedNotice } from '@/domain/record';
 import { askToNotify } from '@/platform/notices';
 import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission, testCover, testUncover } from '@/platform/screenTime';
-import { settingsLocked, store, useDoc, useNow } from '@/state/store';
+import { settingsLocked, store, useDoc } from '@/state/store';
 import { BigButton, Card, Label } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
@@ -17,18 +17,6 @@ import { c } from '@/ui/theme';
  */
 export function ScreenTimeCard() {
   const { settings } = useDoc();
-  useNow();
-  // The test build's readout is read again every few seconds and whenever this
-  // screen comes back into view. (A tab that is out of view stops redrawing, so
-  // without this a screenshot taken straight after switching tabs showed the
-  // readout as it was when the tab was last looked at.)
-  const [, readAgain] = useState(0);
-  useFocusEffect(useCallback(() => readAgain((n) => n + 1), []));
-  useEffect(() => {
-    if (!DEV_TOOLS) return;
-    const id = setInterval(() => readAgain((n) => n + 1), 3000);
-    return () => clearInterval(id);
-  }, []);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Left out of the App Store screenshots, so the goal and the empty-battery choices fit on one screen.
@@ -63,32 +51,8 @@ export function ScreenTimeCard() {
         ) : (
           <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} />
         )}
-        {DEV_TOOLS ? (
-          <>
-            <Text style={[body, { color: c.ink3, marginTop: 6 }]}>Test build only: nothing below this line is in the App Store version.</Text>
-            <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
-            <BigButton
-              quiet
-              label="Lock now (test)"
-              onPress={() => {
-                testCover(settings, store.get().doc.day.topUps);
-                readAgain((n) => n + 1);
-              }}
-            />
-            <BigButton
-              quiet
-              label="Unlock (test)"
-              onPress={() => {
-                testUncover(settings);
-                readAgain((n) => n + 1);
-              }}
-            />
-            {settingsLocked() ? <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} /> : null}
-            <Text selectable style={{ fontSize: 12, lineHeight: 17, color: c.ink3, marginTop: 4 }}>
-              {[...diagnostics(settings), historyLine(store.get().doc.history), ...historyLog().map((l) => `History: ${l}`)].join('\n')}
-            </Text>
-          </>
-        ) : null}
+        {/* A test build can turn counting off even while the settings are locked. */}
+        {DEV_TOOLS && settingsLocked() ? <BigButton quiet label="Turn off" onPress={() => store.turnOffScreenTime()} /> : null}
       </Card>
     );
   }
@@ -107,7 +71,68 @@ export function ScreenTimeCard() {
   );
 }
 
+/**
+ * Test builds only, at the bottom of Settings: tools for trying the locks, and
+ * a readout of what the phone holds. It sits below everything else so that a
+ * readout growing or shrinking never moves the settings above it (build 127:
+ * the goal's stepper jumped about under the finger). The readout is read every
+ * few seconds while Settings is in view, not on every change: reading it asks
+ * the phone for a lot.
+ */
+export function TestBuildTools() {
+  // Asks the phone whether counting is on as it draws: not to be kept by the React Compiler.
+  'use no memo';
+  const [readout, setReadout] = useState('');
+  const readAgain = useCallback(() => {
+    if (DEV_TOOLS && isOn()) setReadout(readoutNow());
+  }, []);
+  // Read on coming into view (a screenshot straight after switching tabs once
+  // showed an old readout), then every few seconds while Settings is in view.
+  useFocusEffect(
+    useCallback(() => {
+      readAgain();
+      if (!DEV_TOOLS) return undefined;
+      const id = setInterval(readAgain, 3000);
+      return () => clearInterval(id);
+    }, [readAgain]),
+  );
+  if (!DEV_TOOLS || (!SCREEN_TIME_AVAILABLE && !MOCK_PHONE) || STORE_SHOTS || !isOn()) return null;
+  return (
+    <View style={{ marginTop: 14, gap: 10 }}>
+      <Label>Developer: Screen Time</Label>
+      <Text style={[body, { color: c.ink3 }]}>Test build only: none of this is in the App Store version.</Text>
+      <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
+      <BigButton
+        quiet
+        label="Lock now (test)"
+        onPress={() => {
+          const { settings, day } = store.get().doc;
+          testCover(settings, day.topUps);
+          readAgain();
+        }}
+      />
+      <BigButton
+        quiet
+        label="Unlock (test)"
+        onPress={() => {
+          testUncover(store.get().doc.settings);
+          readAgain();
+        }}
+      />
+      <Text selectable style={{ fontSize: 12, lineHeight: 17, color: c.ink3, marginTop: 4 }}>
+        {readout}
+      </Text>
+    </View>
+  );
+}
+
 const body = { fontSize: 15, lineHeight: 21, color: c.ink2 } as const;
+
+/** The test build's readout, as the phone has it now. */
+function readoutNow(): string {
+  const doc = store.get().doc;
+  return [...diagnostics(doc.settings), historyLine(doc.history), ...historyLog().map((l) => `History: ${l}`)].join('\n');
+}
 
 /** For the readout: how many finished days are kept, and the latest, so a lost day shows. */
 function historyLine(history: readonly { start: string; usedMinutes: number; state: string }[]): string {

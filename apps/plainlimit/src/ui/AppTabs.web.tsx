@@ -2,7 +2,7 @@ import { TabList, TabSlot, TabTrigger, Tabs, type TabTriggerSlotProps } from 'ex
 import { Pressable, StyleSheet, Text, View, type PressableProps } from 'react-native';
 
 import { c } from './theme';
-import { useDay } from './useDay';
+import { useAccent } from './useDay';
 
 // The web preview's tab bar, drawn to match the iPhone's (AppTabs.tsx): a
 // floating capsule with an icon over a small label for each tab, tinted in the
@@ -50,7 +50,7 @@ function TabButton({ label, icon, accent, isFocused, ...props }: TabTriggerSlotP
 
 export default function AppTabs() {
   // The open tab is marked in the battery's colour.
-  const { accent } = useDay();
+  const accent = useAccent();
   return (
     <Tabs>
       <TabSlot style={{ flex: 1 }} />

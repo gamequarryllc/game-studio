@@ -69,6 +69,7 @@ function saved(used: number, extra: Record<string, unknown> = {}) {
 /** A fresh store module over `phone`, with `raw` as the saved copy. */
 function load(phone: Fake, raw: unknown, ask: Fake = fakeAsk()) {
   let mod: typeof import('../store') | undefined;
+  let rn: typeof import('react-native') | undefined;
   jest.isolateModules(() => {
     jest.doMock('@/platform/screenTime', () => phone);
     jest.doMock('@/platform/askFirst', () => ask);
@@ -76,8 +77,11 @@ function load(phone: Fake, raw: unknown, ask: Fake = fakeAsk()) {
     // A fresh copy per test needs require inside isolateModules.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     mod = require('../store');
+    // The copy of React Native the store sees, for a test to stand in for the phone's app state.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    rn = require('react-native');
   });
-  return mod as typeof import('../store');
+  return { ...(mod as typeof import('../store')), rn: rn as typeof import('react-native') };
 }
 
 // The store looks again on timers after some changes; fake ones keep a test from leaving them running.
@@ -228,7 +232,7 @@ describe('the daily goal', () => {
 
   it('waits for the recharge to raise it, and tells the phone only when today\'s goal changes', async () => {
     const phone = fakePhone();
-    const { store } = load(phone, saved(60));
+    const { store, STEP_SETTLE_MS } = load(phone, saved(60));
     await store.start();
     jest.advanceTimersByTime(1000);
     const before = plans(phone).length;
@@ -238,25 +242,76 @@ describe('the daily goal', () => {
     expect(store.get().doc.settings).toMatchObject({ goalMinutes: 180, nextGoalMinutes: 210 });
     expect(plans(phone).length).toBe(before);
     for (let i = 0; i < 3; i++) store.stepGoal(-1);
-    jest.advanceTimersByTime(1000);
+    jest.advanceTimersByTime(STEP_SETTLE_MS + 100);
     expect(store.get().doc.settings.goalMinutes).toBe(165);
     expect(store.get().doc.settings.nextGoalMinutes).toBeUndefined();
     expect(plans(phone).slice(before)).toEqual([165]);
   });
 
+  it('tells the phone once the taps have stopped, not on each one', async () => {
+    const phone = fakePhone();
+    const { store, STEP_SETTLE_MS } = load(phone, saved(60));
+    await store.start();
+    jest.advanceTimersByTime(1000);
+    const before = plans(phone).length;
+    for (let i = 0; i < 3; i++) {
+      store.stepGoal(-1);
+      jest.advanceTimersByTime(1000);
+    }
+    // A second between taps is still one run of taps.
+    expect(plans(phone).length).toBe(before);
+    jest.advanceTimersByTime(STEP_SETTLE_MS);
+    expect(plans(phone).slice(before)).toEqual([135]);
+  });
+
+  it('a change still waiting goes to the phone as soon as the app is left', async () => {
+    const phone = fakePhone();
+    const { store, STEP_SETTLE_MS, rn } = load(phone, saved(60));
+    let changed: ((state: string) => void) | undefined;
+    jest.spyOn(rn.AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      changed = listener as (state: string) => void;
+      return { remove: () => {} } as ReturnType<typeof rn.AppState.addEventListener>;
+    });
+    await store.start();
+    jest.advanceTimersByTime(1000);
+    const before = plans(phone).length;
+    store.stepGoal(-1);
+    changed?.('inactive');
+    expect(plans(phone).slice(before)).toEqual([165]);
+    jest.advanceTimersByTime(STEP_SETTLE_MS + 100);
+    expect(plans(phone).slice(before)).toEqual([165]);
+  });
+
   it('going back up after a lowering takes off the lower goal\'s screens, and never lowers past what is used', async () => {
     const phone = fakePhone();
-    const { store } = load(phone, saved(140));
+    // The phone holds whatever goal it was last given.
+    let registered = 180;
+    phone.applyPlan = jest.fn(async (s: { goalMinutes: number }) => {
+      registered = s.goalMinutes;
+      return true;
+    });
+    phone.registeredGoal = jest.fn(() => registered);
+    const { store, STEP_SETTLE_MS } = load(phone, saved(140));
     await store.start();
     expect(store.canStepGoal(-1)).toBe(true);
     for (let i = 0; i < 5; i++) store.stepGoal(-1);
     // 2:30 would leave nothing of the battery at 2:20 used.
     expect(store.get().doc.settings.goalMinutes).toBe(150);
     expect(store.canStepGoal(-1)).toBe(false);
-    expect(phone.coverAgain).not.toHaveBeenCalled();
+    // Back up before the phone was told: it never had the lower goal, so nothing to take off.
     store.stepGoal(1);
-    expect(store.get().doc.settings.goalMinutes).toBe(165);
+    jest.advanceTimersByTime(STEP_SETTLE_MS + 100);
+    expect(registered).toBe(165);
+    expect(phone.coverAgain).not.toHaveBeenCalled();
+    store.stepGoal(-1);
+    jest.advanceTimersByTime(STEP_SETTLE_MS + 100);
+    expect(registered).toBe(150);
+    store.stepGoal(1);
+    expect(phone.coverAgain).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(STEP_SETTLE_MS + 100);
+    expect(phone.coverAgain).toHaveBeenCalledTimes(1);
     expect(phone.coverAgain).toHaveBeenCalledWith(false, expect.objectContaining({ goalMinutes: 165 }), 0);
+    expect(registered).toBe(165);
   });
 
   it('starts a waiting goal at the recharge, registers the day with it, and takes off what the old goal covered', async () => {

@@ -65,15 +65,41 @@ function shareRecord() {
 }
 
 // On a real phone, a change to the settings is handed to Screen Time a moment
-// later, so a run of taps on a stepper is one change, not ten.
+// later, so a run of taps on a stepper is one change, not ten. Registering the
+// day holds the app up for a moment, and the phone then reports the day again,
+// so the goal's stepper waits until the taps have stopped for a while (build
+// 127: the screen caught on every tap). Leaving the app hands it over at once.
+const PLAN_WAIT_MS = 600;
+export const STEP_SETTLE_MS = 2500;
 let replan: ReturnType<typeof setTimeout> | null = null;
-function planSoon() {
+/** A goal step went up since the day was last registered (see `planNow`). */
+let uncoverOnPlan = false;
+function planSoon(wait = PLAN_WAIT_MS) {
   if (!screenTime.isOn()) return;
   if (replan) clearTimeout(replan);
-  replan = setTimeout(() => {
-    replan = null;
-    void screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
-  }, 600);
+  replan = setTimeout(planNow, wait);
+}
+
+/** Registers the day with the settings as they are now. */
+function planNow() {
+  if (replan) clearTimeout(replan);
+  replan = null;
+  const { settings, day } = snapshot.doc;
+  try {
+    // Back up after a lowering the phone was told of: the screen the lower goal put up no longer applies.
+    // (The phone puts it back once it has reported the day for the goal it now has, if it does.)
+    const registered = screenTime.registeredGoal();
+    if (uncoverOnPlan && registered > 0 && settings.goalMinutes > registered) screenTime.coverAgain(batteryLocked(snapshot.doc, new Date()), settings, day.topUps);
+  } catch {
+    // The registration below takes them off too.
+  }
+  uncoverOnPlan = false;
+  void screenTime.applyPlan(settings, day.topUps);
+}
+
+/** A change still waiting to reach the phone goes now: the app is being left. */
+function planWaiting() {
+  if (replan) planNow();
 }
 
 /**
@@ -334,11 +360,11 @@ function syncAskFirst() {
  */
 let proOn = false;
 
-function withSettings(change: (s: Settings) => Settings) {
+function withSettings(change: (s: Settings) => Settings, wait = PLAN_WAIT_MS) {
   if (settingsLocked()) return;
   // A new recharge time can move the start of the current battery.
   set(advanced(snapshot.doc, new Date(), change(snapshot.doc.settings)));
-  planSoon();
+  planSoon(wait);
 }
 
 export const store = {
@@ -378,7 +404,10 @@ export const store = {
     syncAskFirst();
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
     AppState.addEventListener('change', (state) => {
-      if (state !== 'active') return;
+      if (state !== 'active') {
+        planWaiting();
+        return;
+      }
       store.tick(new Date());
       void askAgain();
       for (const wait of [1500, 5000, 10000, 20000]) setTimeout(lookAgain, wait);
@@ -542,15 +571,13 @@ export const store = {
    */
   stepGoal(direction: 1 | -1) {
     if (settingsLocked()) return;
-    const now = new Date();
     const before = snapshot.doc.settings.goalMinutes;
-    set(stepChosenGoal(advanced(snapshot.doc, now), direction));
-    const { settings, day } = snapshot.doc;
-    if (settings.goalMinutes === before) return;
-    // Back up after a lowering: the last cell's screen the lower goal put up no longer applies.
-    // (The phone puts it back once it has reported the day for the goal it now has, if it does.)
-    if (settings.goalMinutes > before && screenTime.isOn()) screenTime.coverAgain(batteryLocked(snapshot.doc, now), settings, day.topUps);
-    planSoon();
+    set(stepChosenGoal(advanced(snapshot.doc, new Date()), direction));
+    const after = snapshot.doc.settings.goalMinutes;
+    if (after === before) return;
+    // A tap only redraws; the phone hears of the goal once the taps stop (planSoon).
+    if (after > before) uncoverOnPlan = true;
+    planSoon(STEP_SETTLE_MS);
   },
   /** Whether the goal's stepper can go that way: not past its limits, nor below what today has used (goal.ts). */
   canStepGoal(direction: 1 | -1): boolean {
@@ -566,7 +593,7 @@ export const store = {
     if (!proOn || settingsLocked()) return;
     const doc = advanced(snapshot.doc, new Date());
     const change = stepChosenRecharge(doc, direction);
-    if (change.now) withSettings(() => change.settings);
+    if (change.now) withSettings(() => change.settings, STEP_SETTLE_MS);
     else set({ ...doc, settings: change.settings });
   },
   setEmptyLevel(emptyLevel: EmptyLevel) {
@@ -694,6 +721,16 @@ export function useStore(): Snapshot {
 
 export function useDoc(): Doc {
   return useStore().doc;
+}
+
+/**
+ * One plain value from the store, redrawing only when it changes. For the
+ * layouts and the tab bar: drawn again on every change, they redrew every
+ * screen's header and tab on each tap of a stepper (build 127).
+ */
+export function useStoreValue<T extends string | number | boolean | null | undefined>(pick: (snapshot: Snapshot) => T): T {
+  const read = () => pick(store.get());
+  return useSyncExternalStore(store.subscribe, read, read);
 }
 
 /** The time now, refreshed a few times a minute, which also keeps the battery's day current. */

@@ -4,32 +4,36 @@ import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { CELLS, cellWords } from '@/domain/battery';
 import { clockLabel, clockLabelOf, durationLabel } from '@/domain/day';
-import { chosenGoal } from '@/domain/goal';
+import { chosenGoal, goalFree } from '@/domain/goal';
 import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import { topUpPlan } from '@/domain/puzzle';
 import { EXPECTED_PRICE } from '@/pro/config';
 import { pro, usePro } from '@/pro/pro';
 import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCount, essentialsMode, isOn, pickCount } from '@/platform/screenTime';
-import { settingsLocked, store } from '@/state/store';
+import { settingsLocked, store, useDoc } from '@/state/store';
 import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
 import { essentialsValue } from '@/ui/countWords';
 import { TIPS } from '@/ui/tips';
 import { Battery } from '@/ui/Battery';
-import { ScreenTimeCard } from '@/ui/ScreenTimeCard';
+import { ScreenTimeCard, TestBuildTools } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
 export default function Settings() {
+  // Drawn afresh each time: it asks the phone things as it draws (is counting
+  // on, are the settings locked), which the React Compiler would otherwise keep
+  // from the first drawing (the goal's buttons never looked closed at a limit).
+  'use no memo';
   const router = useRouter();
   const { settings, day, accent } = useDay();
   const first = topUpPlan(0);
   // Read the picks again whenever this tab comes back into view: a tab out of
   // view is not redrawn, and after a change on the Essentials screen the row
   // kept the old number (build 86 said "11 count" for a list of 95).
-  const [, readAgain] = useState(0);
-  useFocusEffect(useCallback(() => readAgain((n) => n + 1), []));
-  const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
-  const countedValue = essentialsValue(picked, essentialsMode() ? essentialsCount() : null);
+  // Read only then, not on every tap of a stepper: asking the phone how many
+  // are picked takes a moment, and the screen caught on each tap (build 127).
+  const [countedValue, setCountedValue] = useState(essentialsNow);
+  useFocusEffect(useCallback(() => setCountedValue(essentialsNow()), []));
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
   const pretend = DEV_TOOLS && !isOn();
   // On a narrow phone the goal's figures give the two round buttons room.
@@ -47,6 +51,8 @@ export default function Settings() {
   // A new recharge time waits for this battery to end; the stepper shows the one chosen.
   const chosenTime = clockLabel(chosenRecharge(settings));
   const timeWaiting = chosenRecharge(settings) !== settings.rechargeMinute;
+  // On setup's own day every change starts at once (goal.ts); the note says so, and what happens after.
+  const firstDay = goalFree(useDoc());
 
   return (
     <Page top={24} bottom={24}>
@@ -83,6 +89,12 @@ export default function Settings() {
             </View>
           </View>
         ) : null}
+        {firstDay ? (
+          <View style={styles.firstDay}>
+            <Text style={styles.firstDayTitle}>Your first day: changes start now</Text>
+            <Text style={styles.firstDayLine}>From tomorrow, more time waits for the {chosenTime} recharge. Less time always starts right away.</Text>
+          </View>
+        ) : null}
       </Card>
 
       <Card>
@@ -101,6 +113,7 @@ export default function Settings() {
             // Later: this battery runs on to the new time. Earlier: one more recharge as planned, counted from the new time.
             <Text style={styles.rechargeNote}>{recharge === chosenTime ? `This battery runs on until ${chosenTime}.` : `One more recharge at ${recharge}, then at ${chosenTime}.`}</Text>
           ) : null}
+          {firstDay ? <Text style={styles.rechargeNote}>Your first day, so this changes now. From tomorrow, a new time waits for the battery to end.</Text> : null}
         </View>
         ) : (
           // Changing the recharge time is Pro. A time chosen before Pro (1.0) stays as it was.
@@ -154,8 +167,16 @@ export default function Settings() {
           <BigButton quiet label="See the empty screen" onPress={() => router.push('/screens/empty')} />
         </View>
       ) : null}
+
+      <TestBuildTools />
     </Page>
   );
+}
+
+/** The Essentials row's value: how many are picked, as the phone has it now. */
+function essentialsNow(): string {
+  const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
+  return essentialsValue(picked, essentialsMode() ? essentialsCount() : null);
 }
 
 const styles = StyleSheet.create({
@@ -168,6 +189,9 @@ const styles = StyleSheet.create({
   waitLabel: { fontSize: 13, lineHeight: 17, color: c.ink3 },
   waitValue: { fontFamily: display.semi, fontSize: 20, lineHeight: 24, color: c.ink },
   waitArrow: { fontSize: 18, color: c.ink3 },
+  firstDay: { gap: 3, marginTop: 4, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(244,245,242,0.07)' },
+  firstDayTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: c.ink },
+  firstDayLine: { fontSize: 14, lineHeight: 19, color: c.ink3 },
   rechargeRow: { minHeight: 60, paddingVertical: 10, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 12, rowGap: 8 },
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
   rechargeValue: { fontFamily: display.semi, fontSize: 17, color: c.ink, minWidth: 84, textAlign: 'center' },

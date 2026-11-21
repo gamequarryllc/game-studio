@@ -9,7 +9,7 @@ import { Platform, View } from 'react-native';
 
 import { onNoticeRoute } from '@/platform/notices';
 import { pro } from '@/pro/pro';
-import { store, useStore } from '@/state/store';
+import { store, useStoreValue } from '@/state/store';
 import { c } from '@/ui/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -35,7 +35,7 @@ const navTheme = {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({ SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
-  const loaded = useStore().state === 'ready';
+  const loaded = useStoreValue((s) => s.state === 'ready');
 
   useEffect(() => {
     void store.start();
@@ -57,7 +57,7 @@ export default function RootLayout() {
     return onNoticeRoute((route) => router.push(route));
   }, [ready, router]);
   // A first launch goes through setup before anything else.
-  const setupDone = useStore().doc.setupDone;
+  const setupDone = useStoreValue((s) => s.doc.setupDone);
   const pathname = usePathname();
   useEffect(() => {
     if (ready && !setupDone && pathname !== '/setup') router.replace('/setup');

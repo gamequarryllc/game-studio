@@ -196,6 +196,7 @@ async function main() {
     // The stepper shows the goal chosen; today keeps its own, and says when the new one starts.
     await page.getByLabel('Daily goal, 4:00, from 6:00 AM').waitFor({ state: 'visible', timeout: 8000 });
     await page.getByLabel('Today stays at 3:00. 4:00 starts at 6:00 AM.').waitFor({ state: 'visible', timeout: 8000 });
+    if ((await page.getByText('Your first day: changes start now', { exact: true }).count()) !== 0) throw new Error('the first day\'s note shows on a later day');
     await shot(page, 'q27-goal-waits');
     await tab(page, 'Today');
     await see(page, 'Nearly out');
