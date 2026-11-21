@@ -17,7 +17,7 @@ Kept current after every finished item, so a run that is cut off can be picked u
 ## In progress
 
 - Critic review 2 fixes are in; a third review after the first phone test.
-- The first TestFlight upload (NOTES.md, "Owner actions": it needs the app record).
+- Waiting on the owner's first test of TestFlight build 1.0.0 (112), uploaded 2026-11-21.
 
 ## Next
 

@@ -30,8 +30,8 @@
       "title": "Plainpins",
       "color": "#D2432A",
       "tagline": "A map of everywhere you have been: a pin for each place, with its photos, the day, who came along and what you did.",
-      "status": "building",
-      "note": "The travel pin map, asked for by the owner on 2026-11-20 outside the list of nine. Plainpins is a working name; the owner has not settled it (ideas are in store/plainpins/listing.json). Built in the owner's travel map conversation. Progress: apps/plainpins/PROGRESS.md"
+      "status": "ready-to-test",
+      "note": "The travel pin map, asked for by the owner on 2026-11-20 outside the list of nine. Plainpins is a working name; the owner has not settled it (ideas are in store/plainpins/listing.json). Build 1.0.0 (112) went to TestFlight on 2026-11-21 for the owner's first test; two critics said almost. Built in the owner's travel map conversation. Progress: apps/plainpins/PROGRESS.md"
     },
     {
       "slug": "clean-photo",
