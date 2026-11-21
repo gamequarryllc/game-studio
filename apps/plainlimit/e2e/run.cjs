@@ -67,7 +67,7 @@ async function main() {
     await shot('00-setup-welcome');
     await press('Set it up');
     await see('Your essentials');
-    await see('Essentials never count and never lock. Everything else does.');
+    await see('These never count and never lock.');
     await shot('00-setup-counts');
     await press('Next');
     await see('How much a day?');

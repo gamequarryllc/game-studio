@@ -13,6 +13,8 @@ import SwiftUI
 //            since the recharge, to the minute, added up app by app. The app
 //            itself only learns use in steps, so this is the exact number the
 //            person sees.
+//   Week     for setup: the seven days before today as seven bars, against a
+//            line at the goal, so you see which days would have locked.
 //
 // The phone runs this in a sealed box: it may draw, and nothing else. The app
 // shows the picture and never learns what is in it.
@@ -33,12 +35,15 @@ extension DeviceActivityReport.Context {
   static let topApps = Self("TopApps")
   static let total = Self("Total")
   static let average = Self("Average")
+  static let week = Self("Week")
 }
 
 private let ink = Color(red: 244 / 255, green: 245 / 255, blue: 242 / 255)
 private let quiet = Color(red: 169 / 255, green: 174 / 255, blue: 179 / 255)
 private let rule = Color(red: 37 / 255, green: 40 / 255, blue: 44 / 255)
 private let ground = Color(red: 14 / 255, green: 16 / 255, blue: 17 / 255)
+private let green = Color(red: 74 / 255, green: 198 / 255, blue: 111 / 255)
+private let coral = Color(red: 255 / 255, green: 123 / 255, blue: 107 / 255)
 
 /// The app's display face, shipped inside this extension (the build copies it
 /// in). If it cannot be loaded the phone's own bold face is used instead.
@@ -203,6 +208,128 @@ struct AverageReport: DeviceActivityReportScene {
   }
 }
 
+/// The seven days before today, oldest first, and the goal if the app passed it.
+struct WeekUse {
+  let days: [TimeInterval]
+  let letters: [String]
+  let goal: TimeInterval?
+}
+
+private let sevenDays: TimeInterval = 7 * 24 * 3600
+
+struct WeekReport: DeviceActivityReportScene {
+  let context: DeviceActivityReport.Context = .week
+  let content: (WeekUse) -> WeekBarsView
+
+  func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
+    -> WeekUse {
+    // The app can hand this sealed box nothing but the window it asks about,
+    // so the goal rides on the window's length: it starts one second earlier
+    // for each minute of the goal (src/platform/screenTime.ts, weekWindow).
+    // The days are counted back from the window's end, the battery's
+    // recharge, so the extra seconds fall outside them.
+    var window: DateInterval?
+    var hours: [(start: Date, seconds: TimeInterval)] = []
+    for await device in data {
+      if case .hourly(during: let interval) = device.segmentInterval { window = interval }
+      for await segment in device.activitySegments {
+        var seconds: TimeInterval = 0
+        for await category in segment.categories {
+          for await app in category.applications {
+            seconds += app.totalActivityDuration
+          }
+        }
+        hours.append((segment.dateInterval.start, seconds))
+      }
+    }
+    let end = window?.end ?? hours.map { $0.start.addingTimeInterval(3600) }.max() ?? Date()
+    let start = end.addingTimeInterval(-sevenDays)
+    var days = [TimeInterval](repeating: 0, count: 7)
+    for hour in hours {
+      let day = Int((hour.start.timeIntervalSince(start) / 86400).rounded(.down))
+      if day >= 0 && day < 7 { days[day] += hour.seconds }
+    }
+    var goal: TimeInterval?
+    if let window {
+      let minutes = (window.duration - sevenDays).rounded()
+      if minutes >= 30 && minutes <= 720 { goal = minutes * 60 }
+    }
+    let letter = DateFormatter()
+    letter.dateFormat = "EEEEE"
+    let letters = (0..<7).map { letter.string(from: start.addingTimeInterval(Double($0) * 86400 + 43200)) }
+    return WeekUse(days: days, letters: letters, goal: goal)
+  }
+}
+
+struct WeekBarsView: View {
+  let use: WeekUse
+
+  private var top: TimeInterval { max(3600, max(use.days.max() ?? 0, use.goal ?? 0) * 1.15) }
+  private var over: Int { use.goal.map { goal in use.days.filter { $0 > goal }.count } ?? 0 }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      HStack(spacing: 8) {
+        Text("LAST 7 DAYS")
+          .font(.system(size: 13, weight: .bold))
+          .tracking(1)
+          .foregroundStyle(quiet)
+        Spacer(minLength: 8)
+        if use.goal != nil {
+          if over > 0 {
+            Label(over == 1 ? "1 day would lock" : "\(over) days would lock", systemImage: "lock.fill")
+              .font(.system(size: 14, weight: .semibold))
+              .foregroundStyle(coral)
+          } else {
+            Text("No day would lock")
+              .font(.system(size: 14, weight: .semibold))
+              .foregroundStyle(green)
+          }
+        }
+      }
+      GeometryReader { geo in
+        // The bars stand on a line 22 points above the bottom; the day letters go under it.
+        let tall = max(1, geo.size.height - 22)
+        ZStack(alignment: .topLeading) {
+          HStack(alignment: .bottom, spacing: 8) {
+            ForEach(0..<7, id: \.self) { day in
+              VStack(spacing: 6) {
+                Spacer(minLength: 0)
+                RoundedRectangle(cornerRadius: 6)
+                  .fill(use.goal.map { use.days[day] > $0 ? coral : green } ?? green)
+                  .frame(width: 26, height: max(4, tall * CGFloat(use.days[day] / top)))
+                Text(use.letters[day])
+                  .font(.system(size: 13, weight: .semibold))
+                  .foregroundStyle(quiet)
+                  .frame(height: 16)
+              }
+              .frame(maxWidth: .infinity)
+            }
+          }
+          if let goal = use.goal {
+            let y = tall - tall * CGFloat(goal / top)
+            Path { line in
+              line.move(to: CGPoint(x: 0, y: y))
+              line.addLine(to: CGPoint(x: geo.size.width, y: y))
+            }
+            .stroke(ink, style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+            Text(clockWords(goal))
+              .font(displayFace.map { Font.custom($0, size: 14) } ?? .system(size: 14, weight: .bold))
+              .foregroundStyle(ground)
+              .padding(.horizontal, 7)
+              .padding(.vertical, 2)
+              .background(Capsule().fill(ink))
+              .position(x: geo.size.width - 24, y: y)
+          }
+        }
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(ground)
+    .ignoresSafeArea()
+  }
+}
+
 struct TotalView: View {
   let seconds: TimeInterval
 
@@ -243,6 +370,9 @@ struct PlainlimitReport: DeviceActivityReportExtension {
     }
     AverageReport { seconds in
       TotalView(seconds: seconds)
+    }
+    WeekReport { use in
+      WeekBarsView(use: use)
     }
   }
 }
