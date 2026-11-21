@@ -1003,18 +1003,6 @@ export function averageWindow(settings: Settings, now: Date): { fromMs: number; 
   return { fromMs: periodStart.getTime() - 7 * 24 * 3600 * 1000, toMs: periodStart.getTime(), selection: token };
 }
 
-/**
- * The same seven days for setup's bars, with the goal riding on the window: it
- * starts one second earlier for each minute of the goal. The phone's report is
- * sealed and can be handed nothing else; it counts the days back from the
- * window's end, so the extra seconds fall outside them
- * (targets/report/PlainlimitReport.swift, WeekReport).
- */
-export function weekWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
-  const week = averageWindow(settings, now);
-  return { ...week, fromMs: week.fromMs - settings.goalMinutes * 1000 };
-}
-
 /** For setup's last screen: whether the day's figure has settled after the latest change (see `roundSettled`). */
 export function countSettled(settings: Settings): boolean {
   if (!SCREEN_TIME_AVAILABLE) return true;
