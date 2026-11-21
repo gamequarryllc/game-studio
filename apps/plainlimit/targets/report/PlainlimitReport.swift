@@ -15,8 +15,9 @@ import SwiftUI
 //            person sees.
 //   Week4, Week6, Week8, Week12
 //            for setup: the seven days before today as seven bars on an hour
-//            scale of 4, 6, 8 or 12 hours, each with its time. The app picks
-//            the scale and draws the goal's line over the chart itself.
+//            scale of 4, 6, 8 or 12 hours, each with its time, and a goal to
+//            try about 15% under the average. The app picks the scale and
+//            draws the goal's line over the chart itself.
 //   FirstApps for Second thought: the apps opened first after picking up the
 //            phone over the last seven days, as Screen Time's "First Used
 //            After Pickup", so the person sees which apps to pick.
@@ -228,10 +229,12 @@ struct WeekUse {
 // The chart's layout. The app lays the goal line over the chart and copies
 // these numbers to put it at the right height (src/ui/UsageReport.tsx, WEEK):
 // the room over the bars for their times, the room under them for the day
-// letters, and the column for the hour scale.
+// letters, the column for the hour scale, and the column on the right for the
+// goal to try.
 private let weekTop: CGFloat = 20
 private let weekBottom: CGFloat = 22
 private let weekAxis: CGFloat = 30
+private let weekRight: CGFloat = 44
 
 private let sevenDays: TimeInterval = 7 * 24 * 3600
 
@@ -274,6 +277,19 @@ struct WeekReport: DeviceActivityReportScene {
   }
 }
 
+/// A goal to try: about 15% under the daily average shown above the chart,
+/// to the stepper's 15 minutes and never under its least, 30 minutes
+/// (src/domain/settings.ts, GOAL_STEP and GOAL_MIN). Nil when there is no use
+/// to go by, or when it would not come out under the average. Drawn here
+/// because only this report sees the use; the app never learns it, so it can
+/// show the suggestion but not start the stepper on it (the owner, build 123).
+func suggestedGoal(_ days: [TimeInterval]) -> TimeInterval? {
+  let average = days.reduce(0, +) / 7
+  let step: TimeInterval = 15 * 60
+  let tried = max(2 * step, (average * 0.85 / step).rounded() * step)
+  return tried < average ? tried : nil
+}
+
 /// Seven bars on an hour scale, each with its time over it and its day under it.
 struct WeekBarsView: View {
   let use: WeekUse
@@ -289,14 +305,15 @@ struct WeekBarsView: View {
   var body: some View {
     GeometryReader { geo in
       let plot = max(1, geo.size.height - weekTop - weekBottom)
-      let slot = (geo.size.width - weekAxis) / 7
+      let end = geo.size.width - weekRight
+      let slot = (end - weekAxis) / 7
       let width = min(24, slot * 0.6)
       ZStack(alignment: .topLeading) {
         ForEach(Array(stride(from: step, through: use.hours, by: step)), id: \.self) { hour in
           let at = height(of: TimeInterval(hour) * 3600, plot: plot)
           Path { line in
             line.move(to: CGPoint(x: weekAxis, y: at))
-            line.addLine(to: CGPoint(x: geo.size.width, y: at))
+            line.addLine(to: CGPoint(x: end, y: at))
           }
           .stroke(rule, lineWidth: 1)
           Text("\(hour)h")
@@ -306,7 +323,7 @@ struct WeekBarsView: View {
         }
         Path { line in
           line.move(to: CGPoint(x: weekAxis, y: weekTop + plot))
-          line.addLine(to: CGPoint(x: geo.size.width, y: weekTop + plot))
+          line.addLine(to: CGPoint(x: end, y: weekTop + plot))
         }
         .stroke(quiet.opacity(0.5), lineWidth: 1)
         ForEach(0..<7, id: \.self) { day in
@@ -326,6 +343,32 @@ struct WeekBarsView: View {
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(quiet)
             .position(x: x, y: weekTop + plot + 13)
+        }
+        // The goal to try: a green line ending in a tag with its time, in
+        // the column on the right. The app's own dashed goal line, with its
+        // time at the left end, stops at that column, so as the stepper
+        // reaches the goal to try the two lines meet and the dashes run into
+        // the tag. Past the top of the scale the tag waits at the top.
+        if let tried = suggestedGoal(use.days) {
+          let at = height(of: tried, plot: plot)
+          Path { line in
+            line.move(to: CGPoint(x: weekAxis, y: at))
+            line.addLine(to: CGPoint(x: end, y: at))
+          }
+          .stroke(green, lineWidth: 2)
+          VStack(spacing: 0) {
+            Text("Try")
+            Text(tried > top ? "\(clockWords(tried))\u{2191}" : clockWords(tried))
+          }
+          .font(.system(size: 11, weight: .bold))
+          .monospacedDigit()
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+          .foregroundStyle(green)
+          .frame(width: weekRight - 4, height: 32)
+          .background(RoundedRectangle(cornerRadius: 9).fill(ground))
+          .overlay(RoundedRectangle(cornerRadius: 9).stroke(green, lineWidth: 1.5))
+          .position(x: end + weekRight / 2 + 1, y: min(max(16, at), geo.size.height - 16))
         }
       }
       .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)

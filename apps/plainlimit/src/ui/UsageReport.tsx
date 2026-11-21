@@ -115,8 +115,8 @@ export function WeekBars({ settings, now, fallback }: { settings: Settings; now:
   );
 }
 
-/** The phone's chart: its height and, as in targets/report (weekTop, weekBottom, weekAxis), the room over and under the bars and the hour scale's column. */
-export const WEEK = { height: 150, top: 20, bottom: 22, axis: 30 } as const;
+/** The phone's chart: its height and, as in targets/report (weekTop, weekBottom, weekAxis, weekRight), the room over and under the bars, the hour scale's column, and the column on the right for the phone's goal to try. */
+export const WEEK = { height: 150, top: 20, bottom: 22, axis: 30, right: 44 } as const;
 
 /** The chart's scales, in hours: the smallest that leaves room above the goal. */
 const WEEK_SCALES = [4, 6, 8, 12] as const;
@@ -171,9 +171,10 @@ function GoalLine({ goalMinutes, hours }: { goalMinutes: number; hours: number }
 }
 
 const line = StyleSheet.create({
-  zone: { position: 'absolute', top: 0, left: WEEK.axis, right: 0, backgroundColor: 'rgba(255,123,107,0.14)', borderTopLeftRadius: 6, borderTopRightRadius: 6 },
+  zone: { position: 'absolute', top: 0, left: WEEK.axis, right: WEEK.right, backgroundColor: 'rgba(255,123,107,0.14)', borderTopLeftRadius: 6, borderTopRightRadius: 6 },
   zoneText: { position: 'absolute', left: 6, top: 3, fontSize: 11, fontWeight: '700', color: '#FF7B6B' },
-  dashes: { position: 'absolute', left: WEEK.axis, right: 0, height: 2, flexDirection: 'row', gap: 5, overflow: 'hidden' },
+  // Stops at the phone's column on the right, where its "Try" tag sits, so it runs into the tag rather than over it.
+  dashes: { position: 'absolute', left: WEEK.axis, right: WEEK.right, height: 2, flexDirection: 'row', gap: 5, overflow: 'hidden' },
   dash: { width: 6, height: 2, borderRadius: 1, backgroundColor: c.ink },
   // Over the hour scale's column, where it hides no bar's time.
   pill: { position: 'absolute', left: 0, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: c.ink, justifyContent: 'center' },
