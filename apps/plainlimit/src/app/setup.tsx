@@ -5,18 +5,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
-import { toneAt } from '@/domain/tone';
 import { askToNotify } from '@/platform/notices';
 import { tickStepMinutes } from '@/domain/checkpoints';
 import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount } from '@/platform/screenTime';
 import { store } from '@/state/store';
-import { Battery } from '@/ui/Battery';
 import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { TodayTotal, WeekAverage } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
+import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
 import { useDay } from '@/ui/useDay';
 
 // The first launch, in five screens: what it is, Screen Time access, what
@@ -30,8 +29,6 @@ import { useDay } from '@/ui/useDay';
 // locks held and shows Plainlimit's figure beside the phone's. If today is
 // already past the goal, starting is not the main button: tomorrow is.
 // Everything here can be changed later in Settings.
-
-const FULL = toneAt(0);
 
 type Step = 'welcome' | 'access' | 'counts' | 'goal' | 'ready';
 
@@ -139,11 +136,9 @@ export default function Setup() {
   if (step === 'welcome') {
     body = (
       <>
-        <View style={[styles.hero, { backgroundColor: FULL.bg }]}>
-          <Battery cells={6} tone={FULL} height={84} decorative />
-        </View>
+        <DrainingBattery />
         <Heading>Your screen time is a battery</Heading>
-        <Lead>One battery a day. The apps you choose use it up, and lock when it&apos;s empty. It recharges every morning.</Lead>
+        <BatteryStory recharge={clockLabel(settings.rechargeMinute)} />
       </>
     );
     primary = { label: 'Set it up', onPress: next };
@@ -370,7 +365,6 @@ function Row({ label, value, last = false }: { label: string; value: string; las
 }
 
 const styles = StyleSheet.create({
-  hero: { borderRadius: 32, paddingVertical: 26, paddingHorizontal: 22, marginBottom: 8 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 8 },
   back: { minWidth: 56, minHeight: 44, justifyContent: 'center' },
   backText: { fontSize: 16, fontWeight: '600', color: c.ink2 },
