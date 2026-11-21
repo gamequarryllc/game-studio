@@ -337,7 +337,7 @@ async function main() {
     await tab(page, 'Settings');
     await page.getByRole('button', { name: /^Advanced/ }).click();
     await page.getByRole('button', { name: /^Second thought/ }).click();
-    await page.getByRole('img', { name: 'You open an app. Solve one sum. It opens for 10 minutes, then it asks again.', exact: true }).waitFor();
+    await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It opens for 10 minutes, then it asks again.', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Apps, 3 picked', exact: true }).waitFor();
     const toggle = page.getByRole('switch', { name: 'Second thought' });
     if (await toggle.isChecked()) throw new Error('Second thought was not off by default');
@@ -346,8 +346,9 @@ async function main() {
     if (!(await toggle.isChecked())) throw new Error('the switch did not turn it on');
     await page.getByRole('radio', { name: '15 minutes', exact: true }).click();
     if (!(await page.getByRole('radio', { name: '15 minutes', exact: true }).isChecked())) throw new Error('15 minutes did not stay chosen');
-    await page.getByRole('img', { name: 'You open an app. Solve one sum. It opens for 15 minutes, then it asks again.', exact: true }).waitFor();
-    await see(page, '15:00');
+    await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It opens for 15 minutes, then it asks again.', exact: true }).waitFor();
+    await see(page, 'Open 15 min, then it asks again');
+    await see(page, 'One sum, then your app opens for 15 minutes.');
     await shot(page, 'q21-ask-first-settings', true);
     await page.goBack();
     await see(page, 'On, 15 min');

@@ -1,134 +1,117 @@
-import type { ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { c, display } from './theme';
+import { c } from './theme';
 
-// Second thought in one picture (Settings > Advanced > Second thought): an app
-// that asks first, one sum, the app open for the chosen minutes, and a dashed
-// arrow back to the start, since it asks again after that. Drawn with plain
-// views so it needs no image files. The owner, 2026-11-21: the screen had no
-// visual of how it works, and was mostly words.
+// Second thought in one picture (Settings > Advanced > Second thought): a
+// small phone showing the screen an app on the list puts up (the same words,
+// hand and buttons as `askShieldCopy` and the shield look in
+// src/platform/askFirst.ts), beside three short lines: it asks first, one
+// sum, then it opens for the chosen minutes and asks again. The owner,
+// 2026-11-21: the screen had no visual of how it works, and was mostly words;
+// of three mock-ups they picked this one as the clearest.
+
+type Glyph = 'hand.raised' | 'plus' | 'timer';
 
 export function SecondThoughtPicture({ openMinutes, accent }: { openMinutes: number; accent: string }) {
+  const { width } = useWindowDimensions();
+  // The phone takes about two fifths of the card, so the lines beside it still fit on a small iPhone.
+  const phoneW = Math.max(108, Math.min(140, Math.round((width - 72) * 0.42)));
+  const k = phoneW / 140;
   return (
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel={`You open an app. Solve one sum. It opens for ${openMinutes} minutes, then it asks again.`}
+      accessibilityLabel={`Your app asks first. Solve one sum. It opens for ${openMinutes} minutes, then it asks again.`}
       style={styles.card}>
-      <View style={styles.steps}>
-        <Step words={'You open\nan app'}>
-          <View>
-            <AppTile muted />
-            <View style={styles.lockBadge}>
-              <Lock />
-            </View>
+      <View style={[styles.phone, { width: phoneW, height: phoneW * 1.62, borderRadius: 24 * k, padding: 5 * k }]}>
+        <View style={[styles.screen, { borderRadius: 19 * k, paddingTop: 30 * k, paddingHorizontal: 10 * k, paddingBottom: 10 * k }]}>
+          <View style={[styles.island, { top: 7 * k, width: 40 * k, height: 11 * k, borderRadius: 6 * k }]} />
+          <Icon name="hand.raised" size={34 * k} color={c.ink} />
+          <Text style={[styles.shieldTitle, { fontSize: 13 * k, lineHeight: 16 * k, marginTop: 10 * k }]}>Second thought</Text>
+          <Text style={[styles.shieldLine, { fontSize: 9.5 * k, lineHeight: 12.5 * k, marginTop: 5 * k }]}>{`One sum, then your app opens for ${openMinutes} minutes.`}</Text>
+          <View style={{ flex: 1 }} />
+          <View style={[styles.shieldButton, { height: 28 * k, borderRadius: 9 * k }]}>
+            <Text style={[styles.shieldButtonText, { fontSize: 10.5 * k }]}>Not now</Text>
           </View>
-        </Step>
-        <Arrow />
-        <Step words={'Solve\none sum'}>
-          <View style={styles.sum}>
-            <Text style={styles.sumText}>47 + 38</Text>
-            <Text style={[styles.sumAnswer, { color: accent }]}>= 85 ✓</Text>
-          </View>
-        </Step>
-        <Arrow />
-        <Step words={`It opens\nfor ${openMinutes} min`}>
-          <View>
-            <AppTile />
-            <View style={[styles.timer, { backgroundColor: accent }]}>
-              <Text style={styles.timerText}>{`${openMinutes}:00`}</Text>
-            </View>
-          </View>
-        </Step>
+          <Text style={[styles.shieldSecond, { fontSize: 10.5 * k, lineHeight: 24 * k, marginTop: 2 * k }]}>Solve one sum</Text>
+        </View>
       </View>
 
-      {/* The way back: the bottom half of a dashed rounded box, from the third step to the first, with an arrowhead up. */}
-      <View style={styles.loopRow}>
-        <View style={{ flex: 2 }} />
-        <View style={{ flex: 10 }}>
-          <View style={styles.loopClip}>
-            <View style={styles.loop} />
-          </View>
-          <View style={styles.loopHead} />
-          <View style={styles.loopWords}>
-            <Text style={styles.loopText}>then it asks again</Text>
-          </View>
-        </View>
-        <View style={{ flex: 2 }} />
+      <View style={styles.lines}>
+        <Line glyph="hand.raised" words="Your app asks first" />
+        <Line glyph="plus" words="Solve one sum" />
+        <Line glyph="timer" words={`Open ${openMinutes} min, then it asks again`} tint={accent} />
       </View>
     </View>
   );
 }
 
-function Step({ words, children }: { words: string; children: ReactNode }) {
+function Line({ glyph, words, tint = c.ink }: { glyph: Glyph; words: string; tint?: string }) {
   return (
-    <View style={styles.step}>
-      <View style={styles.art}>{children}</View>
+    <View style={styles.line}>
+      <View style={styles.dot}>
+        <Icon name={glyph} size={17} color={tint} />
+      </View>
       <Text style={styles.words}>{words}</Text>
     </View>
   );
 }
 
-function Arrow() {
+/** Apple's own symbol on an iPhone (the real screen shows hand.raised); a drawn stand-in in the web preview. */
+function Icon({ name, size, color }: { name: Glyph; size: number; color: string }) {
+  return <SymbolView name={name} size={size} tintColor={color} weight="medium" fallback={<Drawn name={name} size={size} color={color} />} />;
+}
+
+function Drawn({ name, size, color }: { name: Glyph; size: number; color: string }) {
+  const s = size / 24;
+  if (name === 'plus') {
+    return (
+      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ position: 'absolute', width: 15 * s, height: 2.6 * s, borderRadius: 1.3 * s, backgroundColor: color }} />
+        <View style={{ position: 'absolute', width: 2.6 * s, height: 15 * s, borderRadius: 1.3 * s, backgroundColor: color }} />
+      </View>
+    );
+  }
+  if (name === 'timer') {
+    return (
+      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}>
+        <View style={{ position: 'absolute', top: 1 * s, width: 6 * s, height: 2.4 * s, borderRadius: 1.2 * s, backgroundColor: color }} />
+        <View style={{ width: 17 * s, height: 17 * s, borderRadius: 8.5 * s, borderWidth: 2.3 * s, borderColor: color, marginBottom: 1.5 * s, alignItems: 'center' }}>
+          <View style={{ width: 2.3 * s, height: 6 * s, marginTop: 2.5 * s, borderRadius: 1.2 * s, backgroundColor: color }} />
+        </View>
+      </View>
+    );
+  }
+  // A raised hand: four fingers over a palm, and a thumb.
+  const finger = (h: number, up: number) => <View style={{ width: 3.6 * s, height: h * s, marginTop: up * s, borderRadius: 1.8 * s, backgroundColor: color }} />;
   return (
-    <View style={styles.arrow}>
-      <View style={styles.arrowLine} />
-      <View style={styles.arrowHead} />
+    <View style={{ width: size, height: size, alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', gap: 0.8 * s, marginTop: 1 * s, marginLeft: 3 * s }}>
+        {finger(10, 2)}
+        {finger(12, 0)}
+        {finger(11.5, 0.5)}
+        {finger(9.5, 2.5)}
+      </View>
+      <View style={{ width: 16.5 * s, height: 10 * s, marginTop: -2 * s, marginLeft: 3 * s, borderTopLeftRadius: 2 * s, borderTopRightRadius: 2 * s, borderBottomLeftRadius: 6 * s, borderBottomRightRadius: 6 * s, backgroundColor: color }} />
+      <View style={{ position: 'absolute', left: 2.5 * s, top: 10 * s, width: 3.6 * s, height: 8 * s, borderRadius: 1.8 * s, backgroundColor: color, transform: [{ rotate: '-35deg' }] }} />
     </View>
   );
 }
-
-/** A look-alike app: a blue tile with a feed on it. Muted while it waits for the sum. */
-function AppTile({ muted = false }: { muted?: boolean }) {
-  return (
-    <View style={[styles.tile, { backgroundColor: muted ? '#4F5B6B' : '#3A8DF5' }]}>
-      <View style={[styles.feedTop, muted ? styles.feedMuted : null]} />
-      <View style={[styles.feedMid, muted ? styles.feedMuted : null]} />
-      <View style={[styles.feedEnd, muted ? styles.feedMuted : null]} />
-    </View>
-  );
-}
-
-function Lock() {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <View style={styles.shackle} />
-      <View style={styles.lockBody} />
-    </View>
-  );
-}
-
-const TILE = 52;
-const LOOP_H = 24;
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 22, backgroundColor: c.card, borderWidth: 1, borderColor: c.rule, paddingTop: 20, paddingBottom: 14, paddingHorizontal: 8 },
-  steps: { flexDirection: 'row', alignItems: 'flex-start' },
-  // Steps and arrows share the width 4 : 1, so the loop below can line up with the first and last step.
-  step: { flex: 4, alignItems: 'center', gap: 10 },
-  art: { height: 62, alignItems: 'center', justifyContent: 'center' },
-  words: { fontSize: 14, lineHeight: 18, fontWeight: '500', color: c.ink2, textAlign: 'center' },
-  arrow: { flex: 1, height: 62, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  arrowLine: { width: 12, height: 2, borderRadius: 1, backgroundColor: c.outline },
-  arrowHead: { width: 8, height: 8, borderTopWidth: 2, borderRightWidth: 2, borderColor: c.outline, transform: [{ rotate: '45deg' }], marginLeft: -7 },
-  tile: { width: TILE, height: TILE, borderRadius: TILE * 0.235, justifyContent: 'center', paddingHorizontal: TILE * 0.2, gap: 3 },
-  feedTop: { height: 13, borderRadius: 3.5, backgroundColor: '#FFFFFF' },
-  feedMid: { height: 5, borderRadius: 2.5, backgroundColor: '#FFFFFF' },
-  feedEnd: { height: 4, width: '62%', borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.55)' },
-  feedMuted: { opacity: 0.6 },
-  lockBadge: { position: 'absolute', right: -9, top: -9, width: 26, height: 26, borderRadius: 13, backgroundColor: c.ground, borderWidth: 3, borderColor: c.card, alignItems: 'center', justifyContent: 'center' },
-  shackle: { width: 8, height: 6, borderWidth: 1.8, borderBottomWidth: 0, borderColor: c.ink, borderTopLeftRadius: 4, borderTopRightRadius: 4 },
-  lockBody: { width: 11, height: 8, borderRadius: 2, backgroundColor: c.ink },
-  sum: { width: 80, height: 54, borderRadius: 14, borderWidth: 1.5, borderColor: c.outline, backgroundColor: c.ground, alignItems: 'center', justifyContent: 'center' },
-  sumText: { fontFamily: display.bold, fontSize: 19, lineHeight: 22, letterSpacing: -0.4, color: c.ink },
-  sumAnswer: { fontFamily: display.bold, fontSize: 13, lineHeight: 16 },
-  timer: { position: 'absolute', bottom: -9, alignSelf: 'center', borderRadius: 9, paddingHorizontal: 7, paddingVertical: 3, borderWidth: 2.5, borderColor: c.card },
-  timerText: { fontSize: 12, lineHeight: 14, fontWeight: '700', color: c.onTone },
-  loopRow: { flexDirection: 'row', marginTop: 6 },
-  loopClip: { height: LOOP_H, overflow: 'hidden' },
-  loop: { height: LOOP_H * 2, marginTop: -LOOP_H, borderWidth: 2, borderStyle: 'dashed', borderColor: c.outline, borderRadius: 18 },
-  loopHead: { position: 'absolute', left: -4, top: -2, width: 10, height: 10, borderTopWidth: 2, borderLeftWidth: 2, borderColor: c.outline, transform: [{ rotate: '45deg' }] },
-  loopWords: { position: 'absolute', left: 0, right: 0, bottom: -8, alignItems: 'center' },
-  loopText: { fontSize: 13.5, lineHeight: 17, fontWeight: '500', color: c.ink3, backgroundColor: c.card, paddingHorizontal: 8 },
+  card: { borderRadius: 22, backgroundColor: c.card, borderWidth: 1, borderColor: c.rule, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  phone: { backgroundColor: '#000000', borderWidth: 1.5, borderColor: '#34373C' },
+  // The real screen's colours (askFirst.ts: background #15181A, light words, a light button).
+  screen: { flex: 1, backgroundColor: '#15181A', alignItems: 'center' },
+  island: { position: 'absolute', alignSelf: 'center', backgroundColor: '#000000' },
+  shieldTitle: { fontWeight: '700', color: c.ink, textAlign: 'center' },
+  shieldLine: { color: c.ink2, textAlign: 'center' },
+  shieldButton: { alignSelf: 'stretch', backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center' },
+  shieldButtonText: { fontWeight: '600', color: c.onPaper },
+  shieldSecond: { fontWeight: '600', color: c.ink },
+  lines: { flex: 1, gap: 16 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dot: { width: 34, height: 34, borderRadius: 17, backgroundColor: c.ground, borderWidth: 1.5, borderColor: c.rule, alignItems: 'center', justifyContent: 'center' },
+  words: { flex: 1, fontSize: 15, lineHeight: 19, fontWeight: '500', color: c.ink2 },
 });
