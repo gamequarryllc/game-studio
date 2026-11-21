@@ -16,7 +16,7 @@ interface NativeProps {
   toMs: number;
   selection: string | null;
   /** Which of the extension's reports: the list, or the day's total. */
-  context?: 'TopApps' | 'Total' | 'Average' | WeekContext | 'FirstApps';
+  context?: 'TopApps' | 'Total' | 'Average' | `Week${WeekHours}` | 'FirstApps';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -93,33 +93,48 @@ export function WeekAverage({ settings, now, fallback, style }: { settings: Sett
  * The seven days before today as bars, each with its time, on an hour scale:
  * drawn by the phone (targets/report, WeekReport). The goal's dashed line and
  * the shaded "would lock" zone above it are the app's own, laid over the
- * chart, so they move as soon as the goal changes. (Build 120 asked the phone
- * to draw the line, passing the goal through the window's length; the phone
- * never got it, and the chart showed bare bars.)
+ * chart, so they move as soon as the goal changes, and the bars stay as they
+ * are. (Build 120 asked the phone to draw the line, passing the goal through
+ * the window's length; the phone never got it, and the chart showed bare
+ * bars.)
  */
 export function WeekBars({ settings, now, fallback }: { settings: Settings; now: Date; fallback: ReactNode }) {
+  // The scale is kept while the screen is open (see `keptScale`), so the stepper only moves the line.
+  const [hours, setHours] = useState(() => weekScale(settings.goalMinutes));
+  const kept = keptScale(hours, settings.goalMinutes);
+  if (kept !== hours) setHours(kept);
   const window = SCREEN_TIME_AVAILABLE && NativeReport ? averageWindow(settings, now) : null;
   if (!NativeReport || !window || !window.selection) return <View>{fallback}</View>;
-  const hours = weekScale(settings.goalMinutes);
   return (
     <View pointerEvents="none" style={{ height: WEEK.height, alignSelf: 'stretch' }}>
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>{fallback}</View>
-      <NativeReport context={`Week${hours}`} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
-      <GoalLine goalMinutes={settings.goalMinutes} hours={hours} />
+      <NativeReport context={`Week${kept}`} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
+      <GoalLine goalMinutes={settings.goalMinutes} hours={kept} />
       <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
     </View>
   );
 }
-
-type WeekContext = 'Week4' | 'Week6' | 'Week8' | 'Week12';
 
 /** The phone's chart: its height and, as in targets/report (weekTop, weekBottom, weekAxis), the room over and under the bars and the hour scale's column. */
 export const WEEK = { height: 150, top: 20, bottom: 22, axis: 30 } as const;
 
 /** The chart's scales, in hours: the smallest that leaves room above the goal. */
 const WEEK_SCALES = [4, 6, 8, 12] as const;
-export function weekScale(goalMinutes: number): (typeof WEEK_SCALES)[number] {
+export type WeekHours = (typeof WEEK_SCALES)[number];
+export function weekScale(goalMinutes: number): WeekHours {
   return WEEK_SCALES.find((h) => h * 60 >= goalMinutes * 1.5) ?? 12;
+}
+
+/**
+ * The scale while the screen stays open: the one it opened with, until the
+ * goal goes past its top, and then the one that fits the goal. It never
+ * shrinks. Each scale is its own report, which the phone draws from scratch:
+ * picking the scale afresh on every step redrew the bars at 2:45, 4:15 and
+ * 5:30, and the phone took 30 seconds or more, or never drew them again (the
+ * owner, build 123). Now a step only moves the app's own line.
+ */
+export function keptScale(current: WeekHours, goalMinutes: number): WeekHours {
+  return goalMinutes > current * 60 ? weekScale(goalMinutes) : current;
 }
 
 /** Where the goal stands on the chart, from its top, in points. */
