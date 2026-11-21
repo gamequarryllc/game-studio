@@ -12,7 +12,9 @@ import { MAKES_PDF } from '@/platform/exporter';
 import { exportSpreadsheet, makeClaimPackage, makeReport } from '@/state/operations';
 import { store, useDoc } from '@/state/store';
 import { DateField } from '@/ui/DateField';
-import { choose, confirm, notify } from '@/ui/dialogs';
+import { confirm, notify } from '@/ui/dialogs';
+import { causeIconName } from '@/ui/Icon';
+import { pick } from '@/ui/PickSheet';
 import { FormRow, LiveTextArea, LiveTextRow, PickRow } from '@/ui/form';
 import { Button, Card, Divider, EmptyState, Footnote, Notice, PushedScreen, Row, SectionLabel, Thumb } from '@/ui/kit';
 import { radius, space, type, useTheme } from '@/ui/theme';
@@ -67,9 +69,10 @@ export default function ClaimScreen() {
   const openItems = () => router.push({ pathname: '/claim-items', params: { id: claimId } });
 
   const pickCause = async () => {
-    const picked = await choose<LossCause | 'none'>({
+    const picked = await pick<LossCause | 'none'>({
       title: 'What caused the loss?',
-      choices: [...LOSS_CAUSES.map((k) => ({ key: k, label: LOSS_CAUSE_LABELS[k] })), { key: 'none' as const, label: 'Not stated' }],
+      choices: [...LOSS_CAUSES.map((k) => ({ key: k, label: LOSS_CAUSE_LABELS[k], icon: causeIconName(k) })), { key: 'none' as const, label: 'Not stated', quiet: true }],
+      selected: claim.cause ?? 'none',
     });
     if (picked) set({ cause: picked === 'none' ? null : picked });
   };

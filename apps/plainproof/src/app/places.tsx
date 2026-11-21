@@ -23,6 +23,7 @@ import { store, useLibrary } from '@/state/store';
 import { CabinetArt } from '@/ui/CabinetArt';
 import { ask, choose, confirm } from '@/ui/dialogs';
 import { Icon, type IconName } from '@/ui/Icon';
+import { pick } from '@/ui/PickSheet';
 import { BarButton } from '@/ui/kit';
 import { space, type, useTheme } from '@/ui/theme';
 
@@ -37,7 +38,9 @@ const KIND_ICONS: Record<PlaceKind, IconName> = {
   other: 'pin',
 };
 
-const KIND_CHOICES = PLACE_KINDS.map((key) => ({ key, label: PLACE_KIND_LABELS[key] }));
+const pickKind = (selected: PlaceKind | null) =>
+  pick<PlaceKind>({ title: 'What kind of place is it?', choices: PLACE_KINDS.map((key) => ({ key, label: PLACE_KIND_LABELS[key], icon: KIND_ICONS[key] })), selected });
+
 
 export default function PlacesScreen() {
   const { c } = useTheme();
@@ -62,7 +65,7 @@ export default function PlacesScreen() {
     }
     const name = await ask({ title: 'New place', placeholder: 'Lake cabin, the office, unit 12', confirmLabel: 'Next' });
     if (!name?.trim()) return;
-    const kind = await choose({ title: 'What kind of place is it?', choices: KIND_CHOICES });
+    const kind = await pickKind(null);
     if (!kind) return;
     store.updateLibrary((lib, now) => addPlace(lib, name, kind, now).library);
     success();
@@ -82,7 +85,7 @@ export default function PlacesScreen() {
       const name = await ask({ title: 'Rename this place', initial: place.name, confirmLabel: 'Save' });
       if (name?.trim()) store.updateLibrary((lib) => renamePlace(lib, place.id, name));
     } else if (what === 'kind') {
-      const kind = await choose({ title: 'What kind of place is it?', choices: KIND_CHOICES });
+      const kind = await pickKind(place.kind);
       if (kind) store.updateLibrary((lib) => setPlaceKind(lib, place.id, kind));
     } else if (what === 'delete') {
       const sure = await confirm({

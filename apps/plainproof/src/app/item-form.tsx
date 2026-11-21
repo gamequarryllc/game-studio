@@ -19,6 +19,8 @@ import { store, useDoc } from '@/state/store';
 import { DateField } from '@/ui/DateField';
 import { ask, choose, confirm, notify } from '@/ui/dialogs';
 import { FormRow, PhotoStrip, PickRow, Stepper, TextRow } from '@/ui/form';
+import { categoryIconName, roomIconName } from '@/ui/Icon';
+import { pick } from '@/ui/PickSheet';
 import { BarButton, Button, Card, Divider, Footnote, Row, SectionLabel } from '@/ui/kit';
 import { NO_OUTLINE, space, type, useTheme } from '@/ui/theme';
 
@@ -198,9 +200,10 @@ export default function ItemForm() {
   };
 
   const pickRoom = async () => {
-    const picked = await choose({
+    const picked = await pick({
       title: 'Which room is it in?',
-      choices: [...doc.rooms.map((r) => ({ key: r.id, label: r.name })), { key: '__new__', label: 'New room…' }],
+      choices: [...doc.rooms.map((r) => ({ key: r.id, label: r.name, icon: roomIconName(r.icon) })), { key: '__new__', label: 'New room', icon: 'add' as const, quiet: true }],
+      selected: draft.roomId,
     });
     if (!picked) return;
     if (picked !== '__new__') {
@@ -217,18 +220,20 @@ export default function ItemForm() {
   };
 
   const pickCategory = async () => {
-    const picked = await choose<Category | 'none'>({
+    const picked = await pick<Category | 'none'>({
       title: 'What kind of thing is it?',
-      choices: [...CATEGORIES.map((k) => ({ key: k, label: CATEGORY_LABELS[k] })), { key: 'none' as const, label: 'No category' }],
+      choices: [...CATEGORIES.map((k) => ({ key: k, label: CATEGORY_LABELS[k], icon: categoryIconName(k) })), { key: 'none' as const, label: 'No category', quiet: true }],
+      selected: draft.category ?? 'none',
     });
     if (picked) set('category', picked === 'none' ? null : picked);
   };
 
   const pickCondition = async () => {
-    const picked = await choose<Condition | 'none'>({
+    const picked = await pick<Condition | 'none'>({
       title: 'What condition is it in?',
       message: 'Insurers use this to work out what an older thing is worth.',
-      choices: [...CONDITIONS.map((k) => ({ key: k, label: CONDITION_LABELS[k] })), { key: 'none' as const, label: 'Not stated' }],
+      choices: [...CONDITIONS.map((k) => ({ key: k, label: CONDITION_LABELS[k] })), { key: 'none' as const, label: 'Not stated', quiet: true }],
+      selected: draft.condition ?? 'none',
     });
     if (picked) set('condition', picked === 'none' ? null : picked);
   };

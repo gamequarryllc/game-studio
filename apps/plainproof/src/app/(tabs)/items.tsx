@@ -9,8 +9,8 @@ import type { Item } from '@/domain/types';
 import { tap } from '@/platform/haptics';
 import { openNewItem } from '@/state/nav';
 import { useDoc } from '@/state/store';
-import { choose } from '@/ui/dialogs';
 import { Icon } from '@/ui/Icon';
+import { pick } from '@/ui/PickSheet';
 import { Button, Chip, EmptyState, RoundButton, Thumb } from '@/ui/kit';
 import { HAIRLINE, NO_OUTLINE, TAB_BAR_SPACE, radius, space, type, useTheme } from '@/ui/theme';
 
@@ -48,7 +48,7 @@ export default function ItemsTab() {
   const labels: Record<ItemFilter, string> = { all: 'All', 'no-photo': 'No photo', 'no-value': 'No value', 'no-serial': 'Missing serial' };
 
   const pickSort = async () => {
-    const picked = await choose<ItemSort>({ title: 'Sort items', choices: (Object.keys(SORT_LABELS) as ItemSort[]).map((k) => ({ key: k, label: SORT_LABELS[k] })) });
+    const picked = await pick<ItemSort>({ title: 'Sort items', choices: (Object.keys(SORT_LABELS) as ItemSort[]).map((k) => ({ key: k, label: SORT_LABELS[k] })), selected: sort });
     if (picked) setSort(picked);
   };
 
