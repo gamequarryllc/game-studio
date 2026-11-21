@@ -6,6 +6,9 @@ name: Store listing
 #
 #   plan    read-only: prints what is in App Store Connect now and what would change
 #   apply   makes the changes
+#   review  read-only: prints each version's state and what is with App Review
+#   unsubmit  takes back what is waiting for or in App Review (deletes nothing; the
+#           version's page becomes editable again). Only on the owner's say-so.
 #
 # Only ever started by hand (Actions > Store listing > Run workflow). It uses the same
 # App Store Connect API key the builds sign with. Nothing here submits an app for review,
@@ -19,10 +22,10 @@ on:
         required: true
         type: string
       mode:
-        description: "plan = look only; apply = write the listing"
+        description: "plan = look only; apply = write the listing; review = look at App Review; unsubmit = take back from review"
         required: true
         type: choice
-        options: [plan, apply]
+        options: [plan, apply, review, unsubmit]
         default: plan
       build:
         description: "Build number to attach to the version (apply only; leave empty to leave the build alone)"
@@ -66,6 +69,6 @@ jobs:
           set -euo pipefail
           case "$IN_APP" in *[!a-z0-9-]*|"") echo "::error::Bad app name"; exit 1;; esac
           [ -f "store/$IN_APP/listing.json" ] || { echo "::error::No listing at store/$IN_APP"; exit 1; }
-          case "$IN_MODE" in plan|apply) ;; *) echo "::error::Bad mode"; exit 1;; esac
+          case "$IN_MODE" in plan|apply|review|unsubmit) ;; *) echo "::error::Bad mode"; exit 1;; esac
           case "$IN_BUILD" in *[!0-9]*) echo "::error::Build must be a number"; exit 1;; esac
           python3 tools/asc_listing.py "$IN_APP" "$IN_MODE" "$IN_BUILD"

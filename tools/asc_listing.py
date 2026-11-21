@@ -3,6 +3,8 @@
 
   python3 tools/asc_listing.py <slug> plan            read-only: prints what is there now
   python3 tools/asc_listing.py <slug> apply [build]   writes the listing; attaches build number <build> if given
+  python3 tools/asc_listing.py <slug> review          read-only: prints the versions and what is with App Review
+  python3 tools/asc_listing.py <slug> unsubmit        takes back what is waiting for or in App Review
 
 It uses the App Store Connect API with the same key the builds sign with
 (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 in the environment; the "Store listing"
@@ -534,12 +536,68 @@ class Run:
         print("Done. Nothing was submitted for review: that is the owner's button.")
 
 
+# What App Review still holds, and so can be taken back.
+WITH_REVIEW = ("WAITING_FOR_REVIEW", "IN_REVIEW", "UNRESOLVED_ISSUES")
+
+
+def review(slug, take_back):
+    """Prints each version's state and what is with App Review; with `take_back`, cancels those submissions.
+
+    Taking a version back from review deletes nothing: its page becomes editable again
+    (the owner scrapped 1.0.0 this way, to release the next version first). A version
+    that is already approved and waiting for the owner's release button is not with App
+    Review any more; that one is cancelled on its page in App Store Connect.
+    """
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    with open(os.path.join(root, "store", slug, "listing.json"), encoding="utf-8") as f:
+        bundle = json.load(f)["bundle_id"]
+    c = Client()
+    apps = c.get("/v1/apps", **{"filter[bundleId]": bundle})["data"]
+    app = next(a for a in apps if a["attributes"]["bundleId"] == bundle)["id"]
+
+    def versions():
+        print("\n== Versions")
+        for v in c.all(f"/v1/apps/{app}/appStoreVersions", **{"filter[platform]": "IOS", "limit": 20}):
+            a = v["attributes"]
+            print(f"  {a.get('versionString')}: {a.get('appVersionState') or a.get('appStoreState')} (release: {a.get('releaseType')})")
+
+    def submissions():
+        print("\n== With App Review")
+        subs = c.all("/v1/reviewSubmissions", **{"filter[app]": app, "filter[platform]": "IOS", "limit": 20})
+        held = [s for s in subs if s["attributes"].get("state") in WITH_REVIEW]
+        for s in subs[:10]:
+            a = s["attributes"]
+            print(f"  {s['id']}: {a.get('state')} (submitted {a.get('submittedDate')})")
+        if not subs:
+            print("  nothing has been submitted")
+        return held
+
+    versions()
+    held = submissions()
+    if not take_back:
+        print("\nRead only. Nothing was changed.")
+        return
+    if not held:
+        print("\nNothing is waiting for or in review, so there is nothing to take back.")
+        return
+    for s in held:
+        c.call("PATCH", f"/v1/reviewSubmissions/{s['id']}", {"data": {"type": "reviewSubmissions", "id": s["id"], "attributes": {"canceled": True}}})
+        print(f"  taken back: {s['id']}")
+    time.sleep(8)
+    versions()
+    submissions()
+    print("\nDone. Nothing was submitted or released.")
+
+
 def main():
-    if len(sys.argv) < 3 or sys.argv[2] not in ("plan", "apply"):
+    if len(sys.argv) < 3 or sys.argv[2] not in ("plan", "apply", "review", "unsubmit"):
         raise SystemExit(__doc__)
     slug = sys.argv[1]
     if not slug.replace("-", "").isalnum():
         raise SystemExit("Bad app name")
+    if sys.argv[2] in ("review", "unsubmit"):
+        review(slug, sys.argv[2] == "unsubmit")
+        return
     build = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
     Run(slug, sys.argv[2], build).go()
 

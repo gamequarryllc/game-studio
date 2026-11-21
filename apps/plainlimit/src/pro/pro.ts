@@ -22,6 +22,8 @@ export interface ProState {
   owned: boolean;
   /** Developer setting: behave as if Pro were bought. */
   pretend: boolean;
+  /** Developer setting: behave as if Pro were not bought, on a phone whose Apple Account owns it (to try the free app). */
+  pretendFree: boolean;
   /** The store is switched on and can sell or restore. */
   storeOpen: boolean;
   /** The store's own price text, when it could be read. */
@@ -29,19 +31,19 @@ export interface ProState {
   busy: boolean;
 }
 
-let state: ProState = { ready: false, isPro: false, owned: false, pretend: false, storeOpen: false, price: null, busy: false };
+let state: ProState = { ready: false, isPro: false, owned: false, pretend: false, pretendFree: false, storeOpen: false, price: null, busy: false };
 const listeners = new Set<() => void>();
 let started: Promise<void> | null = null;
 
 function set(patch: Partial<ProState>) {
   const next = { ...state, ...patch };
-  next.isPro = next.owned || (DEV_TOOLS && next.pretend);
+  next.isPro = DEV_TOOLS && next.pretendFree ? false : next.owned || (DEV_TOOLS && next.pretend);
   state = next;
   for (const l of listeners) l();
 }
 
 function persist() {
-  void AsyncStorage.setItem(KEY, JSON.stringify({ owned: state.owned, pretend: state.pretend })).catch(() => {});
+  void AsyncStorage.setItem(KEY, JSON.stringify({ owned: state.owned, pretend: state.pretend, pretendFree: state.pretendFree })).catch(() => {});
 }
 
 function setOwned(owned: boolean) {
@@ -55,9 +57,9 @@ export const pro = {
     if (!started) {
       started = (async () => {
         try {
-          const saved = JSON.parse((await AsyncStorage.getItem(KEY)) ?? '{}') as { owned?: unknown; pretend?: unknown };
+          const saved = JSON.parse((await AsyncStorage.getItem(KEY)) ?? '{}') as { owned?: unknown; pretend?: unknown; pretendFree?: unknown };
           // The saved answer lets Pro work offline; the store corrects it below when it can be reached.
-          set({ owned: saved.owned === true && storeAvailable(), pretend: saved.pretend === true });
+          set({ owned: saved.owned === true && storeAvailable(), pretend: saved.pretend === true, pretendFree: saved.pretendFree === true });
         } catch {
           // No saved answer yet.
         }
@@ -105,6 +107,12 @@ export const pro = {
   setPretend(pretend: boolean): void {
     if (!DEV_TOOLS) return;
     set({ pretend });
+    persist();
+  },
+
+  setPretendFree(pretendFree: boolean): void {
+    if (!DEV_TOOLS) return;
+    set({ pretendFree });
     persist();
   },
 

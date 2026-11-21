@@ -97,8 +97,18 @@ export default function Settings() {
       {DEV_TOOLS ? (
         <View style={{ marginTop: 14, gap: 10 }}>
           <Label>Developer: Pro</Label>
-          <Text style={styles.note}>{proState.pretend ? 'Pretending Pro is bought.' : 'Pro is not bought.'} None of this is in the App Store version.</Text>
-          <BigButton quiet label={proState.pretend ? 'Stop pretending Pro' : 'Pretend Pro is bought'} onPress={() => pro.setPretend(!proState.pretend)} />
+          {/* A phone that has bought Pro can try the free app, and one that hasn't can try Pro. */}
+          {proState.owned ? (
+            <>
+              <Text style={styles.note}>{proState.pretendFree ? 'Pro is bought, but the app is acting as the free version.' : 'Pro is bought.'} None of this is in the App Store version.</Text>
+              <BigButton quiet label={proState.pretendFree ? 'Back to Pro' : 'Act as the free version'} onPress={() => pro.setPretendFree(!proState.pretendFree)} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.note}>{proState.pretend ? 'Pretending Pro is bought.' : 'Pro is not bought.'} None of this is in the App Store version.</Text>
+              <BigButton quiet label={proState.pretend ? 'Stop pretending Pro' : 'Pretend Pro is bought'} onPress={() => pro.setPretend(!proState.pretend)} />
+            </>
+          )}
         </View>
       ) : null}
 
