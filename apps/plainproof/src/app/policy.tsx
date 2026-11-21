@@ -17,7 +17,8 @@ import { dropFiles } from '@/state/operations';
 import { store, useDoc } from '@/state/store';
 import { choose, confirm, notify } from '@/ui/dialogs';
 import { LiveTextRow, MoneyRow } from '@/ui/form';
-import { Icon } from '@/ui/Icon';
+import { Icon, categoryIconName } from '@/ui/Icon';
+import { pick } from '@/ui/PickSheet';
 import { Button, Card, Divider, Footnote, Notice, PushedScreen, Row, SectionLabel } from '@/ui/kit';
 import { space, type, useTheme } from '@/ui/theme';
 
@@ -48,7 +49,7 @@ export default function PolicyScreen() {
     });
 
   const addKind = async () => {
-    const picked = await choose<Category>({ title: 'A special limit for', choices: otherKinds.map((k) => ({ key: k, label: CATEGORY_LABELS[k] })) });
+    const picked = await pick<Category>({ title: 'A special limit for', choices: otherKinds.map((k) => ({ key: k, label: CATEGORY_LABELS[k], icon: categoryIconName(k) })) });
     if (picked) setExtra((e) => [...e, picked]);
   };
 

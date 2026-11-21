@@ -2,13 +2,9 @@
 
 Kept current after every finished item, so a run that is cut off can be picked up from here.
 
-## Status: in TestFlight, waiting for the owner's first run on a phone (2026-11-11)
+## Status: 1.0.1 being readied for the App Store (2026-11-21)
 
-**Build 1.0.0 (14), playtest flavor, was signed on GitHub and uploaded to TestFlight on 2026-11-11** ("iOS app build", run 43098533628). The app has its identifier (`com.gamequarry.plainproof`) and its App Store Connect record ("Plainproof: Home Inventory"; Apple accepted the name), and an internal testing group, "Me", with automatic distribution and the account holder as its one tester. The owner ran build 14 on his iPhone the same day; build 17 carried the changes he asked for after that run (the welcome picture, fewer words, 20 free items), build 19 the first file drawer, build 20 the cabinets, build 21 a drawer you flipped through from the front, build 23 the drawer as it is now (every folder in view and an opening that slides with the finger), and **build 1.0.0 (26)**, the newest (run 43141638708, uploaded 2026-11-12 02:47 UTC), the note on the Rooms tab when the backup is behind. Build 26's upload succeeded; that Apple finished processing it was not checked, because the App Store Connect sign-in in the owner's browser had expired. How that slide feels under a real finger, the first-time dip and the timing of the ticks are not yet proven on a phone. A 3D sketch of another way the drawer could look (a real cabinet drawer, the chosen folder lifted out) was made in Blender for the owner the same night; it is a picture to react to, not a plan.
-
-The preview was built and published by CI for the first time on 2026-11-11 (the build and the Pages deployment both succeeded; the live page itself cannot be opened from the workspace, as with the games).
-
-**Checks right now:** lint clean, typecheck clean, 111 unit tests pass, the web export and the iPhone bundle both build, the browser run (`node e2e/run.cjs`, 22 steps, three phone sizes and dark mode) passes with no console errors, `python3 tools/store_check.py` passes, and **the native iPhone build compiles on GitHub** (an unsigned `check` build of the Xcode project that `expo prebuild` writes; about 20 minutes on a Mac runner). Two fresh-eyes critics have both said **almost** (reviews 1 and 2 in NOTES.md); everything they found that could be fixed without a phone or a new library is fixed and has a test.
+**Live:** version 1.0.0 (build 33), submitted 2026-11-12, without the claim features. **In TestFlight:** 1.0.1 (69), playtest flavor, with everything below; the owner is testing it on his iPhone with a list from the 2026-11-21 thread. **Readied for 1.0.1:** the listing at version 1.0.1 with its "What's New" text, six screenshots (a claim screen added), Pro at $9.99, a release build asked for (`testflight-request.json`), and `tools/asc_listing.py` able to make the new version and write "What's New". **Left for the owner:** testing 69, then Submit for Review in App Store Connect.
 
 ## Done
 

@@ -1,7 +1,7 @@
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import type { ColorValue, StyleProp, ViewStyle } from 'react-native';
 
-import type { RoomIcon } from '@/domain/types';
+import type { Category, LossCause, RoomIcon } from '@/domain/types';
 
 // One list of the symbols the app uses. On iPhone these are SF Symbols; the
 // web preview shows the nearest Material symbol, since SF Symbols only exist
@@ -69,6 +69,28 @@ const ICONS = {
   outdoor: { ios: 'tree.fill', web: 'yard' },
   hall: { ios: 'door.left.hand.closed', web: 'door_front' },
   box: { ios: 'shippingbox.fill', web: 'package_2' },
+  // The kinds of thing, for the category picker.
+  catElectronics: { ios: 'tv.fill', web: 'tv' },
+  catAppliances: { ios: 'washer.fill', web: 'local_laundry_service' },
+  catFurniture: { ios: 'chair.lounge.fill', web: 'chair' },
+  catJewelry: { ios: 'sparkles', web: 'diamond' },
+  catClothing: { ios: 'tshirt.fill', web: 'checkroom' },
+  catTools: { ios: 'hammer.fill', web: 'handyman' },
+  catKitchenware: { ios: 'cup.and.saucer.fill', web: 'coffee' },
+  catArt: { ios: 'paintpalette.fill', web: 'palette' },
+  catSports: { ios: 'figure.run', web: 'directions_run' },
+  catMusic: { ios: 'guitars.fill', web: 'music_note' },
+  catBooks: { ios: 'books.vertical.fill', web: 'menu_book' },
+  catOther: { ios: 'square.grid.2x2.fill', web: 'category' },
+  // What caused a loss, for the claim.
+  causeFire: { ios: 'flame.fill', web: 'local_fire_department' },
+  causeSmoke: { ios: 'smoke.fill', web: 'air' },
+  causeWater: { ios: 'drop.fill', web: 'water_drop' },
+  causeStorm: { ios: 'cloud.bolt.rain.fill', web: 'thunderstorm' },
+  causeTheft: { ios: 'lock.open.fill', web: 'lock_open' },
+  causeVandalism: { ios: 'hammer.fill', web: 'broken_image' },
+  causeAccident: { ios: 'exclamationmark.triangle.fill', web: 'warning' },
+  causeOther: { ios: 'questionmark.circle.fill', web: 'help' },
 } as const satisfies Record<string, Pair>;
 
 export type IconName = keyof typeof ICONS;
@@ -89,3 +111,31 @@ export function Icon({
   const pair = ICONS[name];
   return <SymbolView name={{ ios: pair.ios, android: pair.web, web: pair.web }} size={size} tintColor={color} style={style} />;
 }
+
+const CATEGORY_ICONS: Record<Category, IconName> = {
+  electronics: 'catElectronics',
+  appliances: 'catAppliances',
+  furniture: 'catFurniture',
+  jewelry: 'catJewelry',
+  clothing: 'catClothing',
+  tools: 'catTools',
+  kitchenware: 'catKitchenware',
+  art: 'catArt',
+  sports: 'catSports',
+  music: 'catMusic',
+  books: 'catBooks',
+  other: 'catOther',
+};
+export const categoryIconName = (category: Category): IconName => CATEGORY_ICONS[category];
+
+const CAUSE_ICONS: Record<LossCause, IconName> = {
+  fire: 'causeFire',
+  smoke: 'causeSmoke',
+  water: 'causeWater',
+  storm: 'causeStorm',
+  theft: 'causeTheft',
+  vandalism: 'causeVandalism',
+  accident: 'causeAccident',
+  other: 'causeOther',
+};
+export const causeIconName = (cause: LossCause): IconName => CAUSE_ICONS[cause];

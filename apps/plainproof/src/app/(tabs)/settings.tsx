@@ -16,9 +16,10 @@ import { BACKUP_NAME, cloudBackup, useCloudBackup } from '@/state/cloudBackup';
 import { appVersion, eraseEverything, loadSample } from '@/state/operations';
 import { reminders, useReminderPermission, type ReminderKind } from '@/state/reminders';
 import { store, useDoc, useLibrary } from '@/state/store';
-import { choose, confirm, notify } from '@/ui/dialogs';
+import { confirm, notify } from '@/ui/dialogs';
 import { FormRow } from '@/ui/form';
 import { Icon } from '@/ui/Icon';
+import { pick } from '@/ui/PickSheet';
 import { Card, Divider, Footnote, Notice, Row, SectionLabel, TabScreen } from '@/ui/kit';
 import { space, type, useTheme } from '@/ui/theme';
 
@@ -36,7 +37,7 @@ export default function SettingsTab() {
   const currency = CURRENCIES.find((k) => k.code === doc.settings.currency);
 
   const pickCurrency = async () => {
-    const picked = await choose({ title: 'Currency for values', choices: CURRENCIES.map((k) => ({ key: k.code, label: `${k.name} (${k.code})` })) });
+    const picked = await pick({ title: 'Currency for values', choices: CURRENCIES.map((k) => ({ key: k.code, label: `${k.name} (${k.code})` })), selected: doc.settings.currency });
     // One currency for every place.
     if (picked) store.updateLibrary((lib) => mapDocs(lib, (d) => setCurrency(d, picked)));
   };

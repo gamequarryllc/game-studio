@@ -16,6 +16,7 @@ import { dropFiles, dropPhotos } from '@/state/operations';
 import { store, useDoc } from '@/state/store';
 import { ask, choose, confirm, notify } from '@/ui/dialogs';
 import { Icon, roomIconName } from '@/ui/Icon';
+import { pick } from '@/ui/PickSheet';
 import { Button, Card, Divider, EmptyState, Footnote, IconTile, PushedScreen, Row, SectionLabel, Thumb } from '@/ui/kit';
 import { space, type, useTheme } from '@/ui/theme';
 
@@ -118,7 +119,7 @@ export default function RoomScreen() {
   };
 
   const changeIcon = async () => {
-    const picked = await choose<RoomIcon>({ title: 'Symbol for this room', choices: ROOM_ICONS.map((k) => ({ key: k, label: ICON_LABELS[k] })) });
+    const picked = await pick<RoomIcon>({ title: 'Symbol for this room', choices: ROOM_ICONS.map((k) => ({ key: k, label: ICON_LABELS[k], icon: roomIconName(k) })), selected: room.icon });
     if (picked) store.update((d) => setRoomIcon(d, room.id, picked));
   };
 

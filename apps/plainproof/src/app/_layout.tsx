@@ -14,6 +14,7 @@ import { cloudBackup } from '@/state/cloudBackup';
 import { reminders } from '@/state/reminders';
 import { store, useStore } from '@/state/store';
 import { DialogHost } from '@/ui/dialogs';
+import { PickSheetHost } from '@/ui/PickSheet';
 import { RecoveryScreen } from '@/ui/Recovery';
 import { useTheme } from '@/ui/theme';
 
@@ -117,6 +118,7 @@ export default function RootLayout() {
           </Stack>
           )}
           <DialogHost />
+          <PickSheetHost />
         </View>
       </View>
     </ThemeProvider>

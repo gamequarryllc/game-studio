@@ -258,7 +258,17 @@ async function main() {
       await h.tap('pick-Bathroom');
       await h.tap('pick-Home office');
       await h.tap('pick-Garage');
+      // A room of their own, picked as it is added; the same name again only picks the tile it already has.
+      await h.tap('pick-add-own');
+      await h.answer('Guest room');
+      await h.visible('pick-Guest room');
+      await h.expectText('welcome-finish', 'Start with 6 rooms');
+      await h.tap('pick-add-own');
+      await h.answer('guest room');
+      await h.expectText('welcome-finish', 'Start with 6 rooms');
       await h.shot('02-welcome-rooms');
+      // Taken back off, so the rest of the run has the five rooms it expects.
+      await h.tap('pick-Guest room');
       await h.expectText('welcome-finish', 'Start with 5 rooms');
       await h.tap('welcome-finish');
       await h.visible('rooms-screen');
