@@ -17,7 +17,7 @@ import { CountingProblem } from '@/ui/CountingProblem';
 import { GlowBattery, GlowField } from '@/ui/GlowBattery';
 import { BigButton, Card, LinkRow, StatusBand, tiles } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
-import { TodayTotal } from '@/ui/UsageReport';
+import { TodayTotal, UsageReport } from '@/ui/UsageReport';
 import { WeekView } from '@/ui/WeekView';
 import { useDay } from '@/ui/useDay';
 
@@ -126,10 +126,14 @@ export default function Today() {
           <WeekView compact week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true, doc.record?.uses)} />
 
           <Card>
-            <LinkRow icon={{ name: 'history', bg: tiles.blue }} label="History" sub="Your record, passes and top apps" onPress={() => router.push('/record')} last />
+            <LinkRow icon={{ name: 'history', bg: tiles.blue }} label="History" sub="Your record and passes" onPress={() => router.push('/record')} last />
           </Card>
 
-          {counting ? null : (
+          {/* Last on the page: Apple's list sits in a box sized for five rows, and spare room at the end is only extra scroll.
+              It went to History with the overhaul and came back the same day: the owner still wants it here (2026-11-22). */}
+          {counting ? (
+            <UsageReport settings={settings} now={now} />
+          ) : (
             <View style={{ gap: 6 }}>
               <Text style={styles.body}>
                 {SCREEN_TIME_AVAILABLE

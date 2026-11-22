@@ -122,12 +122,11 @@ async function main() {
     const { page, context } = await open(doc({ goal: 270, used: 97 }), '?mock=counting');
     await see(page, 'used of 4:30');
     await shot(page, 'q01-counting-top');
-    // The phone's list of apps is on History, last on the page.
-    await page.getByRole('button', { name: /^History/ }).click();
+    // The phone's list of apps is last on Today, under the History row.
     await toBottom(page);
+    await see(page, 'What used it');
     await see(page, 'Waiting for the phone');
     await shot(page, 'q02-counting-bottom');
-    await page.goBack();
     // While counting is on, Settings says nothing about it; the switch is in Advanced.
     await tab(page, 'Settings');
     if ((await page.getByRole('button', { name: 'Turn on Screen Time', exact: true }).count()) > 0) throw new Error('Settings offers to turn counting on while it is on');

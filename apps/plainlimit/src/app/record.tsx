@@ -2,18 +2,17 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import type { Cell } from '@/domain/record';
 import { weekView } from '@/domain/week';
-import { SCREEN_TIME_AVAILABLE, isOn } from '@/platform/screenTime';
+import { SCREEN_TIME_AVAILABLE } from '@/platform/screenTime';
 import { Page, Title } from '@/ui/kit';
 import { PassDot, useRecord, weekday } from '@/ui/RecordCard';
 import { c, display } from '@/ui/theme';
-import { UsageReport } from '@/ui/UsageReport';
 import { WeekView } from '@/ui/WeekView';
 
 // History, opened from Today: the last seven days in full, then the record
 // (record.ts: the run without an emergency pass, perfect weeks, passes in the
-// bank, the last 12 weeks day by day, when passes were used), then the phone's
-// own list of what used the battery today. Up to build 129 the week and the
-// list were on Today and this screen was "Your record" (the owner, 2026-11-22).
+// bank, the last 12 weeks day by day, when passes were used). Up to build 129
+// the week's words were on Today and this screen was "Your record" (the owner,
+// 2026-11-22). The phone's list of what used the battery stays on Today.
 
 const UNDER = '#46CC70';
 const RAN_OUT = '#FF7B6B';
@@ -45,8 +44,6 @@ function monthTick(start: string): string {
 }
 
 export default function Record() {
-  // Asks the phone whether counting is on as it draws: not to be kept by the React Compiler.
-  'use no memo';
   const { view, doc, now } = useRecord();
   const used = view.used.map((d) => d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
   const fresh = view.streakWeeks === 0 && view.bestWeeks === 0;
@@ -148,13 +145,6 @@ export default function Record() {
         </View>
       )}
       <Text style={styles.note}>A pass opens everything, settings too, for 15 minutes. One is added each Monday, they bank with no limit, and one can be used a day.</Text>
-
-      {/* Last on the page: Apple's list sits in a box sized for five rows, and spare room at the end is only extra scroll. */}
-      {isOn() ? (
-        <View style={{ marginTop: 10 }}>
-          <UsageReport settings={doc.settings} now={now} />
-        </View>
-      ) : null}
     </Page>
   );
 }
