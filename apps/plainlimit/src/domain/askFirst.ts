@@ -62,7 +62,13 @@ export interface AskFirst {
   whileInUse?: boolean;
 }
 
-export const DEFAULT_ASK_FIRST: AskFirst = { on: false, openMinutes: 10 };
+/**
+ * Off, and "Until I leave it" once it is turned on (the owner, 2026-11-22: it
+ * is the choice they use, and wanted it to be the one a new person starts
+ * with). The minutes are what it falls back to if the phone refuses the timers
+ * that choice needs, and what a number is chosen from.
+ */
+export const DEFAULT_ASK_FIRST: AskFirst = { on: false, openMinutes: 10, whileInUse: true };
 
 /** After Apple's list closes with `picked` apps in it: picking apps turns the list on, and an empty list turns it off. */
 export function onAfterPicking(picked: number): boolean {
@@ -89,9 +95,15 @@ export function askStateLine(on: boolean, picked: number, canPick: boolean): str
   return picked === 1 ? '1 app asks first' : `${picked} apps ask first`;
 }
 
-/** A saved copy read back, with anything missing or odd put right. */
+/**
+ * A saved copy read back, with anything missing or odd put right. Nothing
+ * saved reads as the default. A saved copy keeps what it said: one without
+ * `whileInUse` chose minutes (or was saved before "Until I leave it" was the
+ * default), and stays on its minutes.
+ */
 export function repairAskFirst(raw: unknown): AskFirst {
-  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_ASK_FIRST };
+  const r = raw as Record<string, unknown>;
   const openMinutes = (OPEN_CHOICES as readonly number[]).includes(r.openMinutes as number) ? (r.openMinutes as OpenMinutes) : DEFAULT_ASK_FIRST.openMinutes;
   return r.whileInUse === true ? { on: r.on === true, openMinutes, whileInUse: true } : { on: r.on === true, openMinutes };
 }

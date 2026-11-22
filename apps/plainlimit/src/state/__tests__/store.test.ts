@@ -454,9 +454,19 @@ describe('Ask first', () => {
     await store.start();
     expect(ask.applyAskFirst).toHaveBeenCalledTimes(1);
     store.setPro(true, true);
-    store.setAskFirst({ on: true, openMinutes: 15 });
-    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
-    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 }, { empty: false, recharge: expect.any(String) });
+    store.setAskFirst({ on: true, openMinutes: 15, whileInUse: false });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15, whileInUse: false });
+    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15, whileInUse: false }, { empty: false, recharge: expect.any(String) });
+  });
+
+  it('starts on "Until I leave it" for someone who has never chosen an open time', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    const { store } = load(phone, saved(30), ask);
+    await store.start();
+    store.askPicksChanged(3);
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 10, whileInUse: true });
+    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 10, whileInUse: true }, { empty: false, recharge: expect.any(String) });
   });
 
   it('turns on when apps are picked in Apple\'s list, keeps the open time, and turns off when the list is emptied', async () => {
@@ -464,14 +474,14 @@ describe('Ask first', () => {
     const ask = fakeAsk();
     const { store } = load(phone, saved(30), ask);
     await store.start();
-    store.setAskFirst({ openMinutes: 15 });
+    store.setAskFirst({ openMinutes: 15, whileInUse: false });
     store.askPicksChanged(3);
-    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
-    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15 }, { empty: false, recharge: expect.any(String) });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15, whileInUse: false });
+    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15, whileInUse: false }, { empty: false, recharge: expect.any(String) });
     store.setAskFirst({ on: false });
-    expect(store.get().doc.settings.askFirst).toEqual({ on: false, openMinutes: 15 });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: false, openMinutes: 15, whileInUse: false });
     store.askPicksChanged(0);
-    expect(store.get().doc.settings.askFirst).toEqual({ on: false, openMinutes: 15 });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: false, openMinutes: 15, whileInUse: false });
     store.askPicksChanged(2);
     expect(store.get().doc.settings.askFirst?.on).toBe(true);
     store.askPicksChanged(0);
@@ -588,8 +598,8 @@ describe('Pro', () => {
     store.setSumLevel('hard');
     expect(store.get().doc.settings.rechargeMinute).toBe(360);
     expect(store.get().doc.settings.sumLevel).toBe('normal');
-    store.setAskFirst({ on: true, openMinutes: 15 });
-    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15 });
+    store.setAskFirst({ on: true, openMinutes: 15, whileInUse: false });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15, whileInUse: false });
     store.setLockMessage('  Go   outside. ');
     expect(store.get().doc.settings.lockMessage).toBeUndefined();
     store.setLockMessage('  Text someone   you miss. ');

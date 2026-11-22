@@ -420,7 +420,9 @@ async function main() {
     const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting');
     await tab(page, 'Settings');
     await page.getByRole('button', { name: /^Second thought/ }).click();
-    await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It opens for 10 minutes, then it asks again.', exact: true }).waitFor();
+    // "Until I leave it" is the open time someone starts with (the owner, 2026-11-22), and the picture says so.
+    await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It stays open until you leave it, then it asks again.', exact: true }).waitFor();
+    if (!(await page.getByRole('radio', { name: 'Until I leave it', exact: true }).isChecked())) throw new Error('"Until I leave it" is not the open time to start with');
     await page.getByRole('button', { name: 'Your apps, 3 picked', exact: true }).waitFor();
     // The phone's list of apps opened first after a pickup: here only its box, waiting for the phone.
     await see(page, 'You open these first');

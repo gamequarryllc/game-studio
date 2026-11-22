@@ -30,9 +30,14 @@ import { ACTIVITY, COUNTED_ID, SHORTEST_WATCH_MINUTES, TICKS_ACTIVITY, TOPUP_ACT
 import { repairSettings } from '../settings';
 
 describe('Ask first', () => {
-  it('is off by default and repairs a saved copy', () => {
-    expect(DEFAULT_ASK_FIRST).toEqual({ on: false, openMinutes: 10 });
+  it('is off by default, with "Until I leave it" as the open time, and repairs a saved copy', () => {
+    expect(DEFAULT_ASK_FIRST).toEqual({ on: false, openMinutes: 10, whileInUse: true });
+    expect(openChoice(DEFAULT_ASK_FIRST)).toBe('use');
     expect(repairAskFirst(undefined)).toEqual(DEFAULT_ASK_FIRST);
+    expect(repairAskFirst('nonsense')).toEqual(DEFAULT_ASK_FIRST);
+    // A saved copy that chose minutes stays on its minutes, whatever the default is now.
+    expect(openChoice(repairAskFirst({ on: true, openMinutes: 15 }))).toBe(15);
+    expect(openChoice(repairAskFirst({ ...DEFAULT_ASK_FIRST, ...openChange(5) }))).toBe(5);
     expect(repairAskFirst({ on: true, openMinutes: 15 })).toEqual({ on: true, openMinutes: 15 });
     expect(repairAskFirst({ on: 'yes', openMinutes: 7 })).toEqual({ on: false, openMinutes: 10 });
   });

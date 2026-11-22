@@ -110,7 +110,7 @@ describe('reading a saved copy', () => {
       },
       now,
     );
-    expect(doc.settings).toEqual({ goalMinutes: 90, rechargeMinute: 60, countMode: 'timeWasters', emptyLevel: 'work', allowed: ['Phone', 'Camera'], askFirst: { on: false, openMinutes: 10 }, sumLevel: 'normal' });
+    expect(doc.settings).toEqual({ goalMinutes: 90, rechargeMinute: 60, countMode: 'timeWasters', emptyLevel: 'work', allowed: ['Phone', 'Camera'], askFirst: { on: false, openMinutes: 10, whileInUse: true }, sumLevel: 'normal' });
     expect(doc.day).toEqual({ periodStart: new Date(2026, 10, 11, 1, 0).toISOString(), usedMinutes: 55, topUps: 2, unlockedUntil: null, uncounted: false, startGoalMinutes: 90 });
   });
 
