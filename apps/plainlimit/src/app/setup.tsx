@@ -13,16 +13,24 @@ import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { Icon } from '@/ui/icons';
-import { SetupFigures, WHOLE, WholeTotal } from '@/ui/UsageReport';
+import { SetupFigures, WHOLE, WakeScreenTime, WholeTotal } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
 import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
+import { EmptyPicture, EmptyStory } from '@/ui/WhenEmpty';
 import { useDay } from '@/ui/useDay';
 
-// The first launch, in five screens: what it is, Screen Time access, what
-// counts, the goal, and a last check. Access comes first, so the goal screen
-// can show the phone's own figures (today so far, and the last week's
-// average) while the goal is picked; the old order asked for a goal before
-// anything was known, and a quick tap-through could lock every app at once.
+// The first launch, in six screens: what it is, Screen Time access, what
+// counts, what an empty battery does, the goal, and a last check. Access comes
+// first, so the goal screen can show the phone's own figures (today so far,
+// and the last week's average) while the goal is picked; the old order asked
+// for a goal before anything was known, and a quick tap-through could lock
+// every app at once.
+//
+// The phone's first drawing after an install can take a minute, and the app
+// can't tell when it is done. So setup starts early: Screen Time is woken as
+// soon as access is allowed (WakeScreenTime), and the goal screen's chart is
+// asked for one screen ahead, out of sight behind 'between', which gives the
+// reader something useful to look at meanwhile (the owner, build 144).
 //
 // Counting always takes in the day since the recharge, so the app can be
 // installed at any time of day. The last screen registers the day with the
@@ -30,9 +38,9 @@ import { useDay } from '@/ui/useDay';
 // already past the goal, starting is not the main button: tomorrow is.
 // Everything here can be changed later in Settings.
 
-type Step = 'welcome' | 'access' | 'counts' | 'goal' | 'ready';
+type Step = 'welcome' | 'access' | 'counts' | 'between' | 'goal' | 'ready';
 
-const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'access', 'counts', 'goal', 'ready'] : ['welcome', 'counts', 'goal', 'ready'];
+const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'access', 'counts', 'between', 'goal', 'ready'] : ['welcome', 'counts', 'between', 'goal', 'ready'];
 
 /**
  * How the last screen waits for the phone's report of the day so far: until
@@ -45,6 +53,9 @@ const QUIET_MS = 3000;
 const LONGEST_MS = 30_000;
 
 type Button = { label: string; onPress: () => void };
+
+/** How tall the goal screen's figures are while parked behind another screen. */
+const PARKED = 330;
 
 
 export default function Setup() {
@@ -59,7 +70,7 @@ export default function Setup() {
   const [phase, setPhase] = useState<'reading' | 'ready' | 'failed'>('reading');
   const [waitedAt, setWaitedAt] = useState<number | null>(null);
   const previewed = useRef(false);
-  // Whether the goal screen's figures have been shown, so they stay for the rest of setup.
+  // Whether the goal screen's figures have been asked for, so they stay for the rest of setup.
   const [figuresShown, setFiguresShown] = useState(false);
 
   const step = STEPS[at];
@@ -123,6 +134,8 @@ export default function Setup() {
     if (answer === 'approved') next();
   };
 
+  // The goal screen's own words go in `head`, over the phone's figures; every other screen's go in `body`, which covers the figures while they are parked.
+  let head: ReactNode = null;
   let body: ReactNode = null;
   let primary: Button = { label: 'Next', onPress: next };
   let secondary: Button | null = null;
@@ -175,13 +188,28 @@ export default function Setup() {
     }
   }
 
-  // The goal screen's figures and 7-day chart, drawn by the phone. Once shown
-  // they stay for the rest of setup, parked out of sight on the other screens,
-  // so Back and Next don't ask the phone to draw them again: on build 127 the
-  // second drawing never came (the owner). They are drawn again only when the
-  // essentials change, which changes what they count.
+  if (step === 'between') {
+    // Something worth a look while the phone draws the next screen's chart behind this one.
+    body = (
+      <>
+        <EmptyPicture />
+        <Heading>{'When it\u2019s empty'}</Heading>
+        <EmptyStory recharge={clockLabel(settings.rechargeMinute)} />
+      </>
+    );
+  }
+
+  // The goal screen's figures and 7-day chart, drawn by the phone. They are
+  // asked for one screen early, parked out of sight behind 'between', so the
+  // phone has a head start. Once asked for they stay for the rest of setup,
+  // parked on the other screens, so Back and Next don't ask the phone to draw
+  // them again: on build 127 the second drawing never came (the owner). They
+  // are drawn again only when the essentials change, which changes what they
+  // count. Parked, they are drawn in full under the screen in front (`cover`),
+  // not made clear: a clear view might never be drawn, and the head start
+  // would be lost without a sign.
   const recharge = clockLabel(settings.rechargeMinute);
-  if (step === 'goal' && figures && !figuresShown) setFiguresShown(true);
+  if ((step === 'between' || step === 'goal') && figures && !figuresShown) setFiguresShown(true);
   const figureBox =
     figures && figuresShown ? (
       <View
@@ -195,22 +223,18 @@ export default function Setup() {
         <Text style={styles.note}>{`Days start at ${recharge}. Essentials not counted.`}</Text>
       </View>
     ) : null;
-  let afterFigures: ReactNode = null;
 
   if (step === 'goal') {
-    // With the phone's figures: today and the daily average, then the last
-    // seven days as bars with their times against the goal's line, which the
-    // stepper moves (the owner picked the bars from five drafts, build 115,
-    // and asked for the times and figures back, build 120). Without them, the
-    // words.
-    body = (
+    // The goal comes first, over the chart, so it can be picked at once while
+    // the phone is still drawing (the owner, build 144). With the phone's
+    // figures under it: today and the daily average, then the last seven days
+    // as bars with their times against the goal's line, which the stepper
+    // moves (the owner picked the bars from five drafts, build 115, and asked
+    // for the times and figures back, build 120). Without them, the words.
+    head = (
       <>
         <Heading>How much a day?</Heading>
         {figures ? null : <Lead>Pick a little under a normal day. You can change it later.</Lead>}
-      </>
-    );
-    afterFigures = (
-      <>
         <Card style={{ paddingVertical: 18, gap: 10 }}>
           <View style={styles.stepper}>
             <StepButton sign="−" label="Less time" size={52} onPress={() => store.stepGoal(-1)} />
@@ -330,9 +354,14 @@ export default function Setup() {
         <View style={styles.back} />
       </View>
       <ScrollView contentContainerStyle={styles.body_} keyboardShouldPersistTaps="handled">
-        <Fragment key="body">{body}</Fragment>
+        {/* Three places, always in this order, so the figures are never moved (which would draw them again): over them the goal screen's words, and after them, in front, every other screen. */}
+        <Fragment key="head">{head}</Fragment>
         {figureBox}
-        <Fragment key="after">{afterFigures}</Fragment>
+        {body ? (
+          <View key="body" style={[styles.screen, figureBox ? styles.cover : null]}>
+            {body}
+          </View>
+        ) : null}
       </ScrollView>
       <View style={[styles.foot, { paddingBottom: insets.bottom + 16 }]}>
         <BigButton label={primary.label} onPress={primary.onPress} />
@@ -343,6 +372,8 @@ export default function Setup() {
           </Pressable>
         ) : null}
       </View>
+      {/* Until the goal screen's own figures are asked for; never both at once. */}
+      {canPick && !figuresShown ? <WakeScreenTime settings={settings} now={now} /> : null}
       {essentials.pickers}
     </View>
   );
@@ -405,8 +436,13 @@ const styles = StyleSheet.create({
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   big: { fontFamily: display.bold, fontSize: 60, lineHeight: 64, letterSpacing: -2.2, color: c.ink },
   figureBox: { borderWidth: 1, borderColor: c.rule, borderRadius: 18, padding: 16 },
-  // Out of sight on the other screens, at the same width, so the phone's drawings keep their size and are not redrawn.
-  parked: { position: 'absolute', top: 18, left: 24, right: 24, opacity: 0 },
+  // A screen's own things, spaced as the scroll view spaces its own.
+  screen: { gap: 14 },
+  // Out of sight on the other screens, at the same width, so the phone's drawings keep their size and are not redrawn:
+  // where the screen in front begins, no taller than its cover.
+  parked: { position: 'absolute', top: 18, left: 24, right: 24, maxHeight: PARKED, overflow: 'hidden' },
+  // The screen in front of the parked figures: the ground's colour, and at least as tall as they are.
+  cover: { minHeight: PARKED, backgroundColor: c.ground },
   // Setup's last screen: the iPhone's whole day as the outer box, and Plainlimit's part of it inside.
   whole: { borderWidth: 1.5, borderColor: c.outline, borderRadius: 20, padding: 14, gap: 12 },
   wholeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

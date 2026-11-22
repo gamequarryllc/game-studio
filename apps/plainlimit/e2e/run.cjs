@@ -72,12 +72,23 @@ async function main() {
     await see('These never count and never lock.');
     await shot('00-setup-counts');
     await press('Next');
+    // The screen in between: what an empty battery does, while a phone draws the next screen's chart behind it.
+    await see('When it’s empty');
+    await see('Opens again at 6:00 AM');
+    await see('Or use an emergency pass');
+    await see('Essentials always open');
+    await page.getByLabel('Step 3 of 5', { exact: true }).waitFor();
+    await shot('00-setup-between');
+    await press('Next');
     await see('How much a day?');
     await see('Six cells of 30 minutes each');
     await see('It recharges at 6:00 AM every day.');
     await shot('00-setup-goal');
     await press('Back');
+    await see('When it’s empty');
+    await press('Back');
     await see('Your essentials');
+    await press('Next');
     await press('Next');
     await press('Next');
     await see("You're set");

@@ -107,6 +107,32 @@ export function WholeTotal({ settings, now, fallback }: { settings: Settings; no
 }
 
 /**
+ * Wakes the phone's Screen Time early in setup: a small drawing of the last
+ * week, every app, out of sight, from the moment access is allowed, while the
+ * essentials are still being picked. The first drawing after an install can
+ * take a minute (the owner, builds 138 and 144), and the app can neither hurry
+ * it nor tell when it is done; started here, most of that minute is over by
+ * the time "How much a day?" asks for its chart. It reads the same days as the
+ * chart will, and no selection, since the chart's own needs the essentials.
+ * Setup takes it away once the chart itself is on its way, so the phone is
+ * never asked for both at once.
+ *
+ * It is drawn in full, under a cover the colour of the ground, and not made
+ * clear: a clear view might not be drawn at all, and a nearly clear one leaves
+ * a ghost of the figure on a dark screen.
+ */
+export function WakeScreenTime({ settings, now }: { settings: Settings; now: Date }) {
+  const window = SCREEN_TIME_AVAILABLE && NativeReport ? setupWindow(settings, now) : null;
+  if (!NativeReport || !window) return null;
+  return (
+    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ position: 'absolute', top: 0, right: 0, width: WHOLE.width, height: WHOLE.height }}>
+      <NativeReport context="Whole" fromMs={window.fromMs} toMs={window.toMs} selection={null} style={{ flex: 1 }} />
+      <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: c.ground }} />
+    </View>
+  );
+}
+
+/**
  * Setup's "How much a day?" figures, in one picture drawn by the phone
  * (targets/report, SetupReport): today's figure, the daily average over the
  * seven days before today, and those seven days as bars, each with its time,
