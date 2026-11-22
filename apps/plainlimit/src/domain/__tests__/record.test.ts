@@ -1,4 +1,4 @@
-import { addWeeklyPasses, freshRecord, nextPassDate, passActive, passCheck, recordView, repairRecord, settingsLockedNotice, spendPass, weekKey, type PassRecord } from '../record';
+import { addWeeklyPasses, freshRecord, nextPassDate, passActive, passCheck, passRow, recordView, repairRecord, settingsLockedNotice, spendPass, weekKey, type PassRecord } from '../record';
 import type { DaySummary } from '../types';
 
 const at = (m: number, d: number, h = 12, min = 0) => new Date(2026, m - 1, d, h, min);
@@ -124,6 +124,20 @@ describe('the record', () => {
     for (let d = 2; d <= 8; d++) history.push(day(11, d, 100, d === 4 ? 'partly' : 'counted'));
     const view = recordView(freshRecord(at(11, 1)), history, day(11, 18, 40), now);
     expect(view.perfectWeeks).toBe(0);
+  });
+});
+
+describe("the pass's row on Today", () => {
+  it('can be used only with a pass to use and an empty battery that locks', () => {
+    expect(passRow('ok', true, 4, 'Monday')).toEqual({ usable: true, sub: '15 min of everything.\nEnds your streak.' });
+    expect(passRow('ok', true, 0, 'Monday')).toEqual({ usable: true, sub: '15 minutes of everything' });
+    expect(passRow('ok', false, 4, 'Monday')).toEqual({ usable: false, sub: 'When your battery is empty' });
+  });
+
+  it('is grey, and says why, in every other case', () => {
+    expect(passRow('none', true, 4, 'Monday')).toEqual({ usable: false, sub: 'Next one on Monday' });
+    expect(passRow('usedToday', true, 0, 'Monday')).toEqual({ usable: false, sub: 'Used today. One a day.' });
+    expect(passRow('running', true, 0, 'Monday')).toEqual({ usable: false, sub: 'Open now' });
   });
 });
 

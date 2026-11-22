@@ -7,7 +7,7 @@ import { wordFor } from '@/domain/battery';
 import { clockLabelOf, durationLabel, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
-import { passActive } from '@/domain/record';
+import { passActive, passRow } from '@/domain/record';
 import { batteryEnd } from '@/domain/recharge';
 import { glowAt } from '@/domain/tone';
 import { weekView } from '@/domain/week';
@@ -16,6 +16,8 @@ import { store, useDoc } from '@/state/store';
 import { CountingProblem } from '@/ui/CountingProblem';
 import { GlowBattery, GlowField } from '@/ui/GlowBattery';
 import { BigButton, Card, LinkRow, StatusBand, tiles } from '@/ui/kit';
+import { PassRow } from '@/ui/PassRow';
+import { useRecord, weekday } from '@/ui/RecordCard';
 import { c, display } from '@/ui/theme';
 import { TodayTotal, UsageReport } from '@/ui/UsageReport';
 import { WeekView } from '@/ui/WeekView';
@@ -57,8 +59,10 @@ export default function Today() {
   const held = locksHeldUntil();
   const unlocked = isUnlocked(day, now);
   const passOn = passActive(doc.record, now);
-  const passes = doc.record?.passes ?? 0;
-  const passReady = store.passCheck() === 'ok';
+  const { view: record } = useRecord();
+  // The emergency pass is always on Today: red under an empty battery that is locking apps, grey beside History otherwise.
+  const pass = passRow(store.passCheck(), empty && !unlocked && held === 0, record.streakDays, weekday(record.nextPass));
+  const passLine = <PassRow usable={pass.usable} sub={pass.sub} passes={record.passes} color={glow} onPress={() => router.push('/pass')} />;
   const next = topUpPlan(day.topUps);
   const figure = <Text style={styles.used}>{durationLabel(day.usedMinutes)}</Text>;
 
@@ -97,7 +101,7 @@ export default function Today() {
             </View>
           ) : null}
           {/* An empty battery: what can be done about it sits right under it. */}
-          {empty && !unlocked && held === 0 && (settings.emptyLevel !== 'warn' || passReady) ? (
+          {empty && !unlocked && held === 0 && (settings.emptyLevel !== 'warn' || pass.usable) ? (
             <View style={{ gap: 12 }}>
               {settings.emptyLevel === 'work' ? <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} /> : null}
               {settings.emptyLevel === 'locked' ? (
@@ -105,11 +109,7 @@ export default function Today() {
                   <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>
                 </View>
               ) : null}
-              {passReady ? (
-                <Card>
-                  <LinkRow icon={{ name: 'pass', bg: tiles.orange }} label="Emergency pass" sub="15 minutes of everything" value={`${passes} saved`} onPress={() => router.push('/pass')} last />
-                </Card>
-              ) : null}
+              {pass.usable ? passLine : null}
             </View>
           ) : null}
 
@@ -125,9 +125,12 @@ export default function Today() {
 
           <WeekView compact week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true, doc.record?.uses)} />
 
-          <Card>
-            <LinkRow icon={{ name: 'history', bg: tiles.blue }} label="History" sub="Your record and passes" onPress={() => router.push('/record')} last />
-          </Card>
+          <View style={{ gap: 12 }}>
+            <Card>
+              <LinkRow icon={{ name: 'history', bg: tiles.blue }} label="History" sub="Your record and passes" onPress={() => router.push('/record')} last />
+            </Card>
+            {pass.usable ? null : passLine}
+          </View>
 
           {/* Last on the page: Apple's list sits in a box sized for five rows, and spare room at the end is only extra scroll.
               It went to History with the overhaul and came back the same day: the owner still wants it here (2026-11-22). */}

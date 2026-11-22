@@ -90,6 +90,8 @@ async function main() {
     await see('Today');
     await see('Plenty left');
     await see('Recharges at 6:00 AM');
+    // The emergency pass is on Today from the start, grey until the battery is empty.
+    await page.getByLabel('Emergency pass, 1 saved. When your battery is empty', { exact: true }).first().waitFor({ state: 'visible', timeout: 8000 });
     await used('0:00', '3:00');
     await page.getByLabel('Battery, 6 of 6 cells left').waitFor();
     await shot('01-today-full');

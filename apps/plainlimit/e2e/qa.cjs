@@ -541,6 +541,9 @@ async function main() {
   await scenario('emergency pass: offered on an empty battery, opens everything and the settings, once a day; the record opens from Today', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 200, level: 'locked' }), '?mock=counting');
     await see(page, 'Empty');
+    // Red, with what it costs, under the empty battery.
+    await page.getByRole('button', { name: /^Emergency pass, 1 saved\. 15 min/ }).waitFor({ state: 'visible', timeout: 8000 });
+    await shot(page, 'q23a-pass-row-empty');
     await page.getByRole('button', { name: /^Emergency pass/ }).click();
     await see(page, 'Use an emergency pass?');
     await see(page, 'Passes left after this');
@@ -551,6 +554,8 @@ async function main() {
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await see(page, 'Emergency pass: everything is open');
     if ((await page.getByRole('button', { name: /^Emergency pass/ }).count()) > 0) throw new Error('a second pass was offered the same day');
+    // The pass stays on Today as a grey row that says why it can't be used.
+    await page.getByLabel('Emergency pass, 0 saved. Open now', { exact: true }).first().waitFor({ state: 'visible', timeout: 8000 });
     await tab(page, 'Settings');
     if (await page.getByRole('button', { name: 'More time', exact: true }).isDisabled()) throw new Error('settings stayed locked during the pass');
     await tab(page, 'Today');

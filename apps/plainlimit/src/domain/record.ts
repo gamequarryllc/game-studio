@@ -92,6 +92,22 @@ export function passCheck(r: PassRecord, dayStart: Date, now: Date): 'ok' | 'non
   return r.passes > 0 ? 'ok' : 'none';
 }
 
+/**
+ * The emergency pass's row on Today (the owner's "Quiet row", 2026-11-22): it
+ * is always there, so people know a pass exists before they need one. It can
+ * be used only with a pass to use (`pass` is 'ok') and an empty battery that
+ * is locking apps (`locked`); then the row is red and says what a pass costs.
+ * (on two lines, so the cost is not broken mid-sentence on a narrow phone).
+ * Otherwise it is grey and `sub` says what it is waiting for.
+ */
+export function passRow(pass: ReturnType<typeof passCheck>, locked: boolean, streakDays: number, nextPassDay: string): { usable: boolean; sub: string } {
+  if (pass === 'running') return { usable: false, sub: 'Open now' };
+  if (pass === 'usedToday') return { usable: false, sub: 'Used today. One a day.' };
+  if (pass === 'none') return { usable: false, sub: `Next one on ${nextPassDay}` };
+  if (!locked) return { usable: false, sub: 'When your battery is empty' };
+  return { usable: true, sub: streakDays > 0 ? `${PASS_MINUTES} min of everything.\nEnds your streak.` : `${PASS_MINUTES} minutes of everything` };
+}
+
 /** Why the settings are locked, naming the emergency pass only when one can be used now. */
 export function settingsLockedNotice(rechargeLabel: string, pass: ReturnType<typeof passCheck>): string {
   const locked = `The battery is empty, so these settings are locked until it recharges at ${rechargeLabel}.`;
