@@ -22,10 +22,12 @@ interface FakePhone {
   picked: number;
 }
 
-function load() {
-  const phone: FakePhone = { held: new Map(), actions: new Map(), defaults: new Map(), log: [], refuses: new Set(), picked: 2 };
+function load(build = '', defaults = new Map<string, unknown>()) {
+  const phone: FakePhone = { held: new Map(), actions: new Map(), defaults, log: [], refuses: new Set(), picked: 2 };
   let mod: typeof import('../askFirst') | undefined;
   jest.isolateModules(() => {
+    // The app's own module, which says which build is installed.
+    jest.doMock('expo', () => ({ __esModule: true, requireOptionalNativeModule: () => (build === '' ? null : { build: () => build }) }));
     jest.doMock('react-native-device-activity', () => ({
       __esModule: true,
       isAvailable: () => true,
@@ -100,7 +102,7 @@ describe('after a sum, with minutes chosen', () => {
   });
 });
 
-describe('after a sum, with "While I use it"', () => {
+describe('after a sum, with "Until I leave it"', () => {
   it('opens for an hour at most, on a timer that has already begun', async () => {
     const { phone, ask } = load();
     const open = await ask.openAsk(inUse, recharge, now);
@@ -198,8 +200,44 @@ describe('turning the list off', () => {
     const { phone, ask } = load();
     await ask.applyAskFirst(inUse, { empty: false, recharge: '6:00 AM' });
     const look = phone.defaults.get(`shieldConfigurationForSelection_${ASK_ID}`) as { subtitle: string };
-    expect(look.subtitle).toContain('stays open while you use it');
+    expect(look.subtitle).toContain('stays open until you leave it');
     await ask.applyAskFirst(minutes, { empty: false, recharge: '6:00 AM' });
     expect((phone.defaults.get(`shieldConfigurationForSelection_${ASK_ID}`) as { subtitle: string }).subtitle).toContain('opens for 10 minutes');
+  });
+});
+
+describe('the first time a new build puts the cover in place', () => {
+  const battery = { empty: false, recharge: '6:00 AM' };
+  const covers = (log: string[]) => log.filter((line) => line === 'cover' || line === 'uncover');
+
+  it('takes the cover off for a moment first, so the phone has this build draw the screens again', async () => {
+    const { phone, ask } = load('1.1.0 (140)');
+    const began = Date.now();
+    await ask.applyAskFirst(minutes, battery);
+    expect(covers(phone.log)).toEqual(['uncover', 'cover']);
+    expect(Date.now() - began).toBeGreaterThanOrEqual(ask.AFRESH_GAP_MS - 20);
+    expect(phone.defaults.get('plainlimit_ask_drawn_by')).toBe('1.1.0 (140)');
+    // Once: coming back to the app only covers.
+    await ask.applyAskFirst(minutes, battery);
+    expect(covers(phone.log)).toEqual(['uncover', 'cover', 'cover']);
+  });
+
+  it('does nothing of the kind for a build that has already done it, or where the build is not known', async () => {
+    const done = load('1.1.0 (140)', new Map<string, unknown>([['plainlimit_ask_drawn_by', '1.1.0 (140)']]));
+    await done.ask.applyAskFirst(minutes, battery);
+    expect(covers(done.phone.log)).toEqual(['cover']);
+    const unknown = load();
+    await unknown.ask.applyAskFirst(minutes, battery);
+    expect(covers(unknown.phone.log)).toEqual(['cover']);
+    expect(unknown.phone.defaults.has('plainlimit_ask_drawn_by')).toBe(false);
+  });
+
+  it('leaves a list that is open after a sum alone', async () => {
+    const { phone, ask } = load('1.1.0 (140)');
+    const opened = new Date();
+    await ask.openAsk(minutes, opened.getTime() + 20 * 3_600_000, opened);
+    phone.log.length = 0;
+    await ask.applyAskFirst(minutes, battery);
+    expect(covers(phone.log)).toEqual([]);
   });
 });

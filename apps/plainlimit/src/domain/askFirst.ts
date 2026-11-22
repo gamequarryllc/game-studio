@@ -12,7 +12,7 @@
  * - One sum opens the whole list for `openMinutes`, then it is covered again.
  *   iOS never tells an app when another app is closed, so "every open" is
  *   really "every few minutes of use".
- * - Or, with "While I use it" (`whileInUse`), one sum keeps the list open for
+ * - Or, with "Until I leave it" (`whileInUse`), one sum keeps the list open for
  *   as long as it is being used, and it is covered again `IDLE_MINUTES` after
  *   the last minute of use. The owner, 2026-11-22: some people want to stay
  *   in an app as long as they like, but it must not then be open all day;
@@ -31,7 +31,7 @@ export const ASK_WATCH = 'plask';
 /** The timer while the list is open; when it ends the list is covered again. */
 export const ASK_OPEN = 'plaskopen';
 /**
- * "While I use it": the timer whose START is the moment the list is covered
+ * "Until I leave it": the timer whose START is the moment the list is covered
  * again. Every minute of use (`ASK_USE`) stops it and starts it afresh, so it
  * only ever starts once the list has gone unused for `IDLE_MINUTES`. It is the
  * start that covers, never the end: the phone reports an end for a timer that
@@ -39,26 +39,26 @@ export const ASK_OPEN = 'plaskopen';
  * without anything being reported.
  */
 export const ASK_IDLE = 'plaskidle';
-/** "While I use it": counts the minutes the list is used after a sum. Each one puts `ASK_IDLE` off. */
+/** "Until I leave it": counts the minutes the list is used after a sum. Each one puts `ASK_IDLE` off. */
 export const ASK_USE = 'plaskuse';
 
 export const OPEN_CHOICES = [5, 10, 15] as const;
 export type OpenMinutes = (typeof OPEN_CHOICES)[number];
-/** How long one sum opens the list for: a number of minutes, or 'use' for "While I use it". */
+/** How long one sum opens the list for: a number of minutes, or 'use' for "Until I leave it". */
 export type OpenChoice = OpenMinutes | 'use';
 
-/** "While I use it": the list is covered again this long after its last minute of use. */
+/** "Until I leave it": the list is covered again this long after its last minute of use. */
 export const IDLE_MINUTES = 2;
-/** "While I use it": the longest one sum keeps the list open, however much it is used. Then it asks once more. */
+/** "Until I leave it": the longest one sum keeps the list open, however much it is used. Then it asks once more. */
 export const USE_CAP_MINUTES = 60;
-/** "While I use it": how long an `ASK_IDLE` timer runs once it has started (see `idleWindow`). */
+/** "Until I leave it": how long an `ASK_IDLE` timer runs once it has started (see `idleWindow`). */
 export const IDLE_SPAN_MINUTES = 23 * 60;
 
 export interface AskFirst {
   on: boolean;
   /** The minutes one sum opens the list for. Kept as the last number chosen while `whileInUse` is on. */
   openMinutes: OpenMinutes;
-  /** "While I use it": open for as long as the list is being used, instead of for `openMinutes`. */
+  /** "Until I leave it": open for as long as the list is being used, instead of for `openMinutes`. */
   whileInUse?: boolean;
 }
 
@@ -101,19 +101,19 @@ export function openChoice(ask: AskFirst): OpenChoice {
   return ask.whileInUse === true ? 'use' : ask.openMinutes;
 }
 
-/** What choosing `choice` changes. "While I use it" keeps the minutes as they were, for when a number is chosen again. */
+/** What choosing `choice` changes. "Until I leave it" keeps the minutes as they were, for when a number is chosen again. */
 export function openChange(choice: OpenChoice): Partial<AskFirst> {
   return choice === 'use' ? { whileInUse: true } : { openMinutes: choice, whileInUse: false };
 }
 
-/** The longest one sum opens the list for, in minutes: the number chosen, or the cap of "While I use it". */
+/** The longest one sum opens the list for, in minutes: the number chosen, or the cap of "Until I leave it". */
 export function openSpan(ask: AskFirst): number {
   return ask.whileInUse === true ? USE_CAP_MINUTES : ask.openMinutes;
 }
 
-/** The choice in a few words, for its tile in Settings: "10 min", or "while in use". */
+/** The choice in a few words, for its tile in Settings: "10 min", or "until I leave it". */
 export function openShort(ask: AskFirst): string {
-  return ask.whileInUse === true ? 'while in use' : `${ask.openMinutes} min`;
+  return ask.whileInUse === true ? 'until I leave it' : `${ask.openMinutes} min`;
 }
 
 /**
@@ -140,7 +140,7 @@ function clockAt(ms: number): AskClock {
 }
 
 /**
- * "While I use it": the stretch the phone counts the list's use over, after a
+ * "Until I leave it": the stretch the phone counts the list's use over, after a
  * sum at `now` that opens it until `until` at the latest. It has already
  * begun (a minute ago, or sooner where the phone's shortest stretch needs
  * it), so use counts from the sum on, and it ends with the open stretch.
@@ -152,7 +152,7 @@ export function usedWindow(now: Date, until: Date, shortestMinutes: number): { s
 }
 
 /**
- * "While I use it": the first timer after a sum at `now`. It starts
+ * "Until I leave it": the first timer after a sum at `now`. It starts
  * `IDLE_MINUTES` later, on the minute (the phone's timers go by whole
  * minutes), and runs for most of a day: the phone reports a start the first
  * time it is used during the stretch, so the stretch has to still be running
@@ -164,7 +164,7 @@ export function idleWindow(now: Date): { start: AskClock; end: AskClock } {
   return { start: clockAt(start), end: clockAt(start + IDLE_SPAN_MINUTES * minute) };
 }
 
-/** "While I use it": the name of the checkpoint at `minutes` of use. */
+/** "Until I leave it": the name of the checkpoint at `minutes` of use. */
 export function tickOfUse(minutes: number): string {
   return `use${String(minutes).padStart(2, '0')}`;
 }
@@ -199,7 +199,7 @@ export function askShieldCopy(open: number | 'use', rechargeLabel: string, batte
     title: 'Second thought',
     line:
       open === 'use'
-        ? 'One sum, then {applicationOrDomainDisplayName} stays open while you use it and your battery has charge.'
+        ? 'One sum, then {applicationOrDomainDisplayName} stays open until you leave it, while your battery has charge.'
         : `One sum, then {applicationOrDomainDisplayName} opens for ${open} minutes, while your battery has charge.`,
     primary: 'Not now',
     secondary: 'Solve one sum',
@@ -213,7 +213,7 @@ export function askNotice(): { title: string; body: string; route: '/ask' } {
 
 /** The line under the sum, saying what solving it does. */
 export function askLead(open: number | 'use', opensCounted: boolean, rechargeLabel: string): string {
-  const what = open === 'use' ? 'Your Second thought apps stay open while you use them, then ask again.' : `Your Second thought apps open for ${open} minutes, then ask again.`;
+  const what = open === 'use' ? 'Your Second thought apps stay open until you leave them, then ask again.' : `Your Second thought apps open for ${open} minutes, then ask again.`;
   return opensCounted ? what : `${what} Apps that also count stay locked until ${rechargeLabel}, as the battery is empty.`;
 }
 
@@ -226,8 +226,8 @@ export function askOpened(open: number | 'use', untilLabel: string, byHand = tru
   const next = byHand ? ' Go back to the one you wanted.' : '';
   if (open === 'use') {
     return {
-      title: 'Open while you use it',
-      line: `Your Second thought apps stay open while you’re in them, and ask again about ${IDLE_MINUTES} minutes after you stop.${next}`,
+      title: 'Open until you leave it',
+      line: `Your Second thought apps stay open until you leave them, and ask again about ${IDLE_MINUTES} minutes after you leave.${next}`,
     };
   }
   return { title: `Open for ${open} minutes`, line: `Your Second thought apps are open until ${untilLabel}.${next}` };

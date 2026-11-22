@@ -116,7 +116,7 @@ describe('the switch', () => {
   });
 });
 
-describe('While I use it', () => {
+describe('Until I leave it', () => {
   const minute = 60_000;
   const minuteOfDay = (clock: { hour: number; minute: number }) => clock.hour * 60 + clock.minute;
   /** How long a stretch given as two times of day runs, in minutes (it may cross midnight). */
@@ -143,21 +143,21 @@ describe('While I use it', () => {
     expect(IDLE_MINUTES).toBe(2);
     expect(openSpan({ on: true, openMinutes: 10, whileInUse: true })).toBe(USE_CAP_MINUTES);
     expect(openSpan({ on: true, openMinutes: 10 })).toBe(10);
-    expect(openShort({ on: true, openMinutes: 10, whileInUse: true })).toBe('while in use');
+    expect(openShort({ on: true, openMinutes: 10, whileInUse: true })).toBe('until I leave it');
     expect(openShort({ on: true, openMinutes: 10 })).toBe('10 min');
   });
 
   it('says so on the covering screen, under the sum and once it is open', () => {
     const copy = askShieldCopy('use', '6:00 AM');
     expect(copy.line).toContain('{applicationOrDomainDisplayName}');
-    expect(copy.line).toContain('stays open while you use it');
+    expect(copy.line).toContain('stays open until you leave it');
     expect(copy.line).toContain('battery has charge');
     expect(copy.line).not.toContain('minutes');
     // An empty battery says the same whatever the choice.
     expect(askShieldCopy('use', '6:00 AM', true)).toEqual(askShieldCopy(10, '6:00 AM', true));
-    expect(askLead('use', true, '6:00 AM')).toBe('Your Second thought apps stay open while you use them, then ask again.');
+    expect(askLead('use', true, '6:00 AM')).toBe('Your Second thought apps stay open until you leave them, then ask again.');
     expect(askLead('use', false, '6:00 AM')).toContain('stay locked until 6:00 AM');
-    expect(askOpened('use', '2:14 PM')).toEqual({ title: 'Open while you use it', line: expect.stringContaining('about 2 minutes after you stop') });
+    expect(askOpened('use', '2:14 PM')).toEqual({ title: 'Open until you leave it', line: expect.stringContaining('about 2 minutes after you leave') });
     expect(askOpened('use', '2:14 PM').line).not.toContain('2:14 PM');
     expect(askOpened(10, '2:14 PM')).toEqual({ title: 'Open for 10 minutes', line: 'Your Second thought apps are open until 2:14 PM. Go back to the one you wanted.' });
     // With a button that opens the app itself, it doesn't also say to go back by hand.

@@ -28,18 +28,51 @@ describe('the target plugin', () => {
   });
   afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 
+  const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+  const appFile = (file) => fs.readFileSync(path.join(app, file), 'utf8');
+
   it("has the covering screen's extension note the app it is drawn for", () => {
-    const swift = fs.readFileSync(path.join(root, 'targets/ShieldConfiguration/ShieldConfigurationExtension.swift'), 'utf8');
+    const swift = read('targets/ShieldConfiguration/ShieldConfigurationExtension.swift');
     // Every covering screen is built in one place, and the note is taken there.
     expect(count(swift, '\n  plainlimitNoteCovered(placeholders)\n')).toBe(1);
     // Both ways an app is covered pass its bundle id along; websites have none.
     expect(count(swift, '"plainlimitBundle": application.bundleIdentifier,')).toBe(2);
+    // And both keep the app's code, the second with its category's.
+    expect(count(swift, '\n    plainlimitDrawn(application.token, nil)\n')).toBe(1);
+    expect(count(swift, '\n    plainlimitDrawn(application.token, category.token)\n')).toBe(1);
     expect(count(swift, 'func plainlimitNoteCovered(')).toBe(1);
+    expect(count(swift, 'func plainlimitKey<T: Encodable>(')).toBe(1);
     // Under the name the app reads.
     expect(swift).toContain('userDefaults?.set(note, forKey: "plainlimit_covered")');
-    expect(fs.readFileSync(path.join(app, 'src/platform/saved.ts'), 'utf8')).toContain("coveredApp: 'plainlimit_covered'");
+    expect(appFile('src/platform/saved.ts')).toContain("coveredApp: 'plainlimit_covered'");
     // The library's own handle on the shared settings is in the same target.
-    expect(fs.readFileSync(path.join(root, 'targets/ShieldConfiguration/Shared.swift'), 'utf8')).toMatch(/^var userDefaults = UserDefaults\(suiteName: appGroup\)$/m);
+    expect(read('targets/ShieldConfiguration/Shared.swift')).toMatch(/^var userDefaults = UserDefaults\(suiteName: appGroup\)$/m);
+  });
+
+  it('has it leave the same note on a notification that is never shown, under the names the app reads', () => {
+    const swift = read('targets/ShieldConfiguration/ShieldConfigurationExtension.swift');
+    expect(count(swift, '\nimport UserNotifications\n')).toBe(1);
+    expect(swift).toContain('identifier: "plainlimit-covered",');
+    expect(appFile('src/platform/backToApp.ts')).toContain("const WAITING_NOTE = 'plainlimit-covered';");
+    expect(swift).toContain('content.userInfo = ["plainlimitCovered": note]');
+    expect(appFile('src/platform/backToApp.ts')).toContain('.plainlimitCovered)');
+    // No words on it, and set for a year that does not come.
+    expect(swift).not.toMatch(/content\.(title|body|subtitle|sound)/);
+    expect(swift).toContain('never.year = 2099');
+  });
+
+  it("has the buttons' extension note which screen was pressed, before anything else is done with the press", () => {
+    const swift = read('targets/ShieldAction/ShieldActionExtension.swift');
+    const press = '  CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)\n  plainlimitNoteTapped(\n    applicationToken: applicationToken, webdomainToken: webdomainToken, categoryToken: categoryToken)\n';
+    expect(count(swift, press)).toBe(1);
+    // In the one place every press comes through.
+    expect(swift.indexOf(press)).toBeGreaterThan(swift.indexOf('func handleAction('));
+    expect(swift.indexOf(press)).toBeLessThan(swift.indexOf('class ShieldActionExtension'));
+    expect(count(swift, 'func plainlimitNoteTapped(')).toBe(1);
+    expect(count(swift, 'func plainlimitKey<T: Encodable>(')).toBe(1);
+    expect(swift).toContain('userDefaults?.set(note, forKey: "plainlimit_tapped")');
+    expect(appFile('src/platform/saved.ts')).toContain("tappedApp: 'plainlimit_tapped'");
+    expect(read('targets/ShieldAction/Shared.swift')).toMatch(/^var userDefaults = UserDefaults\(suiteName: appGroup\)$/m);
   });
 
   it('still teaches the monitor extension to redraw the widget, but not for the minute checkpoints or Second thought', () => {
@@ -49,9 +82,9 @@ describe('the target plugin', () => {
   });
 
   it('leaves prepared targets alone the second time', () => {
-    const file = path.join(root, 'targets/ShieldConfiguration/ShieldConfigurationExtension.swift');
-    const before = fs.readFileSync(file, 'utf8');
+    const files = ['targets/ShieldConfiguration/ShieldConfigurationExtension.swift', 'targets/ShieldAction/ShieldActionExtension.swift'];
+    const before = files.map(read);
     require('../withTargets.js')({ name: 'x', slug: 'x', _internal: { projectRoot: root } });
-    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    expect(files.map(read)).toEqual(before);
   });
 });

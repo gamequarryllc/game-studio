@@ -13,12 +13,18 @@
 //      asked (the test build shows it), then to wait half a second so the
 //      request has left before iOS puts the extension to sleep. Without this the widget would only
 //      catch up when iOS next feels like refreshing it.
-//   4. Teaches the covering screen's extension to note which app it was last
-//      drawn for (name and bundle id, replacing the one before), in the
-//      settings the app shares with its extensions. After a Second thought sum
-//      the app reads the note and opens that app again (src/domain/appLinks.ts).
-//      It is the one place iOS says which app it is, and the note stays on the
-//      phone.
+//   4. Teaches the covering screen's two extensions to note which app a lock
+//      was last shown on, in the settings the app shares with its extensions.
+//      After a Second thought sum the app reads the notes and opens that app
+//      again (src/domain/appLinks.ts). Nothing of it leaves the phone.
+//      - The extension that draws the screen is the one place iOS gives an
+//        app's name. It notes the name, the bundle id and the app's code (the
+//        opaque one Apple's picker hands over), replacing the note before, and
+//        leaves the same note a second way: on a notification that is never
+//        shown, which the app can read from the phone's waiting list.
+//      - The extension behind the screen's buttons notes the code of the app
+//        whose button was pressed. iOS can show a screen it drew earlier
+//        without asking again, so the press is what says which app it is now.
 //
 //   5. Writes targets/report/Info.plist (the usage report extension). Its
 //      version and build number come from Xcode's settings, which the build
@@ -61,7 +67,7 @@ function patchMonitor(file) {
     const call = `notifyAppWithName(name: "${name}")`;
     const asked = 'userDefaults?.set((Date().timeIntervalSince1970 * 1000).rounded(), forKey: "plainlimit_reload_asked")';
     // The minute checkpoints ("plmin") change nothing the widget draws, so they do not spend its redraws.
-    // Nor do Second thought's timers (names starting "plask"): "While I use it" counts every minute of use,
+    // Nor do Second thought's timers (names starting "plask"): "Until I leave it" counts every minute of use,
     // and a day of opening apps that way would use up the redraws the battery needs.
     const redraw = `if activity.rawValue != "plmin" && !activity.rawValue.hasPrefix("plask") {\n      ${asked}\n      WidgetCenter.shared.reloadAllTimelines()\n      Thread.sleep(forTimeInterval: 0.5)\n    }`;
     source = replaceOnce(source, call, `${call}\n    ${redraw}`, call);
@@ -69,9 +75,22 @@ function patchMonitor(file) {
   fs.writeFileSync(file, source);
 }
 
-// Swift added to the covering screen's extension. `userDefaults` is the library's own
-// handle on the shared settings (Shared.swift, in the same target).
-const NOTE_COVERED = `
+// Swift added to both of the covering screen's extensions: an app's code as text, so the two
+// notes can be matched. Each extension is built on its own, so each gets a copy.
+const TOKEN_KEY = `
+// Added by plugins/withTargets.js. Apple's opaque code for an app or a category, as text.
+func plainlimitKey<T: Encodable>(_ token: T?) -> String {
+  guard let token = token else { return "" }
+  let encoder = JSONEncoder()
+  encoder.outputFormatting = .sortedKeys
+  guard let data = try? encoder.encode(token) else { return "" }
+  return data.base64EncodedString()
+}
+`;
+
+// Swift added to the extension that draws the covering screen. `userDefaults` is the library's
+// own handle on the shared settings (Shared.swift, in the same target).
+const NOTE_COVERED = `${TOKEN_KEY}
 // Added by plugins/withTargets.js. Notes which app the covering screen was last drawn for,
 // so that after a Second thought sum the app can open it again. A website notes no app.
 // The note replaces the one before it and never leaves the phone.
@@ -82,15 +101,84 @@ func plainlimitText(_ placeholders: [String: String?], _ key: String) -> String 
   return ""
 }
 
+// The codes of the app being drawn over, and of its category when it is covered through one.
+// Kept here, and not passed with the words, so the library's own lists stay as they were.
+var plainlimitDrawnKey = ""
+var plainlimitDrawnCategory = ""
+
+func plainlimitDrawn(_ application: ApplicationToken?, _ category: ActivityCategoryToken?) {
+  plainlimitDrawnKey = plainlimitKey(application)
+  plainlimitDrawnCategory = plainlimitKey(category)
+}
+
 func plainlimitNoteCovered(_ placeholders: [String: String?]) {
   let isApp = plainlimitText(placeholders, "tokenType").hasPrefix("application")
   let note: [String: Any] = [
     "name": isApp ? plainlimitText(placeholders, "applicationOrDomainDisplayName") : "",
     "bundle": isApp ? plainlimitText(placeholders, "plainlimitBundle") : "",
+    "key": isApp ? plainlimitDrawnKey : "",
+    "category": isApp ? plainlimitDrawnCategory : "",
     "at": (Date().timeIntervalSince1970 * 1000).rounded()
   ]
   userDefaults?.set(note, forKey: "plainlimit_covered")
   // The extension may be put to sleep as soon as the screen is drawn: write it out now.
+  _ = userDefaults?.synchronize()
+
+  // The same note a second way, in case the shared settings do not take it from here: on a
+  // notification that never shows (it has no words, and is set for the year 2099). The app
+  // reads it from the phone's list of waiting notifications. One name, replaced each time.
+  let content = UNMutableNotificationContent()
+  content.userInfo = ["plainlimitCovered": note]
+  var never = DateComponents()
+  never.year = 2099
+  never.month = 1
+  never.day = 1
+  let request = UNNotificationRequest(
+    identifier: "plainlimit-covered",
+    content: content,
+    trigger: UNCalendarNotificationTrigger(dateMatching: never, repeats: false)
+  )
+  // Waits a moment for the phone to take it, and no longer: the screen is waiting to be drawn.
+  let taken = DispatchSemaphore(value: 0)
+  UNUserNotificationCenter.current().add(request) { _ in
+    taken.signal()
+  }
+  _ = taken.wait(timeout: .now() + 0.2)
+}
+`;
+
+// Swift added to the extension behind the covering screen's buttons.
+const NOTE_TAPPED = `${TOKEN_KEY}
+// Added by plugins/withTargets.js. Notes which app's covering screen had a button pressed:
+// its code, and its name where iOS gives one here (it usually does not). The app matches
+// the code against the note the screen's own extension left. Replaced at every press.
+func plainlimitNoteTapped(
+  applicationToken: ApplicationToken?,
+  webdomainToken: WebDomainToken?,
+  categoryToken: ActivityCategoryToken?
+) {
+  var kind = "site"
+  var key = plainlimitKey(webdomainToken)
+  var name = ""
+  var bundle = ""
+  if let token = applicationToken {
+    kind = "app"
+    key = plainlimitKey(applicationToken)
+    let application = Application(token: token)
+    name = application.localizedDisplayName ?? ""
+    bundle = application.bundleIdentifier ?? ""
+  } else if categoryToken != nil {
+    kind = "category"
+    key = plainlimitKey(categoryToken)
+  }
+  let note: [String: Any] = [
+    "kind": kind,
+    "key": key,
+    "name": name,
+    "bundle": bundle,
+    "at": (Date().timeIntervalSince1970 * 1000).rounded()
+  ]
+  userDefaults?.set(note, forKey: "plainlimit_tapped")
   _ = userDefaults?.synchronize()
 }
 `;
@@ -98,13 +186,29 @@ func plainlimitNoteCovered(_ placeholders: [String: String?]) {
 function patchShieldConfiguration(file) {
   let source = fs.readFileSync(file, 'utf8');
   if (source.includes('plainlimitNoteCovered')) return;
+  source = replaceOnce(source, 'import UIKit\n', 'import UIKit\nimport UserNotifications\n', 'import UIKit');
   // Both ways an app is covered (picked itself, or through its category) are told the app: pass its bundle id along.
   const named = '"applicationOrDomainDisplayName": application.localizedDisplayName,';
   source = replaceTimes(source, named, `${named}\n      "plainlimitBundle": application.bundleIdentifier,`, named, 2);
+  // And keep its code, with its category's when it is covered through one (the button press then only names the category).
+  const itself = '    // Customize the shield as needed for applications.\n';
+  source = replaceOnce(source, itself, `${itself}    plainlimitDrawn(application.token, nil)\n`, 'configuration(shielding application)');
+  const inCategory = '    logger.log("shielding application category")\n';
+  source = replaceOnce(source, inCategory, `${inCategory}    plainlimitDrawn(application.token, category.token)\n`, 'configuration(shielding application, in category)');
   // Every covering screen is built here, with what it is drawn over.
   const build = 'func buildShield(placeholders: [String: String?], config: [String: Any]?)\n  -> ShieldConfiguration {\n';
   source = replaceOnce(source, build, `${build}\n  plainlimitNoteCovered(placeholders)\n`, 'func buildShield');
   fs.writeFileSync(file, source + NOTE_COVERED);
+}
+
+function patchShieldAction(file) {
+  let source = fs.readFileSync(file, 'utf8');
+  if (source.includes('plainlimitNoteTapped')) return;
+  // Every button press on a covering screen comes through here, with the code of what it covers.
+  const handle = '  categoryToken: ActivityCategoryToken?\n) {\n  CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)\n';
+  const note = '  plainlimitNoteTapped(\n    applicationToken: applicationToken, webdomainToken: webdomainToken, categoryToken: categoryToken)\n';
+  source = replaceOnce(source, handle, `${handle}${note}`, 'func handleAction');
+  fs.writeFileSync(file, source + NOTE_TAPPED);
 }
 
 module.exports = function withTargets(config) {
@@ -118,7 +222,7 @@ module.exports = function withTargets(config) {
   // leaves each target's entitlements file in it, and a build in progress is
   // reading these files.
   const version = require(path.join(library, 'package.json')).version;
-  const stamp = `react-native-device-activity ${version}, patch 8\n`;
+  const stamp = `react-native-device-activity ${version}, patch 9\n`;
   for (const name of EXTENSIONS) {
     const to = path.join(targets, name);
     const marker = path.join(to, '.prepared');
@@ -131,6 +235,7 @@ module.exports = function withTargets(config) {
       patchMonitor(path.join(to, 'DeviceActivityMonitorExtension.swift'));
     }
     if (name === 'ShieldConfiguration') patchShieldConfiguration(path.join(to, 'ShieldConfigurationExtension.swift'));
+    if (name === 'ShieldAction') patchShieldAction(path.join(to, 'ShieldActionExtension.swift'));
     fs.writeFileSync(marker, stamp);
   }
   // The report extension's Info.plist: which kind of extension it is. Its

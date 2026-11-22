@@ -4,6 +4,7 @@
  * its own screen and runs its own timer. It never reads the phone's reports.
  */
 
+import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
@@ -30,7 +31,7 @@ import {
 } from '@/domain/askFirst';
 import { SHORTEST_WATCH_MINUTES, rgbOf, spanOf, topUpWindow } from '@/domain/monitorPlan';
 
-import { forget, readNumber, save } from './saved';
+import { forget, readNumber, readString, save } from './saved';
 
 const AVAILABLE = Platform.OS === 'ios' && DeviceActivity.isAvailable();
 const SELECTION = { activitySelectionId: ASK_ID };
@@ -98,6 +99,42 @@ export function coverAskAgain(askFirst: AskFirst | undefined): void {
   }
 }
 
+/** The installed build ("1.1.0 (140)"), from the app's own module; '' where there is none. */
+function installedBuild(): string {
+  try {
+    return (Platform.OS === 'ios' ? requireOptionalNativeModule<{ build?(): string }>('PlainlimitWidgets') : null)?.build?.() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** How long the cover stays off in `drawAfresh`: long enough for the phone to take the two changes as two. */
+export const AFRESH_GAP_MS = 400;
+
+/**
+ * Once per installed build, before the list's cover is put in place: takes it
+ * off for a moment, so the phone asks this build's extension to draw the
+ * covering screens again. The phone keeps showing a screen it has already
+ * drawn, and one drawn by the build before knows nothing this build added
+ * (noting the app for the way straight back to it, src/domain/appLinks.ts).
+ * Never fails: the caller covers the list either way.
+ */
+let afresh: Promise<void> | null = null;
+function drawAfresh(): Promise<void> {
+  afresh ??= (async () => {
+    try {
+      const build = installedBuild();
+      if (build === '' || readString('askDrawnBy') === build) return;
+      save('askDrawnBy', build);
+      DeviceActivity.unblockSelection(SELECTION, 'plainlimit-ask');
+      await new Promise((done) => setTimeout(done, AFRESH_GAP_MS));
+    } catch {
+      // Covered again by the caller.
+    }
+  })();
+  return afresh;
+}
+
 function writeScreen(open: OpenChoice, battery: AskBattery) {
   const copy = askShieldCopy(open, battery.recharge, battery.empty);
   const notice = askNotice();
@@ -156,7 +193,11 @@ export async function applyAskFirst(askFirst: AskFirst | undefined, battery: Ask
     if (!DeviceActivity.getActivities().includes(ASK_WATCH)) {
       await DeviceActivity.startMonitoring(ASK_WATCH, { intervalStart: { hour: 0, minute: 0 }, intervalEnd: { hour: 23, minute: 59 }, repeats: true }, []);
     }
-    if (askOpenUntil() === 0) DeviceActivity.blockSelection(SELECTION, 'plainlimit-ask');
+    if (askOpenUntil() === 0) {
+      await drawAfresh();
+      // Still closed after the wait (a sum may have opened it meanwhile).
+      if (askOpenUntil() === 0) DeviceActivity.blockSelection(SELECTION, 'plainlimit-ask');
+    }
   } catch {
     // Tried again the next time the app comes to the front.
   }
@@ -176,7 +217,7 @@ export function stopAskFirst(): void {
 }
 
 /**
- * "While I use it" (askFirst.ts in the domain): has the phone cover the list
+ * "Until I leave it" (askFirst.ts in the domain): has the phone cover the list
  * again once it has gone unused for `IDLE_MINUTES`, even with Plainlimit
  * closed. Two registrations:
  * - `ASK_IDLE`, a timer that starts `IDLE_MINUTES` from now. Its start covers
@@ -227,7 +268,7 @@ async function coverWhenUnused(now: Date, until: Date): Promise<boolean> {
   return false;
 }
 
-/** An open stretch: until when at the latest, and whether it is "While I use it" (covered again sooner, once the list goes unused). */
+/** An open stretch: until when at the latest, and whether it is "Until I leave it" (covered again sooner, once the list goes unused). */
 export interface AskOpen {
   until: Date;
   inUse: boolean;
@@ -242,11 +283,11 @@ export async function openAsk(askFirst: AskFirst, nextRechargeMs: number, now = 
   if (!AVAILABLE) return { until: openUntil(now, openSpan(askFirst), nextRechargeMs), inUse: askFirst.whileInUse === true };
   try {
     DeviceActivity.stopMonitoring(OPEN_TIMERS);
-    // "While I use it": the timers that cover it again once it goes unused. Without them it opens for the chosen minutes.
+    // "Until I leave it": the timers that cover it again once it goes unused. Without them it opens for the chosen minutes.
     const inUse = askFirst.whileInUse === true && (await coverWhenUnused(now, openUntil(now, USE_CAP_MINUTES, nextRechargeMs)));
     const until = openUntil(now, inUse ? USE_CAP_MINUTES : askFirst.openMinutes, nextRechargeMs);
     DeviceActivity.configureActions({ activityName: ASK_OPEN, callbackName: 'intervalDidEnd', actions: COVER_AGAIN });
-    // The longer stretch of "While I use it" is given as one already running, like the shorter ones (which start in the past).
+    // The longer stretch of "Until I leave it" is given as one already running, like the shorter ones (which start in the past).
     const window = inUse ? usedWindow(now, until, SHORTEST_WATCH_MINUTES) : topUpWindow(until);
     await DeviceActivity.startMonitoring(ASK_OPEN, { intervalStart: window.start, intervalEnd: window.end, repeats: true }, []);
     // Only uncovered once the phone holds the timer that covers it again.

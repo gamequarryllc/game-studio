@@ -29,11 +29,11 @@ import { useDay } from '@/ui/useDay';
 // three places drawn for the switch they picked the top: it is now the first
 // thing under the title, with On or Off in words, as in the phone's own
 // Settings. The apps row sits under the suggestions, which are there to be
-// picked. And the open time has a fourth choice, "While I use it".
+// picked. And the open time has a fourth choice, "Until I leave it".
 
 const OPEN_PILLS: readonly { value: OpenChoice; label: string; spoken?: string; wide?: boolean }[] = [
   ...OPEN_CHOICES.map((minutes) => ({ value: minutes, label: `${minutes} min`, spoken: `${minutes} minutes` })),
-  { value: 'use', label: 'While I use it', wide: true },
+  { value: 'use', label: 'Until I leave it', wide: true },
 ];
 
 export default function AskFirstSettings() {
@@ -105,7 +105,7 @@ export default function AskFirstSettings() {
       <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 10 }}>
         <Label>After the sum, open</Label>
         <Pills options={OPEN_PILLS} chosen={open} accent={accent} onChange={(choice) => store.setAskFirst(openChange(choice))} />
-        {open === 'use' ? <Text style={styles.hint}>{`Stays open while you’re in the app. Asks again about ${IDLE_MINUTES} minutes after you stop.`}</Text> : null}
+        {open === 'use' ? <Text style={styles.hint}>{`Stays open until you leave the app. Asks again about ${IDLE_MINUTES} minutes after you leave.`}</Text> : null}
       </Card>
 
       <Text style={styles.foot}>Apps that also count still use your battery, and stay locked when it’s empty.</Text>

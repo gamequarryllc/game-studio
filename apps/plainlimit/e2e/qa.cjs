@@ -403,7 +403,7 @@ async function main() {
     await context.close();
   });
 
-  await scenario('Second thought: the switch comes first and says On or Off; nothing picked shows off with one button; with apps the switch turns it on, and the picture follows the open choice, "While I use it" among them', async () => {
+  await scenario('Second thought: the switch comes first and says On or Off; nothing picked shows off with one button; with apps the switch turns it on, and the picture follows the open choice, "Until I leave it" among them', async () => {
     {
       const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting,noAskPicks');
       await tab(page, 'Settings');
@@ -445,21 +445,22 @@ async function main() {
     await shot(page, 'q21-ask-first-settings', true);
     // The fourth choice: open for as long as the app is used, and it says what that means.
     if ((await page.getByRole('radio').count()) !== 4) throw new Error('expected four open choices');
-    const whileUsed = page.getByRole('radio', { name: 'While I use it', exact: true });
+    const whileUsed = page.getByRole('radio', { name: 'Until I leave it', exact: true });
     await whileUsed.click();
-    if (!(await whileUsed.isChecked())) throw new Error('"While I use it" did not stay chosen');
-    if (await page.getByRole('radio', { name: '15 minutes', exact: true }).isChecked()) throw new Error('15 minutes stayed chosen beside "While I use it"');
-    await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It stays open while you use it, then it asks again.', exact: true }).waitFor();
-    await see(page, 'Open while you use it, then it asks again');
-    await see(page, 'One sum, then your app opens while you use it.');
-    await see(page, 'Stays open while you’re in the app. Asks again about 2 minutes after you stop.');
+    if (!(await whileUsed.isChecked())) throw new Error('"Until I leave it" did not stay chosen');
+    if (await page.getByRole('radio', { name: '15 minutes', exact: true }).isChecked()) throw new Error('15 minutes stayed chosen beside "Until I leave it"');
+    await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It stays open until you leave it, then it asks again.', exact: true }).waitFor();
+    await see(page, 'Open until you leave it, then it asks again');
+    await see(page, 'One sum, then your app stays open until you leave it.');
+    await see(page, 'Stays open until you leave the app. Asks again about 2 minutes after you leave.');
     // It sits on a row of its own under the three times.
     const wide = await whileUsed.boundingBox();
     const five = await page.getByRole('radio', { name: '5 minutes', exact: true }).boundingBox();
-    if (!(wide.y > five.y + five.height - 1 && wide.width > five.width * 2)) throw new Error('"While I use it" is not on its own row under the times');
+    if (!(wide.y > five.y + five.height - 1 && wide.width > five.width * 2)) throw new Error('"Until I leave it" is not on its own row under the times');
     await shot(page, 'q21b-ask-first-while-in-use', true);
     await page.goBack();
-    await see(page, 'On, while in use');
+    await see(page, 'On, until I leave it');
+    await shot(page, 'q21c-settings-tile-until-i-leave-it', true);
     await page.getByRole('button', { name: /^Second thought/ }).click();
     await page.getByRole('radio', { name: '15 minutes', exact: true }).click();
     await page.getByRole('img', { name: 'Your app asks first. Solve one sum. It opens for 15 minutes, then it asks again.', exact: true }).waitFor();
@@ -497,19 +498,19 @@ async function main() {
     await context.close();
   });
 
-  await scenario('Second thought with "While I use it": the sum says the apps stay open while used, and no end time is promised', async () => {
+  await scenario('Second thought with "Until I leave it": the sum says the apps stay open until they are left, and no end time is promised', async () => {
     const saved = doc({ goal: 180, used: 40 });
     saved.settings.askFirst = { on: true, openMinutes: 10, whileInUse: true };
     const { page, context } = await open(saved, '?mock=counting');
     await page.goto(url.replace(/\/$/, '') + '/ask?mock=counting');
     await see(page, 'One sum to open');
-    await see(page, 'Your Second thought apps stay open while you use them, then ask again.');
+    await see(page, 'Your Second thought apps stay open until you leave them, then ask again.');
     const sum = await page.getByText(/^\s*\d+\s*\+\s*\d+\s*$/).first().textContent();
     const [, a, b] = sum.match(/(\d+)\s*\+\s*(\d+)/);
     await page.getByRole('textbox').first().pressSequentially(String(Number(a) + Number(b)));
-    await see(page, 'Open while you use it');
-    await see(page, 'ask again about 2 minutes after you stop');
-    if ((await page.getByText('open until', { exact: false }).count()) > 0) throw new Error('an end time was promised for "While I use it"');
+    await see(page, 'Open until you leave it');
+    await see(page, 'ask again about 2 minutes after you leave');
+    if ((await page.getByText('are open until', { exact: false }).count()) > 0) throw new Error('an end time was promised for "Until I leave it"');
     await shot(page, 'q22b-ask-open-while-in-use');
     await context.close();
   });
@@ -529,6 +530,21 @@ async function main() {
       await page.getByRole('button', { name: 'Open Snapchat', exact: true }).waitFor();
       await shot(page, 'q22c-ask-sum-names-the-app');
       if ((await openedLink(page)) !== null) throw new Error('an app was opened before the sum was solved');
+      // Pressing and holding the heading shows what the covering screen's notes held, and again puts it away.
+      const hold = async () => {
+        await page.getByRole('heading', { name: 'One sum to open', exact: true }).hover();
+        await page.mouse.down();
+        await page.waitForTimeout(800);
+        await page.mouse.up();
+      };
+      if ((await page.getByText('Lock screen noted:', { exact: false }).count()) > 0) throw new Error('the readout shows without being asked for');
+      await hold();
+      await see(page, 'Lock screen noted: Snapchat');
+      await see(page, 'Button press noted: an app');
+      await see(page, 'Opens: Snapchat (the same app as the press)');
+      await shot(page, 'q22e-ask-sum-readout');
+      await hold();
+      await page.getByText('Lock screen noted:', { exact: false }).waitFor({ state: 'detached' });
       await page.getByRole('textbox').first().pressSequentially(await answerOf(page));
       await page.waitForFunction(() => globalThis.plainlimitOpened === 'snapchat://', null, { timeout: 8000 });
       // The sum is put away: the app is on Today when it is next opened, with no "Done" to press.

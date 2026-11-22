@@ -478,7 +478,7 @@ describe('Ask first', () => {
     expect(store.get().doc.settings.askFirst?.on).toBe(false);
   });
 
-  it('"While I use it" is one of the open choices: kept, sent to the phone, and a number chosen later takes its place', async () => {
+  it('"Until I leave it" is one of the open choices: kept, sent to the phone, and a number chosen later takes its place', async () => {
     const phone = fakePhone();
     const ask = fakeAsk();
     const { store } = load(phone, saved(30), ask);

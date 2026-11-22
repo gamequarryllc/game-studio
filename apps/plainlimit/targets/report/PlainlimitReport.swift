@@ -469,7 +469,12 @@ struct FirstAppsView: View {
       }
       Spacer(minLength: 0)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    // The rows keep to the top of whatever height iOS gives this view. With no
+    // least height, the frame was never shorter than its rows: when iOS first
+    // laid the view out shorter than them, the whole list was centred on it and
+    // drawn too high, over the words above its box, until the next layout (the
+    // owner's phone, build 137: the first app's name under "You open these first").
+    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
     .background(cardGround)
     .ignoresSafeArea()
   }
