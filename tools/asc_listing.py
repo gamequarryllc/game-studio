@@ -17,6 +17,9 @@ What it writes, each only when it differs from what is there:
     screenshots, the notes for App Review, and (if asked) the build
   - the app's price (free) and where it is sold
 
+With "draft_submission": true in the listing it also puts the version in a draft submission
+for App Review, which leaves the owner one button: Submit.
+
 What it never does: submit anything for review, answer the App Privacy questions (Apple
 has no API for them), or enter the contact person for App Review (personal details do not
 belong in a public repository; the owner types them in App Store Connect).
@@ -370,6 +373,17 @@ class Run:
         # The app has none of it: no violence, no gambling, no web access, no ads, no chat, nothing made by other users.
         want = {k: ("NONE" if k in AGE_ENUMS else False) for k in unanswered if k in AGE_ENUMS or k in AGE_FLAGS}
         unknown = [k for k in unanswered if k not in want]
+        # Questions Apple added after this tool was written. A listing may answer them itself
+        # ("age_rating": {"more_none": [...]}): each is tried as a no, then as "NONE", since
+        # Apple asks some as yes/no and some as none/infrequent/frequent.
+        for k in [k for k in unknown if k in self.listing.get("age_rating", {}).get("more_none", [])]:
+            def answer(key=k):
+                try:
+                    self.c.call("PATCH", f"/v1/ageRatingDeclarations/{decl['id']}", {"data": {"type": "ageRatingDeclarations", "id": decl["id"], "attributes": {key: False}}})
+                except ApiError:
+                    self.c.call("PATCH", f"/v1/ageRatingDeclarations/{decl['id']}", {"data": {"type": "ageRatingDeclarations", "id": decl["id"], "attributes": {key: "NONE"}}})
+            self.change(f"age rating: {k}: none", answer)
+            unknown.remove(k)
         if unknown:
             self.say("questions this tool does not know (answer them in App Store Connect): " + ", ".join(unknown))
         if want:
@@ -499,6 +513,34 @@ class Run:
             raise ValueError(f"build {self.build} is not ready (state {b['attributes'].get('processingState')})")
         self.change(f"attach build {self.build}", lambda: self.c.call("PATCH", f"/v1/appStoreVersions/{self.ver}/relationships/build", {"data": {"type": "builds", "id": b["id"]}}))
 
+    def draft_submission(self):
+        """Puts the version in a draft submission for App Review, so the owner's one step is Submit. Never submits."""
+        state = self.c.get(f"/v1/appStoreVersions/{self.ver}")["data"]["attributes"]
+        state = state.get("appVersionState") or state.get("appStoreState")
+        self.say(f"version state: {state}")
+        if state not in ("PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY", "READY_FOR_REVIEW"):
+            self.say("the version is not open for a new submission")
+            return
+        subs = self.c.get("/v1/reviewSubmissions", **{"filter[app]": self.app, "filter[platform]": "IOS", "filter[state]": "READY_FOR_REVIEW", "limit": 5})["data"]
+        if subs:
+            sub = subs[0]["id"]
+            self.say("a draft submission exists")
+        else:
+            made = self.change("new draft submission", lambda: self.c.call("POST", "/v1/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": "IOS"}, "relationships": {"app": rel("apps", self.app)}}}))
+            if not made:
+                self.todo.append("add the version to the draft submission")
+                return
+            sub = made["data"]["id"]
+        items = self.c.get(f"/v1/reviewSubmissions/{sub}/items", include="appStoreVersion", limit=20)["data"]
+        inside = [((i.get("relationships", {}).get("appStoreVersion") or {}).get("data") or {}).get("id") for i in items]
+        if self.ver in inside:
+            self.say("the version is in the draft submission: the owner's Submit is all that is left")
+            return
+        self.change(
+            "add the version to the draft submission (not submitted)",
+            lambda: self.c.call("POST", "/v1/reviewSubmissionItems", {"data": {"type": "reviewSubmissionItems", "relationships": {"reviewSubmission": rel("reviewSubmissions", sub), "appStoreVersion": rel("appStoreVersions", self.ver)}}}),
+        )
+
     # ---- price and where it is sold
 
     def price(self):
@@ -558,6 +600,8 @@ class Run:
         if hasattr(self, "ver"):
             self.section("Notes for App Review", self.review_notes)
             self.section("Build", self.attach_build)
+            if self.listing.get("draft_submission"):
+                self.section("Draft submission for App Review", self.draft_submission)
         self.section("Price", self.price)
         self.section("Where it is sold", self.availability)
         print()
