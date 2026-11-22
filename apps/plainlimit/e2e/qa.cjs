@@ -404,7 +404,7 @@ async function main() {
     await context.close();
   });
 
-  await scenario('Second thought: the switch comes first and says On or Off; nothing picked shows off with one button; with apps the switch turns it on, and the picture follows the open choice, "Until I leave it" among them', async () => {
+  await scenario('Second thought: the switch comes first and says On or Off, the open time second; nothing picked shows off with one button; with apps the switch turns it on, and the picture follows the open choice, "Until I leave it" among them', async () => {
     {
       const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting,noAskPicks');
       await tab(page, 'Settings');
@@ -433,6 +433,9 @@ async function main() {
     const pictureAt = (await page.getByRole('img', { name: /^Your app asks first/ }).boundingBox()).y;
     const appsAt = (await page.getByRole('button', { name: 'Your apps, 3 picked', exact: true }).boundingBox()).y;
     if (!(switchAt < pictureAt && pictureAt < appsAt)) throw new Error(`the switch is not above the picture and the apps (${switchAt}, ${pictureAt}, ${appsAt})`);
+    // The open time comes second, under the switch and above the picture, so it shows as the screen opens (the owner, 2026-11-22).
+    const timesAt = (await page.getByRole('radio', { name: '5 minutes', exact: true }).boundingBox()).y;
+    if (!(switchAt < timesAt && timesAt < pictureAt)) throw new Error(`the open time is not between the switch and the picture (${switchAt}, ${timesAt}, ${pictureAt})`);
     await toggle.click();
     await page.waitForTimeout(200);
     if (!(await toggle.isChecked())) throw new Error('the switch did not turn it on');
@@ -458,6 +461,10 @@ async function main() {
     const wide = await whileUsed.boundingBox();
     const five = await page.getByRole('radio', { name: '5 minutes', exact: true }).boundingBox();
     if (!(wide.y > five.y + five.height - 1 && wide.width > five.width * 2)) throw new Error('"Until I leave it" is not on its own row under the times');
+    // All four choices, and the line under them, are on the first screen: nothing to scroll for.
+    const said = await page.getByText('Stays open until you leave the app.', { exact: false }).boundingBox();
+    const tall = page.viewportSize().height;
+    if (!(said.y + said.height < tall)) throw new Error(`the open time runs off the first screen (${said.y + said.height} of ${tall})`);
     await shot(page, 'q21b-ask-first-while-in-use', true);
     await page.goBack();
     await see(page, 'On, until I leave it');

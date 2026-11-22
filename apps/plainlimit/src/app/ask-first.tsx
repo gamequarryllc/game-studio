@@ -30,6 +30,10 @@ import { useDay } from '@/ui/useDay';
 // thing under the title, with On or Off in words, as in the phone's own
 // Settings. The apps row sits under the suggestions, which are there to be
 // picked. And the open time has a fourth choice, "Until I leave it".
+//
+// The owner, the same day, after build 138: the open time sat under the phone's
+// list, a scroll away. Of three orders drawn they picked "Times second": the
+// open time moves up to second, under the switch, and nothing else moves.
 
 const OPEN_PILLS: readonly { value: OpenChoice; label: string; spoken?: string; wide?: boolean }[] = [
   ...OPEN_CHOICES.map((minutes) => ({ value: minutes, label: `${minutes} min`, spoken: `${minutes} minutes` })),
@@ -80,6 +84,13 @@ export default function AskFirstSettings() {
         </View>
       </Card>
 
+      {/* The open time comes second, so it shows as the screen opens (the owner, 2026-11-22). */}
+      <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 10 }}>
+        <Label>After the sum, open</Label>
+        <Pills options={OPEN_PILLS} chosen={open} accent={accent} onChange={(choice) => store.setAskFirst(openChange(choice))} />
+        {open === 'use' ? <Text style={styles.hint}>{`Stays open until you leave the app. Asks again about ${IDLE_MINUTES} minutes after you leave.`}</Text> : null}
+      </Card>
+
       <SecondThoughtPicture open={open} accent={accent} />
 
       {phone ? (
@@ -101,12 +112,6 @@ export default function AskFirstSettings() {
           <Text style={[styles.hint, { paddingVertical: 14 }]}>On an iPhone you pick the apps in Apple’s own list.</Text>
         </Card>
       )}
-
-      <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 10 }}>
-        <Label>After the sum, open</Label>
-        <Pills options={OPEN_PILLS} chosen={open} accent={accent} onChange={(choice) => store.setAskFirst(openChange(choice))} />
-        {open === 'use' ? <Text style={styles.hint}>{`Stays open until you leave the app. Asks again about ${IDLE_MINUTES} minutes after you leave.`}</Text> : null}
-      </Card>
 
       <Text style={styles.foot}>Apps that also count still use your battery, and stay locked when it’s empty.</Text>
 
