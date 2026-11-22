@@ -89,6 +89,7 @@ export function ScreenTimeSwitch({ accent }: { accent: string }) {
   if ((!SCREEN_TIME_AVAILABLE && !MOCK_PHONE) || STORE_SHOTS) return null;
   const on = isOn();
   const closed = on && settingsLocked() && !DEV_TOOLS;
+  // The line under the name says how things stand now: on build 134 it read "Off: nothing counts or locks" beside a switch that was on.
   return (
     <Card style={{ paddingVertical: 10, gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -97,7 +98,7 @@ export function ScreenTimeSwitch({ accent }: { accent: string }) {
           <Text nativeID="count-switch-label" style={{ fontSize: 16, fontWeight: '500', color: c.ink }}>
             Count my screen time
           </Text>
-          <Text style={{ fontSize: 13.5, lineHeight: 18, color: c.ink3 }}>{closed ? 'Opens again when the battery recharges' : 'Off: nothing counts or locks'}</Text>
+          <Text style={{ fontSize: 13.5, lineHeight: 18, color: c.ink3 }}>{closed ? 'Opens again when the battery recharges' : on ? 'Counting and locking are on' : 'Off: nothing counts or locks'}</Text>
         </View>
         <Switch
           accessibilityLabel="Count my screen time"

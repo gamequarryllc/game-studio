@@ -14,7 +14,7 @@ import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCou
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { tap } from '@/platform/haptics';
 import { Icon, type IconName } from '@/ui/icons';
-import { BigButton, Card, Chevron, IconTile, Label, LinkRow, Page, StepButton, Title, tiles } from '@/ui/kit';
+import { BigButton, Card, Chevron, IconTile, Label, LinkRow, Page, StepButton, Title, tiles, type RowIcon } from '@/ui/kit';
 import { essentialsValue } from '@/ui/countWords';
 import { TIPS } from '@/ui/tips';
 import { ScreenTimeCard, TestBuildTools } from '@/ui/ScreenTimeCard';
@@ -35,7 +35,13 @@ export default function Settings() {
   // Read only then, not on every tap of a stepper: asking the phone how many
   // are picked takes a moment, and the screen caught on each tap (build 127).
   const [countedValue, setCountedValue] = useState(essentialsNow);
-  useFocusEffect(useCallback(() => setCountedValue(essentialsNow()), []));
+  const [essentialTiles, setEssentialTiles] = useState(essentialTilesNow);
+  useFocusEffect(
+    useCallback(() => {
+      setCountedValue(essentialsNow());
+      setEssentialTiles(essentialTilesNow());
+    }, []),
+  );
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
   const pretend = DEV_TOOLS && !isOn();
   // On a narrow phone the goal's figures give the two round buttons room.
@@ -132,7 +138,8 @@ export default function Settings() {
         <Text style={styles.modeLine}>{emptyLine(settings.emptyLevel, first.minutes)}</Text>
       </Card>
 
-      {/* Essentials: example tiles (the phone never says which apps were picked), and how many there are. */}
+      {/* Essentials: example tiles (the phone never says which apps were picked), and how many there are.
+          No more tiles than there are essentials: build 134 said "2 apps" beside three. */}
       <Card>
         <Pressable
           accessibilityRole="button"
@@ -149,9 +156,9 @@ export default function Settings() {
             </Text>
           </View>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={{ flexDirection: 'row', gap: 5 }}>
-            <IconTile icon={{ name: 'phone', bg: '#34C759' }} size={30} />
-            <IconTile icon={{ name: 'message', bg: '#34C759' }} size={30} />
-            <IconTile icon={{ name: 'map', bg: '#3B82F6' }} size={30} />
+            {ESSENTIAL_TILES.slice(0, essentialTiles).map((icon) => (
+              <IconTile key={icon.name} icon={icon} size={30} />
+            ))}
           </View>
           <Chevron />
         </Pressable>
@@ -237,6 +244,19 @@ function emptyLine(level: EmptyLevel, minutes: number): string {
 function essentialsNow(): string {
   const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
   return essentialsValue(picked, essentialsMode() ? essentialsCount() : null);
+}
+
+/** The Essentials row's example tiles, in the order they are shown. */
+const ESSENTIAL_TILES: RowIcon[] = [
+  { name: 'phone', bg: '#34C759' },
+  { name: 'message', bg: '#34C759' },
+  { name: 'map', bg: '#3B82F6' },
+];
+
+/** How many example tiles the Essentials row shows: one for each essential, three at most (all three where the number isn't known). */
+function essentialTilesNow(): number {
+  if (!(SCREEN_TIME_AVAILABLE || MOCK_PHONE) || !essentialsMode()) return ESSENTIAL_TILES.length;
+  return Math.min(ESSENTIAL_TILES.length, essentialsCount());
 }
 
 const styles = StyleSheet.create({

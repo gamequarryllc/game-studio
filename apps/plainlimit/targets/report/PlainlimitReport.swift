@@ -161,7 +161,7 @@ struct TopAppsView: View {
       }
       // Right under the rows: the box is sized for five, and its spare room
       // falls at the end of the page, not between the list and its note.
-      Text("Drawn by the phone's Screen Time, which Plainlimit never sees. The battery hears of it every few minutes, so it can be a cell behind.")
+      Text("Drawn by the phone's Screen Time. This list never reaches Plainlimit. The battery hears of it every few minutes, so it can be a cell behind.")
         .font(.system(size: 13))
         .foregroundStyle(quiet)
         .fixedSize(horizontal: false, vertical: true)
