@@ -1,33 +1,37 @@
 import { useRouter } from 'expo-router';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { wordFor } from '@/domain/battery';
-import { clockLabelOf, durationLabel, goalLabel, untilLabel } from '@/domain/day';
+import { clockLabelOf, durationLabel, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { topUpPlan } from '@/domain/puzzle';
 import { passActive } from '@/domain/record';
 import { batteryEnd } from '@/domain/recharge';
+import { glowAt } from '@/domain/tone';
 import { weekView } from '@/domain/week';
 import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, locksHeldUntil } from '@/platform/screenTime';
 import { store, useDoc } from '@/state/store';
-import { Battery } from '@/ui/Battery';
 import { CountingProblem } from '@/ui/CountingProblem';
-import { BigButton, Label, StatusBand } from '@/ui/kit';
-import { useEasedColor } from '@/ui/motion';
+import { GlowBattery, GlowField } from '@/ui/GlowBattery';
+import { BigButton, Card, LinkRow, StatusBand, tiles } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
-import { TodayTotal, UsageReport } from '@/ui/UsageReport';
-import { RecordCard } from '@/ui/RecordCard';
+import { TodayTotal } from '@/ui/UsageReport';
 import { WeekView } from '@/ui/WeekView';
 import { useDay } from '@/ui/useDay';
 
-// Today: the top of the screen is the battery's colour, edge to edge, so the
-// state of the day is the first thing seen and the only colour on the page.
+// Today, in the look of the app's icon and widget (the owner's pick,
+// 2026-11-22): a dark page, a battery whose cells shine in the day's colour,
+// and only today on it: the word, the recharge, what has been used, and the
+// week as seven bars. The record, the passes and the list of apps are one tap
+// away, on History. Up to build 129 the top of the page was a flat field of
+// the day's colour and everything was on one long scroll.
 
 export default function Today() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { now, settings, day, cells, tone, accent } = useDay();
+  const { now, settings, day, cells, fraction } = useDay();
   const doc = useDoc();
   const { history, watching } = doc;
   const problem = store.health();
@@ -35,10 +39,15 @@ export default function Today() {
   // by the phone's Screen Time to the minute; the app's own stepped figure is
   // what fills the battery, and stands in until the phone has drawn.
   const counting = isOn();
-  const field = useEasedColor(tone.bg);
-  // The word is as large as the phone allows without breaking onto a second line.
+  // The day's colour as light on the dark page: the cells, the word and the glow behind them.
+  const glow = glowAt(fraction);
   const width = Math.min(useWindowDimensions().width, 480);
-  const wordSize = Math.min(58, Math.floor((width - 48) / 5.7));
+  // The word is as large as the phone allows without breaking onto a second line.
+  const wordSize = Math.min(60, Math.floor((width - 48) / 5.7));
+  const batteryHeight = Math.round(Math.min(128, (width - 48) * 0.375));
+  // Where the battery starts, clear of the clock.
+  const top = Math.max(insets.top, 12) + 28;
+  const [scrolled, setScrolled] = useState(false);
 
   // When the next battery starts: the recharge, or a little later when a new recharge time is waiting (recharge.ts).
   const ends = batteryEnd(day, settings);
@@ -51,88 +60,81 @@ export default function Today() {
   const passes = doc.record?.passes ?? 0;
   const passReady = store.passCheck() === 'ok';
   const next = topUpPlan(day.topUps);
+  const figure = <Text style={styles.used}>{durationLabel(day.usedMinutes)}</Text>;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.ground }}>
-      <ScrollView style={{ flex: 1, backgroundColor: c.ground }} contentContainerStyle={{ paddingBottom: insets.bottom + 28 }}>
-        <Animated.View style={[styles.field, { backgroundColor: field, paddingTop: Math.max(insets.top, 12) + 16 }]}>
-          <View style={styles.top}>
-            <Text accessibilityRole="header" style={[styles.title, { color: tone.fg }]}>
-              Today
-            </Text>
-            <Text style={[styles.goal, { color: tone.fg, borderColor: tone.fg }]}>{goalLabel(settings.goalMinutes)}</Text>
-          </View>
-          <Battery cells={cells} tone={tone} height={104} fill={field} />
-          <View style={{ gap: 4 }}>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.word, { color: tone.fg, fontSize: wordSize, lineHeight: wordSize + 2 }]}>
+      <ScrollView style={{ flex: 1, backgroundColor: c.ground }} scrollEventThrottle={32} onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 4)} contentContainerStyle={{ paddingBottom: insets.bottom + 28 + (Platform.OS === 'web' ? 96 : 0) }}>
+        <GlowField color={glow} width={width} centre={top + batteryHeight / 2} reach={batteryHeight / 2 + 150} />
+        <View style={[styles.field, { paddingTop: top }]}>
+          <Text accessibilityRole="header" style={styles.hidden}>
+            Today
+          </Text>
+          <GlowBattery cells={cells} color={glow} height={batteryHeight} />
+          <View style={{ gap: 8, marginTop: 30 }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.word, { color: glow, textShadowColor: glow, fontSize: wordSize, lineHeight: wordSize + 2 }]}>
               {wordFor(cells)}
             </Text>
             <View style={styles.rechargeRow}>
-              <Text style={[styles.recharge, { color: tone.fg }]}>Recharges at {recharge}</Text>
-              <Text style={[styles.until, { color: tone.fg, opacity: tone.dark ? 0.9 : 0.72 }]}>{untilLabel(now, ends)}</Text>
+              <Text style={styles.recharge}>Recharges at {recharge}</Text>
+              <Text style={styles.until}>{untilLabel(now, ends)}</Text>
             </View>
           </View>
-        </Animated.View>
+        </View>
 
         <View style={styles.rest}>
           <CountingProblem health={problem} />
           {held > 0 ? (
-            <View style={[styles.strip, { borderColor: accent }]}>
+            <View style={styles.strip}>
               <Text style={styles.body}>Nothing locks until {clockLabelOf(new Date(held))}. Today was already past your goal when you set up.</Text>
             </View>
           ) : null}
           {unlocked ? (
-            <View style={[styles.strip, { borderColor: accent }]}>
+            <View style={[styles.strip, { borderColor: glow }]}>
               <Text style={styles.body}>
                 {passOn ? `Emergency pass: everything is open until ${clockLabelOf(new Date(day.unlockedUntil as string))}, settings too.` : `Earned time runs until ${clockLabelOf(new Date(day.unlockedUntil as string))}.`}
               </Text>
             </View>
           ) : null}
-          {empty && !unlocked && held === 0 && settings.emptyLevel === 'work' ? (
-            <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} />
-          ) : null}
-          {empty && !unlocked && held === 0 && settings.emptyLevel === 'locked' ? (
-            <View style={[styles.strip, { borderColor: accent }]}>
-              <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>
+          {/* An empty battery: what can be done about it sits right under it. */}
+          {empty && !unlocked && held === 0 && (settings.emptyLevel !== 'warn' || passReady) ? (
+            <View style={{ gap: 12 }}>
+              {settings.emptyLevel === 'work' ? <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} /> : null}
+              {settings.emptyLevel === 'locked' ? (
+                <View style={styles.strip}>
+                  <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>
+                </View>
+              ) : null}
+              {passReady ? (
+                <Card>
+                  <LinkRow icon={{ name: 'pass', bg: tiles.orange }} label="Emergency pass" sub="15 minutes of everything" value={`${passes} saved`} onPress={() => router.push('/pass')} last />
+                </Card>
+              ) : null}
             </View>
           ) : null}
-          {empty && !unlocked && held === 0 && passReady ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={`Use an emergency pass, ${passes} saved`} onPress={() => router.push('/pass')} style={({ pressed }) => [styles.passRow, pressed ? { opacity: 0.8 } : null]}>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.passTitle}>Use an emergency pass</Text>
-                <Text style={styles.passLine}>Opens everything, settings too, for 15 minutes. {passes} saved.</Text>
-              </View>
-              <Text style={styles.passChevron}>›</Text>
-            </Pressable>
-          ) : null}
 
-          <View style={{ gap: 12 }}>
-            {/* "Since 6:00 AM", not "today": the iPhone's Screen Time counts from midnight, and the two looked like a miscount side by side (the owner, build 111). */}
-            <Label>{`Used since ${recharge}`}</Label>
-            {counting ? (
-              <View style={{ gap: 2 }}>
-                <TodayTotal settings={settings} now={now} fallback={<Text style={styles.used}>{durationLabel(day.usedMinutes)}</Text>} />
-                <Text style={styles.usedOfLine}>of {durationLabel(settings.goalMinutes)}, not counting essentials</Text>
-              </View>
-            ) : (
-              <Text style={styles.used}>
-                {durationLabel(day.usedMinutes)} <Text style={styles.usedOf}>of {durationLabel(settings.goalMinutes)}</Text>
-              </Text>
-            )}
+          {/* Used, of the goal. The phone draws its own figure, to the minute, over the app's stepped one. */}
+          <View accessible accessibilityLabel={`${durationLabel(day.usedMinutes)} used of ${durationLabel(settings.goalMinutes)}, since ${recharge}, not counting essentials`} style={styles.usedRow}>
+            <View>
+              {/* Holds the figure's room; the phone's own figure is drawn over it. */}
+              <View style={counting ? { opacity: 0 } : null}>{figure}</View>
+              {counting ? <TodayTotal settings={settings} now={now} fallback={figure} style={styles.usedPhone} /> : null}
+            </View>
+            <Text style={styles.usedOf}>used of {durationLabel(settings.goalMinutes)}</Text>
           </View>
 
-          <WeekView week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true, doc.record?.uses)} />
-          <RecordCard />
+          <WeekView compact week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true, doc.record?.uses)} />
 
-          {/* Last on the page: Apple's list sits in a box sized for five rows, and spare room at the end is only extra scroll. */}
-          {counting ? (
-            <UsageReport settings={settings} now={now} />
-          ) : (
+          <Card>
+            <LinkRow icon={{ name: 'history', bg: tiles.blue }} label="History" sub="Your record, passes and top apps" onPress={() => router.push('/record')} last />
+          </Card>
+
+          {counting ? null : (
             <View style={{ gap: 6 }}>
               <Text style={styles.body}>
                 {SCREEN_TIME_AVAILABLE
                   ? problem === 'fine'
-                    ? 'Counting is off, so nothing drains the battery and nothing locks. Turn it on in Settings, under Screen Time.'
+                    ? 'Counting is off, so nothing drains the battery and nothing locks. Turn it on in Settings.'
                     : 'Nothing is being counted until this is fixed.'
                   : 'On an iPhone, the battery follows your real screen time.'}
               </Text>
@@ -141,29 +143,26 @@ export default function Today() {
           )}
         </View>
       </ScrollView>
-      <StatusBand />
+      {/* Only once the page has moved: at rest the glow runs up behind the clock. */}
+      {scrolled ? <StatusBand /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  field: { paddingHorizontal: 24, paddingBottom: 30, gap: 26, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
-  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  title: { fontFamily: display.bold, fontSize: 22, lineHeight: 26, letterSpacing: -0.3 },
-  goal: { fontSize: 14, fontWeight: '700', borderWidth: 1.5, borderRadius: 99, paddingVertical: 5, paddingHorizontal: 11, overflow: 'hidden' },
-  word: { fontFamily: display.bold, fontSize: 58, lineHeight: 58, letterSpacing: -2.2 },
-  rechargeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 10, rowGap: 2, marginTop: 6 },
-  recharge: { fontSize: 17, fontWeight: '700' },
-  until: { fontSize: 17, fontWeight: '500' },
-  passRow: { flexDirection: 'row', alignItems: 'center', gap: 14, borderWidth: 1.5, borderColor: c.outline, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
-  passTitle: { fontSize: 16, fontWeight: '600', color: c.ink },
-  passLine: { fontSize: 13, lineHeight: 17, color: c.ink3 },
-  passChevron: { fontSize: 22, color: c.ink3 },
-  rest: { paddingHorizontal: 24, paddingTop: 28, gap: 26 },
-  strip: { borderLeftWidth: 0, borderWidth: 1.5, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
-  used: { fontFamily: display.bold, fontSize: 48, lineHeight: 50, letterSpacing: -1.6, color: c.ink },
-  usedOf: { fontFamily: display.semi, fontSize: 22, letterSpacing: -0.3, color: c.ink3 },
-  usedOfLine: { fontFamily: display.semi, fontSize: 18, lineHeight: 22, letterSpacing: -0.2, color: c.ink3 },
+  field: { paddingHorizontal: 24 },
+  // "Today" is said to screen readers; the tab bar already shows it.
+  hidden: { position: 'absolute', width: 1, height: 1, opacity: 0 },
+  word: { fontFamily: display.bold, fontSize: 60, lineHeight: 62, letterSpacing: -2.2, textShadowRadius: 24, textShadowOffset: { width: 0, height: 0 } },
+  rechargeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 10, rowGap: 2 },
+  recharge: { fontSize: 17, fontWeight: '600', color: c.ink2 },
+  until: { fontSize: 17, fontWeight: '400', color: c.ink3 },
+  rest: { paddingHorizontal: 24, paddingTop: 32, gap: 24 },
+  strip: { borderWidth: 1.5, borderColor: c.outline, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
+  usedRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  used: { fontFamily: display.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.6, color: c.ink, fontVariant: ['tabular-nums'], paddingRight: 4 },
+  usedPhone: { position: 'absolute', left: 0, top: 0, right: 0, height: 52, alignSelf: 'auto' },
+  usedOf: { fontFamily: display.semi, fontSize: 19, lineHeight: 24, letterSpacing: -0.2, color: c.ink3, paddingBottom: 7 },
   body: { fontSize: 15, lineHeight: 21, color: c.ink2 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
 });

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tap } from '@/platform/haptics';
 
 import { c, display } from './theme';
+import { Icon, type IconName } from './icons';
 
 // The few pieces every screen is built from.
 
@@ -93,22 +94,67 @@ export function StepButton({ sign, label, onPress, size = 48, disabled = false }
   );
 }
 
-/** One line in a card that leads somewhere, with what is chosen on the right. */
-export function LinkRow({ label, value, onPress, last = false }: { label: string; value: string; onPress: () => void; last?: boolean }) {
+/** A row's picture: a white symbol on a coloured rounded square, as in the iPhone's own Settings. */
+export interface RowIcon {
+  name: IconName;
+  bg: string;
+  /** The symbol's colour, when white would not show on `bg`. */
+  fg?: string;
+}
+
+/** The colours of the row pictures. */
+export const tiles = { green: '#2FB457', red: '#E5484D', orange: '#F08A24', blue: '#3B82F6', purple: '#8B5CF6', gray: '#5B6168', yellow: '#D9A400', teal: '#14A3A3', pink: '#E24C8B' } as const;
+
+export function IconTile({ icon, size = 32 }: { icon: RowIcon; size?: number }) {
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no" aria-hidden style={{ width: size, height: size, borderRadius: size * 0.28, backgroundColor: icon.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <Icon name={icon.name} size={size * 0.6} color={icon.fg ?? '#FFFFFF'} />
+    </View>
+  );
+}
+
+/** The gold mark on what Plainlimit Pro adds. */
+export function ProBadge() {
+  return (
+    <View style={styles.pro}>
+      <Text style={styles.proText}>PRO</Text>
+    </View>
+  );
+}
+
+/**
+ * One line in a card that leads somewhere, with what is chosen on the right.
+ * With `icon` it opens with a small picture; `sub` is a quiet second line;
+ * `pro` marks it as part of Plainlimit Pro.
+ */
+export function LinkRow({ label, value = '', onPress, last = false, icon, sub, pro = false }: { label: string; value?: string; onPress: () => void; last?: boolean; icon?: RowIcon; sub?: string; pro?: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${label}, ${value}`}
+      accessibilityLabel={[label, value, pro ? 'Pro' : ''].filter(Boolean).join(', ')}
       onPress={() => {
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.row, last ? null : styles.rowRule, pressed ? { opacity: 0.7 } : null]}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 }}>
-        <Text numberOfLines={1} style={styles.rowValue}>
-          {value}
+      style={({ pressed }) => [styles.row, sub ? { paddingVertical: 9 } : null, last ? null : styles.rowRule, pressed ? { opacity: 0.7 } : null]}>
+      {icon ? <IconTile icon={icon} /> : null}
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text numberOfLines={1} style={styles.rowLabel}>
+          {label}
         </Text>
+        {sub ? (
+          <Text numberOfLines={1} style={styles.rowSub}>
+            {sub}
+          </Text>
+        ) : null}
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+        {value ? (
+          <Text numberOfLines={1} style={styles.rowValue}>
+            {value}
+          </Text>
+        ) : null}
+        {pro ? <ProBadge /> : null}
         <Chevron />
       </View>
     </Pressable>
@@ -127,14 +173,14 @@ export function Pills<T extends string | number>({
   onChange,
   accent = c.paper,
 }: {
-  options: readonly { value: T; label: string; spoken?: string }[];
+  options: readonly { value: T; label: string; spoken?: string; pro?: boolean }[];
   chosen: T;
   onChange: (value: T) => void;
   accent?: string;
 }) {
   return (
     <View accessibilityRole="radiogroup" style={styles.pills}>
-      {options.map(({ value, label, spoken }) => {
+      {options.map(({ value, label, spoken, pro }) => {
         const on = value === chosen;
         return (
           <Pressable
@@ -149,6 +195,7 @@ export function Pills<T extends string | number>({
             }}
             style={({ pressed }) => [styles.pill, on ? { backgroundColor: accent, borderColor: accent } : null, pressed ? { opacity: 0.8 } : null]}>
             <Text style={[styles.pillText, on ? { color: c.onTone } : null]}>{label}</Text>
+            {pro ? <ProBadge /> : null}
           </Pressable>
         );
       })}
@@ -218,13 +265,16 @@ const styles = StyleSheet.create({
   bigQuiet: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: c.outline },
   bigText: { fontSize: 17, fontWeight: '600', color: c.onPaper },
   row: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  rowSub: { fontSize: 13.5, lineHeight: 18, color: c.ink3 },
+  pro: { borderRadius: 6, paddingVertical: 1, paddingHorizontal: 6, backgroundColor: '#F2C656' },
+  proText: { fontSize: 11, lineHeight: 16, fontWeight: '700', letterSpacing: 0.3, color: c.onPaper },
   rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
   rowValue: { fontSize: 16, color: c.ink3, flexShrink: 1 },
   choice: { minHeight: 62, borderRadius: 16, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, paddingVertical: 11, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   check: { width: 8, height: 15, borderRightWidth: 2.5, borderBottomWidth: 2.5, transform: [{ rotate: '45deg' }], marginRight: 4, marginTop: -4 },
   pills: { flexDirection: 'row', gap: 8 },
-  pill: { flex: 1, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, alignItems: 'center', justifyContent: 'center' },
+  pill: { flex: 1, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
   pillText: { fontSize: 16, fontWeight: '600', color: c.ink2 },
   tag: { borderWidth: 1, borderColor: c.ink3, borderRadius: 8, paddingVertical: 3, paddingHorizontal: 8 },
   tagText: { fontSize: 12, fontWeight: '600', color: c.ink2 },

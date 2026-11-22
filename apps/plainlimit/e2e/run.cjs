@@ -54,6 +54,8 @@ async function main() {
     await page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
   };
   const see = (text) => page.getByText(text, { exact: true }).first().waitFor({ state: 'visible', timeout: 8000 });
+  // Today's figure and goal: "0:30 used of 3:00", read from the row's label.
+  const used = (figure, goal) => page.getByLabel(new RegExp(`^${figure} used of ${goal},`)).first().waitFor({ state: 'visible', timeout: 8000 });
   const press = (name) => page.getByRole('button', { name, exact: true }).first().click();
   const tab = (name) => page.getByRole('tab', { name, exact: true }).click();
   const back = async () => {
@@ -88,7 +90,7 @@ async function main() {
     await see('Today');
     await see('Plenty left');
     await see('Recharges at 6:00 AM');
-    await see('0:00 of 3:00');
+    await used('0:00', '3:00');
     await page.getByLabel('Battery, 6 of 6 cells left').waitFor();
     await shot('01-today-full');
   });
@@ -113,15 +115,15 @@ async function main() {
   });
 
   await step('without Pro, the recharge time, harder sums and a lock message of one\'s own lead to the Pro screen; Second thought and the ready-made lock messages are open', async () => {
-    await press('Recharges at, 6:00 AM · Pro');
-    await see('Plainlimit Pro');
+    await press('Advanced');
+    await press('Recharges at, 6:00 AM, Pro');
+    await page.getByTestId('pro-screen').waitFor();
     await see('Your recharge time');
     await shot('02b-pro');
     await press('Unlock Pro · $9.99');
     await see('Nothing can be bought in this build. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.');
     await back();
-    await press('Advanced, Second thought, more');
-    await see('Extras for when the basics aren’t quite enough.');
+    await page.getByRole('button', { name: 'Recharges at, 6:00 AM, Pro', exact: true }).waitFor();
     await shot('02c-advanced');
     await page.getByRole('radio', { name: /^Hard/ }).click();
     await see('Your recharge time');
@@ -144,11 +146,11 @@ async function main() {
 
   await step('with Pro, the recharge time steps by half hours and harder sums can be chosen', async () => {
     await press('Pretend Pro is bought');
+    await press('Advanced');
     await press('Recharge later');
     await see('6:30 AM');
     await press('Recharge earlier');
     await see('6:00 AM');
-    await press('Advanced, Second thought, more');
     await page.getByRole('radio', { name: /^Hard/ }).click();
     assert.strictEqual(await page.getByRole('radio', { name: /^Hard/ }).getAttribute('aria-checked'), 'true', 'hard sums chosen');
     await page.getByRole('radio', { name: /^Normal/ }).click();
@@ -191,7 +193,7 @@ async function main() {
     await press('Use 30 more minutes');
     await tab('Today');
     await page.getByLabel('Battery, 5 of 6 cells left').waitFor();
-    await see('0:30 of 3:00');
+    await used('0:30', '3:00');
     await tab('Settings');
     for (let i = 0; i < 3; i++) await press('Use 30 more minutes');
     await tab('Today');
@@ -202,7 +204,7 @@ async function main() {
     await press('Use 30 more minutes');
     await tab('Today');
     await see('Nearly out');
-    await see('2:30 of 3:00');
+    await used('2:30', '3:00');
     await shot('07-today-last-cell');
   });
 
@@ -221,7 +223,7 @@ async function main() {
     await tab('Today');
     await see('Empty');
     await page.getByLabel('Battery, empty').waitFor();
-    await see('3:00 of 3:00');
+    await used('3:00', '3:00');
     await page.getByRole('button', { name: 'Solve 3 sums for 15 more minutes' }).waitFor();
     await shot('09-today-empty');
   });
@@ -298,7 +300,7 @@ async function main() {
   await step('everything is still there after closing and reopening', async () => {
     await page.goto(url);
     await see('Empty');
-    await see('3:00 of 3:00');
+    await used('3:00', '3:00');
     await page.getByText(/^Earned time runs until/).waitFor();
     await tab('Settings');
     await page.getByRole('button', { name: 'Essentials, Your picks' }).waitFor();
@@ -308,7 +310,7 @@ async function main() {
     for (let i = 0; i < 8; i++) await press('Use 30 more minutes');
     await tab('Today');
     await see('Empty');
-    await see('7:00 of 3:00');
+    await used('7:00', '3:00');
     await shot('17-today-far-past');
   });
 
@@ -317,7 +319,7 @@ async function main() {
     await press('Recharge now');
     await tab('Today');
     await see('Plenty left');
-    await see('0:00 of 3:00');
+    await used('0:00', '3:00');
     assert.strictEqual(await page.getByText(/^Earned time runs until/).count(), 0);
     await page.goto(url + 'puzzle');
     await see('Nothing to earn');
@@ -327,18 +329,22 @@ async function main() {
   });
 
   await step('the week view shows the last seven days and plain counts', async () => {
+    // Today shows the week as bars; its words are on History.
+    await page.getByLabel(/^Today: at least 0:00 of 3:00, so far$/).first().waitFor();
+    await press('History');
     await see('Last 7 days');
     await see('Your week fills in as the days go by.');
+    await back();
     await tab('Settings');
     await press('Fill the last week');
     await tab('Today');
+    await press('History');
     // The pretend week has a day counted only in part, which is left out of the sum.
     await see('Under your goal on 4 of 5 counted days, 3 in a row.');
     await see('Earned extra time 2 times this week.');
     await see('A faded day was not fully counted, so it is not claimed as under the goal.');
-    await page.getByLabel(/^Today: at least 0:00 of 3:00, so far$/).waitFor();
-    await page.locator('text=Last 7 days').scrollIntoViewIfNeeded();
     await shot('18b-week');
+    await back();
   });
 
   await step('a reloaded inner page and an unknown page both land somewhere sensible', async () => {

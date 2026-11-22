@@ -28,7 +28,7 @@ function spokenDay(col: WeekColumn): string {
   return `${name}: ${used}, ${outcome}`;
 }
 
-function Column({ col }: { col: WeekColumn }) {
+function Column({ col, height }: { col: WeekColumn; height: number }) {
   const shown = col.state !== 'unknown' && col.state !== 'off';
   const fill = Math.max(0, Math.min(1, col.usedMinutes / col.goalMinutes));
   // Two states only: under the goal in the full battery's green, ran out in a
@@ -37,7 +37,7 @@ function Column({ col }: { col: WeekColumn }) {
   const colour = col.usedMinutes >= col.goalMinutes ? accentOnDark(toneForCells(0)) : toneForCells(CELLS).bg;
   return (
     <View accessible accessibilityLabel={spoken(col)} style={styles.column}>
-      <View style={styles.track}>
+      <View style={[styles.track, { height }]}>
         {shown && fill > 0 ? <View style={{ height: `${Math.max(6, fill * 100)}%`, backgroundColor: colour, opacity: col.state === 'partly' ? 0.4 : 1, borderRadius: 8 }} /> : null}
         {col.state === 'off' ? <Text style={styles.mark}>off</Text> : null}
       </View>
@@ -47,24 +47,27 @@ function Column({ col }: { col: WeekColumn }) {
   );
 }
 
-export function WeekView({ week }: { week: Week }) {
+/** `compact` (Today): the bars alone, a little taller; the words about the week are on History. */
+export function WeekView({ week, compact = false }: { week: Week; compact?: boolean }) {
   const faded = week.columns.some((col) => col.state === 'partly');
   const earned = earnedLine(week);
   const passes = week.columns.filter((col) => col.pass).length;
   return (
     <View style={{ gap: 12 }}>
-      <Label>Last 7 days</Label>
-      <View style={styles.row}>
+      {compact ? null : <Label>Last 7 days</Label>}
+      <View accessibilityLabel={compact ? 'Last 7 days' : undefined} style={styles.row}>
         {week.columns.map((col) => (
-          <Column key={col.date} col={col} />
+          <Column key={col.date} col={col} height={compact ? 96 : 76} />
         ))}
       </View>
-      <View style={{ gap: 4 }}>
-        <Text style={styles.body}>{weekLine(week)}</Text>
-        {earned ? <Text style={styles.note}>{earned}</Text> : null}
-        {passes > 0 ? <Text style={styles.note}>{passes === 1 ? 'A dot marks the day you used an emergency pass.' : 'A dot marks each day you used an emergency pass.'}</Text> : null}
-        {faded ? <Text style={styles.note}>A faded day was not fully counted, so it is not claimed as under the goal.</Text> : null}
-      </View>
+      {compact ? null : (
+        <View style={{ gap: 4 }}>
+          <Text style={styles.body}>{weekLine(week)}</Text>
+          {earned ? <Text style={styles.note}>{earned}</Text> : null}
+          {passes > 0 ? <Text style={styles.note}>{passes === 1 ? 'A dot marks the day you used an emergency pass.' : 'A dot marks each day you used an emergency pass.'}</Text> : null}
+          {faded ? <Text style={styles.note}>A faded day was not fully counted, so it is not claimed as under the goal.</Text> : null}
+        </View>
+      )}
     </View>
   );
 }

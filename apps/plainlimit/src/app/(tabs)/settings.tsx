@@ -1,20 +1,22 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { CELLS, cellWords } from '@/domain/battery';
-import { clockLabel, clockLabelOf, durationLabel } from '@/domain/day';
+import { clockLabelOf, durationLabel } from '@/domain/day';
 import { chosenGoal, goalFree } from '@/domain/goal';
-import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import { topUpPlan } from '@/domain/puzzle';
+import { batteryEnd } from '@/domain/recharge';
+import type { EmptyLevel } from '@/domain/types';
 import { EXPECTED_PRICE } from '@/pro/config';
 import { pro, usePro } from '@/pro/pro';
 import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCount, essentialsMode, isOn, pickCount } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
-import { BigButton, Card, Choice, Label, LinkRow, Page, StepButton, Title } from '@/ui/kit';
+import { tap } from '@/platform/haptics';
+import { Icon, type IconName } from '@/ui/icons';
+import { BigButton, Card, Chevron, IconTile, Label, LinkRow, Page, StepButton, Title, tiles } from '@/ui/kit';
 import { essentialsValue } from '@/ui/countWords';
 import { TIPS } from '@/ui/tips';
-import { Battery } from '@/ui/Battery';
 import { ScreenTimeCard, TestBuildTools } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
@@ -48,9 +50,6 @@ export default function Settings() {
   const waiting = chosen !== settings.goalMinutes;
   // When the next battery starts: the recharge, or a little later when a new recharge time is waiting (recharge.ts).
   const recharge = clockLabelOf(batteryEnd(day, settings));
-  // A new recharge time waits for this battery to end; the stepper shows the one chosen.
-  const chosenTime = clockLabel(chosenRecharge(settings));
-  const timeWaiting = chosenRecharge(settings) !== settings.rechargeMinute;
   // On setup's own day every change starts at once (goal.ts); the note says so, and what happens after.
   const firstDay = goalFree(useDoc());
 
@@ -58,6 +57,7 @@ export default function Settings() {
     <Page top={24} bottom={24}>
       <Title>Settings</Title>
 
+      {/* Only when it has something to say: counting is off, or the battery is empty and these are locked. */}
       <ScreenTimeCard />
 
       <Card style={{ paddingTop: 16, paddingBottom: 18, gap: 10 }}>
@@ -69,11 +69,14 @@ export default function Settings() {
           </Text>
           <StepButton sign="+" label="More time" size={narrow ? 46 : 52} disabled={!store.canStepGoal(1)} onPress={() => store.stepGoal(1)} />
         </View>
-        <View style={styles.cellRow}>
-          <View style={{ width: 74 }}>
-            <Battery cells={CELLS} tone={{ fg: c.ink, track: 'rgba(244,245,242,0.22)', bg: c.card }} height={26} flat decorative />
+        {/* The battery's six cells, and how long each lasts at this goal. */}
+        <View style={{ alignItems: 'center', gap: 8 }}>
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={styles.cells}>
+            {Array.from({ length: CELLS }, (_, i) => (
+              <View key={i} style={[styles.cell, { backgroundColor: accent }]} />
+            ))}
           </View>
-          <Text style={styles.cellNote}>Six cells of {cellWords(chosen)} each</Text>
+          <Text style={styles.cellNote}>6 cells of {cellWords(chosen)}</Text>
         </View>
         {waiting ? (
           // Today and the next recharge side by side, so it reads at a glance why Today still shows the old goal.
@@ -92,48 +95,91 @@ export default function Settings() {
         {firstDay ? (
           <View style={styles.firstDay}>
             <Text style={styles.firstDayTitle}>Your first day: changes start now</Text>
-            <Text style={styles.firstDayLine}>From tomorrow, more time waits for the {chosenTime} recharge. Less time always starts right away.</Text>
+            <Text style={styles.firstDayLine}>From tomorrow, more time waits for the {recharge} recharge. Less time always starts right away.</Text>
           </View>
         ) : null}
       </Card>
 
-      <Card>
-        {isPro ? (
-          <View style={[styles.rechargeRow, { borderBottomWidth: 1, borderBottomColor: c.rule }]}>
-          <Text style={styles.rowLabel}>Recharges at</Text>
-          {/* On a narrow phone the stepper drops to its own line, still on the right. */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-            <StepButton sign="−" label="Recharge earlier" size={40} disabled={locked} onPress={() => store.stepRecharge(-1)} />
-            <Text accessibilityLabel={`Recharges at ${chosenTime}${timeWaiting ? ', after this battery' : ''}`} style={[styles.rechargeValue, timeWaiting ? { color: accent } : null]}>
-              {chosenTime}
-            </Text>
-            <StepButton sign="+" label="Recharge later" size={40} disabled={locked} onPress={() => store.stepRecharge(1)} />
-          </View>
-          {timeWaiting ? (
-            // Later: this battery runs on to the new time. Earlier: one more recharge as planned, counted from the new time.
-            <Text style={styles.rechargeNote}>{recharge === chosenTime ? `This battery runs on until ${chosenTime}.` : `One more recharge at ${recharge}, then at ${chosenTime}.`}</Text>
-          ) : null}
-          {firstDay ? <Text style={styles.rechargeNote}>Your first day, so this changes now. From tomorrow, a new time waits for the battery to end.</Text> : null}
-        </View>
-        ) : (
-          // Changing the recharge time is Pro. A time chosen before Pro (1.0) stays as it was.
-          <LinkRow label="Recharges at" value={`${chosenTime} · Pro`} onPress={() => router.push('/pro')} />
-        )}
-        <LinkRow label="Essentials" value={countedValue} onPress={() => router.push('/what-counts')} last />
-      </Card>
-
-      <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 8 }}>
+      {/* What an empty battery does: three pictures to tap, and one line on the chosen one. */}
+      <Card style={{ paddingTop: 14, paddingBottom: 14, gap: 10 }}>
         <Label>When the battery is empty</Label>
-        <Choice title="Warn" line="Red screen, then tap through" chosen={settings.emptyLevel === 'warn'} disabled={locked} accent={accent} onPress={() => store.setEmptyLevel('warn')} />
-        <Choice title="Work for it" line={`Solve sums to get ${first.minutes} more minutes`} chosen={settings.emptyLevel === 'work'} disabled={locked} accent={accent} onPress={() => store.setEmptyLevel('work')} />
-        <Choice title="Locked" line="Counted apps stay locked until it recharges" chosen={settings.emptyLevel === 'locked'} disabled={locked} accent={accent} onPress={() => store.setEmptyLevel('locked')} />
+        <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
+          {EMPTY_CHOICES.map(({ level, title, icon }) => {
+            const chosen = settings.emptyLevel === level;
+            return (
+              <Pressable
+                key={level}
+                accessibilityRole="radio"
+                accessibilityLabel={`${title}, ${emptyLine(level, first.minutes)}`}
+                accessibilityState={{ checked: chosen, disabled: locked }}
+                aria-checked={chosen}
+                disabled={locked}
+                onPress={() => {
+                  tap();
+                  store.setEmptyLevel(level);
+                }}
+                style={({ pressed }) => [styles.mode, chosen ? { borderColor: accent, borderWidth: 2, backgroundColor: 'rgba(244,245,242,0.06)' } : null, locked ? { opacity: 0.6 } : null, pressed ? { opacity: 0.8 } : null]}>
+                <View style={[styles.modeDot, chosen ? { backgroundColor: accent } : null]}>
+                  <Icon name={icon} size={23} color={chosen ? c.onTone : c.ink2} />
+                </View>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.modeName, chosen ? { color: c.ink } : null]}>
+                  {title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.modeLine}>{emptyLine(settings.emptyLevel, first.minutes)}</Text>
+      </Card>
+
+      {/* Essentials: example tiles (the phone never says which apps were picked), and how many there are. */}
+      <Card>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Essentials, ${countedValue}`}
+          onPress={() => {
+            tap();
+            router.push('/what-counts');
+          }}
+          style={({ pressed }) => [styles.essentials, pressed ? { opacity: 0.7 } : null]}>
+          <View style={{ flex: 1, gap: 1 }}>
+            <Text style={styles.rowLabel}>Essentials</Text>
+            <Text numberOfLines={1} style={styles.proLine}>
+              {countedValue}, always free
+            </Text>
+          </View>
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={{ flexDirection: 'row', gap: 5 }}>
+            <IconTile icon={{ name: 'phone', bg: '#34C759' }} size={30} />
+            <IconTile icon={{ name: 'message', bg: '#34C759' }} size={30} />
+            <IconTile icon={{ name: 'map', bg: '#3B82F6' }} size={30} />
+          </View>
+          <Chevron />
+        </Pressable>
       </Card>
 
       <Card>
-        <LinkRow label="Advanced" value="Second thought, more" onPress={() => router.push('/advanced')} />
-        <LinkRow label="Plainlimit Pro" value={proValue} onPress={() => router.push('/pro')} />
-        <LinkRow label="Use your phone less" value={`${TIPS.length} tips`} onPress={() => router.push('/tips')} last />
+        <LinkRow icon={{ name: 'advanced', bg: tiles.gray }} label="Advanced" onPress={() => router.push('/advanced')} />
+        <LinkRow icon={{ name: 'widget', bg: tiles.blue }} label="Add the widget" onPress={() => router.push('/widget')} />
+        <LinkRow icon={{ name: 'tips', bg: tiles.yellow }} label="Use your phone less" value={`${TIPS.length} tips`} onPress={() => router.push('/tips')} last />
       </Card>
+
+      {/* Pro has its own gold row, last: seen, never in the way. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Plainlimit Pro, ${proValue}`}
+        onPress={() => {
+          tap();
+          router.push('/pro');
+        }}
+        style={({ pressed }) => [styles.pro, pressed ? { opacity: 0.8 } : null]}>
+        <IconTile icon={{ name: 'pro', bg: '#F2C656', fg: c.onPaper }} />
+        <View style={{ flex: 1, gap: 1 }}>
+          <Text style={styles.rowLabel}>Plainlimit Pro</Text>
+          <Text style={styles.proLine}>{isPro ? 'Thank you' : 'Pay once, yours for good'}</Text>
+        </View>
+        <Text style={styles.proValue}>{proValue}</Text>
+        <Chevron />
+      </Pressable>
 
       {DEV_TOOLS ? (
         <View style={{ marginTop: 14, gap: 10 }}>
@@ -173,6 +219,20 @@ export default function Settings() {
   );
 }
 
+/** The three things an empty battery can do, each with its picture. */
+const EMPTY_CHOICES: readonly { level: EmptyLevel; title: string; icon: IconName }[] = [
+  { level: 'warn', title: 'Warn', icon: 'warn' },
+  { level: 'work', title: 'Work for it', icon: 'sums' },
+  { level: 'locked', title: 'Locked', icon: 'lock' },
+];
+
+/** One line on what a choice does. */
+function emptyLine(level: EmptyLevel, minutes: number): string {
+  if (level === 'warn') return 'Red screen, then tap through';
+  if (level === 'work') return `Solve sums to get ${minutes} more minutes`;
+  return 'Counted apps stay locked until it recharges';
+}
+
 /** The Essentials row's value: how many are picked, as the phone has it now. */
 function essentialsNow(): string {
   const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
@@ -182,8 +242,9 @@ function essentialsNow(): string {
 const styles = StyleSheet.create({
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   goal: { fontFamily: display.bold, fontSize: 64, lineHeight: 66, letterSpacing: -2.4, color: c.ink },
-  cellRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2 },
-  cellNote: { flex: 1, fontSize: 14, lineHeight: 19, color: c.ink3 },
+  cells: { flexDirection: 'row', gap: 6 },
+  cell: { width: 30, height: 13, borderRadius: 5 },
+  cellNote: { fontSize: 14, lineHeight: 19, color: c.ink3 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(244,245,242,0.07)' },
   waitPart: { flex: 1, gap: 2 },
   waitLabel: { fontSize: 13, lineHeight: 17, color: c.ink3 },
@@ -192,9 +253,14 @@ const styles = StyleSheet.create({
   firstDay: { gap: 3, marginTop: 4, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(244,245,242,0.07)' },
   firstDayTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: c.ink },
   firstDayLine: { fontSize: 14, lineHeight: 19, color: c.ink3 },
-  rechargeRow: { minHeight: 60, paddingVertical: 10, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 12, rowGap: 8 },
+  mode: { flex: 1, borderRadius: 16, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, paddingTop: 12, paddingBottom: 10, paddingHorizontal: 4, alignItems: 'center', gap: 7 },
+  modeDot: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.raised, alignItems: 'center', justifyContent: 'center' },
+  modeName: { fontSize: 14.5, lineHeight: 18, fontWeight: '600', color: c.ink2 },
+  modeLine: { fontSize: 14, lineHeight: 19, color: c.ink3, textAlign: 'center' },
+  essentials: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 10 },
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
-  rechargeValue: { fontFamily: display.semi, fontSize: 17, color: c.ink, minWidth: 84, textAlign: 'center' },
-  rechargeNote: { flexBasis: '100%', fontSize: 14, lineHeight: 19, color: c.ink3 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
+  pro: { minHeight: 64, borderRadius: 22, borderWidth: 1, borderColor: '#5B4A1C', backgroundColor: '#1F1C13', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  proLine: { fontSize: 13.5, lineHeight: 18, color: c.ink3 },
+  proValue: { fontFamily: display.semi, fontSize: 16, color: '#F2C656' },
 });
