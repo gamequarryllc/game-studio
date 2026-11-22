@@ -26,7 +26,8 @@ export default function Pass() {
     check === 'ok' ? ['Passes left after this', String(view.passes - 1)] : ['Passes saved', String(view.passes)],
     ['Next pass', weekday(view.nextPass)],
   ];
-  if (view.streakWeeks > 0) rows.push(['Your streak', `Ends at ${view.streakWeeks} ${view.streakWeeks === 1 ? 'week' : 'weeks'}`, '#FF7B6B']);
+  // The streak is days without a pass (record.ts): using one ends it, and the sheet says so before the button.
+  if (check === 'ok' && view.streakDays > 0) rows.push(['Your streak', `Ends at ${view.streakDays} ${view.streakDays === 1 ? 'day' : 'days'}`, '#FF7B6B']);
 
   if (openUntil) {
     return (

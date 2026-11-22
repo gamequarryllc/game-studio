@@ -2,11 +2,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
+import { ASK_ID, DEFAULT_ASK_FIRST, askShownOn, openShort } from '@/domain/askFirst';
 import { CELLS, cellWords } from '@/domain/battery';
-import { clockLabelOf, durationLabel } from '@/domain/day';
+import { clockLabel, clockLabelOf, durationLabel } from '@/domain/day';
 import { chosenGoal, goalFree } from '@/domain/goal';
-import { topUpPlan } from '@/domain/puzzle';
-import { batteryEnd } from '@/domain/recharge';
+import { sumLevelFor } from '@/domain/pro';
+import { topUpPlan, type SumLevel } from '@/domain/puzzle';
+import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import type { EmptyLevel } from '@/domain/types';
 import { EXPECTED_PRICE } from '@/pro/config';
 import { pro, usePro } from '@/pro/pro';
@@ -14,7 +16,7 @@ import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCou
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { tap } from '@/platform/haptics';
 import { Icon, type IconName } from '@/ui/icons';
-import { BigButton, Card, Chevron, IconTile, Label, LinkRow, Page, StepButton, Title, tiles, type RowIcon } from '@/ui/kit';
+import { BigButton, Card, Chevron, IconTile, Label, LinkRow, Page, ProBadge, StepButton, Title, tiles, type RowIcon } from '@/ui/kit';
 import { essentialsValue } from '@/ui/countWords';
 import { TIPS } from '@/ui/tips';
 import { ScreenTimeCard, TestBuildTools } from '@/ui/ScreenTimeCard';
@@ -36,10 +38,13 @@ export default function Settings() {
   // are picked takes a moment, and the screen caught on each tap (build 127).
   const [countedValue, setCountedValue] = useState(essentialsNow);
   const [essentialTiles, setEssentialTiles] = useState(essentialTilesNow);
+  // Second thought is on only with apps picked, as on its own screen's switch; the phone is asked the same way.
+  const [askPicked, setAskPicked] = useState(askPickedNow);
   useFocusEffect(
     useCallback(() => {
       setCountedValue(essentialsNow());
       setEssentialTiles(essentialTilesNow());
+      setAskPicked(askPickedNow());
     }, []),
   );
   // Pretend use is for trying the app without real screen time; once that is on, it would only confuse.
@@ -58,6 +63,15 @@ export default function Settings() {
   const recharge = clockLabelOf(batteryEnd(day, settings));
   // On setup's own day every change starts at once (goal.ts); the note says so, and what happens after.
   const firstDay = goalFree(useDoc());
+  // The extras, each a tile that says where it stands (the owner's pick of "Tiles", 2026-11-22).
+  const ask = settings.askFirst ?? DEFAULT_ASK_FIRST;
+  const extras: readonly { icon: RowIcon; label: string; value: string; to: '/ask-first' | '/lock-message' | '/sums' | '/recharge' | '/pro'; pro?: boolean }[] = [
+    { icon: { name: 'secondThought', bg: tiles.purple }, label: 'Second thought', value: askShownOn(ask, askPicked, SCREEN_TIME_AVAILABLE || MOCK_PHONE) ? `On, ${openShort(ask)}` : 'Off', to: '/ask-first' },
+    { icon: { name: 'lockMessage', bg: tiles.teal }, label: 'Lock message', value: settings.lockMessage ? 'On' : 'Off', to: '/lock-message' },
+    { icon: { name: 'sums', bg: tiles.pink }, label: 'Sums', value: SUM_LEVEL_NAME[sumLevelFor(settings, isPro)], to: '/sums' },
+    // Choosing the recharge time is Pro: without it the tile shows the time and opens what Pro adds.
+    { icon: { name: 'recharge', bg: tiles.orange }, label: 'Recharge time', value: clockLabel(chosenRecharge(settings)), to: isPro ? '/recharge' : '/pro', pro: !isPro },
+  ];
 
   return (
     <Page top={24} bottom={24}>
@@ -164,8 +178,39 @@ export default function Settings() {
         </Pressable>
       </Card>
 
+      {/* The extras, in the open: four picture tiles, two by two, each with its state under its name.
+          They had a page of their own, "Advanced", which hid them (the owner, 2026-11-22). */}
+      <Card style={{ paddingTop: 14, paddingBottom: 14, gap: 10 }}>
+        <Label>Do more</Label>
+        <View style={styles.extras}>
+          {extras.map(({ icon, label, value, to, pro: needsPro }) => (
+            <Pressable
+              key={label}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}, ${value}${needsPro ? ', Pro' : ''}`}
+              onPress={() => {
+                tap();
+                router.push(to);
+              }}
+              style={({ pressed }) => [styles.extra, pressed ? { opacity: 0.7 } : null]}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <IconTile icon={icon} size={38} />
+                {needsPro ? <ProBadge /> : null}
+              </View>
+              <View style={{ gap: 1 }}>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.extraName}>
+                  {label}
+                </Text>
+                <Text numberOfLines={1} style={styles.extraValue}>
+                  {value}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      </Card>
+
       <Card>
-        <LinkRow icon={{ name: 'advanced', bg: tiles.gray }} label="Advanced" onPress={() => router.push('/advanced')} />
         <LinkRow icon={{ name: 'widget', bg: tiles.blue }} label="Add the widget" onPress={() => router.push('/widget')} />
         <LinkRow icon={{ name: 'tips', bg: tiles.yellow }} label="Use your phone less" value={`${TIPS.length} tips`} onPress={() => router.push('/tips')} last />
       </Card>
@@ -246,6 +291,14 @@ function essentialsNow(): string {
   return essentialsValue(picked, essentialsMode() ? essentialsCount() : null);
 }
 
+/** How many apps Second thought has picked, as the phone has it now. */
+function askPickedNow(): number {
+  return SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(ASK_ID) : 0;
+}
+
+/** The sums' level in a word, for its tile. */
+const SUM_LEVEL_NAME: Record<SumLevel, string> = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
+
 /** The Essentials row's example tiles, in the order they are shown. */
 const ESSENTIAL_TILES: RowIcon[] = [
   { name: 'phone', bg: '#34C759' },
@@ -277,6 +330,11 @@ const styles = StyleSheet.create({
   modeDot: { width: 40, height: 40, borderRadius: 20, backgroundColor: c.raised, alignItems: 'center', justifyContent: 'center' },
   modeName: { fontSize: 14.5, lineHeight: 18, fontWeight: '600', color: c.ink2 },
   modeLine: { fontSize: 14, lineHeight: 19, color: c.ink3, textAlign: 'center' },
+  extras: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // Two to a row: each takes half, less half the gap between them.
+  extra: { flexGrow: 1, flexBasis: '45%', minHeight: 104, borderRadius: 16, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, padding: 12, gap: 10, justifyContent: 'space-between' },
+  extraName: { fontSize: 16, lineHeight: 20, fontWeight: '600', color: c.ink },
+  extraValue: { fontSize: 14, lineHeight: 18, color: c.ink3 },
   essentials: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 10 },
   rowLabel: { fontSize: 16, fontWeight: '500', color: c.ink },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },

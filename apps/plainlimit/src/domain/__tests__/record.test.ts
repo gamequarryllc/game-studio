@@ -65,8 +65,8 @@ describe('the record', () => {
     const view = recordView(r, history, day(11, 18, 40), now);
     expect(view.perfectWeeks).toBe(1);
     expect(view.passes).toBe(3);
-    expect(view.streakWeeks).toBe(5); // Oct 11 to Nov 18
-    expect(view.bestWeeks).toBe(5); // Sep 1 to Oct 11 is 5 weeks and 5 days, the same whole weeks
+    expect(view.streakDays).toBe(38); // Oct 12 to Nov 18
+    expect(view.bestDays).toBe(40); // Sep 1 to Oct 10
     expect(view.weeks).toHaveLength(12);
     const last = view.weeks[11];
     expect(last.start).toBe('2026-11-16');
@@ -78,6 +78,35 @@ describe('the record', () => {
     expect(passWeek?.days[6].pass).toBe(true);
     expect(passWeek?.perfect).toBe(false);
     expect(view.used).toEqual([at(10, 11, 22)]);
+  });
+
+  it('counts the streak in days without a pass, today included', () => {
+    const now = at(11, 18, 12);
+    // No pass ever: every day since the record began, the first day and today among them.
+    expect(recordView(freshRecord(at(11, 1)), [], day(11, 18, 40), now).streakDays).toBe(18);
+    expect(recordView(freshRecord(at(11, 18)), [], day(11, 18, 40), now).streakDays).toBe(1);
+    // A pass on Nov 10: the 11th to the 18th are eight days. The nine before it were the best run.
+    const used: PassRecord = { ...freshRecord(at(11, 1)), uses: [at(11, 10, 21).toISOString()] };
+    const view = recordView(used, [], day(11, 18, 40), now);
+    expect(view.streakDays).toBe(8);
+    expect(view.bestDays).toBe(9);
+    // Days kept from before the record began count too: no pass could have been used on them.
+    expect(recordView(freshRecord(at(11, 18)), [day(11, 16, 90), day(11, 17, 90)], day(11, 18, 40), now).streakDays).toBe(3);
+    // A day over the goal does not break it: only a pass does.
+    expect(recordView(used, [day(11, 16, 300), day(11, 17, 90)], day(11, 18, 40), now).streakDays).toBe(8);
+    // A pass used today: nothing in a row until tomorrow, and the best run stands.
+    const today: PassRecord = { ...used, uses: [...used.uses, at(11, 18, 9).toISOString()] };
+    expect(recordView(today, [], day(11, 18, 40), now).streakDays).toBe(0);
+    expect(recordView(today, [], day(11, 18, 40), now).bestDays).toBe(9);
+  });
+
+  it('breaks the streak on the battery day a pass was used in', () => {
+    // 2 AM on the 18th, before a 6 AM recharge, is still the 17th's battery: used then, it is today's pass.
+    const now = at(11, 18, 3);
+    const r: PassRecord = { ...freshRecord(at(11, 1)), uses: [at(11, 18, 2).toISOString()] };
+    expect(recordView(r, [], day(11, 17, 40), now, 360).streakDays).toBe(0);
+    // After the recharge it is a new day: one day without a pass.
+    expect(recordView(r, [], day(11, 18, 40), at(11, 18, 7), 360).streakDays).toBe(1);
   });
 
   it('marks a pass on the battery day it was used in, even after midnight', () => {

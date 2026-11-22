@@ -15,7 +15,7 @@ import { useAccent } from '@/ui/useDay';
 export default function AddWidget() {
   const accent = useAccent();
   return (
-    <Page top={8}>
+    <Page header top={8}>
       <Title>Add the widget</Title>
       <Lead>Your battery on the Home Screen, without opening the app.</Lead>
 

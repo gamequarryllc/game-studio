@@ -41,5 +41,5 @@ const CELL_LETTER = { under: 'u', ranOut: 'r', partly: 'p', none: 'n', future: '
 export function widgetRecord(view: RecordView, isPro: boolean): WidgetRecord {
   const thisWeek = view.weeks[view.weeks.length - 1];
   const week = (thisWeek?.days ?? []).map((d) => CELL_LETTER[d.cell]).join('').padEnd(7, 'f').slice(0, 7);
-  return { pro: isPro, streak: view.streakWeeks, passes: view.passes, perfect: view.perfectWeeks, week };
+  return { pro: isPro, streak: view.streakDays, passes: view.passes, perfect: view.perfectWeeks, week };
 }

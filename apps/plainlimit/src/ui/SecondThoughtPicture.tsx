@@ -5,7 +5,7 @@ import type { OpenChoice } from '@/domain/askFirst';
 
 import { c } from './theme';
 
-// Second thought in one picture (Settings > Advanced > Second thought): a
+// Second thought in one picture (Settings > Do more > Second thought): a
 // small phone showing the screen an app on the list puts up (the same words,
 // hand and buttons as `askShieldCopy` and the shield look in
 // src/platform/askFirst.ts), beside three short lines: it asks first, one

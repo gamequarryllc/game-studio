@@ -21,7 +21,7 @@
       },
       {
         "q": "Why is Plainlimit's figure different from Screen Time's?",
-        "a": "Plainlimit counts every app except your essentials, from the time it recharges (6:00 AM unless you changed it). Screen Time's daily total counts every app from midnight. Use after midnight but before the recharge belongs to the day before. With Plainlimit Pro you can set Recharges at to 12:00 AM in Settings, under Advanced, to match Screen Time's day."
+        "a": "Plainlimit counts every app except your essentials, from the time it recharges (6:00 AM unless you changed it). Screen Time's daily total counts every app from midnight. Use after midnight but before the recharge belongs to the day before. With Plainlimit Pro you can set the recharge to 12:00 AM in Settings, under Recharge time, to match Screen Time's day."
       },
       {
         "q": "How do I change my essentials?",

@@ -24,7 +24,7 @@ export default function WhatCounts() {
   const locked = settingsLocked() && e.ready;
   const oldList = !e.ready && pickCount(COUNTED_ID) > 0;
   return (
-    <Page top={8}>
+    <Page header top={8}>
       <Title>Essentials</Title>
       <Lead>{COUNTS_LEAD}</Lead>
       {SCREEN_TIME_AVAILABLE || MOCK_PHONE ? (

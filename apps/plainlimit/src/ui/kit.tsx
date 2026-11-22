@@ -9,19 +9,25 @@ import { Icon, type IconName } from './icons';
 
 // The few pieces every screen is built from.
 
-/** A scrolling page with the app's side margins, clear of the notch and the tab bar. */
-export function Page({ children, top = 0, bottom = 32 }: { children: ReactNode; top?: number; bottom?: number }) {
+/**
+ * A scrolling page with the app's side margins, clear of the notch and the tab bar.
+ * `header` is for a screen under the navigation bar (the one with the back
+ * button): that bar already clears the notch, so the page must not clear it a
+ * second time. Up to build 137 it did, and every such screen's title sat a
+ * notch's height too low.
+ */
+export function Page({ children, top = 0, bottom = 32, header = false }: { children: ReactNode; top?: number; bottom?: number; header?: boolean }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1, backgroundColor: c.ground }}>
       <ScrollView
         style={{ flex: 1, backgroundColor: c.ground }}
         // On the web the tab bar floats over the page, so the end can scroll clear of it.
-        contentContainerStyle={{ paddingTop: insets.top + top, paddingBottom: insets.bottom + bottom + (Platform.OS === 'web' ? 96 : 0), paddingHorizontal: 20, gap: 12 }}
+        contentContainerStyle={{ paddingTop: (header ? 0 : insets.top) + top, paddingBottom: insets.bottom + bottom + (Platform.OS === 'web' ? 96 : 0), paddingHorizontal: 20, gap: 12 }}
         keyboardShouldPersistTaps="handled">
         {children}
       </ScrollView>
-      <StatusBand />
+      {header ? null : <StatusBand />}
     </View>
   );
 }

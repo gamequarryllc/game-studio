@@ -115,20 +115,24 @@ async function main() {
   });
 
   await step('without Pro, the recharge time, harder sums and a lock message of one\'s own lead to the Pro screen; Second thought and the ready-made lock messages are open', async () => {
-    await press('Advanced');
-    await press('Recharges at, 6:00 AM, Pro');
+    // The extras are four tiles on Settings, under "Do more"; there is no Advanced page.
+    await see('Do more');
+    assert.strictEqual(await page.getByRole('button', { name: 'Advanced', exact: true }).count(), 0, 'Settings still has an Advanced row');
+    await press('Recharge time, 6:00 AM, Pro');
     await page.getByTestId('pro-screen').waitFor();
     await see('Your recharge time');
     await shot('02b-pro');
     await press('Unlock Pro · $9.99');
     await see('Nothing can be bought in this build. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.');
     await back();
-    await page.getByRole('button', { name: 'Recharges at, 6:00 AM, Pro', exact: true }).waitFor();
-    await shot('02c-advanced');
+    await page.getByRole('button', { name: 'Recharge time, 6:00 AM, Pro', exact: true }).waitFor();
+    await press('Sums, Normal');
+    await shot('02c-sums');
     await page.getByRole('radio', { name: /^Hard/ }).click();
     await see('Your recharge time');
     await back();
     assert.strictEqual(await page.getByRole('radio', { name: /^Normal/ }).getAttribute('aria-checked'), 'true', 'normal sums stay chosen');
+    await back();
     await page.getByRole('button', { name: 'Second thought, Off', exact: true }).waitFor();
     // A ready-made lock message is free; words of one's own are Pro.
     await press('Lock message, Off');
@@ -141,19 +145,25 @@ async function main() {
     await press('No message');
     await back();
     await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
-    await back();
   });
 
   await step('with Pro, the recharge time steps by half hours and harder sums can be chosen', async () => {
     await press('Pretend Pro is bought');
-    await press('Advanced');
+    await press('Recharge time, 6:00 AM');
+    // By its label: the tile behind, on Settings, says the time too.
     await press('Recharge later');
-    await see('6:30 AM');
+    await page.getByLabel('Recharges at 6:30 AM', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
+    await shot('02e-recharge-time');
     await press('Recharge earlier');
-    await see('6:00 AM');
+    await page.getByLabel('Recharges at 6:00 AM', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
+    await back();
+    await press('Sums, Normal');
     await page.getByRole('radio', { name: /^Hard/ }).click();
     assert.strictEqual(await page.getByRole('radio', { name: /^Hard/ }).getAttribute('aria-checked'), 'true', 'hard sums chosen');
+    await back();
+    await press('Sums, Hard');
     await page.getByRole('radio', { name: /^Normal/ }).click();
+    await back();
     await press('Lock message, Off');
     await press('Text someone you miss.');
     await page.getByTestId('lock-message-preview').getByText('\u201CText someone you miss.\u201D', { exact: false }).waitFor();
@@ -166,7 +176,6 @@ async function main() {
     await page.getByRole('button', { name: 'Lock message, Off', exact: true }).waitFor();
     await press('Second thought, Off');
     await see('A pause before the apps you open without thinking.');
-    await back();
     await back();
   });
 
@@ -339,17 +348,18 @@ async function main() {
     // Today shows the week as bars; its words are on History.
     await page.getByLabel(/^Today: at least 0:00 of 3:00, so far$/).first().waitFor();
     await press('History');
-    await see('Last 7 days');
-    await see('Your week fills in as the days go by.');
+    // History leads with the streak: the days without an emergency pass, 1 on the first day.
+    await see('day without an emergency pass');
+    await see('Emergency passes');
+    await see('Perfect weeks');
     await back();
     await tab('Settings');
     await press('Fill the last week');
     await tab('Today');
     await press('History');
-    // The pretend week has a day counted only in part, which is left out of the sum.
-    await see('Under your goal on 4 of 5 counted days, 3 in a row.');
-    await see('Earned extra time 2 times this week.');
-    await see('A faded day was not fully counted, so it is not claimed as under the goal.');
+    // The pretend week shows as lights, a day each. Its days count for the streak, over the goal or not: only a pass ends it.
+    await see('days without an emergency pass');
+    await page.getByRole('img', { name: /^The last 5 weeks, a light for each day/ }).waitFor();
     await shot('18b-week');
     await back();
   });

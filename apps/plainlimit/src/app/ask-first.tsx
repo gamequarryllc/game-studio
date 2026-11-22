@@ -12,7 +12,7 @@ import { FirstPickupApps } from '@/ui/UsageReport';
 import { c } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
-// Settings > Advanced > Second thought (Ask first in the code): a second,
+// Settings > Do more > Second thought (Ask first in the code): a second,
 // optional list of apps that ask for one sum every time they open
 // (src/domain/askFirst.ts).
 //
@@ -53,7 +53,7 @@ export default function AskFirstSettings() {
   };
 
   return (
-    <Page top={8}>
+    <Page header top={8}>
       <Title>Second thought</Title>
       <Lead>A pause before the apps you open without thinking.</Lead>
 

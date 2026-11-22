@@ -13,7 +13,6 @@ const DRAWN: Record<IconName, (c: string) => string> = {
   essentials: (c) => `<path fill="${c}" d="M12 20.5s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 7.9a4.2 4.2 0 0 1 7.5 2.5c0 5.5-7.5 10.1-7.5 10.1z"/>`,
   lock: (c) => `<rect fill="${c}" x="5" y="10.5" width="14" height="10.5" rx="2.8"/><path d="M8.3 10.5V8a3.7 3.7 0 0 1 7.4 0v2.5" ${stroke(c, 2.4)}/>`,
   recharge: (c) => `<path d="M3 17.5h18M7 17.5a5 5 0 0 1 10 0M12 6.5v2.2M5.3 9.8l1.5 1.5M18.7 9.8l-1.5 1.5" ${stroke(c)}/>`,
-  advanced: (c) => `<path d="M4 7.5h9M17.5 7.5H20M4 16.5h2.5M11 16.5h9" ${stroke(c)}/><circle cx="15.2" cy="7.5" r="2.3" ${stroke(c)}/><circle cx="8.7" cy="16.5" r="2.3" ${stroke(c)}/>`,
   widget: (c) => `<rect x="4" y="4" width="7" height="7" rx="2" fill="${c}"/><rect x="13" y="4" width="7" height="7" rx="2" fill="${c}" opacity=".55"/><rect x="4" y="13" width="16" height="7" rx="2" fill="${c}"/>`,
   tips: (c) => `<path d="M8.5 14.5a6 6 0 1 1 7 0c-.6.5-1 1.2-1 2v.5h-5v-.5c0-.8-.4-1.5-1-2zM9.8 20.5h4.4" ${stroke(c)}/>`,
   pro: (c) => `<path fill="${c}" d="M12 3.2l2.5 5.6 6.1.6-4.6 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6-4.6-4.1 6.1-.6z"/>`,

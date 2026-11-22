@@ -231,7 +231,7 @@ struct BatteryProvider: TimelineProvider {
   func placeholder(in context: Context) -> BatteryEntry {
     BatteryEntry(
       date: Date(), state: BatteryState(isSetUp: true, cells: 4, rechargeMinute: 360, goalMinutes: 180),
-      record: RecordInfo(pro: true, streak: 5, passes: 2, perfect: 3, week: "uururff"))
+      record: RecordInfo(pro: true, streak: 12, passes: 2, perfect: 3, week: "uururff"))
   }
 
   func getSnapshot(in context: Context, completion: @escaping (BatteryEntry) -> Void) {
@@ -446,7 +446,7 @@ struct BatteryWidgetView: View {
         .accessibilityLabel(spoken(state))
         if record.pro {
           HStack(spacing: 8) {
-            tile("\(record.streak)", record.streak == 1 ? "week streak" : "weeks streak", colours)
+            tile("\(record.streak)", "day streak", colours)
             tile("\(record.passes)", record.passes == 1 ? "pass saved" : "passes saved", colours)
             tile("\(record.perfect)", record.perfect == 1 ? "perfect week" : "perfect weeks", colours)
           }

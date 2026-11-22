@@ -4,9 +4,12 @@
  * - One pass is added each week (on Monday); passes bank with no limit.
  * - At most one is used a day (a battery's day, recharge to recharge). A
  *   pass opens everything, settings included, for 15 minutes, in any mode.
- * - The record: weeks without using a pass (and the best run), perfect weeks
- *   (every day under the goal, no pass), the passes in the bank, the last 12
- *   weeks day by day, and when passes were used.
+ * - The record: the streak, which is days in a row without using a pass (and
+ *   the best run), perfect weeks (every day under the goal, no pass), the
+ *   passes in the bank, the last 12 weeks day by day, and when passes were used.
+ * - The streak is about passes, not the goal (the owner, 2026-11-22): a day over
+ *   the goal slips easily and a broken streak puts people off, while a pass is
+ *   only ever used on purpose.
  */
 
 import type { DaySummary } from './types';
@@ -106,9 +109,10 @@ export function spendPass(r: PassRecord, now: Date, nextRechargeMs: number): Pas
 export type Cell = 'under' | 'ranOut' | 'partly' | 'none' | 'future';
 
 export interface RecordView {
-  /** Whole weeks since the last pass was used, or since the record began. */
-  streakWeeks: number;
-  bestWeeks: number;
+  /** The streak: battery days in a row without a pass, today included, back to the last pass or the record's first day. 0 on a day a pass was used. */
+  streakDays: number;
+  /** The longest such run so far, the running one included. */
+  bestDays: number;
   /** Finished weeks (Monday to Sunday) with every day counted and under the goal, and no pass. */
   perfectWeeks: number;
   passes: number;
@@ -158,13 +162,26 @@ export function recordView(r: PassRecord, history: readonly DaySummary[], today:
     if (key >= weekKey(now) || days.length < 7) continue;
     if (days.every((h) => cellOf(h) === 'under' && !passDays.has(dateKey(new Date(h.start))))) perfectWeeks += 1;
   }
-  const marks = [new Date(r.since).getTime(), ...r.uses.map((u) => new Date(u).getTime()), now.getTime()];
-  let bestWeeks = 0;
-  for (let i = 1; i < marks.length; i++) bestWeeks = Math.max(bestWeeks, Math.floor((marks[i] - marks[i - 1]) / WEEK));
-  const last = marks[marks.length - 2];
+  // The streak: days without a pass, counted in battery days so a pass at 2 AM breaks the day before.
+  const dayNumber = (key: string) => {
+    const [y, m, d] = key.split('-').map(Number);
+    return Date.UTC(y, m - 1, d) / DAY;
+  };
+  const todayNumber = dayNumber(todayKey);
+  // The day before the record began stands in for a pass: the first run starts on the record's first day,
+  // or on the first day kept, where days were kept before there was a record (1.0 had none).
+  const firstKept = Math.min(todayNumber, ...history.map((h) => dayNumber(dateKey(new Date(h.start)))));
+  let before = Math.min(dayNumber(batteryDay(r.since)), firstKept) - 1;
+  let bestDays = 0;
+  for (const used of [...passDays].map(dayNumber).sort((x, y) => x - y)) {
+    if (used > todayNumber) break;
+    bestDays = Math.max(bestDays, used - before - 1);
+    before = Math.max(before, used);
+  }
+  const streakDays = todayNumber - before;
   return {
-    streakWeeks: Math.max(0, Math.floor((now.getTime() - last) / WEEK)),
-    bestWeeks,
+    streakDays,
+    bestDays: Math.max(bestDays, streakDays),
     perfectWeeks,
     passes: r.passes,
     nextPass: nextPassDate(r),

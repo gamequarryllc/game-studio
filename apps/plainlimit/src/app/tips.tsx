@@ -10,7 +10,7 @@ import { TIPS } from '@/ui/tips';
 
 export default function Tips() {
   return (
-    <Page top={8}>
+    <Page header top={8}>
       <Title>Use your phone less</Title>
       <Lead>The battery sets the limit. These make it easier to stay under it.</Lead>
       {TIPS.map((tip, i) => (

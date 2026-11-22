@@ -53,7 +53,7 @@ export default function ProScreen() {
   };
 
   return (
-    <Page top={8}>
+    <Page header top={8}>
       <View testID="pro-screen" style={{ gap: 10 }}>
         {/* Always a way out, also when the screen was opened from the widget and there is nothing to go back to (build 92 had none). */}
         <View style={styles.head}>

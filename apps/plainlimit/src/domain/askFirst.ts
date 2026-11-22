@@ -111,7 +111,7 @@ export function openSpan(ask: AskFirst): number {
   return ask.whileInUse === true ? USE_CAP_MINUTES : ask.openMinutes;
 }
 
-/** The choice in a few words, for the row in Advanced: "10 min", or "while in use". */
+/** The choice in a few words, for its tile in Settings: "10 min", or "while in use". */
 export function openShort(ask: AskFirst): string {
   return ask.whileInUse === true ? 'while in use' : `${ask.openMinutes} min`;
 }

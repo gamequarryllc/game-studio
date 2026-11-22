@@ -11,7 +11,7 @@ import { Card, Label, Lead, Page, Title } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
-// Settings > Advanced > Lock message: words on the screen that covers an app
+// Settings > Do more > Lock message: words on the screen that covers an app
 // once the battery is empty (shield.ts). The ready-made messages come first
 // and are free; words of one's own come second and are Pro (the owner,
 // 2026-11-21: "see the defaults, and then change it if they're Pro"). Up to
@@ -33,7 +33,7 @@ export default function LockMessage() {
   const own = isLockMessageIdea(text) ? '' : text;
 
   return (
-    <Page top={8}>
+    <Page header top={8}>
       <Title>Lock message</Title>
       <Lead>A few words on the screen you see when an app is locked. Something future you will listen to.</Lead>
 

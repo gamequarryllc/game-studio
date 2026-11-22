@@ -7,13 +7,12 @@ import type { SFSymbol } from './tipDemos/parts';
 // symbols; the web preview (and the App Store pictures taken from it) draws
 // look-alikes: icons.web.tsx.
 
-export type IconName = 'essentials' | 'lock' | 'recharge' | 'advanced' | 'widget' | 'tips' | 'pro' | 'secondThought' | 'lockMessage' | 'sums' | 'history' | 'pass' | 'warn' | 'phone' | 'message' | 'map';
+export type IconName = 'essentials' | 'lock' | 'recharge' | 'widget' | 'tips' | 'pro' | 'secondThought' | 'lockMessage' | 'sums' | 'history' | 'pass' | 'warn' | 'phone' | 'message' | 'map';
 
 const SF: Record<IconName, SFSymbol> = {
   essentials: 'heart.fill',
   lock: 'lock.fill',
   recharge: 'sunrise.fill',
-  advanced: 'slider.horizontal.3',
   widget: 'square.grid.2x2.fill',
   tips: 'lightbulb.fill',
   pro: 'star.fill',
