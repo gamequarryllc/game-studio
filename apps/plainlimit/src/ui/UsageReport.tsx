@@ -254,6 +254,18 @@ export function goalY(goalMinutes: number, hours: number): number {
   return WEEK.top + plot - plot * Math.min(1, goalMinutes / (hours * 60));
 }
 
+/** The hours the phone marks down the chart's left side, as in targets/report (WeekBarsView's `step`): every hour up to 4, every third at 12, else every second. */
+export function hourMarks(hours: number): number[] {
+  const step = hours <= 4 ? 1 : hours >= 12 ? 3 : 2;
+  const marks: number[] = [];
+  for (let hour = step; hour <= hours; hour += step) marks.push(hour);
+  return marks;
+}
+
+/** How near the goal's time has to come to an hour mark, in points, to cover it whole, and where the mark is clear of it again. */
+const MARK_HIDDEN = 17;
+const MARK_CLEAR = 18;
+
 const DASHES = Array.from({ length: 34 }, (_, i) => i);
 
 /** The goal as a dashed line with its time, and the days above it shaded as the ones that would have locked. Past the top of the scale it waits at the top, its time marked with an arrow. */
@@ -274,6 +286,12 @@ function GoalLine({ goalMinutes, hours }: { goalMinutes: number; hours: number }
           <View key={i} style={line.dash} />
         ))}
       </Animated.View>
+      {/* The goal's time shares the hour scale's column. An hour mark it would half cover ("4h" behind "3:30") is covered whole, in the ground's colour, until the time has moved clear. */}
+      {hourMarks(hours).map((hour) => {
+        const at = goalY(hour * 60, hours);
+        const opacity = y.interpolate({ inputRange: [at - MARK_CLEAR, at - MARK_HIDDEN, at + MARK_HIDDEN, at + MARK_CLEAR], outputRange: [0, 1, 1, 0], extrapolate: 'clamp' });
+        return <Animated.View key={hour} style={[line.mark, { top: at - 9, opacity }]} />;
+      })}
       <Animated.View style={[line.pill, { top: Animated.subtract(y, 11) }]}>
         <Text style={line.pillText}>{aboveChart(goalMinutes, hours) ? `${durationLabel(goalMinutes)} \u2191` : durationLabel(goalMinutes)}</Text>
       </Animated.View>
@@ -287,6 +305,8 @@ const line = StyleSheet.create({
   // Stops at the phone's column on the right, where its "Try" tag sits, so it runs into the tag rather than over it.
   dashes: { position: 'absolute', left: WEEK.axis, right: WEEK.right, height: 2, flexDirection: 'row', gap: 5, overflow: 'hidden' },
   dash: { width: 6, height: 2, borderRadius: 1, backgroundColor: c.ink },
+  // As wide as the hour scale's column short of the chart's lines, and as tall as a mark.
+  mark: { position: 'absolute', left: 0, width: WEEK.axis - 3, height: 18, backgroundColor: c.ground },
   // Over the hour scale's column, where it hides no bar's time.
   pill: { position: 'absolute', left: 0, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: c.ink, justifyContent: 'center' },
   pillText: { fontFamily: display.bold, fontSize: 13, color: c.onPaper },

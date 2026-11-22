@@ -1,4 +1,4 @@
-import { WEEK, aboveChart, goalY, weekScale } from '../UsageReport';
+import { WEEK, aboveChart, goalY, hourMarks, weekScale } from '../UsageReport';
 import { GOAL_MAX, GOAL_MIN, GOAL_STEP } from '@/domain/settings';
 
 describe("the 7-day chart's scale", () => {
@@ -25,6 +25,13 @@ describe("the 7-day chart's scale", () => {
     expect(aboveChart(6 * 60 + GOAL_STEP, 6)).toBe(true);
     expect(goalY(6 * 60 + GOAL_STEP, 6)).toBe(WEEK.top);
     expect(goalY(GOAL_MAX, 6)).toBe(WEEK.top);
+  });
+
+  it('marks the hours the phone draws down the side', () => {
+    expect(hourMarks(4)).toEqual([1, 2, 3, 4]);
+    expect(hourMarks(6)).toEqual([2, 4, 6]);
+    expect(hourMarks(8)).toEqual([2, 4, 6, 8]);
+    expect(hourMarks(12)).toEqual([3, 6, 9, 12]);
   });
 
   it('moves the line with every step below the top', () => {
