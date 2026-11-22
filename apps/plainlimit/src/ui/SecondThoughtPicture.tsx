@@ -1,19 +1,23 @@
 import { SymbolView } from 'expo-symbols';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
+import type { OpenChoice } from '@/domain/askFirst';
+
 import { c } from './theme';
 
 // Second thought in one picture (Settings > Advanced > Second thought): a
 // small phone showing the screen an app on the list puts up (the same words,
 // hand and buttons as `askShieldCopy` and the shield look in
 // src/platform/askFirst.ts), beside three short lines: it asks first, one
-// sum, then it opens for the chosen minutes and asks again. The owner,
-// 2026-11-21: the screen had no visual of how it works, and was mostly words;
-// of three mock-ups they picked this one as the clearest.
+// sum, then it opens for the chosen minutes (or while it is used, with
+// "While I use it") and asks again. The owner, 2026-11-21: the screen had no
+// visual of how it works, and was mostly words; of three mock-ups they picked
+// this one as the clearest.
 
 type Glyph = 'hand.raised' | 'plus' | 'timer';
 
-export function SecondThoughtPicture({ openMinutes, accent }: { openMinutes: number; accent: string }) {
+export function SecondThoughtPicture({ open, accent }: { open: OpenChoice; accent: string }) {
+  const use = open === 'use';
   const { width } = useWindowDimensions();
   // The phone takes about two fifths of the card, so the lines beside it still fit on a small iPhone.
   const phoneW = Math.max(108, Math.min(140, Math.round((width - 72) * 0.42)));
@@ -22,14 +26,16 @@ export function SecondThoughtPicture({ openMinutes, accent }: { openMinutes: num
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel={`Your app asks first. Solve one sum. It opens for ${openMinutes} minutes, then it asks again.`}
+      accessibilityLabel={use ? 'Your app asks first. Solve one sum. It stays open while you use it, then it asks again.' : `Your app asks first. Solve one sum. It opens for ${open} minutes, then it asks again.`}
       style={styles.card}>
       <View style={[styles.phone, { width: phoneW, height: phoneW * 1.62, borderRadius: 24 * k, padding: 5 * k }]}>
         <View style={[styles.screen, { borderRadius: 19 * k, paddingTop: 30 * k, paddingHorizontal: 10 * k, paddingBottom: 10 * k }]}>
           <View style={[styles.island, { top: 7 * k, width: 40 * k, height: 11 * k, borderRadius: 6 * k }]} />
           <Icon name="hand.raised" size={34 * k} color={c.ink} />
           <Text style={[styles.shieldTitle, { fontSize: 13 * k, lineHeight: 16 * k, marginTop: 10 * k }]}>Second thought</Text>
-          <Text style={[styles.shieldLine, { fontSize: 9.5 * k, lineHeight: 12.5 * k, marginTop: 5 * k }]}>{`One sum, then your app opens for ${openMinutes} minutes.`}</Text>
+          <Text style={[styles.shieldLine, { fontSize: 9.5 * k, lineHeight: 12.5 * k, marginTop: 5 * k }]}>
+            {use ? 'One sum, then your app opens while you use it.' : `One sum, then your app opens for ${open} minutes.`}
+          </Text>
           <View style={{ flex: 1 }} />
           <View style={[styles.shieldButton, { height: 28 * k, borderRadius: 9 * k }]}>
             <Text style={[styles.shieldButtonText, { fontSize: 10.5 * k }]}>Not now</Text>
@@ -41,7 +47,7 @@ export function SecondThoughtPicture({ openMinutes, accent }: { openMinutes: num
       <View style={styles.lines}>
         <Line glyph="hand.raised" words="Your app asks first" />
         <Line glyph="plus" words="Solve one sum" />
-        <Line glyph="timer" words={`Open ${openMinutes} min, then it asks again`} tint={accent} />
+        <Line glyph="timer" words={use ? 'Open while you use it, then it asks again' : `Open ${open} min, then it asks again`} tint={accent} />
       </View>
     </View>
   );

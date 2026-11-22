@@ -8,8 +8,27 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { ASK_ID, ASK_OPEN, ASK_WATCH, askNotice, askShieldCopy, openUntil, type AskFirst } from '@/domain/askFirst';
-import { rgbOf, topUpWindow } from '@/domain/monitorPlan';
+import {
+  ASK_ID,
+  ASK_IDLE,
+  ASK_OPEN,
+  ASK_USE,
+  ASK_WATCH,
+  IDLE_MINUTES,
+  IDLE_SPAN_MINUTES,
+  USE_CAP_MINUTES,
+  askNotice,
+  askShieldCopy,
+  idleWindow,
+  openChoice,
+  openSpan,
+  openUntil,
+  tickOfUse,
+  usedWindow,
+  type AskFirst,
+  type OpenChoice,
+} from '@/domain/askFirst';
+import { SHORTEST_WATCH_MINUTES, rgbOf, spanOf, topUpWindow } from '@/domain/monitorPlan';
 
 import { forget, readNumber, save } from './saved';
 
@@ -37,10 +56,31 @@ export function askActive(askFirst: AskFirst | undefined): boolean {
   return askFirst?.on === true && picked() > 0;
 }
 
-/** When the list is open until, after a sum (0 when it isn't). */
+/** Every timer the list runs after a sum. */
+const OPEN_TIMERS = [ASK_OPEN, ASK_IDLE, ASK_USE];
+/** What the phone does when an open stretch is over: cover the list again, and stop the stretch's timers. */
+const COVER_AGAIN: Action[] = [
+  { type: 'blockSelection', familyActivitySelectionId: ASK_ID },
+  { type: 'stopMonitoring', activityNames: OPEN_TIMERS },
+];
+
+/**
+ * When the list is open until, after a sum (0 when it isn't). Under "While I
+ * use it" the phone covers the list again by itself once it has gone unused,
+ * and stops the stretch's timers as it does: so there the list is only still
+ * open while the phone still holds the timer.
+ */
 export function askOpenUntil(now = Date.now()): number {
   const until = readNumber('askOpenUntil');
-  return until > now ? until : 0;
+  if (until <= now) return 0;
+  if (readNumber('askOpenInUse') === 1 && AVAILABLE) {
+    try {
+      if (!DeviceActivity.getActivities().includes(ASK_OPEN)) return 0;
+    } catch {
+      // Taken as still open: the timer covers it again at the latest.
+    }
+  }
+  return until;
 }
 
 /** For the phone to run when it takes every cover off at the recharge: put this list's cover back. */
@@ -58,8 +98,8 @@ export function coverAskAgain(askFirst: AskFirst | undefined): void {
   }
 }
 
-function writeScreen(openMinutes: number, battery: AskBattery) {
-  const copy = askShieldCopy(openMinutes, battery.recharge, battery.empty);
+function writeScreen(open: OpenChoice, battery: AskBattery) {
+  const copy = askShieldCopy(open, battery.recharge, battery.empty);
   const notice = askNotice();
   const look: ShieldConfiguration = {
     title: copy.title,
@@ -103,14 +143,15 @@ export async function applyAskFirst(askFirst: AskFirst | undefined, battery: Ask
   if (!AVAILABLE) return;
   try {
     if (!askActive(askFirst)) {
-      DeviceActivity.stopMonitoring([ASK_WATCH, ASK_OPEN]);
+      DeviceActivity.stopMonitoring([ASK_WATCH, ...OPEN_TIMERS]);
       DeviceActivity.unblockSelection(SELECTION, 'plainlimit-ask');
       DeviceActivity.userDefaultsRemove(LOOK_KEY);
       DeviceActivity.userDefaultsRemove(BUTTONS_KEY);
       forget('askOpenUntil');
+      forget('askOpenInUse');
       return;
     }
-    writeScreen((askFirst as AskFirst).openMinutes, battery);
+    writeScreen(openChoice(askFirst as AskFirst), battery);
     // The phone shows a list's own screen only while an activity named for it runs.
     if (!DeviceActivity.getActivities().includes(ASK_WATCH)) {
       await DeviceActivity.startMonitoring(ASK_WATCH, { intervalStart: { hour: 0, minute: 0 }, intervalEnd: { hour: 23, minute: 59 }, repeats: true }, []);
@@ -125,37 +166,105 @@ export async function applyAskFirst(askFirst: AskFirst | undefined, battery: Ask
 export function stopAskFirst(): void {
   if (!AVAILABLE) return;
   try {
-    DeviceActivity.stopMonitoring([ASK_WATCH, ASK_OPEN]);
+    DeviceActivity.stopMonitoring([ASK_WATCH, ...OPEN_TIMERS]);
     DeviceActivity.unblockSelection(SELECTION, 'plainlimit-ask');
     forget('askOpenUntil');
+    forget('askOpenInUse');
   } catch {
     // Nothing more to do.
   }
 }
 
 /**
- * After the sum: uncovers the list and has the phone cover it again when the
- * open stretch ends, even if Plainlimit is closed by then. Returns when it is
- * open until, or null if the phone refused.
+ * "While I use it" (askFirst.ts in the domain): has the phone cover the list
+ * again once it has gone unused for `IDLE_MINUTES`, even with Plainlimit
+ * closed. Two registrations:
+ * - `ASK_IDLE`, a timer that starts `IDLE_MINUTES` from now. Its start covers
+ *   the list (the phone reports a start the first time it is used after the
+ *   start, so a phone left lying is covered as it is picked up again).
+ * - `ASK_USE`, a checkpoint at every minute the list is used. Each one stops
+ *   `ASK_IDLE` and starts it again `IDLE_MINUTES` on, from the phone's own
+ *   extension. There are `USE_CAP_MINUTES` of them, and `ASK_OPEN` ends then
+ *   too, so one sum never keeps the list open for longer than that.
+ * If the phone refuses either, the list is not left open on a timer that
+ * can't be put off: `false` and the caller opens it for the chosen minutes.
  */
-export async function openAsk(askFirst: AskFirst, nextRechargeMs: number, now = new Date()): Promise<Date | null> {
-  if (!AVAILABLE) return openUntil(now, askFirst.openMinutes, nextRechargeMs);
+async function coverWhenUnused(now: Date, until: Date): Promise<boolean> {
   try {
-    const until = openUntil(now, askFirst.openMinutes, nextRechargeMs);
-    DeviceActivity.stopMonitoring([ASK_OPEN]);
-    DeviceActivity.configureActions({
-      activityName: ASK_OPEN,
-      callbackName: 'intervalDidEnd',
-      actions: [{ type: 'blockSelection', familyActivitySelectionId: ASK_ID }, { type: 'stopMonitoring', activityNames: [ASK_OPEN] }],
-    });
-    const window = topUpWindow(until);
+    const token = DeviceActivity.getFamilyActivitySelectionId(ASK_ID);
+    if (!token) return false;
+    const minute = 60_000;
+    const putOff: Action[] = [
+      { type: 'stopMonitoring', activityNames: [ASK_IDLE] },
+      { type: 'startMonitoring', activityName: ASK_IDLE, deviceActivityEvents: [], intervalStartDelayMs: IDLE_MINUTES * minute, intervalEndDelayMs: (IDLE_MINUTES + IDLE_SPAN_MINUTES) * minute },
+    ];
+    const ticks = Array.from({ length: USE_CAP_MINUTES }, (_, i) => i + 1);
+    for (const minutes of ticks) {
+      DeviceActivity.configureActions({ activityName: ASK_USE, callbackName: 'eventDidReachThreshold', eventName: tickOfUse(minutes), actions: putOff });
+    }
+    DeviceActivity.userDefaultsClearWithPrefix(`events_${ASK_USE}`);
+    DeviceActivity.userDefaultsClearWithPrefix(`events_${ASK_IDLE}`);
+    DeviceActivity.configureActions({ activityName: ASK_IDLE, callbackName: 'intervalDidStart', actions: COVER_AGAIN });
+    const idle = idleWindow(now);
+    await DeviceActivity.startMonitoring(ASK_IDLE, { intervalStart: idle.start, intervalEnd: idle.end, repeats: false }, []);
+    const used = usedWindow(now, until, SHORTEST_WATCH_MINUTES);
+    await DeviceActivity.startMonitoring(
+      ASK_USE,
+      { intervalStart: used.start, intervalEnd: used.end, repeats: true },
+      // Only use from here on counts, not what was used earlier in the stretch.
+      ticks.map((minutes) => ({ eventName: tickOfUse(minutes), familyActivitySelection: token, threshold: spanOf(minutes), includesPastActivity: false })),
+    );
+    const held = DeviceActivity.getActivities();
+    if (held.includes(ASK_IDLE) && held.includes(ASK_USE)) return true;
+  } catch {
+    // Falls through: opened for the chosen minutes instead.
+  }
+  try {
+    DeviceActivity.stopMonitoring([ASK_IDLE, ASK_USE]);
+  } catch {
+    // Nothing more to do.
+  }
+  return false;
+}
+
+/** An open stretch: until when at the latest, and whether it is "While I use it" (covered again sooner, once the list goes unused). */
+export interface AskOpen {
+  until: Date;
+  inUse: boolean;
+}
+
+/**
+ * After the sum: uncovers the list and has the phone cover it again when the
+ * open stretch ends, even if Plainlimit is closed by then. Returns the open
+ * stretch, or null if the phone refused.
+ */
+export async function openAsk(askFirst: AskFirst, nextRechargeMs: number, now = new Date()): Promise<AskOpen | null> {
+  if (!AVAILABLE) return { until: openUntil(now, openSpan(askFirst), nextRechargeMs), inUse: askFirst.whileInUse === true };
+  try {
+    DeviceActivity.stopMonitoring(OPEN_TIMERS);
+    // "While I use it": the timers that cover it again once it goes unused. Without them it opens for the chosen minutes.
+    const inUse = askFirst.whileInUse === true && (await coverWhenUnused(now, openUntil(now, USE_CAP_MINUTES, nextRechargeMs)));
+    const until = openUntil(now, inUse ? USE_CAP_MINUTES : askFirst.openMinutes, nextRechargeMs);
+    DeviceActivity.configureActions({ activityName: ASK_OPEN, callbackName: 'intervalDidEnd', actions: COVER_AGAIN });
+    // The longer stretch of "While I use it" is given as one already running, like the shorter ones (which start in the past).
+    const window = inUse ? usedWindow(now, until, SHORTEST_WATCH_MINUTES) : topUpWindow(until);
     await DeviceActivity.startMonitoring(ASK_OPEN, { intervalStart: window.start, intervalEnd: window.end, repeats: true }, []);
     // Only uncovered once the phone holds the timer that covers it again.
-    if (!DeviceActivity.getActivities().includes(ASK_OPEN)) return null;
+    if (!DeviceActivity.getActivities().includes(ASK_OPEN)) {
+      DeviceActivity.stopMonitoring(OPEN_TIMERS);
+      return null;
+    }
     save('askOpenUntil', until.getTime());
+    save('askOpenInUse', inUse ? 1 : 0);
     DeviceActivity.unblockSelection(SELECTION, 'plainlimit-ask');
-    return until;
+    return { until, inUse };
   } catch {
+    try {
+      // Nothing is left running for a list that stayed covered.
+      DeviceActivity.stopMonitoring(OPEN_TIMERS);
+    } catch {
+      // Nothing more to do.
+    }
     return null;
   }
 }

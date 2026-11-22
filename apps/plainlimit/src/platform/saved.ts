@@ -38,6 +38,8 @@ export const SAVED = {
   roundGoalBefore: 'plainlimit_round_goal_before',
   /** While the Ask first list is open after a sum: until then (see askFirst.ts). */
   askOpenUntil: 'plainlimit_ask_open_until',
+  /** 1 while that open stretch is "While I use it": the phone covers the list again by itself once it goes unused. */
+  askOpenInUse: 'plainlimit_ask_open_in_use',
   /** When counting was first seen not working, in a run of bad checks. */
   wrongSince: 'plainlimit_wrong_since',
   /** What the widget draws from: the goal, the recharge, when counting began, and the rounds. */

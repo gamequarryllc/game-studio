@@ -166,21 +166,25 @@ export function Chevron({ color = c.ink3 }: { color?: string }) {
   return <View style={{ width: 9, height: 9, borderTopWidth: 2, borderRightWidth: 2, borderColor: color, transform: [{ rotate: '45deg' }], marginRight: 3 }} />;
 }
 
-/** A choice among a few short options, side by side: the chosen one is filled with the accent. */
+/**
+ * A choice among a few short options, side by side: the chosen one is filled
+ * with the accent. An option marked `wide` takes a row of its own under the
+ * others (a longer label that is still one of the same choices).
+ */
 export function Pills<T extends string | number>({
   options,
   chosen,
   onChange,
   accent = c.paper,
 }: {
-  options: readonly { value: T; label: string; spoken?: string; pro?: boolean }[];
+  options: readonly { value: T; label: string; spoken?: string; pro?: boolean; wide?: boolean }[];
   chosen: T;
   onChange: (value: T) => void;
   accent?: string;
 }) {
   return (
     <View accessibilityRole="radiogroup" style={styles.pills}>
-      {options.map(({ value, label, spoken, pro }) => {
+      {options.map(({ value, label, spoken, pro, wide }) => {
         const on = value === chosen;
         return (
           <Pressable
@@ -193,7 +197,7 @@ export function Pills<T extends string | number>({
               tap();
               onChange(value);
             }}
-            style={({ pressed }) => [styles.pill, on ? { backgroundColor: accent, borderColor: accent } : null, pressed ? { opacity: 0.8 } : null]}>
+            style={({ pressed }) => [styles.pill, wide ? styles.pillWide : null, on ? { backgroundColor: accent, borderColor: accent } : null, pressed ? { opacity: 0.8 } : null]}>
             <Text style={[styles.pillText, on ? { color: c.onTone } : null]}>{label}</Text>
             {pro ? <ProBadge /> : null}
           </Pressable>
@@ -273,8 +277,9 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 16, color: c.ink3, flexShrink: 1 },
   choice: { minHeight: 62, borderRadius: 16, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, paddingVertical: 11, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   check: { width: 8, height: 15, borderRightWidth: 2.5, borderBottomWidth: 2.5, transform: [{ rotate: '45deg' }], marginRight: 4, marginTop: -4 },
-  pills: { flexDirection: 'row', gap: 8 },
-  pill: { flex: 1, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pill: { flexGrow: 1, flexShrink: 1, flexBasis: 0, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
+  pillWide: { flexBasis: '100%' },
   pillText: { fontSize: 16, fontWeight: '600', color: c.ink2 },
   tag: { borderWidth: 1, borderColor: c.ink3, borderRadius: 8, paddingVertical: 3, paddingHorizontal: 8 },
   tagText: { fontSize: 12, fontWeight: '600', color: c.ink2 },

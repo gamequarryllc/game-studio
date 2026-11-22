@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { askLead, DEFAULT_ASK_FIRST, opensCountedApps } from '@/domain/askFirst';
+import { askLead, askOpened, DEFAULT_ASK_FIRST, openChoice, opensCountedApps } from '@/domain/askFirst';
 import { cellsLeft } from '@/domain/battery';
 import { clockLabel, clockLabelOf } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { isRight, makeRandom, makeSums, type Sum } from '@/domain/puzzle';
 import { success, warning } from '@/platform/haptics';
 import { sumLevelFor } from '@/domain/pro';
+import type { AskOpen } from '@/platform/askFirst';
 import { store } from '@/state/store';
 import { BigButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
@@ -26,7 +27,7 @@ export default function Ask() {
   const [sum] = useState<Sum>(() => makeSums(1, makeRandom(Date.now()), sumLevelFor(settings, store.hasPro()))[0]);
   const [typed, setTyped] = useState('');
   const [wrong, setWrong] = useState(false);
-  const [openUntil, setOpenUntil] = useState<Date | null>(null);
+  const [opened, setOpened] = useState<AskOpen | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -35,16 +36,18 @@ export default function Ask() {
   const empty = cellsLeft(day.usedMinutes, settings.goalMinutes) === 0;
   const opensCounted = opensCountedApps(empty, isUnlocked(day, now));
 
-  if (openUntil || failed) {
+  if (opened || failed) {
+    // "While I use it" only where the phone took its timers; otherwise it opened for the chosen minutes.
+    const words = opened ? askOpened(opened.inUse ? 'use' : ask.openMinutes, clockLabelOf(opened.until)) : null;
     return (
       <View style={[styles.page, frame]}>
         <View style={{ gap: 12 }}>
           <Text accessibilityRole="header" style={styles.title}>
-            {openUntil ? `Open for ${ask.openMinutes} minutes` : 'Not opened'}
+            {words ? words.title : 'Not opened'}
           </Text>
           <Text style={styles.lead}>
-            {openUntil
-              ? `Your Second thought apps are open until ${clockLabelOf(openUntil)}. Go back to the one you wanted.${opensCounted ? '' : ` Apps that also count stay locked, as the battery is empty.`}`
+            {words
+              ? `${words.line}${opensCounted ? '' : ` Apps that also count stay locked, as the battery is empty.`}`
               : 'The phone didn’t take the timer, so the apps stay covered. Try again in a moment.'}
           </Text>
         </View>
@@ -62,10 +65,10 @@ export default function Ask() {
     }
     setBusy(true);
     try {
-      const until = await store.openAskFirst();
-      if (until) {
+      const open = await store.openAskFirst();
+      if (open) {
         success();
-        setOpenUntil(until);
+        setOpened(open);
       } else {
         setFailed(true);
       }
@@ -81,7 +84,7 @@ export default function Ask() {
           <Text accessibilityRole="header" style={styles.title}>
             One sum to open
           </Text>
-          <Text style={styles.lead}>{askLead(ask.openMinutes, opensCounted, clockLabel(settings.rechargeMinute))}</Text>
+          <Text style={styles.lead}>{askLead(openChoice(ask), opensCounted, clockLabel(settings.rechargeMinute))}</Text>
         </View>
 
         <Text accessibilityLabel={`${sum.a} plus ${sum.b}`} numberOfLines={1} adjustsFontSizeToFit style={styles.sum}>

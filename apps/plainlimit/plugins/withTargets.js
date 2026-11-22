@@ -53,7 +53,9 @@ function patchMonitor(file) {
     const call = `notifyAppWithName(name: "${name}")`;
     const asked = 'userDefaults?.set((Date().timeIntervalSince1970 * 1000).rounded(), forKey: "plainlimit_reload_asked")';
     // The minute checkpoints ("plmin") change nothing the widget draws, so they do not spend its redraws.
-    const redraw = `if activity.rawValue != "plmin" {\n      ${asked}\n      WidgetCenter.shared.reloadAllTimelines()\n      Thread.sleep(forTimeInterval: 0.5)\n    }`;
+    // Nor do Second thought's timers (names starting "plask"): "While I use it" counts every minute of use,
+    // and a day of opening apps that way would use up the redraws the battery needs.
+    const redraw = `if activity.rawValue != "plmin" && !activity.rawValue.hasPrefix("plask") {\n      ${asked}\n      WidgetCenter.shared.reloadAllTimelines()\n      Thread.sleep(forTimeInterval: 0.5)\n    }`;
     source = replaceOnce(source, call, `${call}\n    ${redraw}`, call);
   }
   fs.writeFileSync(file, source);
@@ -70,7 +72,7 @@ module.exports = function withTargets(config) {
   // leaves each target's entitlements file in it, and a build in progress is
   // reading these files.
   const version = require(path.join(library, 'package.json')).version;
-  const stamp = `react-native-device-activity ${version}, patch 5\n`;
+  const stamp = `react-native-device-activity ${version}, patch 7\n`;
   for (const name of EXTENSIONS) {
     const to = path.join(targets, name);
     const marker = path.join(to, '.prepared');

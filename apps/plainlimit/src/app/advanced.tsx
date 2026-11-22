@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { clockLabel, clockLabelOf } from '@/domain/day';
 import { goalFree } from '@/domain/goal';
 import { batteryEnd, chosenRecharge } from '@/domain/recharge';
-import { ASK_ID, DEFAULT_ASK_FIRST, askShownOn } from '@/domain/askFirst';
+import { ASK_ID, DEFAULT_ASK_FIRST, askShownOn, openShort } from '@/domain/askFirst';
 import { sumLevelFor } from '@/domain/pro';
 import type { SumLevel } from '@/domain/puzzle';
 import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenTime';
@@ -34,7 +34,7 @@ export default function Advanced() {
   const firstDay = goalFree(useDoc());
   const ask = settings.askFirst ?? DEFAULT_ASK_FIRST;
   // On only with apps picked, as on the Second thought screen's switch.
-  const askValue = askShownOn(ask, pickCount(ASK_ID), SCREEN_TIME_AVAILABLE || MOCK_PHONE) ? `On, ${ask.openMinutes} min` : 'Off';
+  const askValue = askShownOn(ask, pickCount(ASK_ID), SCREEN_TIME_AVAILABLE || MOCK_PHONE) ? `On, ${openShort(ask)}` : 'Off';
   const level = sumLevelFor(settings, isPro);
   // Easy and hard sums are Pro: without it, choosing one shows what Pro adds.
   const choose = (next: SumLevel) => (next === 'normal' || isPro ? store.setSumLevel(next) : router.push('/pro'));
