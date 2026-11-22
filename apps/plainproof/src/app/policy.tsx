@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 
 import { addPolicyDocuments, removePolicyDocument, updatePolicy, updateProfile } from '@/domain/actions';
-import { ASK_ABOUT_CENTS, OFTEN_LIMITED, coverage } from '@/domain/coverage';
+import { OFTEN_LIMITED, TYPICAL_LIMITS, coverage } from '@/domain/coverage';
 import { displayTime } from '@/domain/dates';
 import { newId } from '@/domain/ids';
-import { formatMoney } from '@/domain/money';
+import { centsToInput, formatMoney, tidyMoneyInput } from '@/domain/money';
 import { formatBytes, plural, unitCents } from '@/domain/selectors';
 import { CATEGORIES, CATEGORY_LABELS, LIMITS, type Attachment, type Category } from '@/domain/types';
 import { importFile, importPageImage, previewAttachment } from '@/platform/attachments';
@@ -182,7 +182,7 @@ export default function PolicyScreen() {
         {limitKinds.map((k, i) => (
           <View key={k}>
             {i > 0 ? <Divider /> : null}
-            <MoneyRow testID={`policy-limit-${k}`} label={CATEGORY_LABELS[k]} cents={policy.categoryLimits[k] ?? null} onChange={(cents) => setLimit(k, cents)} currency={currency} placeholder="None stated" />
+            <MoneyRow testID={`policy-limit-${k}`} label={CATEGORY_LABELS[k]} cents={policy.categoryLimits[k] ?? null} onChange={(cents) => setLimit(k, cents)} currency={currency} placeholder={TYPICAL_LIMITS[k] !== undefined ? `Often ${tidyMoneyInput(centsToInput(TYPICAL_LIMITS[k]))}` : 'None stated'} />
           </View>
         ))}
         {otherKinds.length > 0 ? (
@@ -192,7 +192,7 @@ export default function PolicyScreen() {
           </>
         ) : null}
       </Card>
-      <Footnote>Many policies pay only up to a set amount for jewelry, art, instruments or sports gear, most of all after a theft, unless each piece is listed on the policy. Look for “special limits” or “sub-limits”.</Footnote>
+      <Footnote>Most policies pay only up to a set amount for jewelry, firearms, silverware, collectibles and business equipment, most of all after a theft, unless each piece is listed on the policy. Look for “special limits” in yours; the amounts shown are the usual ones, not your policy’s.</Footnote>
 
       <SectionLabel>Coverage check</SectionLabel>
       <Card style={{ padding: space.l, gap: space.s }}>
@@ -253,7 +253,7 @@ export default function PolicyScreen() {
             ))}
           </Card>
           <Footnote>
-            {`Each of these is worth its kind’s special limit or more on its own (${money(ASK_ABOUT_CENTS)} where no limit is typed in, for kinds policies often limit). Insurers can list such pieces on the policy by name, a “scheduled item” or “rider”, so they are covered in full.`}
+            {`Each of these is worth its kind’s special limit or more on its own (the usual limit where none is typed in). Insurers can list such pieces on the policy by name, a “scheduled item” or “rider”, so they are covered in full.`}
           </Footnote>
         </>
       ) : null}

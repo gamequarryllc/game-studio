@@ -6,14 +6,28 @@ import { CATEGORIES, type Category, type Doc, type Item } from './types';
 // points at numbers worth asking the insurer about.
 
 /**
- * Kinds of things standard home policies often cover only up to a lower
- * amount, most of all for theft, unless each item is listed on the policy
- * ("scheduled"). Shown as a hint when no limit has been typed in.
+ * Kinds of things standard home policies cover only up to a lower amount,
+ * most of all for theft, unless each item is listed on the policy
+ * ("scheduled"), with the amount the standard form sets (ISO HO 3 special
+ * limits: jewelry, watches and furs $1,500 for theft; firearms, silverware,
+ * trading cards and comics, and business property at home $2,500; some forms
+ * also cap rugs, fine art and instruments at $5,000 an item). Policies differ,
+ * so these are only hints: shown on the policy screen, and used to pick out
+ * single things worth asking about when no limit has been typed in.
  */
-export const OFTEN_LIMITED: readonly Category[] = ['jewelry', 'art', 'music', 'sports'];
+export const TYPICAL_LIMITS: Readonly<Partial<Record<Category, number>>> = {
+  jewelry: 150_000,
+  firearms: 250_000,
+  silver: 250_000,
+  collectibles: 250_000,
+  business: 250_000,
+  rugs: 500_000,
+  art: 500_000,
+  music: 500_000,
+};
 
-/** The amount at which a single thing in one of those kinds is worth asking about. */
-export const ASK_ABOUT_CENTS = 150_000;
+/** The kinds a policy often limits, in the order of the category list. */
+export const OFTEN_LIMITED: readonly Category[] = CATEGORIES.filter((k) => TYPICAL_LIMITS[k] !== undefined);
 
 export interface CategoryCoverage {
   category: Category;
@@ -52,7 +66,7 @@ export function coverage(doc: Doc): Coverage {
     if (items.length === 0 || category === null) continue;
     const total = items.reduce((n, i) => n + itemTotalCents(i), 0);
     const limitCents = doc.policy.categoryLimits[category] ?? null;
-    const threshold = limitCents ?? (OFTEN_LIMITED.includes(category) ? ASK_ABOUT_CENTS : null);
+    const threshold = limitCents ?? TYPICAL_LIMITS[category] ?? null;
     const bigItems = threshold === null ? [] : items.filter((i) => (unitCents(i) ?? 0) >= threshold);
     toSchedule.push(...bigItems);
     byCategory.push({ category, count: items.length, totalCents: total, limitCents, over: limitCents !== null && total > limitCents, bigItems });

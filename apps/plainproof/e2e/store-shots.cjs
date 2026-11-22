@@ -53,7 +53,7 @@ const THINGS = [
   ['Microwave oven', 'Kitchen', 'Appliances', '159', 'Norvik', 'MW-1100', 'NVMW11-60233', ''],
   ['Queen mattress', 'Bedroom', 'Furniture', '795', 'Driftwell', 'Hybrid', '', ''],
   ['Six-drawer dresser', 'Bedroom', 'Furniture', '420', 'Fieldhouse', 'Lowe', '', ''],
-  ['Automatic wristwatch', 'Bedroom', 'Jewelry and watches', '650', 'Halden', 'Field 38', '', ''],
+  ['Automatic wristwatch', 'Bedroom', 'Jewelry, watches and furs', '650', 'Halden', 'Field 38', '', ''],
   ['14-inch laptop', 'Home office', 'Electronics', '1299', 'Orchard', 'Pro 14', 'C02XK4Q7ORCH', 'laptop.jpg'],
   ['27-inch monitor', 'Home office', 'Electronics', '329', 'Dellan', 'U2724', 'DL27-88410-TQ', ''],
   ['Mesh task chair', 'Home office', 'Furniture', '289', 'Hartwell', 'Aero B', '', ''],
