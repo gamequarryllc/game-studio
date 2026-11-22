@@ -4,20 +4,23 @@ import FamilyControls
 import ManagedSettings
 import SwiftUI
 
-// Two pictures for Today, both as Apple's Screen Time counts:
+// The pictures the app asks for, all as Apple's Screen Time counts:
 //   TopApps  the "what used it" list: the apps that used the most time since the
 //            battery last recharged.
-//   Average  for setup: the counted apps' use over the seven days before
-//            today, a day on average, to help pick a goal.
 //   Total    the day's figure: every minute the counted apps have been used
 //            since the recharge, to the minute, added up app by app. The app
 //            itself only learns use in steps, so this is the exact number the
 //            person sees.
-//   Week4, Week6, Week8, Week12
-//            for setup: the seven days before today as seven bars on an hour
-//            scale of 4, 6, 8 or 12 hours, each with its time, and a goal to
-//            try about 15% under the average. The app picks the scale and
-//            draws the goal's line over the chart itself.
+//   Setup4, Setup6, Setup8, Setup12
+//            for setup's "How much a day?", in one picture: today's figure,
+//            the daily average over the seven days before today, and those
+//            seven days as bars on an hour scale of 4, 6, 8 or 12 hours, each
+//            with its time, and a goal to try about 15% under the average.
+//            The app picks the scale, lays its labels in the gaps and draws
+//            the goal's line over the chart itself. These were three pictures
+//            (Total, Average, Week), each read from the phone on its own: on
+//            a fresh install the average came first and the rest took about a
+//            minute (the owner, build 138). One picture is one reading.
 //   FirstApps for Second thought: the apps opened first after picking up the
 //            phone over the last seven days, as Screen Time's "First Used
 //            After Pickup", so the person sees which apps to pick.
@@ -40,11 +43,10 @@ struct UsageSummary {
 extension DeviceActivityReport.Context {
   static let topApps = Self("TopApps")
   static let total = Self("Total")
-  static let average = Self("Average")
-  static let week4 = Self("Week4")
-  static let week6 = Self("Week6")
-  static let week8 = Self("Week8")
-  static let week12 = Self("Week12")
+  static let setup4 = Self("Setup4")
+  static let setup6 = Self("Setup6")
+  static let setup8 = Self("Setup8")
+  static let setup12 = Self("Setup12")
   static let firstApps = Self("FirstApps")
 }
 
@@ -198,27 +200,6 @@ struct TotalReport: DeviceActivityReportScene {
   }
 }
 
-struct AverageReport: DeviceActivityReportScene {
-  let context: DeviceActivityReport.Context = .average
-  let content: (TimeInterval) -> TotalView
-
-  func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
-    -> TimeInterval {
-    var seconds: TimeInterval = 0
-    for await device in data {
-      for await segment in device.activitySegments {
-        for await category in segment.categories {
-          for await app in category.applications {
-            seconds += app.totalActivityDuration
-          }
-        }
-      }
-    }
-    // The app asks for the seven days before today.
-    return seconds / 7
-  }
-}
-
 /// The seven days before today, oldest first, drawn against a scale of `hours`.
 struct WeekUse {
   let days: [TimeInterval]
@@ -236,24 +217,42 @@ private let weekBottom: CGFloat = 22
 private let weekAxis: CGFloat = 30
 private let weekRight: CGFloat = 44
 
+// Setup's one picture, top to bottom (src/ui/UsageReport.tsx, SETUP, keeps
+// the same numbers): room for the app's labels, the two figures side by side,
+// room for the app's "Last 7 days", then the chart.
+private let setupFigureTop: CGFloat = 20
+private let setupFigureHeight: CGFloat = 52
+private let setupFigureGap: CGFloat = 12
+private let setupChartTop: CGFloat = 112
+private let setupChartHeight: CGFloat = 150
+
 private let sevenDays: TimeInterval = 7 * 24 * 3600
 
-struct WeekReport: DeviceActivityReportScene {
+/// What setup's picture shows: today so far, and the seven days before it.
+struct SetupUse {
+  let today: TimeInterval
+  let week: WeekUse
+}
+
+struct SetupReport: DeviceActivityReportScene {
   let context: DeviceActivityReport.Context
-  /// The top of the scale, in hours. The app picks the scale from the goal, so
-  /// its line falls inside the chart; this report is never told the goal (the
-  /// phone keeps it sealed off from anything but the window and the apps).
+  /// The top of the chart's scale, in hours. The app picks the scale from the
+  /// goal, so its line falls inside the chart; this report is never told the
+  /// goal (the phone keeps it sealed off from anything but the window and the apps).
   let hours: Int
-  let content: (WeekUse) -> WeekBarsView
+  let content: (SetupUse) -> SetupView
 
   func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
-    -> WeekUse {
-    // The days are counted back from the window's end, the battery's recharge.
+    -> SetupUse {
+    // The window runs from seven days before today's recharge to the next
+    // recharge: its first seven days are the bars, and what comes after is today.
     var window: DateInterval?
     var hourly: [(start: Date, seconds: TimeInterval)] = []
     for await device in data {
       if case .hourly(during: let interval) = device.segmentInterval { window = interval }
       for await segment in device.activitySegments {
+        // Added up app by app: a segment's own total is all screen-on time and
+        // ignores which apps are ticked (see TotalReport).
         var seconds: TimeInterval = 0
         for await category in segment.categories {
           for await app in category.applications {
@@ -263,17 +262,21 @@ struct WeekReport: DeviceActivityReportScene {
         hourly.append((segment.dateInterval.start, seconds))
       }
     }
-    let end = window?.end ?? hourly.map { $0.start.addingTimeInterval(3600) }.max() ?? Date()
-    let start = end.addingTimeInterval(-sevenDays)
+    let start = window?.start ?? hourly.map { $0.start }.min() ?? Date().addingTimeInterval(-sevenDays)
     var days = [TimeInterval](repeating: 0, count: 7)
+    var today: TimeInterval = 0
     for hour in hourly {
       let day = Int((hour.start.timeIntervalSince(start) / 86400).rounded(.down))
-      if day >= 0 && day < 7 { days[day] += hour.seconds }
+      if day >= 0 && day < 7 {
+        days[day] += hour.seconds
+      } else if day >= 7 {
+        today += hour.seconds
+      }
     }
     let letter = DateFormatter()
     letter.dateFormat = "EEEEE"
     let letters = (0..<7).map { letter.string(from: start.addingTimeInterval(Double($0) * 86400 + 43200)) }
-    return WeekUse(days: days, letters: letters, hours: hours)
+    return SetupUse(today: today, week: WeekUse(days: days, letters: letters, hours: hours))
   }
 }
 
@@ -290,7 +293,7 @@ func suggestedGoal(_ days: [TimeInterval]) -> TimeInterval? {
   return tried < average ? tried : nil
 }
 
-/// Seven bars on an hour scale, each with its time over it and its day under it.
+/// Seven bars on an hour scale, each with its time over it and its day under it. Fills the frame it is given.
 struct WeekBarsView: View {
   let use: WeekUse
 
@@ -373,7 +376,53 @@ struct WeekBarsView: View {
       }
       .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+}
+
+/// A length of time in the app's display face, as tall as the app's box for a figure, kept to the left.
+struct FigureText: View {
+  let seconds: TimeInterval
+
+  var body: some View {
+    HStack(spacing: 0) {
+      Text(clockWords(seconds))
+        .font(displayFace.map { Font.custom($0, size: 48) } ?? .system(size: 48, weight: .bold))
+        .tracking(-1.6)
+        .foregroundStyle(ink)
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+      Spacer(minLength: 0)
+    }
+    .frame(height: 52, alignment: .leading)
+  }
+}
+
+/// Setup's picture: today's figure and the daily average side by side, then
+/// the chart, each where the app has left room for it. Everything keeps to the
+/// top left of whatever size iOS gives this view (see TotalView and
+/// FirstAppsView for what happens otherwise).
+struct SetupView: View {
+  let use: SetupUse
+
+  private var average: TimeInterval { use.week.days.reduce(0, +) / 7 }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: setupFigureGap) {
+        FigureText(seconds: use.today)
+          .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        FigureText(seconds: average)
+          .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+      }
+      .frame(height: setupFigureHeight)
+      .padding(.top, setupFigureTop)
+      WeekBarsView(use: use.week)
+        .frame(height: setupChartHeight)
+        .padding(.top, setupChartTop - setupFigureTop - setupFigureHeight)
+      Spacer(minLength: 0)
+    }
+    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
     .background(ground)
     .ignoresSafeArea()
   }
@@ -489,23 +538,13 @@ struct TotalView: View {
   // before the box had its size (the owner's phone, build 75: "2:06" with its
   // top half cut off, right a moment later).
   var body: some View {
-    HStack(spacing: 0) {
-      Text(clockWords(seconds))
-        .font(displayFace.map { Font.custom($0, size: 48) } ?? .system(size: 48, weight: .bold))
-        .tracking(-1.6)
-        .foregroundStyle(ink)
-        .monospacedDigit()
-        .lineLimit(1)
-        .minimumScaleFactor(0.6)
-      Spacer(minLength: 0)
-    }
-    .frame(height: 52, alignment: .leading)
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .background(ground)
-    // This process lays the view out in its own window and can give it a top
-    // inset, which drew the figure about 30 points low and cut it in half
-    // (build 86, "2:45", now and then). No inset here, so it keeps to the top.
-    .ignoresSafeArea()
+    FigureText(seconds: seconds)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      .background(ground)
+      // This process lays the view out in its own window and can give it a top
+      // inset, which drew the figure about 30 points low and cut it in half
+      // (build 86, "2:45", now and then). No inset here, so it keeps to the top.
+      .ignoresSafeArea()
   }
 }
 
@@ -518,20 +557,17 @@ struct PlainlimitReport: DeviceActivityReportExtension {
     TotalReport { seconds in
       TotalView(seconds: seconds)
     }
-    AverageReport { seconds in
-      TotalView(seconds: seconds)
+    SetupReport(context: .setup4, hours: 4) { use in
+      SetupView(use: use)
     }
-    WeekReport(context: .week4, hours: 4) { use in
-      WeekBarsView(use: use)
+    SetupReport(context: .setup6, hours: 6) { use in
+      SetupView(use: use)
     }
-    WeekReport(context: .week6, hours: 6) { use in
-      WeekBarsView(use: use)
+    SetupReport(context: .setup8, hours: 8) { use in
+      SetupView(use: use)
     }
-    WeekReport(context: .week8, hours: 8) { use in
-      WeekBarsView(use: use)
-    }
-    WeekReport(context: .week12, hours: 12) { use in
-      WeekBarsView(use: use)
+    SetupReport(context: .setup12, hours: 12) { use in
+      SetupView(use: use)
     }
     FirstAppsReport { apps in
       FirstAppsView(apps: apps)

@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import type { Settings } from '@/domain/types';
-import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, averageWindow, pickupWindow, reportWindow } from '@/platform/screenTime';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, pickupWindow, reportWindow, setupWindow } from '@/platform/screenTime';
 import { Label } from '@/ui/kit';
 import { durationLabel } from '@/domain/day';
 import { useReducedMotion } from '@/ui/motion';
@@ -16,7 +16,7 @@ interface NativeProps {
   toMs: number;
   selection: string | null;
   /** Which of the extension's reports: the list, or the day's total. */
-  context?: 'TopApps' | 'Total' | 'Average' | `Week${WeekHours}` | 'FirstApps';
+  context?: 'TopApps' | 'Total' | `Setup${WeekHours}` | 'FirstApps';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -57,7 +57,7 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
  * A figure drawn by the phone's Screen Time over `fallback` (shown until it has
  * drawn, and wherever it can't). Plainlimit never learns the number it shows.
  */
-function PhoneFigure({ context, fromMs, toMs, selection, fallback, style }: { context: 'Total' | 'Average'; fromMs: number; toMs: number; selection: string; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
+function PhoneFigure({ context, fromMs, toMs, selection, fallback, style }: { context: 'Total'; fromMs: number; toMs: number; selection: string; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
   if (!NativeReport) return <View style={style}>{fallback}</View>;
   return (
     <View pointerEvents="none" style={[{ height: 52, alignSelf: 'stretch' }, style]}>
@@ -82,32 +82,56 @@ export function TodayTotal({ settings, now, fallback, style }: { settings: Setti
   return <PhoneFigure context="Total" fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} fallback={fallback} style={style} />;
 }
 
-/** The counted apps' use over the seven days before today, a day on average, drawn by the phone. For picking a goal. */
-export function WeekAverage({ settings, now, fallback, style }: { settings: Settings; now: Date; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const window = SCREEN_TIME_AVAILABLE && NativeReport ? averageWindow(settings, now) : null;
-  if (!window || !window.selection) return <View style={style}>{fallback}</View>;
-  return <PhoneFigure context="Average" fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} fallback={fallback} style={style} />;
-}
-
 /**
- * The seven days before today as bars, each with its time, on an hour scale:
- * drawn by the phone (targets/report, WeekReport). The goal's dashed line and
- * the shaded "would lock" zone above it are the app's own, laid over the
- * chart, so they move as soon as the goal changes, and the bars stay as they
- * are. (Build 120 asked the phone to draw the line, passing the goal through
- * the window's length; the phone never got it, and the chart showed bare
- * bars.)
+ * Setup's "How much a day?" figures, in one picture drawn by the phone
+ * (targets/report, SetupReport): today's figure, the daily average over the
+ * seven days before today, and those seven days as bars, each with its time,
+ * on an hour scale. The labels, the goal's dashed line and the shaded "would
+ * lock" zone above it are the app's own, laid over the picture, so the line
+ * moves as soon as the goal changes and the bars stay as they are. (Build 120
+ * asked the phone to draw the line, passing the goal through the window's
+ * length; the phone never got it, and the chart showed bare bars.)
+ *
+ * Up to build 138 these were three pictures, each read from the phone on its
+ * own, the week twice over. On a fresh install the average came first and the
+ * other two took about a minute (the owner). One picture is one reading, and
+ * it all arrives together.
  */
-export function WeekBars({ settings, now, fallback }: { settings: Settings; now: Date; fallback: ReactNode }) {
+export function SetupFigures({ settings, now, todayLabel }: { settings: Settings; now: Date; todayLabel: string }) {
   // The scale is picked once, as the screen opens, and never changes while it is open (see `weekScale`), so the stepper only moves the line.
   const [hours] = useState(() => weekScale(settings.goalMinutes));
-  const window = SCREEN_TIME_AVAILABLE && NativeReport ? averageWindow(settings, now) : null;
-  if (!NativeReport || !window || !window.selection) return <View>{fallback}</View>;
+  const window = SCREEN_TIME_AVAILABLE && NativeReport ? setupWindow(settings, now) : null;
+  if (!NativeReport || !window || !window.selection) return null;
   return (
-    <View pointerEvents="none" style={{ height: WEEK.height, alignSelf: 'stretch' }}>
-      <WeekLoading />
-      <NativeReport context={`Week${hours}`} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
-      <GoalLine goalMinutes={settings.goalMinutes} hours={hours} />
+    <View pointerEvents="none" style={{ height: SETUP.height, alignSelf: 'stretch' }}>
+      {/* Under the phone's picture, and covered by it once drawn: dots where the figures go, stand-in bars where the chart goes. */}
+      <View style={[setup.row, { top: SETUP.figureTop }]}>
+        <View style={setup.half}>
+          <WaitingDots />
+        </View>
+        <View style={setup.half}>
+          <WaitingDots />
+        </View>
+      </View>
+      <View style={setup.chart}>
+        <WeekLoading />
+      </View>
+      <NativeReport context={`Setup${hours}`} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
+      {/* Over the picture, in the room it leaves: the labels, and the goal's line on the chart. */}
+      <View style={[setup.row, { top: 0 }]}>
+        <Text numberOfLines={1} style={[setup.label, setup.half]}>
+          {todayLabel}
+        </Text>
+        <Text numberOfLines={1} style={[setup.label, setup.half]}>
+          Daily average
+        </Text>
+      </View>
+      <Text numberOfLines={1} style={[setup.label, { position: 'absolute', left: 0, right: 0, top: SETUP.weekLabelTop }]}>
+        Last 7 days
+      </Text>
+      <View style={setup.chart}>
+        <GoalLine goalMinutes={settings.goalMinutes} hours={hours} />
+      </View>
       <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
     </View>
   );
@@ -115,6 +139,20 @@ export function WeekBars({ settings, now, fallback }: { settings: Settings; now:
 
 /** The phone's chart: its height and, as in targets/report (weekTop, weekBottom, weekAxis, weekRight), the room over and under the bars, the hour scale's column, and the column on the right for the phone's goal to try. */
 export const WEEK = { height: 150, top: 20, bottom: 22, axis: 30, right: 44 } as const;
+
+/**
+ * Setup's one picture, top to bottom, as in targets/report (setupFigureTop,
+ * setupFigureGap, setupChartTop): a line of labels, the two figures side by
+ * side (each 52 high, a gap between), the "Last 7 days" label, the chart.
+ */
+export const SETUP = { labelHeight: 16, figureTop: 20, figureGap: 12, weekLabelTop: 84, chartTop: 112, height: 112 + WEEK.height } as const;
+
+const setup = StyleSheet.create({
+  row: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', gap: SETUP.figureGap },
+  half: { flex: 1 },
+  label: { fontSize: 13, lineHeight: SETUP.labelHeight, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: c.ink3 },
+  chart: { position: 'absolute', left: 0, right: 0, top: SETUP.chartTop, height: WEEK.height },
+});
 
 /** Rough heights for the stand-in bars, as parts of the chart. */
 const STAND_IN = [0.55, 0.45, 0.28, 0.5, 0.62, 0.34, 0.48];
@@ -162,12 +200,14 @@ function WeekLoading() {
       <View style={[loading.base, { top: WEEK.top + plot }]} />
       {/* Low in the chart: the goal's line, which the app lays over this, opens in the upper two thirds. */}
       <View style={[loading.low, { top: WEEK.top, height: plot }]}>
-        <View accessible accessibilityRole="progressbar" accessibilityLabel={slow ? 'Still loading your last 7 days. You can pick a goal without them.' : 'Loading your last 7 days'} style={loading.tag}>
+        <View accessible accessibilityRole="progressbar" accessibilityLabel={slow ? 'Still loading your last 7 days. The first time can take a minute. You can pick a goal without them.' : 'Loading your last 7 days'} style={loading.tag}>
           <View style={loading.tagRow}>
             <Text style={loading.tagText}>{slow ? 'Still loading' : 'Loading your last 7 days'}</Text>
             <WaitingDots size={5} height={10} />
           </View>
-          {slow ? <Text style={loading.slowText}>You can pick a goal without it.</Text> : null}
+          {/* Said plainly: the phone's first drawing after an install is slow, and the app can't hurry it or tell how far along it is.
+              One line, so the tag stays under the goal's line (the stepper and Next say for themselves that a goal can be picked). */}
+          {slow ? <Text style={loading.slowText}>The first time can take a minute.</Text> : null}
         </View>
       </View>
     </View>

@@ -1038,11 +1038,16 @@ export function reportWindow(settings: Settings, now: Date): { fromMs: number; t
   return { fromMs: from.getTime(), toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: token, fromRecharge: from.getTime() === periodStart.getTime() };
 }
 
-/** The seven days before today's battery, for the phone's 7-day average in setup. */
-export function averageWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
+/**
+ * The seven days before today's battery and today's battery itself, for the
+ * phone's one picture in setup (today's figure, the 7-day average and the
+ * chart; targets/report/PlainlimitReport.swift, SetupReport). The report takes
+ * the first seven days from the start as the week and the rest as today.
+ */
+export function setupWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
   const periodStart = periodStartOf(now, settings.rechargeMinute);
   const token = SCREEN_TIME_AVAILABLE ? countedToken() : null;
-  return { fromMs: periodStart.getTime() - 7 * 24 * 3600 * 1000, toMs: periodStart.getTime(), selection: token };
+  return { fromMs: periodStart.getTime() - 7 * 24 * 3600 * 1000, toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: token };
 }
 
 /**

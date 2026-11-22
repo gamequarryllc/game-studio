@@ -13,7 +13,7 @@ import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
-import { TodayTotal, WeekAverage, WeekBars } from '@/ui/UsageReport';
+import { SetupFigures, TodayTotal } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
 import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
 import { useDay } from '@/ui/useDay';
@@ -197,18 +197,8 @@ export default function Setup() {
         accessibilityElementsHidden={step !== 'goal'}
         importantForAccessibility={step === 'goal' ? 'auto' : 'no-hide-descendants'}
         style={[styles.figureBox, { gap: 12 }, step === 'goal' ? null : styles.parked]}>
-        <View style={styles.figures}>
-          <View style={styles.figure}>
-            <Text style={styles.figureLabel}>{`Since ${recharge}`}</Text>
-            <TodayTotal settings={settings} now={now} fallback={<WaitingDots />} />
-          </View>
-          <View style={styles.figure}>
-            <Text style={styles.figureLabel}>Daily average</Text>
-            <WeekAverage settings={settings} now={now} fallback={<WaitingDots />} />
-          </View>
-        </View>
-        <Text style={styles.figureLabel}>Last 7 days</Text>
-        <WeekBars settings={settings} now={now} fallback={<WaitingDots />} />
+        {/* One picture from the phone for both figures and the chart, so they arrive together (UsageReport.tsx). */}
+        <SetupFigures settings={settings} now={now} todayLabel={`Since ${recharge}`} />
         <Text style={styles.note}>{`Days start at ${recharge}. Essentials not counted.`}</Text>
       </View>
     ) : null;
