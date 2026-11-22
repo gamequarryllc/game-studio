@@ -46,7 +46,7 @@ function fakeAsk(): Fake {
   return {
     __esModule: true,
     applyAskFirst: jest.fn(async () => {}),
-    openAsk: jest.fn(async () => new Date(Date.now() + 10 * 60_000)),
+    openAsk: jest.fn(async () => ({ until: new Date(Date.now() + 10 * 60_000), inUse: false })),
   };
 }
 
@@ -478,6 +478,21 @@ describe('Ask first', () => {
     expect(store.get().doc.settings.askFirst?.on).toBe(false);
   });
 
+  it('"While I use it" is one of the open choices: kept, sent to the phone, and a number chosen later takes its place', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    const { store } = load(phone, saved(30), ask);
+    await store.start();
+    store.setAskFirst({ on: true, openMinutes: 15 });
+    store.setAskFirst({ whileInUse: true });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15, whileInUse: true });
+    expect(ask.applyAskFirst).toHaveBeenLastCalledWith({ on: true, openMinutes: 15, whileInUse: true }, { empty: false, recharge: expect.any(String) });
+    await store.openAskFirst();
+    expect(ask.openAsk).toHaveBeenLastCalledWith({ on: true, openMinutes: 15, whileInUse: true }, expect.any(Number), expect.any(Date));
+    store.setAskFirst({ openMinutes: 5, whileInUse: false });
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 5, whileInUse: false });
+  });
+
   it('is left alone while counting is off', async () => {
     const phone = fakePhone();
     const ask = fakeAsk();
@@ -538,6 +553,15 @@ describe('emergency passes', () => {
     // Not twice in a battery's day, whatever is in the bank.
     expect(store.usePass()).toBe(false);
     expect(store.passCheck()).toBe('running');
+  });
+
+  it('a pass opens the Second thought apps for its 15 minutes, whatever their own open choice', async () => {
+    const phone = fakePhone();
+    const ask = fakeAsk();
+    const { store } = load(phone, saved(180, { settings: { goalMinutes: 180, rechargeMinute: 360, countMode: 'custom', emptyLevel: 'work', allowed: [], askFirst: { on: true, openMinutes: 5, whileInUse: true } } }), ask);
+    await store.start();
+    expect(store.usePass()).toBe(true);
+    expect(ask.openAsk).toHaveBeenLastCalledWith({ on: true, openMinutes: 15, whileInUse: false }, expect.any(Number), expect.any(Date));
   });
 
   it('with none in the bank, nothing opens', async () => {

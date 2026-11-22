@@ -12,7 +12,7 @@ import { stepChosenRecharge } from '@/domain/recharge';
 import { cleanLockMessage, isLockMessageIdea } from '@/domain/settings';
 import type { SumLevel } from '@/domain/puzzle';
 import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
-import { applyAskFirst, openAsk } from '@/platform/askFirst';
+import { applyAskFirst, openAsk, type AskOpen } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
 
@@ -650,12 +650,12 @@ export const store = {
    * The sum on the Ask first screen was solved: open the list for a while.
    * While the battery's covers are up, apps that also count stay covered.
    */
-  async openAskFirst(): Promise<Date | null> {
+  async openAskFirst(): Promise<AskOpen | null> {
     const { settings } = snapshot.doc;
     const now = new Date();
-    const until = await openAsk(settings.askFirst ?? DEFAULT_ASK_FIRST, nextRecharge(now, settings.rechargeMinute).getTime(), now);
-    if (until && batteryLocked(snapshot.doc, now)) screenTime.coverEmptyNow(settings, snapshot.doc.day.topUps);
-    return until;
+    const open = await openAsk(settings.askFirst ?? DEFAULT_ASK_FIRST, nextRecharge(now, settings.rechargeMinute).getTime(), now);
+    if (open && batteryLocked(snapshot.doc, now)) screenTime.coverEmptyNow(settings, snapshot.doc.day.topUps);
+    return open;
   },
   /** Whether an emergency pass can be used now (record.ts). */
   passCheck(): 'ok' | 'none' | 'usedToday' | 'running' {
@@ -679,7 +679,7 @@ export const store = {
     const day = { ...doc.day, unlockedUntil };
     set({ ...doc, record: used, day });
     if (screenTime.isOn()) void screenTime.grantExtraTime(new Date(unlockedUntil), doc.settings, day.topUps, now);
-    if (doc.settings.askFirst?.on) void openAsk({ ...doc.settings.askFirst, openMinutes: 15 }, recharge, now);
+    if (doc.settings.askFirst?.on) void openAsk({ ...doc.settings.askFirst, openMinutes: 15, whileInUse: false }, recharge, now);
     return true;
   },
   /** Developer: pretend this many more minutes were used. */
