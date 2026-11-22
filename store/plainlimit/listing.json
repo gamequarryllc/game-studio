@@ -17,15 +17,15 @@
     "more": [
       {
         "q": "Why didn't an app lock when the battery was empty?",
-        "a": "Check that it is ticked: open Settings, then What counts. Apps in the iPhone's Always Allowed list (Phone, Messages, FaceTime and Maps unless you changed it, in the Settings app under Screen Time) are never locked by any app. iOS also locks at most 50 apps ticked one by one; Plainlimit says so on the Today screen if your list has more, and ticking whole categories instead has no limit."
+        "a": "Check that it isn't one of your essentials: open Settings, then Essentials. Essentials never count and never lock, and everything else does. Apps in the iPhone's Always Allowed list (Phone, Messages, FaceTime and Maps unless you changed it, in the Settings app under Screen Time) are never locked by any app."
       },
       {
         "q": "Why is Plainlimit's figure different from Screen Time's?",
-        "a": "Plainlimit counts only the apps you ticked, from the time it recharges (6:00 AM unless you changed it). Screen Time's daily total counts every app from midnight. Use after midnight but before the recharge belongs to the day before. With Plainlimit Pro you can set Recharges at to 12:00 AM in Settings to match Screen Time's day."
+        "a": "Plainlimit counts every app except your essentials, from the time it recharges (6:00 AM unless you changed it). Screen Time's daily total counts every app from midnight. Use after midnight but before the recharge belongs to the day before. With Plainlimit Pro you can set Recharges at to 12:00 AM in Settings, under Advanced, to match Screen Time's day."
       },
       {
-        "q": "How do I change what counts?",
-        "a": "Open Settings, tap What counts, then Change the apps. It can't be changed while the battery is empty, so an app can't be unticked to get around the lock; it opens again when the battery recharges."
+        "q": "How do I change my essentials?",
+        "a": "Open Settings, tap Essentials, then Choose essentials. You can have up to 50. It can't be changed while the battery is empty, so an app can't be made an essential to get around the lock; it opens again when the battery recharges."
       },
       {
         "q": "How do I stop using it?",
