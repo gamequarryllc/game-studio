@@ -127,14 +127,19 @@ async function main() {
     await see(page, 'What used it');
     await see(page, 'Waiting for the phone');
     await shot(page, 'q02-counting-bottom');
-    // While counting is on, Settings says nothing about it; the switch is in Advanced.
+    // While counting is on, Settings says nothing about it, and nothing in Advanced turns it off
+    // (a switch there was an easy way round the day's limit).
     await tab(page, 'Settings');
     if ((await page.getByRole('button', { name: 'Turn on Screen Time', exact: true }).count()) > 0) throw new Error('Settings offers to turn counting on while it is on');
     await shot(page, 'q03-counting-settings');
     await page.getByRole('button', { name: 'Advanced', exact: true }).click();
-    const counting = page.getByRole('switch', { name: 'Count my screen time' });
-    if (!(await counting.isChecked())) throw new Error('the counting switch is off while counting');
+    await see(page, 'Sums');
+    if ((await page.getByRole('switch').count()) > 0) throw new Error('Advanced has a switch: counting must not be turned off from the app');
+    if ((await page.getByText(/count my screen time/i).count()) > 0) throw new Error('Advanced still offers to stop counting');
     await shot(page, 'q03b-counting-advanced');
+    // A test build keeps one button for it among its tools (the preview's stand-in phone can't be turned off, so it is only looked for).
+    await page.goBack();
+    await see(page, 'Turn counting off (test)');
     await context.close();
   });
 

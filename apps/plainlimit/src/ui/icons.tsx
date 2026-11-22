@@ -7,7 +7,7 @@ import type { SFSymbol } from './tipDemos/parts';
 // symbols; the web preview (and the App Store pictures taken from it) draws
 // look-alikes: icons.web.tsx.
 
-export type IconName = 'essentials' | 'lock' | 'recharge' | 'advanced' | 'widget' | 'tips' | 'pro' | 'secondThought' | 'lockMessage' | 'sums' | 'counting' | 'history' | 'pass' | 'warn' | 'phone' | 'message' | 'map';
+export type IconName = 'essentials' | 'lock' | 'recharge' | 'advanced' | 'widget' | 'tips' | 'pro' | 'secondThought' | 'lockMessage' | 'sums' | 'history' | 'pass' | 'warn' | 'phone' | 'message' | 'map';
 
 const SF: Record<IconName, SFSymbol> = {
   essentials: 'heart.fill',
@@ -20,7 +20,6 @@ const SF: Record<IconName, SFSymbol> = {
   secondThought: 'hand.raised.fill',
   lockMessage: 'text.bubble.fill',
   sums: 'plus.forwardslash.minus',
-  counting: 'eye.fill',
   history: 'chart.bar.fill',
   pass: 'ticket.fill',
   warn: 'exclamationmark.triangle.fill',

@@ -72,7 +72,7 @@ export default function Today() {
           </Text>
           <GlowBattery cells={cells} color={glow} height={batteryHeight} />
           <View style={{ gap: 8, marginTop: 30 }}>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.word, { color: glow, textShadowColor: glow, fontSize: wordSize, lineHeight: wordSize + 2 }]}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.word, { color: glow, fontSize: wordSize, lineHeight: wordSize + 2 }]}>
               {wordFor(cells)}
             </Text>
             <View style={styles.rechargeRow}>
@@ -153,17 +153,14 @@ export default function Today() {
   );
 }
 
-/** Room around Today's word for its light, more than the light's reach. */
-const WORD_ROOM = 30;
-
 const styles = StyleSheet.create({
   field: { paddingHorizontal: 24 },
   // "Today" is said to screen readers; the tab bar already shows it.
   hidden: { position: 'absolute', width: 1, height: 1, opacity: 0 },
-  // The word's light needs room: an iPhone draws a text's shadow only inside the text's own box, and with none to
-  // spare the light stopped at the box's edges, a faint lit rectangle behind the word (build 134). The padding is
-  // that room, and the same margin taken back keeps the word where it was.
-  word: { fontFamily: display.bold, fontSize: 60, lineHeight: 62, letterSpacing: -2.2, textShadowRadius: 18, textShadowOffset: { width: 0, height: 0 }, padding: WORD_ROOM, margin: -WORD_ROOM },
+  // No shadow on the word. It had one as its light, and on an iPhone the light stopped dead at the edges of the
+  // text's own box: a faint lit rectangle behind the word (builds 134 and 137; padding round the text did not
+  // move the edges). The battery's light above is enough.
+  word: { fontFamily: display.bold, fontSize: 60, lineHeight: 62, letterSpacing: -2.2 },
   rechargeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 10, rowGap: 2 },
   recharge: { fontSize: 17, fontWeight: '600', color: c.ink2 },
   until: { fontSize: 17, fontWeight: '400', color: c.ink3 },

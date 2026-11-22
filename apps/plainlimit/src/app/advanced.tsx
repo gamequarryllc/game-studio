@@ -11,7 +11,6 @@ import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenT
 import { usePro } from '@/pro/pro';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { Card, IconTile, LinkRow, Page, Pills, StepButton, Title, tiles, type RowIcon } from '@/ui/kit';
-import { ScreenTimeSwitch } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 
@@ -84,8 +83,6 @@ export default function Advanced() {
         </View>
         <Pills options={[{ value: 'easy', label: 'Easy', pro: !isPro }, { value: 'normal', label: 'Normal' }, { value: 'hard', label: 'Hard', pro: !isPro }]} chosen={level} accent={accent} onChange={(next) => (locked ? undefined : choose(next))} />
       </Card>
-
-      <ScreenTimeSwitch accent={accent} />
     </Page>
   );
 }

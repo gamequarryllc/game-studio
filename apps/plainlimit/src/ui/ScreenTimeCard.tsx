@@ -1,10 +1,9 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Switch, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { clockLabel } from '@/domain/day';
 import { settingsLockedNotice } from '@/domain/record';
-import { tap } from '@/platform/haptics';
 import { askToNotify } from '@/platform/notices';
 import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission, testCover, testUncover } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
@@ -37,10 +36,11 @@ function useTurnOn() {
 
 /**
  * The top of Settings, on a real iPhone. While counting is on and all is well
- * it draws nothing: the switch that turns counting off lives in Advanced (the
- * owner, 2026-11-22: basics only on the front screens). It speaks up in two
- * cases: counting is off (a card to turn it on), and the battery is empty
- * (why the settings are locked).
+ * it draws nothing. It speaks up in two cases: counting is off (a card to turn
+ * it on), and the battery is empty (why the settings are locked).
+ * Nothing in the app turns counting off: a "Turn off" button, then a switch in
+ * Advanced, was an easy way round the day's limit, and the owner had it taken
+ * out (2026-11-22). A test build keeps a button for it among its tools.
  * Draws nothing in a browser or in Expo Go (but the preview's "?mock=" stand-in).
  */
 export function ScreenTimeCard() {
@@ -77,52 +77,6 @@ export function ScreenTimeCard() {
 }
 
 /**
- * Advanced, on a real iPhone: the switch that turns counting on and off.
- * Off is closed while the battery is empty, like the other settings (it would
- * be a way round the lock); a test build can always turn it off.
- */
-export function ScreenTimeSwitch({ accent }: { accent: string }) {
-  // Asks the phone whether counting is on as it draws: not to be kept by the React Compiler.
-  'use no memo';
-  useDoc();
-  const { turnOn, busy, problem } = useTurnOn();
-  if ((!SCREEN_TIME_AVAILABLE && !MOCK_PHONE) || STORE_SHOTS) return null;
-  const on = isOn();
-  const closed = on && settingsLocked() && !DEV_TOOLS;
-  // The line under the name says how things stand now: on build 134 it read "Off: nothing counts or locks" beside a switch that was on.
-  return (
-    <Card style={{ paddingVertical: 10, gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <IconTile icon={{ name: 'counting', bg: tiles.green }} />
-        <View style={{ flex: 1, gap: 1 }}>
-          <Text nativeID="count-switch-label" style={{ fontSize: 16, fontWeight: '500', color: c.ink }}>
-            Count my screen time
-          </Text>
-          <Text style={{ fontSize: 13.5, lineHeight: 18, color: c.ink3 }}>{closed ? 'Opens again when the battery recharges' : on ? 'Counting and locking are on' : 'Off: nothing counts or locks'}</Text>
-        </View>
-        <Switch
-          accessibilityLabel="Count my screen time"
-          aria-labelledby="count-switch-label"
-          value={on}
-          disabled={closed || busy}
-          onValueChange={(next) => {
-            tap();
-            if (next) void turnOn();
-            else store.turnOffScreenTime();
-          }}
-          trackColor={{ false: '#39393D', true: accent }}
-          thumbColor="#FFFFFF"
-          ios_backgroundColor="#39393D"
-          // The web preview's own colour for the knob when on (the phone uses thumbColor).
-          {...({ activeThumbColor: '#FFFFFF' } as object)}
-        />
-      </View>
-      {problem ? <Text style={[body, { color: c.ink }]}>{problem}</Text> : null}
-    </Card>
-  );
-}
-
-/**
  * Test builds only, at the bottom of Settings: tools for trying the locks, and
  * a readout of what the phone holds. It sits below everything else so that a
  * readout growing or shrinking never moves the settings above it (build 127:
@@ -153,6 +107,8 @@ export function TestBuildTools() {
       <Label>Developer: Screen Time</Label>
       <Text style={[body, { color: c.ink3 }]}>Test build only: none of this is in the App Store version.</Text>
       <BigButton quiet label="Start the day over" onPress={() => void store.startDayOver()} />
+      {/* The only way left to turn counting off, for trying the app's "off" side (the Turn on card, pretend use). */}
+      <BigButton quiet label="Turn counting off (test)" onPress={() => store.turnOffScreenTime()} />
       <BigButton
         quiet
         label="Lock now (test)"
