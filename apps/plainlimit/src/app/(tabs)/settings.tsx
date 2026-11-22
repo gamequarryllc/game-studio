@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 
 import { ASK_ID, DEFAULT_ASK_FIRST, askShownOn, openShort } from '@/domain/askFirst';
 import { CELLS, cellWords } from '@/domain/battery';
-import { clockLabel, clockLabelOf, durationLabel } from '@/domain/day';
+import { clockLabel, clockLabelOf, dayWord, durationLabel } from '@/domain/day';
 import { chosenGoal, goalFree } from '@/domain/goal';
 import { sumLevelFor } from '@/domain/pro';
 import { topUpPlan, type SumLevel } from '@/domain/puzzle';
@@ -29,7 +29,7 @@ export default function Settings() {
   // from the first drawing (the goal's buttons never looked closed at a limit).
   'use no memo';
   const router = useRouter();
-  const { settings, day, accent } = useDay();
+  const { settings, day, accent, now } = useDay();
   const first = topUpPlan(0);
   // Read the picks again whenever this tab comes back into view: a tab out of
   // view is not redrawn, and after a change on the Essentials screen the row
@@ -60,7 +60,11 @@ export default function Settings() {
   const chosen = chosenGoal(settings);
   const waiting = chosen !== settings.goalMinutes;
   // When the next battery starts: the recharge, or a little later when a new recharge time is waiting (recharge.ts).
-  const recharge = clockLabelOf(batteryEnd(day, settings));
+  const nextBattery = batteryEnd(day, settings);
+  const recharge = clockLabelOf(nextBattery);
+  // A waiting goal names its day as well as its time: tomorrow, or today in the small hours before the recharge.
+  const startDay = dayWord(nextBattery, now);
+  const starts = `${startDay === 'today' || startDay === 'tomorrow' ? startDay : `on ${startDay}`} at ${recharge}`;
   // On setup's own day every change starts at once (goal.ts); the note says so, and what happens after.
   const firstDay = goalFree(useDoc());
   // The extras, each a tile that says where it stands (the owner's pick of "Tiles", 2026-11-22).
@@ -84,34 +88,35 @@ export default function Settings() {
         <Label>Daily goal</Label>
         <View style={styles.stepper}>
           <StepButton sign="−" label="Less time" size={narrow ? 46 : 52} disabled={!store.canStepGoal(-1)} onPress={() => store.stepGoal(-1)} />
-          <Text accessibilityLabel={`Daily goal, ${durationLabel(chosen)}${waiting ? `, from ${recharge}` : ''}`} style={[styles.goal, { color: accent }, narrow ? { fontSize: 50, lineHeight: 54, letterSpacing: -1.6 } : null]}>
+          <Text accessibilityLabel={`Daily goal, ${durationLabel(chosen)}${waiting ? `, starts ${starts}` : ''}`} style={[styles.goal, { color: accent }, narrow ? { fontSize: 50, lineHeight: 54, letterSpacing: -1.6 } : null]}>
             {durationLabel(chosen)}
           </Text>
           <StepButton sign="+" label="More time" size={narrow ? 46 : 52} disabled={!store.canStepGoal(1)} onPress={() => store.stepGoal(1)} />
         </View>
-        {/* The battery's six cells, and how long each lasts at this goal. */}
-        <View style={{ alignItems: 'center', gap: 8 }}>
-          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={styles.cells}>
-            {Array.from({ length: CELLS }, (_, i) => (
-              <View key={i} style={[styles.cell, { backgroundColor: accent }]} />
-            ))}
-          </View>
-          <Text style={styles.cellNote}>6 cells of {cellWords(chosen)}</Text>
-        </View>
         {waiting ? (
-          // Today and the next recharge side by side, so it reads at a glance why Today still shows the old goal.
-          <View style={styles.waiting} accessible accessibilityLabel={`Today stays at ${durationLabel(settings.goalMinutes)}. ${durationLabel(chosen)} starts at ${recharge}.`}>
-            <View style={styles.waitPart}>
-              <Text style={styles.waitLabel}>Today</Text>
-              <Text style={styles.waitValue}>{durationLabel(settings.goalMinutes)}</Text>
-            </View>
-            <Text style={styles.waitArrow}>→</Text>
-            <View style={styles.waitPart}>
-              <Text style={styles.waitLabel}>From {recharge}</Text>
-              <Text style={[styles.waitValue, { color: accent }]}>{durationLabel(chosen)}</Text>
+          // A higher goal waits for the next battery (goal.ts). Two days side by side, each a small battery: today
+          // with the goal it keeps, lit, and the day the new goal starts, in outline, with its time. Up to build 138
+          // a strip read "Today 3:30 -> From 6:00 AM 4:00": it never said which day (the owner asked whether it was
+          // clear, and picked "Two days" from three mock-ups, 2026-11-22).
+          <View style={{ gap: 10 }} accessible accessibilityLabel={`Today stays at ${durationLabel(settings.goalMinutes)}. ${durationLabel(chosen)} starts ${starts}.`}>
+            <Text style={[styles.cellNote, { textAlign: 'center' }]}>{startDay === 'today' ? `Starts at ${recharge}. This battery keeps its goal.` : `Starts ${startDay === 'tomorrow' ? 'tomorrow' : `on ${startDay}`}. Today keeps its goal.`}</Text>
+            <View style={styles.days}>
+              <DayTile name={startDay === 'today' ? 'Now' : 'Today'} goal={durationLabel(settings.goalMinutes)} line={startDay === 'today' ? `until ${recharge}` : 'now'} accent={accent} on />
+              <Text style={styles.daysArrow}>→</Text>
+              <DayTile name={startDay} goal={durationLabel(chosen)} line={`from ${recharge}`} accent={accent} />
             </View>
           </View>
-        ) : null}
+        ) : (
+          // The battery's six cells, and how long each lasts at this goal.
+          <View style={{ alignItems: 'center', gap: 8 }}>
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={styles.cells}>
+              {Array.from({ length: CELLS }, (_, i) => (
+                <View key={i} style={[styles.cell, { backgroundColor: accent }]} />
+              ))}
+            </View>
+            <Text style={styles.cellNote}>6 cells of {cellWords(chosen)}</Text>
+          </View>
+        )}
         {firstDay ? (
           <View style={styles.firstDay}>
             <Text style={styles.firstDayTitle}>Your first day: changes start now</Text>
@@ -271,6 +276,35 @@ export default function Settings() {
   );
 }
 
+/** The colour of "not yet": the name of the day a waiting goal starts. */
+const STARTS = '#F2C656';
+
+/**
+ * One day of the two shown while a higher goal waits: its name, its goal, a
+ * small battery (lit for the day that is running, in outline for the one to
+ * come) and a line on when.
+ */
+function DayTile({ name, goal, line, accent, on = false }: { name: string; goal: string; line: string; accent: string; on?: boolean }) {
+  return (
+    <View style={[styles.dayTile, on ? { borderWidth: 2, borderColor: accent } : null]}>
+      <Text numberOfLines={1} style={[styles.dayName, on ? null : { color: STARTS }]}>
+        {name}
+      </Text>
+      <Text numberOfLines={1} style={[styles.dayGoal, on ? null : { color: accent }]}>
+        {goal}
+      </Text>
+      <View style={styles.dayCells}>
+        {Array.from({ length: CELLS }, (_, i) => (
+          <View key={i} style={[styles.dayCell, on ? { backgroundColor: accent } : { borderWidth: 1.5, borderColor: accent, opacity: 0.75 }]} />
+        ))}
+      </View>
+      <Text numberOfLines={1} style={styles.dayLine}>
+        {line}
+      </Text>
+    </View>
+  );
+}
+
 /** The three things an empty battery can do, each with its picture. */
 const EMPTY_CHOICES: readonly { level: EmptyLevel; title: string; icon: IconName }[] = [
   { level: 'warn', title: 'Warn', icon: 'warn' },
@@ -318,11 +352,14 @@ const styles = StyleSheet.create({
   cells: { flexDirection: 'row', gap: 6 },
   cell: { width: 30, height: 13, borderRadius: 5 },
   cellNote: { fontSize: 14, lineHeight: 19, color: c.ink3 },
-  waiting: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(244,245,242,0.07)' },
-  waitPart: { flex: 1, gap: 2 },
-  waitLabel: { fontSize: 13, lineHeight: 17, color: c.ink3 },
-  waitValue: { fontFamily: display.semi, fontSize: 20, lineHeight: 24, color: c.ink },
-  waitArrow: { fontSize: 18, color: c.ink3 },
+  days: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  daysArrow: { alignSelf: 'center', fontSize: 18, color: c.ink3 },
+  dayTile: { flex: 1, borderRadius: 16, borderWidth: 1.5, borderColor: c.rule, backgroundColor: c.ground, paddingTop: 11, paddingBottom: 11, paddingHorizontal: 12 },
+  dayName: { fontSize: 11.5, lineHeight: 16, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase', color: c.ink },
+  dayGoal: { fontFamily: display.bold, fontSize: 30, lineHeight: 34, letterSpacing: -0.8, color: c.ink, marginTop: 3 },
+  dayCells: { flexDirection: 'row', gap: 3, marginTop: 7 },
+  dayCell: { flex: 1, height: 9, borderRadius: 3 },
+  dayLine: { fontSize: 12, lineHeight: 16, color: c.ink3, marginTop: 7 },
   firstDay: { gap: 3, marginTop: 4, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: 'rgba(244,245,242,0.07)' },
   firstDayTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: c.ink },
   firstDayLine: { fontSize: 14, lineHeight: 19, color: c.ink3 },

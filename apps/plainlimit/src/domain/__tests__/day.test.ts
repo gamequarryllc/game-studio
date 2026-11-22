@@ -1,4 +1,4 @@
-import { clockLabel, durationLabel, goalLabel, nextRecharge, periodStart, untilLabel, wrapMinute } from '../day';
+import { clockLabel, dayWord, durationLabel, goalLabel, nextRecharge, periodStart, untilLabel, wrapMinute } from '../day';
 import { HISTORY_DAYS, advance, freshDay, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse } from '../dayState';
 
 const SIX = 6 * 60;
@@ -185,3 +185,15 @@ describe('the history of finished days', () => {
   });
 });
 
+describe('the day a coming moment falls on', () => {
+  it('says today, tomorrow, or the weekday beyond that', () => {
+    const at = (d: number, h: number) => new Date(2026, 10, d, h, 0);
+    // In the small hours the 6 AM recharge is still today's.
+    expect(dayWord(at(22, 6), at(22, 1))).toBe('today');
+    // By midday it is tomorrow's, and stays so until midnight.
+    expect(dayWord(at(23, 6), at(22, 12))).toBe('tomorrow');
+    expect(dayWord(at(23, 6), at(22, 23))).toBe('tomorrow');
+    // A battery that runs on to a later recharge time can end the day after: Nov 24, 2026 is a Tuesday.
+    expect(dayWord(at(24, 2), at(22, 12))).toBe('Tuesday');
+  });
+});

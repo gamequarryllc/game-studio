@@ -203,8 +203,9 @@ async function main() {
     await tab(page, 'Settings');
     for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'More time', exact: true }).click();
     // The stepper shows the goal chosen; today keeps its own, and says when the new one starts.
-    await page.getByLabel('Daily goal, 4:00, from 6:00 AM').waitFor({ state: 'visible', timeout: 8000 });
-    await page.getByLabel('Today stays at 3:00. 4:00 starts at 6:00 AM.').waitFor({ state: 'visible', timeout: 8000 });
+    await page.getByLabel(/^Daily goal, 4:00, starts (today|tomorrow) at 6:00 AM$/).waitFor({ state: 'visible', timeout: 8000 });
+    // The day is named: tomorrow, or today when this runs in the small hours before the recharge.
+    await page.getByLabel(/^Today stays at 3:00\. 4:00 starts (today|tomorrow) at 6:00 AM\.$/).waitFor({ state: 'visible', timeout: 8000 });
     if ((await page.getByText('Your first day: changes start now', { exact: true }).count()) !== 0) throw new Error('the first day\'s note shows on a later day');
     await shot(page, 'q27-goal-waits');
     await tab(page, 'Today');
@@ -213,7 +214,7 @@ async function main() {
     await tab(page, 'Settings');
     for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Less time', exact: true }).click();
     await page.getByLabel('Daily goal, 3:00').waitFor({ state: 'visible', timeout: 8000 });
-    if ((await page.getByText('From 6:00 AM', { exact: true }).count()) !== 0) throw new Error('the waiting goal stayed after going back down');
+    if ((await page.getByText('from 6:00 AM', { exact: true }).count()) !== 0) throw new Error('the waiting goal stayed after going back down');
     // 2:45 would empty the battery at 2:50 used, and lock the settings with no way back.
     if (!(await page.getByRole('button', { name: 'Less time', exact: true }).isDisabled())) throw new Error('"Less time" is open with 2:50 of 3:00 used');
     await context.close();
@@ -229,9 +230,9 @@ async function main() {
     await tab(page, 'Settings');
     for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'More time', exact: true }).click();
     await page.getByLabel('Daily goal, 3:00').waitFor({ state: 'visible', timeout: 8000 });
-    if ((await page.getByText('From 6:00 AM', { exact: true }).count()) !== 0) throw new Error('going back up to the day\'s own goal waited for the recharge');
+    if ((await page.getByText('from 6:00 AM', { exact: true }).count()) !== 0) throw new Error('going back up to the day\'s own goal waited for the recharge');
     await page.getByRole('button', { name: 'More time', exact: true }).click();
-    await page.getByLabel('Daily goal, 3:15, from 6:00 AM').waitFor({ state: 'visible', timeout: 8000 });
+    await page.getByLabel(/^Daily goal, 3:15, starts (today|tomorrow) at 6:00 AM$/).waitFor({ state: 'visible', timeout: 8000 });
     await shot(page, 'q28-goal-back-up');
     await context.close();
   });

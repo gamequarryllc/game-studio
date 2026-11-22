@@ -44,6 +44,20 @@ export function clockLabelOf(when: Date): string {
   return clockLabel(when.getHours() * 60 + when.getMinutes());
 }
 
+/**
+ * Which day a coming moment falls on, seen from `now`: "today", "tomorrow", or
+ * the weekday's name beyond that ("Tuesday"). For saying when something
+ * waiting starts: at 1 AM a 6 AM recharge is today's, and by midday it is
+ * tomorrow's.
+ */
+export function dayWord(when: Date, now: Date): string {
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((midnight(when) - midnight(now)) / (24 * 3600 * 1000));
+  if (days <= 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  return when.toLocaleDateString('en-US', { weekday: 'long' });
+}
+
 /** A length of time as hours and minutes: 130 is "2:10". */
 export function durationLabel(minutes: number): string {
   const m = Math.max(0, Math.round(minutes));
