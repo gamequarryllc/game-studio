@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import type { Settings } from '@/domain/types';
-import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, pickupWindow, reportWindow, setupWindow } from '@/platform/screenTime';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, pickupWindow, reportWindow, setupWindow, wholeWindow } from '@/platform/screenTime';
 import { Label } from '@/ui/kit';
 import { durationLabel } from '@/domain/day';
 import { useReducedMotion } from '@/ui/motion';
@@ -16,7 +16,7 @@ interface NativeProps {
   toMs: number;
   selection: string | null;
   /** Which of the extension's reports: the list, or the day's total. */
-  context?: 'TopApps' | 'Total' | `Setup${WeekHours}` | 'FirstApps';
+  context?: 'TopApps' | 'Total' | `Setup${WeekHours}` | 'FirstApps' | 'Whole';
   style?: StyleProp<ViewStyle>;
 }
 
@@ -80,6 +80,30 @@ export function TodayTotal({ settings, now, fallback, style }: { settings: Setti
   // phone's report goes by whole hours and would take in use from before it.
   if (!window || !window.fromRecharge || !window.selection) return <View style={style}>{fallback}</View>;
   return <PhoneFigure context="Total" fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} fallback={fallback} style={style} />;
+}
+
+/** The box for the iPhone's whole day, as in targets/report (WholeView): a small figure kept to the right. */
+export const WHOLE = { width: 92, height: 32 } as const;
+
+/**
+ * The iPhone's whole day so far, every app, as the phone's own Screen Time
+ * counts it (targets/report, WholeReport), drawn small at the right end of a
+ * row on setup's last screen. Plainlimit never learns the number. `fallback`
+ * shows until the phone has drawn, and wherever it can't.
+ */
+export function WholeTotal({ settings, now, fallback }: { settings: Settings; now: Date; fallback: ReactNode }) {
+  const window = SCREEN_TIME_AVAILABLE && NativeReport ? wholeWindow(settings, now) : null;
+  return (
+    <View pointerEvents="none" style={{ width: WHOLE.width, height: WHOLE.height }}>
+      <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, justifyContent: 'center' }}>{fallback}</View>
+      {NativeReport && window ? (
+        <>
+          <NativeReport context="Whole" fromMs={window.fromMs} toMs={window.toMs} selection={null} style={{ flex: 1 }} />
+          <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
+        </>
+      ) : null}
+    </View>
+  );
 }
 
 /**

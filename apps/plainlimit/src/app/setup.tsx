@@ -6,14 +6,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { askToNotify } from '@/platform/notices';
-import { tickStepMinutes } from '@/domain/checkpoints';
-import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount } from '@/platform/screenTime';
+import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount, wholeWindow } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
-import { SetupFigures, TodayTotal } from '@/ui/UsageReport';
+import { Icon } from '@/ui/icons';
+import { SetupFigures, WHOLE, WholeTotal } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
 import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
 import { useDay } from '@/ui/useDay';
@@ -46,13 +46,6 @@ const LONGEST_MS = 30_000;
 
 type Button = { label: string; onPress: () => void };
 
-/**
- * Why these figures are not the total in the iPhone's own Screen Time: the
- * owner compared the two on build 111 (5:31 here, 7 h 24 min there) and, as
- * the developer, wondered if the app was wrong. A new user would delete it.
- */
-const sinceNote = (recharge: string) =>
-  `Counted since ${recharge}, when your battery recharges, without your essentials. iPhone\u2019s Screen Time counts from midnight and includes everything, so it can show more.`;
 
 export default function Setup() {
   const router = useRouter();
@@ -237,39 +230,53 @@ export default function Setup() {
   if (step === 'ready' && checking) {
     // Plainlimit's count stops at the goal: reaching it means today is already past.
     const over = phase === 'ready' && day.usedMinutes >= settings.goalMinutes;
+    // Plainlimit's own figure, until the phone has reported anything for today.
+    const reading = phase === 'reading' && day.usedMinutes === 0;
     body = (
       <>
         <Heading>{phase === 'failed' ? 'Not counting yet' : over ? 'Already past your goal' : 'Ready'}</Heading>
-        {/* On the plain ground, not a card: the phone draws its figure on the ground's own colour. */}
-        <View style={styles.figureBox}>
-          <View style={styles.figures}>
-            <View style={styles.figure}>
-              <Text style={styles.figureLabel}>Screen Time</Text>
-              <TodayTotal settings={settings} now={now} fallback={<WaitingDots />} />
+        {/*
+          Why Plainlimit's figure is not the total in the iPhone's own Screen Time, as a picture: the iPhone's whole day
+          is the outer box, and what Plainlimit counts is a part inside it. (The owner compared the two on build 111,
+          5:31 here against 7 h 24 min there, and wondered if the app was wrong; up to build 141 a paragraph said why,
+          beside the phone's figure for the counted apps alone, which nearly matched Plainlimit's and looked pointless.)
+          On the plain ground, not a card: the phone draws its figure on the ground's own colour.
+        */}
+        <View style={styles.whole}>
+          <View style={styles.wholeRow}>
+            <Icon name="iphone" size={18} color={c.ink2} />
+            <View style={styles.wholeWords}>
+              <Text style={styles.wholeName}>iPhone Screen Time</Text>
+              <Text style={styles.wholeNote}>{wholeWindow(settings, now).sinceYesterday ? 'Every app, since yesterday' : 'Every app, since midnight'}</Text>
             </View>
-            <View style={styles.figure}>
-              <Text style={styles.figureLabel}>Plainlimit</Text>
-              {phase === 'reading' && day.usedMinutes === 0 ? (
-                <WaitingDots />
+            <WholeTotal settings={settings} now={now} fallback={<WaitingDots size={6} height={WHOLE.height} />} />
+          </View>
+          <View
+            accessible
+            accessibilityLabel={`Plainlimit counts ${reading ? 'still reading' : durationLabel(day.usedMinutes)}, without essentials, since ${recharge}`}
+            style={[styles.part, { borderColor: accent, backgroundColor: accent.length === 7 ? `${accent}1F` : 'transparent' }]}>
+            <View style={styles.wholeRow}>
+              <Icon name="battery" size={18} color={accent} />
+              <Text style={[styles.wholeName, styles.wholeWords, { color: c.ink }]}>Plainlimit counts</Text>
+              {reading ? (
+                <WaitingDots size={8} height={44} />
               ) : (
-                <Text numberOfLines={1} adjustsFontSizeToFit style={[styles.figureValue, { color: accent }]}>
+                <Text numberOfLines={1} style={[styles.partValue, { color: accent }]}>
                   {durationLabel(day.usedMinutes)}
                 </Text>
               )}
             </View>
+            <Text style={[styles.wholeNote, styles.partNote]}>{`Without essentials, since ${recharge}`}</Text>
           </View>
-          <Text style={[styles.note, { marginTop: 10 }]}>{sinceNote(recharge)}</Text>
         </View>
         {phase === 'reading' ? <ReadingBar colour={accent} /> : null}
-        <Lead>
-          {phase === 'reading'
-            ? 'Reading today\u2019s Screen Time. This can take up to half a minute, and nothing locks yet.'
-            : phase === 'failed'
-              ? 'The phone would not start counting. You can turn it on later in Settings.'
-              : over
-                ? `You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock your counted apps until ${recharge}.`
-                : `The two should match, or Plainlimit can be up to ${tickStepMinutes(settings.goalMinutes)} minutes under.`}
-        </Lead>
+        {phase === 'reading' ? (
+          <Lead>Reading today so far. Nothing locks yet.</Lead>
+        ) : phase === 'failed' ? (
+          <Lead>The phone would not start counting. You can turn it on later in Settings.</Lead>
+        ) : over ? (
+          <Lead>{`You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock your counted apps until ${recharge}.`}</Lead>
+        ) : null}
       </>
     );
     if (phase === 'failed') {
@@ -282,7 +289,7 @@ export default function Setup() {
       quiet = { label: 'Lock now anyway', onPress: () => void leave(() => store.startCounting())() };
     } else {
       primary = { label: busy ? 'One moment…' : 'Start counting', onPress: () => void leave(() => store.startCounting())() };
-      quiet = { label: 'Plainlimit is well above? Count from now instead', onPress: () => void leave(() => store.countFromNow())() };
+      quiet = { label: 'Looks wrong? Count from now', onPress: () => void leave(() => store.countFromNow())() };
     }
   } else if (step === 'ready') {
     body = (
@@ -400,10 +407,16 @@ const styles = StyleSheet.create({
   figureBox: { borderWidth: 1, borderColor: c.rule, borderRadius: 18, padding: 16 },
   // Out of sight on the other screens, at the same width, so the phone's drawings keep their size and are not redrawn.
   parked: { position: 'absolute', top: 18, left: 24, right: 24, opacity: 0 },
-  figures: { flexDirection: 'row', gap: 12 },
-  figure: { flex: 1, gap: 4 },
-  figureLabel: { fontSize: 13, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: c.ink3 },
-  figureValue: { fontFamily: display.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.6, color: c.ink },
+  // Setup's last screen: the iPhone's whole day as the outer box, and Plainlimit's part of it inside.
+  whole: { borderWidth: 1.5, borderColor: c.outline, borderRadius: 20, padding: 14, gap: 12 },
+  wholeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  wholeWords: { flex: 1 },
+  wholeName: { fontSize: 15, lineHeight: 19, fontWeight: '600', color: c.ink2 },
+  wholeNote: { fontSize: 13.5, lineHeight: 18, color: c.ink3, marginTop: 2 },
+  part: { borderWidth: 2, borderRadius: 15, paddingVertical: 12, paddingHorizontal: 13 },
+  partValue: { fontFamily: display.bold, fontSize: 40, lineHeight: 44, letterSpacing: -1.2 },
+  // Under the name, clear of the picture beside it.
+  partNote: { marginLeft: 26, color: c.ink2 },
   foot: { paddingHorizontal: 20, paddingTop: 10, gap: 10, borderTopWidth: 1, borderTopColor: c.rule, backgroundColor: c.ground },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },

@@ -48,9 +48,12 @@ extension DeviceActivityReport.Context {
   static let setup8 = Self("Setup8")
   static let setup12 = Self("Setup12")
   static let firstApps = Self("FirstApps")
+  static let whole = Self("Whole")
 }
 
 private let ink = Color(red: 244 / 255, green: 245 / 255, blue: 242 / 255)
+/// The app's second ink (src/ui/theme.ts, c.ink2), for a figure that is not the main one.
+private let ink2 = Color(red: 214 / 255, green: 217 / 255, blue: 220 / 255)
 private let quiet = Color(red: 169 / 255, green: 174 / 255, blue: 179 / 255)
 private let rule = Color(red: 37 / 255, green: 40 / 255, blue: 44 / 255)
 private let ground = Color(red: 14 / 255, green: 16 / 255, blue: 17 / 255)
@@ -186,6 +189,30 @@ struct TotalReport: DeviceActivityReportScene {
     // all screen-on time, including time in no app at all (build 48 showed it:
     // 3:10 against 1:50 of app use), and it ignores which apps are ticked.
     // Websites are left out: their time is already inside the browser's.
+    var seconds: TimeInterval = 0
+    for await device in data {
+      for await segment in device.activitySegments {
+        for await category in segment.categories {
+          for await app in category.applications {
+            seconds += app.totalActivityDuration
+          }
+        }
+      }
+    }
+    return seconds
+  }
+}
+
+/// The iPhone's whole day, for setup's last screen: every app's time added up,
+/// as the phone's own Screen Time counts it. The app asks with no selection,
+/// so no app is left out; Plainlimit's own count stands inside this figure's
+/// box as the part of it that counts. Added up app by app, as in TotalReport.
+struct WholeReport: DeviceActivityReportScene {
+  let context: DeviceActivityReport.Context = .whole
+  let content: (TimeInterval) -> WholeView
+
+  func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
+    -> TimeInterval {
     var seconds: TimeInterval = 0
     for await device in data {
       for await segment in device.activitySegments {
@@ -548,6 +575,30 @@ struct TotalView: View {
   }
 }
 
+/// The iPhone's whole day as a small figure, kept to the top right of whatever
+/// size iOS gives this view (see TotalView): the app's box for it is 32 points
+/// high, at the right end of a row.
+struct WholeView: View {
+  let seconds: TimeInterval
+
+  var body: some View {
+    HStack(spacing: 0) {
+      Spacer(minLength: 0)
+      Text(clockWords(seconds))
+        .font(displayFace.map { Font.custom($0, size: 28) } ?? .system(size: 28, weight: .bold))
+        .tracking(-0.6)
+        .foregroundStyle(ink2)
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+    }
+    .frame(height: 32, alignment: .trailing)
+    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topTrailing)
+    .background(ground)
+    .ignoresSafeArea()
+  }
+}
+
 @main
 struct PlainlimitReport: DeviceActivityReportExtension {
   var body: some DeviceActivityReportScene {
@@ -571,6 +622,9 @@ struct PlainlimitReport: DeviceActivityReportExtension {
     }
     FirstAppsReport { apps in
       FirstAppsView(apps: apps)
+    }
+    WholeReport { seconds in
+      WholeView(seconds: seconds)
     }
   }
 }

@@ -1046,6 +1046,21 @@ export function setupWindow(settings: Settings, now: Date): { fromMs: number; to
 }
 
 /**
+ * The iPhone's whole day, every app, for setup's last screen (the phone's
+ * "Whole" figure; targets/report/PlainlimitReport.swift, WholeReport): from
+ * the midnight before today's battery began to the next recharge, so the
+ * figure always takes in what Plainlimit counts. That midnight is today's,
+ * as in the iPhone's own Screen Time, but in the small hours before the
+ * recharge, when the battery began the day before (`sinceYesterday`).
+ */
+export function wholeWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; sinceYesterday: boolean } {
+  const start = periodStartOf(now, settings.rechargeMinute);
+  const midnight = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return { fromMs: midnight.getTime(), toMs: nextRecharge(now, settings.rechargeMinute).getTime(), sinceYesterday: midnight.getTime() < today.getTime() };
+}
+
+/**
  * The last seven days up to the end of this hour, every app, for the phone's
  * list of the apps opened first after a pickup (Second thought's suggestions;
  * targets/report/PlainlimitReport.swift, FirstAppsReport). No selection: the

@@ -25,6 +25,8 @@ const DRAWN: Record<IconName, (c: string) => string> = {
   phone: (c) => `<path fill="${c}" d="M7.2 3.5c.7-.3 1.5 0 1.9.7l1.4 2.7c.3.6.2 1.3-.3 1.8l-1.1 1.1c.9 1.9 2.4 3.4 4.3 4.3l1.1-1.1c.5-.5 1.2-.6 1.8-.3l2.7 1.4c.7.4 1 1.2.7 1.9-.6 1.7-2.2 2.8-4 2.6C9.9 18 5.3 13.4 4.6 7.5c-.2-1.8.9-3.4 2.6-4z"/>`,
   message: (c) => `<path fill="${c}" d="M12 4c5 0 9 3.2 9 7.2s-4 7.2-9 7.2c-1 0-2-.1-2.9-.4L4.5 20l1.2-3.7C4 15 3 13.2 3 11.2 3 7.200 7 4 12 4z"/>`,
   map: (c) => `<path fill="${c}" d="M12 2.8a6.7 6.7 0 0 0-6.7 6.7c0 4.8 6.7 11.7 6.7 11.7s6.7-6.9 6.7-11.7A6.7 6.7 0 0 0 12 2.8zm0 9.2a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/>`,
+  iphone: (c) => `<rect x="6.5" y="2.5" width="11" height="19" rx="2.8" ${stroke(c, 2)}/><path d="M10.5 18.3h3" ${stroke(c, 2)}/>`,
+  battery: (c) => `<rect x="2.5" y="7" width="16.5" height="10" rx="2.6" ${stroke(c, 2)}/><path d="M21.5 10.5v3" ${stroke(c, 2)}/><rect x="5.3" y="9.8" width="7" height="4.4" rx="1" fill="${c}"/>`,
 };
 
 export function Icon({ name, size, color }: { name: IconName; size: number; color: string }) {
