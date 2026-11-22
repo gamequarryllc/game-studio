@@ -120,14 +120,22 @@ async function main() {
 
   await scenario('a counting phone shows its figure and the list box waiting for the phone', async () => {
     const { page, context } = await open(doc({ goal: 270, used: 97 }), '?mock=counting');
-    await see(page, 'of 4:30, not counting essentials');
+    await see(page, 'used of 4:30');
     await shot(page, 'q01-counting-top');
+    // The phone's list of apps is on History, last on the page.
+    await page.getByRole('button', { name: /^History/ }).click();
     await toBottom(page);
     await see(page, 'Waiting for the phone');
     await shot(page, 'q02-counting-bottom');
+    await page.goBack();
+    // While counting is on, Settings says nothing about it; the switch is in Advanced.
     await tab(page, 'Settings');
-    await see(page, 'On. The battery follows');
+    if ((await page.getByRole('button', { name: 'Turn on Screen Time', exact: true }).count()) > 0) throw new Error('Settings offers to turn counting on while it is on');
     await shot(page, 'q03-counting-settings');
+    await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+    const counting = page.getByRole('switch', { name: 'Count my screen time' });
+    if (!(await counting.isChecked())) throw new Error('the counting switch is off while counting');
+    await shot(page, 'q03b-counting-advanced');
     await context.close();
   });
 
@@ -200,7 +208,7 @@ async function main() {
     await shot(page, 'q27-goal-waits');
     await tab(page, 'Today');
     await see(page, 'Nearly out');
-    await see(page, '3 hour day');
+    await see(page, 'used of 3:00');
     await tab(page, 'Settings');
     for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Less time', exact: true }).click();
     await page.getByLabel('Daily goal, 3:00').waitFor({ state: 'visible', timeout: 8000 });
@@ -216,7 +224,7 @@ async function main() {
     for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'Less time', exact: true }).click();
     await page.getByLabel('Daily goal, 2:30').waitFor({ state: 'visible', timeout: 8000 });
     await tab(page, 'Today');
-    await see(page, '2 h 30 min day');
+    await see(page, 'used of 2:30');
     await tab(page, 'Settings');
     for (let i = 0; i < 2; i++) await page.getByRole('button', { name: 'More time', exact: true }).click();
     await page.getByLabel('Daily goal, 3:00').waitFor({ state: 'visible', timeout: 8000 });
@@ -229,21 +237,30 @@ async function main() {
 
   await scenario('with Pro, a new recharge time waits for this battery: later runs it on, earlier recharges once more first', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 120 }), '?mock=counting');
-    await tab(page, 'Settings');
+    // The recharge time is in Settings, under Advanced.
+    const advanced = async () => {
+      await tab(page, 'Settings');
+      await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+    };
+    const today = async () => {
+      await page.goBack();
+      await tab(page, 'Today');
+    };
+    await advanced();
     for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Recharge later', exact: true }).click();
     await page.getByLabel('Recharges at 8:00 AM, after this battery').waitFor({ state: 'visible', timeout: 8000 });
     await see(page, 'This battery runs on until 8:00 AM.');
     await shot(page, 'q29-recharge-later', true);
-    await tab(page, 'Today');
+    await today();
     await see(page, 'Recharges at 8:00 AM');
-    await tab(page, 'Settings');
+    await advanced();
     for (let i = 0; i < 8; i++) await page.getByRole('button', { name: 'Recharge earlier', exact: true }).click();
     await page.getByLabel('Recharges at 4:00 AM, after this battery').waitFor({ state: 'visible', timeout: 8000 });
     await see(page, 'One more recharge at 6:00 AM, then at 4:00 AM.');
-    await tab(page, 'Today');
+    await today();
     await see(page, 'Recharges at 6:00 AM');
     // Back to today's time: nothing waits.
-    await tab(page, 'Settings');
+    await advanced();
     for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'Recharge later', exact: true }).click();
     await page.getByLabel('Recharges at 6:00 AM', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
     await context.close();
@@ -256,13 +273,19 @@ async function main() {
     await tab(page, 'Settings');
     await see(page, 'these settings are locked until it recharges');
     // Locked controls look and act locked, rather than ignoring taps.
-    for (const name of ['More time', 'Less time', 'Recharge earlier', 'Recharge later']) {
+    for (const name of ['More time', 'Less time']) {
       if (!(await page.getByRole('button', { name, exact: true }).isDisabled())) throw new Error(`"${name}" is not disabled while locked`);
     }
     for (const name of [/^Warn/, /^Work for it/, /^Locked/]) {
       if (!(await page.getByRole('radio', { name }).isDisabled())) throw new Error(`${name} is not disabled while locked`);
     }
     await shot(page, 'q09-empty-settings');
+    await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+    for (const name of ['Recharge earlier', 'Recharge later']) {
+      if (!(await page.getByRole('button', { name, exact: true }).isDisabled())) throw new Error(`"${name}" is not disabled while locked`);
+    }
+    await shot(page, 'q09b-empty-advanced');
+    await page.goBack();
     await page.getByRole('button', { name: /^Essentials/ }).click();
     await see(page, "This can't change while the battery is empty");
     await see(page, '14 essentials stay free');
@@ -294,9 +317,10 @@ async function main() {
 
   await scenario('a week of every kind of day', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 60, history: mixedWeek(180, 360) }));
-    await toBottom(page);
-    await see(page, 'Last 7 days');
     await shot(page, 'q12-week-mixed');
+    await page.getByRole('button', { name: /^History/ }).click();
+    await see(page, 'Last 7 days');
+    await shot(page, 'q12b-week-mixed-history');
     await context.close();
   });
 
@@ -305,14 +329,15 @@ async function main() {
     saved.settings.askFirst = { on: true, openMinutes: 10 };
     const { page, context } = await open(saved, '', PHONE, { withPro: false });
     await tab(page, 'Settings');
-    await page.getByRole('button', { name: 'Recharges at, 7:00 AM · Pro', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Advanced, Second thought, more', exact: true }).click();
+    await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+    await page.getByRole('button', { name: 'Recharges at, 7:00 AM, Pro', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Second thought, On, 10 min', exact: true }).waitFor();
-    await page.goBack();
     if ((await page.getByRole('button', { name: 'Recharge later', exact: true }).count()) > 0) throw new Error('the recharge stepper shows without Pro');
+    await shot(page, 'q20b-free-advanced');
+    await page.goBack();
     await shot(page, 'q20-free-settings');
     await page.getByRole('button', { name: /^Plainlimit Pro/ }).click();
-    await see(page, 'Plainlimit Pro');
+    await page.getByTestId('pro-screen').waitFor();
     await shot(page, 'q21-pro-screen');
     await context.close();
   });
@@ -323,13 +348,13 @@ async function main() {
     await see(page, 'Plainlimit Pro');
     await page.getByRole('button', { name: 'Not now', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await see(page, 'Used since 6:00 AM');
+    await see(page, 'used of 3:00');
     await context.close();
   });
 
   await scenario('the shortest goal and a midnight recharge', async () => {
     const { page, context } = await open(doc({ goal: 30, recharge: 0, used: 12 }));
-    await see(page, '30 minute day');
+    await see(page, 'used of 0:30');
     await see(page, 'Recharges at 12:00 AM');
     await shot(page, 'q13-goal-30-midnight');
     await context.close();
@@ -337,7 +362,7 @@ async function main() {
 
   await scenario('the longest goal and an 11:30 PM recharge', async () => {
     const { page, context } = await open(doc({ goal: 720, recharge: 1410, used: 700 }));
-    await see(page, '12 hour day');
+    await see(page, 'used of 12:00');
     await see(page, 'Recharges at 11:30 PM');
     await shot(page, 'q14-goal-12h-late');
     await tab(page, 'Settings');
@@ -491,7 +516,7 @@ async function main() {
   await scenario('emergency pass: offered on an empty battery, opens everything and the settings, once a day; the record opens from Today', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 200, level: 'locked' }), '?mock=counting');
     await see(page, 'Empty');
-    await page.getByRole('button', { name: /^Use an emergency pass/ }).click();
+    await page.getByRole('button', { name: /^Emergency pass/ }).click();
     await see(page, 'Use an emergency pass?');
     await see(page, 'Passes left after this');
     await shot(page, 'q23-pass-sheet');
@@ -500,12 +525,11 @@ async function main() {
     await page.getByText(/^Open until \d/).first().waitFor({ state: 'visible', timeout: 8000 });
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await see(page, 'Emergency pass: everything is open');
-    if ((await page.getByRole('button', { name: /^Use an emergency pass/ }).count()) > 0) throw new Error('a second pass was offered the same day');
+    if ((await page.getByRole('button', { name: /^Emergency pass/ }).count()) > 0) throw new Error('a second pass was offered the same day');
     await tab(page, 'Settings');
     if (await page.getByRole('button', { name: 'More time', exact: true }).isDisabled()) throw new Error('settings stayed locked during the pass');
     await tab(page, 'Today');
-    await toBottom(page);
-    await page.getByRole('button', { name: /^Your record/ }).click();
+    await page.getByRole('button', { name: /^History/ }).click();
     await page.getByText(/^Last \d+ weeks$/).first().waitFor({ state: 'visible', timeout: 8000 });
     await see(page, 'Passes used');
     await shot(page, 'q24-record', true);
@@ -531,15 +555,14 @@ async function main() {
     saved.record.lastAdded = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
     const { page, context } = await open(saved, '?mock=counting');
     await see(page, 'Empty');
-    if ((await page.getByRole('button', { name: /^Use an emergency pass/ }).count()) > 0) throw new Error('a pass was offered after one was used today');
-    await see(page, 'A dot marks each day you used an emergency pass.');
+    if ((await page.getByRole('button', { name: /^Emergency pass/ }).count()) > 0) throw new Error('a pass was offered after one was used today');
     await shot(page, 'q25-today-pass-days', true);
     await tab(page, 'Settings');
     await see(page, 'emergency pass has been used');
     if ((await page.getByText('opens them for 15 minutes').count()) > 0) throw new Error('the locked notice offered a pass that cannot be used');
     await tab(page, 'Today');
-    await toBottom(page);
-    await page.getByRole('button', { name: /^Your record/ }).click();
+    await page.getByRole('button', { name: /^History/ }).click();
+    await see(page, 'A dot marks each day you used an emergency pass.');
     await page.getByText(/^Last \d+ weeks$/).first().waitFor({ state: 'visible', timeout: 8000 });
     await shot(page, 'q26-record-lived-in', true);
     await context.close();

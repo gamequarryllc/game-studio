@@ -159,8 +159,9 @@ const styles = StyleSheet.create({
   until: { fontSize: 17, fontWeight: '400', color: c.ink3 },
   rest: { paddingHorizontal: 24, paddingTop: 32, gap: 24 },
   strip: { borderWidth: 1.5, borderColor: c.outline, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
-  usedRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  used: { fontFamily: display.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.6, color: c.ink, fontVariant: ['tabular-nums'], paddingRight: 4 },
+  // The figure's box is a little wider than the app's own figure: the phone's may be a digit's width off.
+  usedRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  used: { fontFamily: display.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.6, color: c.ink, fontVariant: ['tabular-nums'], paddingRight: 10 },
   usedPhone: { position: 'absolute', left: 0, top: 0, right: 0, height: 52, alignSelf: 'auto' },
   usedOf: { fontFamily: display.semi, fontSize: 19, lineHeight: 24, letterSpacing: -0.2, color: c.ink3, paddingBottom: 7 },
   body: { fontSize: 15, lineHeight: 21, color: c.ink2 },
