@@ -7,17 +7,21 @@ import { askLead, askOpened, DEFAULT_ASK_FIRST, openChoice, opensCountedApps } f
 import { cellsLeft } from '@/domain/battery';
 import { clockLabel, clockLabelOf } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
-import { isRight, makeRandom, makeSums, type Sum } from '@/domain/puzzle';
-import { success, warning } from '@/platform/haptics';
+import { makeRandom, makeSums, type Sum } from '@/domain/puzzle';
+import { success } from '@/platform/haptics';
 import { sumLevelFor } from '@/domain/pro';
 import type { AskOpen } from '@/platform/askFirst';
+import { appToReturnTo, returnTo } from '@/platform/backToApp';
 import { store } from '@/state/store';
 import { BigButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
+import { useSumEntry } from '@/ui/useSumEntry';
 
 // The sum an "Ask first" app asks for (src/domain/askFirst.ts): reached from
-// the covering screen's notification. One sum opens the list for a while.
+// the covering screen's notification. One sum opens the list for a while, and
+// where the covering screen noted a well-known app, the right answer goes
+// straight back to it (src/domain/appLinks.ts).
 
 export default function Ask() {
   const router = useRouter();
@@ -25,20 +29,55 @@ export default function Ask() {
   const { settings, day, now } = useDay();
   const ask = settings.askFirst ?? DEFAULT_ASK_FIRST;
   const [sum] = useState<Sum>(() => makeSums(1, makeRandom(Date.now()), sumLevelFor(settings, store.hasPro()))[0]);
-  const [typed, setTyped] = useState('');
-  const [wrong, setWrong] = useState(false);
+  // The app the covering screen was just drawn for, if it is one that can be opened from here.
+  const [back] = useState(() => appToReturnTo(new Date()));
   const [opened, setOpened] = useState<AskOpen | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The app's link did not open (it is gone from the phone, or the link changed): stop offering it.
+  const [noLink, setNoLink] = useState(false);
 
   const leave = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const frame = { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 28 };
   const empty = cellsLeft(day.usedMinutes, settings.goalMinutes) === 0;
   const opensCounted = opensCountedApps(empty, isUnlocked(day, now));
+  const goBack = back && !noLink ? back : null;
+
+  /** Opens the app the person was after and puts this screen away. False if the phone would not open it. */
+  const jump = async () => {
+    if (!goBack) return false;
+    if (await returnTo(goBack)) {
+      leave();
+      return true;
+    }
+    setNoLink(true);
+    return false;
+  };
+
+  const open = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const done = await store.openAskFirst();
+      if (!done) {
+        setFailed(true);
+        return;
+      }
+      success();
+      // Straight back to the app. Not while the battery is empty: an app that also counts
+      // is still locked then, and landing on its lock with no word would look broken.
+      if (opensCounted && (await jump())) return;
+      setOpened(done);
+    } finally {
+      setBusy(false);
+    }
+  };
+  // A right answer opens by itself; the button is only one more way in.
+  const entry = useSumEntry(sum, () => void open(), true);
 
   if (opened || failed) {
     // "While I use it" only where the phone took its timers; otherwise it opened for the chosen minutes.
-    const words = opened ? askOpened(opened.inUse ? 'use' : ask.openMinutes, clockLabelOf(opened.until)) : null;
+    const words = opened ? askOpened(opened.inUse ? 'use' : ask.openMinutes, clockLabelOf(opened.until), !goBack) : null;
     return (
       <View style={[styles.page, frame]}>
         <View style={{ gap: 12 }}>
@@ -51,31 +90,19 @@ export default function Ask() {
               : 'The phone didn’t take the timer, so the apps stay covered. Try again in a moment.'}
           </Text>
         </View>
-        <BigButton label="Done" onPress={leave} />
+        {opened && goBack ? (
+          <View style={{ gap: 6 }}>
+            <BigButton label={`Open ${goBack.name}`} onPress={() => void jump()} />
+            <Pressable accessibilityRole="button" onPress={leave} style={({ pressed }) => [styles.stop, pressed ? { opacity: 0.6 } : null]}>
+              <Text style={styles.stopText}>Done</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <BigButton label="Done" onPress={leave} />
+        )}
       </View>
     );
   }
-
-  const check = async () => {
-    if (busy) return;
-    if (!isRight(sum, typed)) {
-      warning();
-      setWrong(true);
-      return;
-    }
-    setBusy(true);
-    try {
-      const open = await store.openAskFirst();
-      if (open) {
-        success();
-        setOpened(open);
-      } else {
-        setFailed(true);
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <View style={[styles.page, frame]}>
@@ -98,26 +125,23 @@ export default function Ask() {
           <TextInput
             accessibilityLabelledBy="ask-answer-label"
             aria-labelledby="ask-answer-label"
-            value={typed}
-            onChangeText={(t) => {
-              setTyped(t.replace(/[^0-9]/g, '').slice(0, 4));
-              setWrong(false);
-            }}
-            onSubmitEditing={() => void check()}
+            value={entry.typed}
+            onChangeText={entry.type}
+            onSubmitEditing={entry.submit}
+            editable={!busy}
             keyboardType="number-pad"
             inputMode="numeric"
-            returnKeyType="done"
             autoFocus
-            style={[styles.input, wrong ? { borderColor: '#F0A08C' } : null]}
+            style={[styles.input, entry.wrong ? { borderColor: '#F0A08C' } : null]}
           />
-          {wrong ? (
+          {entry.wrong ? (
             <Text accessibilityLiveRegion="polite" style={styles.wrong}>
-              Not {typed}. Try again.
+              Not {entry.wrong}. Try again.
             </Text>
           ) : null}
         </View>
 
-        <BigButton label={busy ? 'One moment…' : 'Open'} disabled={typed === ''} onPress={() => void check()} />
+        <BigButton label={busy ? 'One moment…' : goBack ? `Open ${goBack.name}` : 'Open'} disabled={entry.typed === '' || busy} onPress={entry.submit} />
       </View>
 
       <Pressable accessibilityRole="button" onPress={leave} style={({ pressed }) => [styles.stop, pressed ? { opacity: 0.6 } : null]}>

@@ -183,14 +183,15 @@ async function main() {
       await context.close();
     }
 
-    // 4: "Work for it" when empty: the sums, with the first answer typed in.
+    // 4: "Work for it" when empty: the sums, with the first answer being typed.
     {
       const { page, context } = await open(doc(GOAL));
       await page.getByRole('button', { name: /Solve 3 sums/ }).click();
       await page.getByText('Sum 1 of 3', { exact: false }).first().waitFor();
       const sum = await page.getByText(/^\s*\d+\s*[+−-]\s*\d+\s*$/).first().textContent();
       const [, a, op, b] = sum.match(/(\d+)\s*([+−-])\s*(\d+)/);
-      await page.getByRole('textbox').first().fill(String(op === '+' ? Number(a) + Number(b) : Number(a) - Number(b)));
+      // All but the last digit: the whole answer would move on to the next sum by itself.
+      await page.getByRole('textbox').first().fill(String(op === '+' ? Number(a) + Number(b) : Number(a) - Number(b)).slice(0, -1));
       await raw(page, 'sums');
       await context.close();
     }

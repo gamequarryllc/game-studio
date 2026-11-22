@@ -399,8 +399,7 @@ async function main() {
     await shot(page, 'q18-puzzle');
     const input = page.getByRole('textbox').first();
     await input.fill('99999');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(500);
+    await see(page, 'Not 9999. Try again.');
     await shot(page, 'q19-puzzle-wrong');
     await context.close();
   });
@@ -473,7 +472,7 @@ async function main() {
     await context.close();
   });
 
-  await scenario('Second thought: one sum opens the list, a wrong answer is told apart, and an empty battery is said', async () => {
+  await scenario('Second thought: the right answer opens the list by itself, a wrong one is said at once, and an empty battery is said', async () => {
     const saved = doc({ goal: 180, used: 200 });
     const { page, context } = await open(saved, '?mock=counting');
     await see(page, 'Empty');
@@ -482,13 +481,20 @@ async function main() {
     await see(page, 'Apps that also count stay locked');
     await shot(page, 'q22a-ask-sum');
     const input = page.getByRole('textbox').first();
-    await input.fill('99999');
-    await page.getByRole('button', { name: 'Open', exact: true }).click();
-    await see(page, 'Not 9999');
     const sum = await page.getByText(/^\s*\d+\s*\+\s*\d+\s*$/).first().textContent();
     const [, a, b] = sum.match(/(\d+)\s*\+\s*(\d+)/);
-    await input.fill(String(Number(a) + Number(b)));
+    const answer = String(Number(a) + Number(b));
+    // One digit is not an answer yet; Open turns it down.
+    await input.fill('1');
+    if ((await page.getByText('Try again', { exact: false }).count()) > 0) throw new Error('one digit was called wrong');
     await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await see(page, 'Not 1. Try again.');
+    // A miss as long as the answer is said at once, and the field empties for another go.
+    await input.fill('99999');
+    await see(page, 'Not 9999. Try again.');
+    if ((await input.inputValue()) !== '') throw new Error('a wrong answer stayed in the field');
+    // The right answer opens by itself, a key at a time: no button to find.
+    await input.pressSequentially(answer);
     await see(page, 'open until');
     await shot(page, 'q22-ask-open');
     await context.close();
@@ -503,13 +509,60 @@ async function main() {
     await see(page, 'Your Second thought apps stay open while you use them, then ask again.');
     const sum = await page.getByText(/^\s*\d+\s*\+\s*\d+\s*$/).first().textContent();
     const [, a, b] = sum.match(/(\d+)\s*\+\s*(\d+)/);
-    await page.getByRole('textbox').first().fill(String(Number(a) + Number(b)));
-    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await page.getByRole('textbox').first().pressSequentially(String(Number(a) + Number(b)));
     await see(page, 'Open while you use it');
     await see(page, 'ask again about 2 minutes after you stop');
     if ((await page.getByText('open until', { exact: false }).count()) > 0) throw new Error('an end time was promised for "While I use it"');
     await shot(page, 'q22b-ask-open-while-in-use');
     await context.close();
+  });
+
+  await scenario('Second thought goes straight back to the app: the right answer opens the app the covering screen was drawn for and puts the sum away; with an empty battery it says why first', async () => {
+    const answerOf = async (page) => {
+      const sum = await page.getByText(/^\s*\d+\s*\+\s*\d+\s*$/).first().textContent();
+      const [, a, b] = sum.match(/(\d+)\s*\+\s*(\d+)/);
+      return String(Number(a) + Number(b));
+    };
+    const openedLink = (page) => page.evaluate(() => globalThis.plainlimitOpened ?? null);
+    {
+      const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting,covered');
+      await page.goto(url.replace(/\/$/, '') + '/ask?mock=counting,covered');
+      await see(page, 'One sum to open');
+      // The button names the app it will open.
+      await page.getByRole('button', { name: 'Open Snapchat', exact: true }).waitFor();
+      await shot(page, 'q22c-ask-sum-names-the-app');
+      if ((await openedLink(page)) !== null) throw new Error('an app was opened before the sum was solved');
+      await page.getByRole('textbox').first().pressSequentially(await answerOf(page));
+      await page.waitForFunction(() => globalThis.plainlimitOpened === 'snapchat://', null, { timeout: 8000 });
+      // The sum is put away: the app is on Today when it is next opened, with no "Done" to press.
+      await see(page, 'Plenty left');
+      if ((await page.getByText('One sum to open', { exact: false }).count()) > 0) throw new Error('the sum stayed up after the app was opened');
+      await context.close();
+    }
+    {
+      // An empty battery: an app that also counts is still locked, so the screen says so and offers the app.
+      const { page, context } = await open(doc({ goal: 180, used: 200 }), '?mock=counting,covered');
+      await see(page, 'Empty');
+      await page.goto(url.replace(/\/$/, '') + '/ask?mock=counting,covered');
+      await see(page, 'One sum to open');
+      await page.getByRole('textbox').first().pressSequentially(await answerOf(page));
+      await see(page, 'Apps that also count stay locked, as the battery is empty.');
+      if ((await openedLink(page)) !== null) throw new Error('with an empty battery the app was opened without a word');
+      await shot(page, 'q22d-ask-open-empty-names-the-app');
+      await page.getByRole('button', { name: 'Open Snapchat', exact: true }).click();
+      await page.waitForFunction(() => globalThis.plainlimitOpened === 'snapchat://', null, { timeout: 8000 });
+      await context.close();
+    }
+    {
+      // No note of an app (or one Plainlimit has no link for): as before, it says to go back.
+      const { page, context } = await open(doc({ goal: 180, used: 40 }), '?mock=counting');
+      await page.goto(url.replace(/\/$/, '') + '/ask?mock=counting');
+      await page.getByRole('button', { name: 'Open', exact: true }).waitFor();
+      await page.getByRole('textbox').first().pressSequentially(await answerOf(page));
+      await see(page, 'Go back to the one you wanted.');
+      if ((await page.getByRole('button', { name: /^Open / }).count()) > 0) throw new Error('an app was offered with nothing noted');
+      await context.close();
+    }
   });
 
   await scenario('emergency pass: offered on an empty battery, opens everything and the settings, once a day; the record opens from Today', async () => {

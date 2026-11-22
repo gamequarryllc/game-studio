@@ -83,3 +83,17 @@ export function isRight(sum: Sum, typed: string): boolean {
   if (!/^\d{1,4}$/.test(text)) return false;
   return Number(text) === sum.a + sum.b;
 }
+
+/** Where the typing stands: the answer, a miss with as many digits as the answer, or not there yet. */
+export type Typing = 'right' | 'wrong' | 'typing';
+
+/**
+ * Judges what has been typed so far, so that a sum goes through the moment the
+ * answer is right, with no button to find (the owner, 2026-11-22: the phone's
+ * own Done button sat on top of Open). A miss is only called once it is as
+ * long as the answer: 9 on the way to 94 is not wrong yet.
+ */
+export function typingOf(sum: Sum, typed: string): Typing {
+  if (isRight(sum, typed)) return 'right';
+  return typed.trim().length >= String(sum.a + sum.b).length ? 'wrong' : 'typing';
+}

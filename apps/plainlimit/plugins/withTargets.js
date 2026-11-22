@@ -13,11 +13,17 @@
 //      asked (the test build shows it), then to wait half a second so the
 //      request has left before iOS puts the extension to sleep. Without this the widget would only
 //      catch up when iOS next feels like refreshing it.
+//   4. Teaches the covering screen's extension to note which app it was last
+//      drawn for (name and bundle id, replacing the one before), in the
+//      settings the app shares with its extensions. After a Second thought sum
+//      the app reads the note and opens that app again (src/domain/appLinks.ts).
+//      It is the one place iOS says which app it is, and the note stays on the
+//      phone.
 //
-//   4. Writes targets/report/Info.plist (the usage report extension). Its
+//   5. Writes targets/report/Info.plist (the usage report extension). Its
 //      version and build number come from Xcode's settings, which the build
 //      script sets to the app's.
-//   5. Removes the push-notification entitlement the notifications package adds.
+//   6. Removes the push-notification entitlement the notifications package adds.
 //
 // targets/widget/ and targets/report/ are the app's own and are kept in git.
 const fs = require('fs');
@@ -34,16 +40,18 @@ const base = createConfig("device-activity-monitor");
 module.exports = (config) => ({ ...base(config), bundleIdentifier: ".ActivityMonitor" });
 `;
 
-function replaceOnce(source, find, replacement, what) {
-  const at = source.indexOf(find);
-  if (at === -1 || source.indexOf(find, at + find.length) !== -1) {
+function replaceTimes(source, find, replacement, what, times) {
+  const parts = source.split(find);
+  if (parts.length - 1 !== times) {
     throw new Error(
-      `plugins/withTargets.js: expected exactly one "${what}" in the Screen Time library's monitor extension. ` +
+      `plugins/withTargets.js: expected "${what}" ${times === 1 ? 'exactly once' : `${times} times`} in the Screen Time library's extensions, found ${parts.length - 1}. ` +
         'The library has changed; update the patch.',
     );
   }
-  return source.slice(0, at) + replacement + source.slice(at + find.length);
+  return parts.join(replacement);
 }
+
+const replaceOnce = (source, find, replacement, what) => replaceTimes(source, find, replacement, what, 1);
 
 function patchMonitor(file) {
   let source = fs.readFileSync(file, 'utf8');
@@ -61,6 +69,44 @@ function patchMonitor(file) {
   fs.writeFileSync(file, source);
 }
 
+// Swift added to the covering screen's extension. `userDefaults` is the library's own
+// handle on the shared settings (Shared.swift, in the same target).
+const NOTE_COVERED = `
+// Added by plugins/withTargets.js. Notes which app the covering screen was last drawn for,
+// so that after a Second thought sum the app can open it again. A website notes no app.
+// The note replaces the one before it and never leaves the phone.
+func plainlimitText(_ placeholders: [String: String?], _ key: String) -> String {
+  if let value = placeholders[key], let text = value {
+    return text
+  }
+  return ""
+}
+
+func plainlimitNoteCovered(_ placeholders: [String: String?]) {
+  let isApp = plainlimitText(placeholders, "tokenType").hasPrefix("application")
+  let note: [String: Any] = [
+    "name": isApp ? plainlimitText(placeholders, "applicationOrDomainDisplayName") : "",
+    "bundle": isApp ? plainlimitText(placeholders, "plainlimitBundle") : "",
+    "at": (Date().timeIntervalSince1970 * 1000).rounded()
+  ]
+  userDefaults?.set(note, forKey: "plainlimit_covered")
+  // The extension may be put to sleep as soon as the screen is drawn: write it out now.
+  _ = userDefaults?.synchronize()
+}
+`;
+
+function patchShieldConfiguration(file) {
+  let source = fs.readFileSync(file, 'utf8');
+  if (source.includes('plainlimitNoteCovered')) return;
+  // Both ways an app is covered (picked itself, or through its category) are told the app: pass its bundle id along.
+  const named = '"applicationOrDomainDisplayName": application.localizedDisplayName,';
+  source = replaceTimes(source, named, `${named}\n      "plainlimitBundle": application.bundleIdentifier,`, named, 2);
+  // Every covering screen is built here, with what it is drawn over.
+  const build = 'func buildShield(placeholders: [String: String?], config: [String: Any]?)\n  -> ShieldConfiguration {\n';
+  source = replaceOnce(source, build, `${build}\n  plainlimitNoteCovered(placeholders)\n`, 'func buildShield');
+  fs.writeFileSync(file, source + NOTE_COVERED);
+}
+
 module.exports = function withTargets(config) {
   const projectRoot = config._internal?.projectRoot ?? process.cwd();
   const library = path.dirname(require.resolve('react-native-device-activity/package.json', { paths: [projectRoot] }));
@@ -72,7 +118,7 @@ module.exports = function withTargets(config) {
   // leaves each target's entitlements file in it, and a build in progress is
   // reading these files.
   const version = require(path.join(library, 'package.json')).version;
-  const stamp = `react-native-device-activity ${version}, patch 7\n`;
+  const stamp = `react-native-device-activity ${version}, patch 8\n`;
   for (const name of EXTENSIONS) {
     const to = path.join(targets, name);
     const marker = path.join(to, '.prepared');
@@ -84,6 +130,7 @@ module.exports = function withTargets(config) {
       fs.writeFileSync(path.join(to, 'expo-target.config.js'), MONITOR_CONFIG);
       patchMonitor(path.join(to, 'DeviceActivityMonitorExtension.swift'));
     }
+    if (name === 'ShieldConfiguration') patchShieldConfiguration(path.join(to, 'ShieldConfigurationExtension.swift'));
     fs.writeFileSync(marker, stamp);
   }
   // The report extension's Info.plist: which kind of extension it is. Its

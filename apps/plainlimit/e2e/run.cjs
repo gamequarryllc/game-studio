@@ -257,20 +257,27 @@ async function main() {
       const label = await page.getByLabel(/^\d+ plus \d+$/).getAttribute('aria-label');
       const [a, b] = label.match(/\d+/g).map(Number);
       assert.ok(a >= 12 && b >= 11 && (a % 10) + (b % 10) >= 10, `sum ${label} should need a carry`);
+      const answer = String(a + b);
       if (i === 0) {
+        // A miss as long as the answer is said at once, with no button, and the field empties for another go.
         await page.getByRole('textbox').fill(String(a + b + 1));
-        await press('Check');
         await see(`Not ${a + b + 1}. Try again.`);
+        assert.strictEqual(await page.getByRole('textbox').inputValue(), '', 'a wrong answer is cleared');
         await shot(`${name}-wrong`);
-        await page.getByRole('textbox').fill('12abc');
-        assert.strictEqual(await page.getByRole('textbox').inputValue(), '12', 'only digits can be typed');
-        await page.getByRole('textbox').fill('');
+        await page.getByRole('textbox').fill('1a');
+        assert.strictEqual(await page.getByRole('textbox').inputValue(), '1', 'only digits can be typed');
+        assert.strictEqual(await page.getByText('Try again', { exact: false }).count(), 0, 'one digit is not a wrong answer yet');
+        // The button turns down what is there, and does nothing on an empty field.
+        await press('Check');
+        await see('Not 1. Try again.');
         await press('Check');
         await see('Sum 1 of ' + count);
+        await page.getByRole('textbox').fill(answer.slice(0, -1));
+        await shot(`${name}-sum`);
+        await page.getByRole('textbox').fill('');
       }
-      await page.getByRole('textbox').fill(String(a + b));
-      if (i === 0) await shot(`${name}-sum`);
-      await press('Check');
+      // Typed a key at a time, the right answer moves on by itself: there is no button to press.
+      await page.getByRole('textbox').pressSequentially(answer);
     }
   }
 

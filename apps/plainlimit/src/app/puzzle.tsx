@@ -5,13 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cellsLeft } from '@/domain/battery';
 import { clockLabel, clockLabelOf } from '@/domain/day';
-import { isRight, makeRandom, makeSums, topUpPlan, type Sum } from '@/domain/puzzle';
-import { success, warning } from '@/platform/haptics';
+import { makeRandom, makeSums, topUpPlan, type Sum } from '@/domain/puzzle';
+import { success } from '@/platform/haptics';
 import { sumLevelFor } from '@/domain/pro';
 import { store } from '@/state/store';
 import { BigButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
+import { useSumEntry } from '@/ui/useSumEntry';
 
 // "Work for it": a few sums for a little more time. Each top-up since the
 // last recharge asks for more sums and gives fewer minutes.
@@ -26,9 +27,19 @@ export default function Puzzle() {
   const [plan] = useState(() => topUpPlan(day.topUps));
   const [sums] = useState<Sum[]>(() => makeSums(plan.sums, makeRandom(Date.now()), sumLevelFor(settings, store.hasPro())));
   const [at, setAt] = useState(0);
-  const [typed, setTyped] = useState('');
-  const [wrong, setWrong] = useState(false);
   const [earnedUntil, setEarnedUntil] = useState<string | null>(null);
+
+  // Each right answer moves on by itself; the last one earns the time.
+  const sum = sums[Math.min(at, sums.length - 1)];
+  const entry = useSumEntry(sum, () => {
+    if (at + 1 < sums.length) {
+      setAt(at + 1);
+      return;
+    }
+    success();
+    store.earnTopUp();
+    setEarnedUntil(store.get().doc.day.unlockedUntil);
+  });
 
   const leave = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const frame = { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 28 };
@@ -65,24 +76,6 @@ export default function Puzzle() {
       </View>
     );
   }
-
-  const sum = sums[at];
-  const check = () => {
-    if (!isRight(sum, typed)) {
-      warning();
-      setWrong(true);
-      return;
-    }
-    setTyped('');
-    setWrong(false);
-    if (at + 1 < sums.length) {
-      setAt(at + 1);
-      return;
-    }
-    success();
-    store.earnTopUp();
-    setEarnedUntil(store.get().doc.day.unlockedUntil);
-  };
 
   return (
     <View style={[styles.page, frame]}>
@@ -123,26 +116,22 @@ export default function Puzzle() {
           <TextInput
             accessibilityLabelledBy="answer-label"
             aria-labelledby="answer-label"
-            value={typed}
-            onChangeText={(t) => {
-              setTyped(t.replace(/[^0-9]/g, '').slice(0, 4));
-              setWrong(false);
-            }}
-            onSubmitEditing={check}
+            value={entry.typed}
+            onChangeText={entry.type}
+            onSubmitEditing={entry.submit}
             keyboardType="number-pad"
             inputMode="numeric"
-            returnKeyType="done"
             autoFocus
-            style={[styles.input, wrong ? { borderColor: '#F0A08C' } : null]}
+            style={[styles.input, entry.wrong ? { borderColor: '#F0A08C' } : null]}
           />
-          {wrong ? (
+          {entry.wrong ? (
             <Text accessibilityLiveRegion="polite" style={styles.wrong}>
-              Not {typed}. Try again.
+              Not {entry.wrong}. Try again.
             </Text>
           ) : null}
         </View>
 
-        <BigButton label="Check" onPress={check} />
+        <BigButton label="Check" onPress={entry.submit} />
       </View>
 
       <Pressable accessibilityRole="button" onPress={leave} style={({ pressed }) => [styles.stop, pressed ? { opacity: 0.6 } : null]}>

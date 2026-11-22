@@ -1,4 +1,4 @@
-import { isRight, makeRandom, makeSum, makeSums, topUpPlan } from '../puzzle';
+import { isRight, makeRandom, makeSum, makeSums, topUpPlan, typingOf } from '../puzzle';
 import { ALLOWED_MAX, clampGoal, stepGoal, stepRecharge, withAllowed, withoutAllowed } from '../settings';
 
 describe('the puzzle', () => {
@@ -93,5 +93,24 @@ describe('sum difficulty', () => {
 
   it('normal is the same sums as before difficulty existed', () => {
     expect(makeSums(5, makeRandom(7), 'normal')).toEqual(makeSums(5, makeRandom(7)));
+  });
+
+  it('judges the typing as it goes, so a right answer needs no button', () => {
+    const sum = { a: 48, b: 46 };
+    expect(typingOf(sum, '')).toBe('typing');
+    // On the way to 94, 9 is not wrong yet.
+    expect(typingOf(sum, '9')).toBe('typing');
+    expect(typingOf(sum, '94')).toBe('right');
+    // As long as the answer and not it: said at once.
+    expect(typingOf(sum, '95')).toBe('wrong');
+    expect(typingOf(sum, '1')).toBe('typing');
+    expect(typingOf(sum, '940')).toBe('wrong');
+    // A three-digit answer waits for the third digit.
+    const big = { a: 89, b: 45 };
+    expect(typingOf(big, '13')).toBe('typing');
+    expect(typingOf(big, '134')).toBe('right');
+    expect(typingOf(big, '135')).toBe('wrong');
+    // A zero in front is still the same number.
+    expect(typingOf(sum, '094')).toBe('right');
   });
 });

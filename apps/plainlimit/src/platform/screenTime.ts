@@ -56,7 +56,9 @@ export type Permission = 'unknown' | 'denied' | 'approved';
  * Words, comma-separated: "counting" (counting is on), one counting problem
  * ("nothingPicked", "tooManyApps", "accessOff", "notRegistered", "miscounted"),
  * "held" (setup's "start tomorrow": nothing locks before the recharge),
- * "noAskPicks" (nothing picked yet for Second thought) and
+ * "noAskPicks" (nothing picked yet for Second thought),
+ * "covered" (the covering screen was last drawn for Snapchat, and opening an
+ * app is only noted on the page) and
  * "store" (the App Store screenshots: no test tools, and no box for the list
  * only a phone can draw). Never on a phone.
  */
@@ -71,6 +73,9 @@ const MOCK: ReadonlySet<string> = (() => {
 
 /** Preview only: the address asks to stand in for a phone that is counting. */
 export const MOCK_PHONE = MOCK.has('counting');
+
+/** Preview only: the covering screen was last drawn for an app Plainlimit can open again (src/platform/backToApp.ts). */
+export const MOCK_COVERED = MOCK.has('covered');
 
 /** Preview only: the App Store screenshots are being taken. */
 export const STORE_SHOTS = MOCK.has('store');

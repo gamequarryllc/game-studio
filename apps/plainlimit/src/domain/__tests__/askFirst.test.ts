@@ -160,6 +160,9 @@ describe('While I use it', () => {
     expect(askOpened('use', '2:14 PM')).toEqual({ title: 'Open while you use it', line: expect.stringContaining('about 2 minutes after you stop') });
     expect(askOpened('use', '2:14 PM').line).not.toContain('2:14 PM');
     expect(askOpened(10, '2:14 PM')).toEqual({ title: 'Open for 10 minutes', line: 'Your Second thought apps are open until 2:14 PM. Go back to the one you wanted.' });
+    // With a button that opens the app itself, it doesn't also say to go back by hand.
+    expect(askOpened(10, '2:14 PM', false).line).toBe('Your Second thought apps are open until 2:14 PM.');
+    expect(askOpened('use', '2:14 PM', false).line).not.toContain('Go back');
   });
 
   it("times it with timers of its own, named for the list so its screen still shows, and never with a battery's", () => {
