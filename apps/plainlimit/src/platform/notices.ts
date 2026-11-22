@@ -21,13 +21,41 @@ if (Platform.OS === 'ios') {
   });
 }
 
-/** Asks once whether the app may show notifications. */
-export async function askToNotify(): Promise<void> {
-  if (Platform.OS !== 'ios') return;
+/** Whether the app may show notifications: allowed, turned down, or not asked yet. */
+export type NotifyAnswer = 'on' | 'off' | 'unasked';
+
+/** The iPhone's own answers (UNAuthorizationStatus, which expo-notifications passes on as `ios.status`): 0 not asked, 1 denied, 2 allowed, 3 and 4 allowed quietly or for a while. */
+const IOS_NOT_ASKED = 0;
+const IOS_ALLOWED_FROM = 2;
+
+export function answerOf(status: Pick<Notifications.NotificationPermissionsStatus, 'granted' | 'status' | 'ios'>): NotifyAnswer {
+  const ios = status.ios?.status as number | undefined;
+  if (status.granted || (ios !== undefined && ios >= IOS_ALLOWED_FROM)) return 'on';
+  if (ios === IOS_NOT_ASKED || (ios === undefined && status.status === 'undetermined')) return 'unasked';
+  return 'off';
+}
+
+/** Off an iPhone there is nothing to ask; the preview plays along, so setup's screen can be walked through. */
+let pretend: NotifyAnswer = 'unasked';
+
+/** Whether notifications are allowed, without asking. */
+export async function notifyState(): Promise<NotifyAnswer> {
+  if (Platform.OS !== 'ios') return pretend;
   try {
-    await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false } });
+    return answerOf(await Notifications.getPermissionsAsync());
   } catch {
-    // Without them the empty screen's "I need more time" has nowhere to lead; Settings says so.
+    return 'unasked';
+  }
+}
+
+/** Asks whether the app may show notifications. The iPhone puts the question only once; after that this just reports the answer. */
+export async function askToNotify(): Promise<NotifyAnswer> {
+  if (Platform.OS !== 'ios') return (pretend = 'on');
+  try {
+    return answerOf(await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false } }));
+  } catch {
+    // Without them the empty screen's "I need more time" has nowhere to lead; setup says so.
+    return 'off';
   }
 }
 

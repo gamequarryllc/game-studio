@@ -72,23 +72,29 @@ async function main() {
     await see('These never count and never lock.');
     await shot('00-setup-counts');
     await press('Next');
-    // The screen in between: what an empty battery does, while a phone draws the next screen's chart behind it.
-    await see('When it’s empty');
-    await see('Opens again at 6:00 AM');
-    await see('Or use an emergency pass');
-    await see('Essentials always open');
+    // Notifications, with their reason, where the question used to come cold after the last screen. A phone draws the next screen's chart behind this one.
+    await see('Notifications need to be on');
+    await see('A warning when you’re nearly out');
+    await see('The pop-up to earn more time');
+    await see('Nothing else, ever');
+    await see('Without them, asking for more time on a locked app does nothing.');
     await page.getByLabel('Step 3 of 5', { exact: true }).waitFor();
-    await shot('00-setup-between');
-    await press('Next');
+    await shot('00-setup-notify');
+    await press('Not now');
     await see('How much a day?');
     await see('Six cells of 30 minutes each');
     await see('It recharges at 6:00 AM every day.');
     await shot('00-setup-goal');
     await press('Back');
-    await see('When it’s empty');
+    await see('Notifications need to be on');
     await press('Back');
     await see('Your essentials');
     await press('Next');
+    // Allowing moves on by itself; coming back, the screen says they are on.
+    await press('Allow notifications');
+    await see('How much a day?');
+    await press('Back');
+    await see('They’re on.');
     await press('Next');
     await press('Next');
     await see("You're set");

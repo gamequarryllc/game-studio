@@ -1,11 +1,11 @@
 import { useRouter } from 'expo-router';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Easing, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
-import { askToNotify } from '@/platform/notices';
+import { askToNotify, notifyState, type NotifyAnswer } from '@/platform/notices';
 import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount, wholeWindow } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
@@ -13,24 +13,26 @@ import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { Icon } from '@/ui/icons';
+import { NotifyPicture, NotifyStory } from '@/ui/NotifyStep';
 import { SetupFigures, WHOLE, WakeScreenTime, WholeTotal } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
 import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
-import { EmptyPicture, EmptyStory } from '@/ui/WhenEmpty';
 import { useDay } from '@/ui/useDay';
 
 // The first launch, in six screens: what it is, Screen Time access, what
-// counts, what an empty battery does, the goal, and a last check. Access comes
-// first, so the goal screen can show the phone's own figures (today so far,
-// and the last week's average) while the goal is picked; the old order asked
-// for a goal before anything was known, and a quick tap-through could lock
-// every app at once.
+// counts, notifications, the goal, and a last check. Access comes first, so
+// the goal screen can show the phone's own figures (today so far, and the
+// last week's average) while the goal is picked; the old order asked for a
+// goal before anything was known, and a quick tap-through could lock every
+// app at once.
 //
 // The phone's first drawing after an install can take a minute, and the app
 // can't tell when it is done. So setup starts early: Screen Time is woken as
 // soon as access is allowed (WakeScreenTime), and the goal screen's chart is
-// asked for one screen ahead, out of sight behind 'between', which gives the
-// reader something useful to look at meanwhile (the owner, build 144).
+// asked for one screen ahead, out of sight behind 'notify'. That screen is not
+// there to fill time: the notifications question used to come cold, after
+// "Start counting", and the owner had it moved to where its reason can be
+// said and the wait is covered by something setup needs anyway (build 144).
 //
 // Counting always takes in the day since the recharge, so the app can be
 // installed at any time of day. The last screen registers the day with the
@@ -38,9 +40,9 @@ import { useDay } from '@/ui/useDay';
 // already past the goal, starting is not the main button: tomorrow is.
 // Everything here can be changed later in Settings.
 
-type Step = 'welcome' | 'access' | 'counts' | 'between' | 'goal' | 'ready';
+type Step = 'welcome' | 'access' | 'counts' | 'notify' | 'goal' | 'ready';
 
-const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'access', 'counts', 'between', 'goal', 'ready'] : ['welcome', 'counts', 'between', 'goal', 'ready'];
+const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'access', 'counts', 'notify', 'goal', 'ready'] : ['welcome', 'counts', 'notify', 'goal', 'ready'];
 
 /**
  * How the last screen waits for the phone's report of the day so far: until
@@ -70,6 +72,8 @@ export default function Setup() {
   const [phase, setPhase] = useState<'reading' | 'ready' | 'failed'>('reading');
   const [waitedAt, setWaitedAt] = useState<number | null>(null);
   const previewed = useRef(false);
+  // Whether notifications are allowed, read as setup opens and again whenever the app comes back to the front (from the iPhone's Settings, say).
+  const [notify, setNotify] = useState<NotifyAnswer>('unasked');
   // Whether the goal screen's figures have been asked for, so they stay for the rest of setup.
   const [figuresShown, setFiguresShown] = useState(false);
 
@@ -84,6 +88,17 @@ export default function Setup() {
   const figures = canPick && picked > 0;
   // Only a phone with access and something ticked can count; anywhere else the last screen is a summary.
   const checking = step === 'ready' && figures;
+
+  useEffect(() => {
+    let live = true;
+    const read = () => void notifyState().then((answer) => (live ? setNotify(answer) : undefined));
+    read();
+    const watch = AppState.addEventListener('change', (state) => (state === 'active' ? read() : undefined));
+    return () => {
+      live = false;
+      watch.remove();
+    };
+  }, []);
 
   // Registers the day (locks held) on reaching the last screen, once.
   useEffect(() => {
@@ -113,7 +128,8 @@ export default function Setup() {
     if (busy) return;
     setBusy(true);
     try {
-      // "I need more time" on a locked app works through a notification.
+      // "I need more time" on a locked app works through a notification. The question has its own screen now;
+      // this is its second chance for anyone who tapped "Not now" there (the iPhone puts it once, so otherwise it is silent).
       await askToNotify();
       await then();
     } catch {
@@ -132,6 +148,16 @@ export default function Setup() {
     setAccess(answer);
     setAsked(true);
     if (answer === 'approved') next();
+  };
+
+  const allowNotices = async () => {
+    if (busy) return;
+    setBusy(true);
+    const answer = await askToNotify();
+    setBusy(false);
+    setNotify(answer);
+    // Turned down: stay, and say what that costs.
+    if (answer === 'on') next();
   };
 
   // The goal screen's own words go in `head`, over the phone's figures; every other screen's go in `body`, which covers the figures while they are parked.
@@ -188,19 +214,35 @@ export default function Setup() {
     }
   }
 
-  if (step === 'between') {
-    // Something worth a look while the phone draws the next screen's chart behind this one.
+  if (step === 'notify') {
+    // Needed, and said so: without notifications the empty screen's "I need more time" leads nowhere (the owner, 2026-11-22).
     body = (
       <>
-        <EmptyPicture />
-        <Heading>{'When it\u2019s empty'}</Heading>
-        <EmptyStory recharge={clockLabel(settings.rechargeMinute)} />
+        <NotifyPicture />
+        <Heading>Notifications need to be on</Heading>
+        <NotifyStory />
+        {notify === 'on' ? (
+          <Text style={styles.ok}>{'They\u2019re on.'}</Text>
+        ) : notify === 'off' ? (
+          <Text accessibilityRole="alert" style={styles.warn}>
+            {'They\u2019re off, so asking for more time on a locked app won\u2019t do anything. Turn them on in the iPhone\u2019s Settings.'}
+          </Text>
+        ) : (
+          <Lead>Without them, asking for more time on a locked app does nothing.</Lead>
+        )}
       </>
     );
+    if (notify === 'unasked') {
+      primary = { label: busy ? 'One moment…' : 'Allow notifications', onPress: () => void allowNotices() };
+      secondary = { label: 'Not now', onPress: next };
+    } else if (notify === 'off') {
+      primary = { label: 'Open Settings', onPress: () => void Linking.openSettings().catch(() => {}) };
+      secondary = { label: 'Skip for now', onPress: next };
+    }
   }
 
   // The goal screen's figures and 7-day chart, drawn by the phone. They are
-  // asked for one screen early, parked out of sight behind 'between', so the
+  // asked for one screen early, parked out of sight behind 'notify', so the
   // phone has a head start. Once asked for they stay for the rest of setup,
   // parked on the other screens, so Back and Next don't ask the phone to draw
   // them again: on build 127 the second drawing never came (the owner). They
@@ -209,7 +251,7 @@ export default function Setup() {
   // not made clear: a clear view might never be drawn, and the head start
   // would be lost without a sign.
   const recharge = clockLabel(settings.rechargeMinute);
-  if ((step === 'between' || step === 'goal') && figures && !figuresShown) setFiguresShown(true);
+  if ((step === 'notify' || step === 'goal') && figures && !figuresShown) setFiguresShown(true);
   const figureBox =
     figures && figuresShown ? (
       <View
@@ -433,6 +475,7 @@ const styles = StyleSheet.create({
   body: { fontSize: 15, lineHeight: 21, color: c.ink2 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
   ok: { fontSize: 16, fontWeight: '600', color: c.ink },
+  warn: { fontSize: 15, lineHeight: 21, fontWeight: '600', color: '#FF7B6B' },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   big: { fontFamily: display.bold, fontSize: 60, lineHeight: 64, letterSpacing: -2.2, color: c.ink },
   figureBox: { borderWidth: 1, borderColor: c.rule, borderRadius: 18, padding: 16 },
