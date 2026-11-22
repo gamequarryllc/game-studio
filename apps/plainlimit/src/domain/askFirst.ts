@@ -217,18 +217,13 @@ export function askLead(open: number | 'use', opensCounted: boolean, rechargeLab
   return opensCounted ? what : `${what} Apps that also count stay locked until ${rechargeLabel}, as the battery is empty.`;
 }
 
-/**
- * What the sum's screen says once the list is open: a heading, and the line
- * under it. `byHand` adds where to go next; it is left out when the screen has
- * a button that opens the app itself (src/domain/appLinks.ts).
- */
-export function askOpened(open: number | 'use', untilLabel: string, byHand = true): { title: string; line: string } {
-  const next = byHand ? ' Go back to the one you wanted.' : '';
+/** What the sum's screen says once the list is open: a heading, and the line under it. */
+export function askOpened(open: number | 'use', untilLabel: string): { title: string; line: string } {
   if (open === 'use') {
     return {
       title: 'Open until you leave it',
-      line: `Your Second thought apps stay open until you leave them, and ask again about ${IDLE_MINUTES} minutes after you leave.${next}`,
+      line: `Your Second thought apps stay open until you leave them, and ask again about ${IDLE_MINUTES} minutes after you leave. Go back to the one you wanted.`,
     };
   }
-  return { title: `Open for ${open} minutes`, line: `Your Second thought apps are open until ${untilLabel}.${next}` };
+  return { title: `Open for ${open} minutes`, line: `Your Second thought apps are open until ${untilLabel}. Go back to the one you wanted.` };
 }

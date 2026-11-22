@@ -50,18 +50,3 @@ export function onNoticeRoute(go: (route: NoticeRoute) => void): () => void {
     subscription.remove();
   };
 }
-
-/**
- * What a notification that is still waiting carries, by its name; undefined
- * when there is none. The covering screen's extension leaves its note on one
- * that is never shown (plugins/withTargets.js), and this is how the app reads it.
- */
-export async function waitingData(identifier: string): Promise<unknown> {
-  if (Platform.OS !== 'ios') return undefined;
-  try {
-    const all = await Notifications.getAllScheduledNotificationsAsync();
-    return all.find((request) => request.identifier === identifier)?.content.data ?? undefined;
-  } catch {
-    return undefined;
-  }
-}

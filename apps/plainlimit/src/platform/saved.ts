@@ -40,12 +40,6 @@ export const SAVED = {
   askOpenUntil: 'plainlimit_ask_open_until',
   /** 1 while that open stretch is "Until I leave it": the phone covers the list again by itself once it goes unused. */
   askOpenInUse: 'plainlimit_ask_open_in_use',
-  /** The build whose extension last drew the Ask first list's covering screens afresh (askFirst.ts, `drawAfresh`). */
-  askDrawnBy: 'plainlimit_ask_drawn_by',
-  /** The app the covering screen was last drawn for: written by its extension, only read here (src/domain/appLinks.ts). */
-  coveredApp: 'plainlimit_covered',
-  /** The covering screen whose button was last pressed: written by the buttons' extension, only read here. */
-  tappedApp: 'plainlimit_tapped',
   /** When counting was first seen not working, in a run of bad checks. */
   wrongSince: 'plainlimit_wrong_since',
   /** What the widget draws from: the goal, the recharge, when counting began, and the rounds. */
@@ -103,16 +97,6 @@ export function save(key: Saved, value: unknown): void {
 /** Forgets a value. Throws if the phone refuses. */
 export function forget(key: Saved): void {
   DeviceActivity.userDefaultsRemove(SAVED[key]);
-}
-
-/** What the covering screen's extension noted about the app it was last drawn for, as it was saved. */
-export function coveredApp(): unknown {
-  return get('coveredApp');
-}
-
-/** What the extension behind the covering screen's buttons noted at the last press, as it was saved. */
-export function tappedApp(): unknown {
-  return get('tappedApp');
 }
 
 export function countingSince(): number | null {

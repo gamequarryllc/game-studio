@@ -68,7 +68,7 @@ export function ScreenTimeCard() {
       <Text style={body}>
         {denied
           ? 'Screen Time access is off for Plainlimit. Turn it on to have the battery follow your real day.'
-          : 'Let the battery follow your real screen time. The phone does the counting; Plainlimit hears how much time has gone, and none of it leaves your phone.'}
+          : 'Let the battery follow your real screen time. The phone does the counting; Plainlimit only hears how much time has gone, never which apps you opened.'}
       </Text>
       <BigButton label={busy ? 'Asking…' : 'Turn on Screen Time'} onPress={() => void turnOn()} />
       {problem ? <Text style={[body, { color: c.ink }]}>{problem}</Text> : null}

@@ -4,7 +4,6 @@
  * its own screen and runs its own timer. It never reads the phone's reports.
  */
 
-import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
@@ -31,7 +30,7 @@ import {
 } from '@/domain/askFirst';
 import { SHORTEST_WATCH_MINUTES, rgbOf, spanOf, topUpWindow } from '@/domain/monitorPlan';
 
-import { forget, readNumber, readString, save } from './saved';
+import { forget, readNumber, save } from './saved';
 
 const AVAILABLE = Platform.OS === 'ios' && DeviceActivity.isAvailable();
 const SELECTION = { activitySelectionId: ASK_ID };
@@ -99,42 +98,6 @@ export function coverAskAgain(askFirst: AskFirst | undefined): void {
   }
 }
 
-/** The installed build ("1.1.0 (140)"), from the app's own module; '' where there is none. */
-function installedBuild(): string {
-  try {
-    return (Platform.OS === 'ios' ? requireOptionalNativeModule<{ build?(): string }>('PlainlimitWidgets') : null)?.build?.() ?? '';
-  } catch {
-    return '';
-  }
-}
-
-/** How long the cover stays off in `drawAfresh`: long enough for the phone to take the two changes as two. */
-export const AFRESH_GAP_MS = 400;
-
-/**
- * Once per installed build, before the list's cover is put in place: takes it
- * off for a moment, so the phone asks this build's extension to draw the
- * covering screens again. The phone keeps showing a screen it has already
- * drawn, and one drawn by the build before knows nothing this build added
- * (noting the app for the way straight back to it, src/domain/appLinks.ts).
- * Never fails: the caller covers the list either way.
- */
-let afresh: Promise<void> | null = null;
-function drawAfresh(): Promise<void> {
-  afresh ??= (async () => {
-    try {
-      const build = installedBuild();
-      if (build === '' || readString('askDrawnBy') === build) return;
-      save('askDrawnBy', build);
-      DeviceActivity.unblockSelection(SELECTION, 'plainlimit-ask');
-      await new Promise((done) => setTimeout(done, AFRESH_GAP_MS));
-    } catch {
-      // Covered again by the caller.
-    }
-  })();
-  return afresh;
-}
-
 function writeScreen(open: OpenChoice, battery: AskBattery) {
   const copy = askShieldCopy(open, battery.recharge, battery.empty);
   const notice = askNotice();
@@ -193,11 +156,7 @@ export async function applyAskFirst(askFirst: AskFirst | undefined, battery: Ask
     if (!DeviceActivity.getActivities().includes(ASK_WATCH)) {
       await DeviceActivity.startMonitoring(ASK_WATCH, { intervalStart: { hour: 0, minute: 0 }, intervalEnd: { hour: 23, minute: 59 }, repeats: true }, []);
     }
-    if (askOpenUntil() === 0) {
-      await drawAfresh();
-      // Still closed after the wait (a sum may have opened it meanwhile).
-      if (askOpenUntil() === 0) DeviceActivity.blockSelection(SELECTION, 'plainlimit-ask');
-    }
+    if (askOpenUntil() === 0) DeviceActivity.blockSelection(SELECTION, 'plainlimit-ask');
   } catch {
     // Tried again the next time the app comes to the front.
   }
