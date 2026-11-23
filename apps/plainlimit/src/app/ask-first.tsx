@@ -34,6 +34,10 @@ import { useDay } from '@/ui/useDay';
 // The owner, the same day, after build 138: the open time sat under the phone's
 // list, a scroll away. Of three orders drawn they picked "Times second": the
 // open time moves up to second, under the switch, and nothing else moves.
+//
+// The owner, after build 145: "Your apps" was hiding at the foot of the page,
+// under the phone's list. It now sits in the first card, under the switch
+// (with nothing picked, the "Choose apps" button does).
 
 const OPEN_PILLS: readonly { value: OpenChoice; label: string; spoken?: string; wide?: boolean }[] = [
   ...OPEN_CHOICES.map((minutes) => ({ value: minutes, label: `${minutes} min`, spoken: `${minutes} minutes` })),
@@ -82,6 +86,16 @@ export default function AskFirstSettings() {
             {...({ activeThumbColor: '#FFFFFF' } as object)}
           />
         </View>
+        {/* The apps sit with the switch: at the foot of the page they were out of sight (the owner, 2026-11-22). */}
+        {!phone ? null : picked === 0 ? (
+          <View style={{ paddingTop: 2, paddingBottom: 16 }}>
+            <BigButton label="Choose apps" onPress={() => setPicking(true)} />
+          </View>
+        ) : (
+          <View style={styles.apps}>
+            <LinkRow label="Your apps" value={`${picked} picked`} onPress={() => setPicking(true)} last />
+          </View>
+        )}
       </Card>
 
       {/* The open time comes second, so it shows as the screen opens (the owner, 2026-11-22). */}
@@ -94,18 +108,11 @@ export default function AskFirstSettings() {
       <SecondThoughtPicture open={open} accent={accent} />
 
       {phone ? (
-        <Card style={{ paddingTop: 14 }}>
+        <Card style={{ paddingTop: 14, paddingBottom: 12 }}>
           {/* Suggestions: what the phone says is opened first after a pickup (drawn by the phone; the app can't read or tick them). */}
           <Label>You open these first</Label>
           <Text style={[styles.hint, { marginTop: 2, marginBottom: 2 }]}>After picking up your phone, last 7 days.</Text>
           <FirstPickupApps now={now} />
-          {picked === 0 ? (
-            <View style={{ paddingTop: 12, paddingBottom: 16 }}>
-              <BigButton label="Choose apps" onPress={() => setPicking(true)} />
-            </View>
-          ) : (
-            <LinkRow label="Your apps" value={`${picked} picked`} onPress={() => setPicking(true)} last />
-          )}
         </Card>
       ) : (
         <Card>
@@ -129,6 +136,7 @@ export default function AskFirstSettings() {
 }
 
 const styles = StyleSheet.create({
+  apps: { borderTopWidth: 1, borderTopColor: c.rule },
   master: { minHeight: 66, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   state: { fontSize: 18, lineHeight: 22, fontWeight: '600', color: c.ink },
   hint: { fontSize: 15, lineHeight: 20, color: c.ink3 },

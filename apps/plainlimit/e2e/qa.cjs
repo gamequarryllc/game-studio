@@ -412,6 +412,10 @@ async function main() {
       await see(page, 'A pause before the apps you open without thinking.');
       await see(page, 'Pick apps and it turns on');
       await page.getByRole('button', { name: 'Choose apps', exact: true }).waitFor();
+      // The button sits with the switch too, above the open time.
+      const chooseAt = (await page.getByRole('button', { name: 'Choose apps', exact: true }).boundingBox()).y;
+      const firstTimeAt = (await page.getByRole('radio', { name: '5 minutes', exact: true }).boundingBox()).y;
+      if (!(chooseAt < firstTimeAt)) throw new Error(`"Choose apps" is not above the open time (${chooseAt}, ${firstTimeAt})`);
       if (await page.getByRole('switch', { name: 'Second thought' }).isChecked()) throw new Error('the switch was on with nothing picked');
       await page.getByTestId('ask-state').filter({ hasText: /^Off$/ }).waitFor();
       await shot(page, 'q21a-ask-first-nothing-picked', true);
@@ -434,10 +438,12 @@ async function main() {
     const switchAt = (await toggle.boundingBox()).y;
     const pictureAt = (await page.getByRole('img', { name: /^Your app asks first/ }).boundingBox()).y;
     const appsAt = (await page.getByRole('button', { name: 'Your apps, 3 picked', exact: true }).boundingBox()).y;
-    if (!(switchAt < pictureAt && pictureAt < appsAt)) throw new Error(`the switch is not above the picture and the apps (${switchAt}, ${pictureAt}, ${appsAt})`);
+    if (!(switchAt < pictureAt)) throw new Error(`the switch is not above the picture (${switchAt}, ${pictureAt})`);
     // The open time comes second, under the switch and above the picture, so it shows as the screen opens (the owner, 2026-11-22).
     const timesAt = (await page.getByRole('radio', { name: '5 minutes', exact: true }).boundingBox()).y;
     if (!(switchAt < timesAt && timesAt < pictureAt)) throw new Error(`the open time is not between the switch and the picture (${switchAt}, ${timesAt}, ${pictureAt})`);
+    // "Your apps" sits with the switch, in the first card, not at the foot of the page (the owner, after build 145).
+    if (!(switchAt < appsAt && appsAt < timesAt)) throw new Error(`"Your apps" is not between the switch and the open time (${switchAt}, ${appsAt}, ${timesAt})`);
     await toggle.click();
     await page.waitForTimeout(200);
     if (!(await toggle.isChecked())) throw new Error('the switch did not turn it on');
