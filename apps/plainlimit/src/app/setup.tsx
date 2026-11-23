@@ -1,11 +1,11 @@
 import { useRouter } from 'expo-router';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, AppState, Easing, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
-import { askToNotify, notifyState, type NotifyAnswer } from '@/platform/notices';
+import { askToNotify, openPhoneSettings } from '@/platform/notices';
 import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount, wholeWindow } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
@@ -18,6 +18,7 @@ import { SetupFigures, WHOLE, WakeScreenTime, WholeTotal } from '@/ui/UsageRepor
 import { WaitingDots } from '@/ui/Waiting';
 import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
 import { useDay } from '@/ui/useDay';
+import { useNotices } from '@/ui/useNotices';
 
 // The first launch, in six screens: what it is, Screen Time access, what
 // counts, notifications, the goal, and a last check. Access comes first, so
@@ -73,7 +74,7 @@ export default function Setup() {
   const [waitedAt, setWaitedAt] = useState<number | null>(null);
   const previewed = useRef(false);
   // Whether notifications are allowed, read as setup opens and again whenever the app comes back to the front (from the iPhone's Settings, say).
-  const [notify, setNotify] = useState<NotifyAnswer>('unasked');
+  const [notify, setNotify] = useNotices();
   // Whether the goal screen's figures have been asked for, so they stay for the rest of setup.
   const [figuresShown, setFiguresShown] = useState(false);
 
@@ -88,17 +89,6 @@ export default function Setup() {
   const figures = canPick && picked > 0;
   // Only a phone with access and something ticked can count; anywhere else the last screen is a summary.
   const checking = step === 'ready' && figures;
-
-  useEffect(() => {
-    let live = true;
-    const read = () => void notifyState().then((answer) => (live ? setNotify(answer) : undefined));
-    read();
-    const watch = AppState.addEventListener('change', (state) => (state === 'active' ? read() : undefined));
-    return () => {
-      live = false;
-      watch.remove();
-    };
-  }, []);
 
   // Registers the day (locks held) on reaching the last screen, once.
   useEffect(() => {
@@ -236,7 +226,7 @@ export default function Setup() {
       primary = { label: busy ? 'One moment…' : 'Allow notifications', onPress: () => void allowNotices() };
       secondary = { label: 'Not now', onPress: next };
     } else if (notify === 'off') {
-      primary = { label: 'Open Settings', onPress: () => void Linking.openSettings().catch(() => {}) };
+      primary = { label: 'Open Settings', onPress: openPhoneSettings };
       secondary = { label: 'Skip for now', onPress: next };
     }
   }

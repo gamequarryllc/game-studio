@@ -27,6 +27,7 @@ import type { Settings } from '@/domain/types';
 
 import { askCoverActions, coverAskAgain, stopAskFirst } from './askFirst';
 import { countingSince, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readNumberOrNull, readString, registeredAt, round, save, SAVED, savedGuard } from './saved';
+import { MOCK } from './mock';
 
 // The one file that talks to Apple's Screen Time.
 //
@@ -56,18 +57,11 @@ export type Permission = 'unknown' | 'denied' | 'approved';
  * Words, comma-separated: "counting" (counting is on), one counting problem
  * ("nothingPicked", "tooManyApps", "accessOff", "notRegistered", "miscounted"),
  * "held" (setup's "start tomorrow": nothing locks before the recharge),
- * "noAskPicks" (nothing picked yet for Second thought) and
+ * "noAskPicks" (nothing picked yet for Second thought),
+ * "noticesOff" (notifications turned off; read in notices.ts) and
  * "store" (the App Store screenshots: no test tools, and no box for the list
- * only a phone can draw). Never on a phone.
+ * only a phone can draw). Never on a phone. The words are read in mock.ts.
  */
-const MOCK: ReadonlySet<string> = (() => {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return new Set<string>();
-  try {
-    return new Set((new URLSearchParams(window.location.search).get('mock') ?? '').split(',').filter(Boolean));
-  } catch {
-    return new Set<string>();
-  }
-})();
 
 /** Preview only: the address asks to stand in for a phone that is counting. */
 export const MOCK_PHONE = MOCK.has('counting');

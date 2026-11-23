@@ -1,5 +1,7 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
+
+import { MOCK } from './mock';
 
 // The app's notifications are all made on the phone itself: "nearly out", and
 // the one that carries someone from the empty screen to the sums. Nothing is
@@ -35,8 +37,8 @@ export function answerOf(status: Pick<Notifications.NotificationPermissionsStatu
   return 'off';
 }
 
-/** Off an iPhone there is nothing to ask; the preview plays along, so setup's screen can be walked through. */
-let pretend: NotifyAnswer = 'unasked';
+/** Off an iPhone there is nothing to ask; the preview plays along, so setup's screen can be walked through, and "?mock=noticesOff" shows Today's warning. */
+let pretend: NotifyAnswer = MOCK.has('noticesOff') ? 'off' : 'unasked';
 
 /** Whether notifications are allowed, without asking. */
 export async function notifyState(): Promise<NotifyAnswer> {
@@ -57,6 +59,12 @@ export async function askToNotify(): Promise<NotifyAnswer> {
     // Without them the empty screen's "I need more time" has nowhere to lead; setup says so.
     return 'off';
   }
+}
+
+/** Opens Plainlimit's page in the iPhone's Settings, where notifications are turned on. Nothing happens anywhere else. */
+export function openPhoneSettings(): void {
+  if (Platform.OS !== 'ios') return;
+  void Linking.openSettings().catch(() => {});
 }
 
 /** Calls back with the page a tapped notification asks for, including the one that opened the app. */

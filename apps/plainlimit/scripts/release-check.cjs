@@ -24,8 +24,12 @@ for (const file of ['.env', '.env.local', '.env.production']) {
   if (fs.existsSync(full) && /EXPO_PUBLIC_PLAYTEST\s*=\s*1/.test(fs.readFileSync(full, 'utf8'))) problems.push(`${file}: sets EXPO_PUBLIC_PLAYTEST=1, which would put the test tools in the store build.`);
 }
 // The browser stand-in for a phone is for the web preview only.
-if (!/if \(Platform\.OS !== 'web' \|\| typeof window === 'undefined'\) return new Set<string>\(\);/.test(screenTime)) {
-  problems.push('src/platform/screenTime.ts: the "?mock=" stand-in is no longer limited to the browser.');
+// Its words are read in one place, mock.ts, which hands a phone an empty set; nothing else may read the address for them.
+if (!/if \(Platform\.OS !== 'web' \|\| typeof window === 'undefined'\) return new Set<string>\(\);/.test(read('src/platform/mock.ts'))) {
+  problems.push('src/platform/mock.ts: the "?mock=" stand-in is no longer limited to the browser.');
+}
+for (const file of ['src/platform/screenTime.ts', 'src/platform/notices.ts']) {
+  if (/get\(['"]mock['"]\)/.test(read(file))) problems.push(`${file}: reads "?mock=" itself; only src/platform/mock.ts may, behind its browser check.`);
 }
 
 // The app's promise is that nothing leaves the phone: no analytics, crash reporting or purchase service.

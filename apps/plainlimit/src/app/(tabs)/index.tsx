@@ -14,6 +14,7 @@ import { weekView } from '@/domain/week';
 import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, locksHeldUntil } from '@/platform/screenTime';
 import { store, useDoc } from '@/state/store';
 import { CountingProblem } from '@/ui/CountingProblem';
+import { NoticesOff } from '@/ui/NoticesOff';
 import { GlowBattery, GlowField } from '@/ui/GlowBattery';
 import { BigButton, Card, LinkRow, StatusBand, tiles } from '@/ui/kit';
 import { PassRow } from '@/ui/PassRow';
@@ -88,6 +89,8 @@ export default function Today() {
 
         <View style={styles.rest}>
           <CountingProblem health={problem} />
+          {/* Only while counting: with it off, nothing would send one. */}
+          {counting ? <NoticesOff asks={settings.emptyLevel === 'work' || settings.askFirst?.on === true} /> : null}
           {held > 0 ? (
             <View style={styles.strip}>
               <Text style={styles.body}>Nothing locks until {clockLabelOf(new Date(held))}. Today was already past your goal when you set up.</Text>

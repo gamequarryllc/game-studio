@@ -185,6 +185,21 @@ async function main() {
     await context.close();
   });
 
+  await scenario('notifications off: Today says so, and says nothing while they are on', async () => {
+    const off = await open(doc({ used: 40 }), '?mock=counting,noticesOff');
+    await off.page.getByRole('button', { name: 'Notifications are off. Asking for more time won’t work. Opens Settings.', exact: true }).waitFor({ state: 'visible', timeout: 8000 });
+    await shot(off.page, 'q05a-notices-off');
+    // The tap leads to the iPhone's Settings; in a browser there is nowhere to go, and the page stays as it is.
+    await off.page.getByRole('button', { name: /^Notifications are off/ }).click();
+    await see(off.page, 'Notifications are off');
+    await off.context.close();
+    const on = await open(doc({ used: 40 }), '?mock=counting');
+    await see(on.page, 'used of');
+    await on.page.waitForTimeout(500);
+    if ((await on.page.getByText('Notifications are off').count()) > 0) throw new Error('the warning shows while notifications are not off');
+    await on.context.close();
+  });
+
   await scenario('locks held past the goal: nothing locks, settings stay open', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 240, uncounted: true }), '?mock=counting,held');
     await see(page, 'Nothing locks until');
