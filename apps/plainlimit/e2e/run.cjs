@@ -133,7 +133,7 @@ async function main() {
     await shot('02-settings');
   });
 
-  await step('without Pro, the recharge time, harder sums and a lock message of one\'s own lead to the Pro screen; Second thought and the ready-made lock messages are open', async () => {
+  await step('without Pro, the recharge time, harder sums, Second thought and a lock message of one\'s own lead to the Pro screen; the ready-made lock messages are open', async () => {
     // The extras are four tiles on Settings, under "Do more"; there is no Advanced page.
     await see('Do more');
     assert.strictEqual(await page.getByRole('button', { name: 'Advanced', exact: true }).count(), 0, 'Settings still has an Advanced row');
@@ -145,14 +145,27 @@ async function main() {
     await see('Nothing can be bought in this build. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.');
     await back();
     await page.getByRole('button', { name: 'Recharge time, 6:00 AM, Pro', exact: true }).waitFor();
-    await press('Sums, Normal');
+    // Sums carries the Pro mark too: normal ones are free, easy and hard are Pro.
+    await press('Sums, Normal, Pro');
     await shot('02c-sums');
     await page.getByRole('radio', { name: /^Hard/ }).click();
     await see('Your recharge time');
     await back();
     assert.strictEqual(await page.getByRole('radio', { name: /^Normal/ }).getAttribute('aria-checked'), 'true', 'normal sums stay chosen');
     await back();
-    await page.getByRole('button', { name: 'Second thought, Off', exact: true }).waitFor();
+    // Second thought is Pro: its screen shows what it does and where to get it, with nothing to switch or pick.
+    await press('Second thought, Off, Pro');
+    await see('A pause before the apps you open without thinking.');
+    await see('Second thought is part of Plainlimit Pro.');
+    assert.strictEqual(await page.getByRole('switch', { name: 'Second thought' }).count(), 0, 'the Second thought switch shows without Pro');
+    assert.strictEqual(await page.getByRole('radio').count(), 0, 'the open times show without Pro');
+    await shot('02c-second-thought-free');
+    await press('See Plainlimit Pro');
+    await page.getByTestId('pro-screen').waitFor();
+    await see('One sum before the apps you open without thinking');
+    await back();
+    await back();
+    await page.getByRole('button', { name: 'Second thought, Off, Pro', exact: true }).waitFor();
     // A ready-made lock message is free; words of one's own are Pro.
     await press('Lock message, Off');
     await press('You set this limit for a reason.');

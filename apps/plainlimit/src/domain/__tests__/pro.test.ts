@@ -1,4 +1,4 @@
-import { sumLevelFor, widgetRecord } from '../pro';
+import { PRO_FEATURES, askFirstFor, sumLevelFor, widgetRecord } from '../pro';
 import { DEFAULT_SETTINGS } from '../settings';
 
 describe('what Pro changes', () => {
@@ -7,6 +7,17 @@ describe('what Pro changes', () => {
     expect(sumLevelFor(hard, true)).toBe('hard');
     expect(sumLevelFor(hard, false)).toBe('normal');
     expect(sumLevelFor({ ...DEFAULT_SETTINGS, sumLevel: undefined }, true)).toBe('normal');
+  });
+
+  it('runs Second thought with Pro and not without it, keeping the choices either way', () => {
+    const on = { ...DEFAULT_SETTINGS, askFirst: { on: true, openMinutes: 15 as const, whileInUse: false } };
+    expect(askFirstFor(on, true)).toEqual({ on: true, openMinutes: 15, whileInUse: false });
+    expect(askFirstFor(on, false)).toEqual({ on: false, openMinutes: 15, whileInUse: false });
+    expect(askFirstFor({ ...DEFAULT_SETTINGS, askFirst: undefined }, true).on).toBe(false);
+  });
+
+  it('lists Second thought among what Pro adds', () => {
+    expect(PRO_FEATURES.map((f) => f.title)).toContain('Second thought');
   });
 });
 

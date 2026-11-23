@@ -1,9 +1,12 @@
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 
-import { ASK_ID, DEFAULT_ASK_FIRST, IDLE_MINUTES, OPEN_CHOICES, askShownOn, askStateLine, openChange, openChoice, type OpenChoice } from '@/domain/askFirst';
+import { ASK_ID, IDLE_MINUTES, OPEN_CHOICES, askShownOn, askStateLine, openChange, openChoice, type OpenChoice } from '@/domain/askFirst';
+import { askFirstFor } from '@/domain/pro';
 import { tap } from '@/platform/haptics';
 import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, pickCount } from '@/platform/screenTime';
+import { usePro } from '@/pro/pro';
 import { store, useDoc } from '@/state/store';
 import { AppPicker } from '@/ui/AppPicker';
 import { BigButton, Card, Label, Lead, LinkRow, Page, Pills, Title } from '@/ui/kit';
@@ -38,6 +41,10 @@ import { useDay } from '@/ui/useDay';
 // The owner, after build 145: "Your apps" was hiding at the foot of the page,
 // under the phone's list. It now sits in the first card, under the switch
 // (with nothing picked, the "Choose apps" button does).
+//
+// Second thought is part of Pro (the owner, 2026-11-23; it was free while it
+// was being tried). Without Pro the screen shows what it does, in its picture,
+// and where to get it; nothing on it can be switched or picked.
 
 const OPEN_PILLS: readonly { value: OpenChoice; label: string; spoken?: string; wide?: boolean }[] = [
   ...OPEN_CHOICES.map((minutes) => ({ value: minutes, label: `${minutes} min`, spoken: `${minutes} minutes` })),
@@ -45,10 +52,12 @@ const OPEN_PILLS: readonly { value: OpenChoice; label: string; spoken?: string; 
 ];
 
 export default function AskFirstSettings() {
+  const router = useRouter();
+  const isPro = usePro().isPro;
   const [picking, setPicking] = useState(false);
   const doc = useDoc();
   const { accent, now } = useDay();
-  const ask = doc.settings.askFirst ?? DEFAULT_ASK_FIRST;
+  const ask = askFirstFor(doc.settings, isPro);
   const phone = SCREEN_TIME_AVAILABLE || MOCK_PHONE;
   const picked = pickCount(ASK_ID);
   const on = askShownOn(ask, picked, phone);
@@ -59,6 +68,18 @@ export default function AskFirstSettings() {
     if (next && phone && picked === 0) setPicking(true);
     else store.setAskFirst({ on: next });
   };
+
+  if (!isPro) {
+    return (
+      <Page header top={8}>
+        <Title>Second thought</Title>
+        <Lead>A pause before the apps you open without thinking.</Lead>
+        <SecondThoughtPicture open={open} accent={accent} />
+        <Text style={styles.hint}>Second thought is part of Plainlimit Pro.</Text>
+        <BigButton label="See Plainlimit Pro" onPress={() => router.push('/pro')} />
+      </Page>
+    );
+  }
 
   return (
     <Page header top={8}>

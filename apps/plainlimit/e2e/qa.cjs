@@ -341,15 +341,21 @@ async function main() {
     await context.close();
   });
 
-  await scenario('without Pro, a recharge time chosen in 1.0 stays, and Second thought stays on', async () => {
+  await scenario('without Pro, a recharge time chosen in 1.0 stays, and a Second thought left on reads Off and can\'t be switched', async () => {
     const saved = doc({ recharge: 420, used: 20 });
     saved.settings.askFirst = { on: true, openMinutes: 10 };
     const { page, context } = await open(saved, '', PHONE, { withPro: false });
     await tab(page, 'Settings');
     await page.getByRole('button', { name: 'Recharge time, 7:00 AM, Pro', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Second thought, On, 10 min', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Sums, Normal, Pro', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Second thought, Off, Pro', exact: true }).waitFor();
     if ((await page.getByRole('button', { name: 'Recharge later', exact: true }).count()) > 0) throw new Error('the recharge stepper shows without Pro');
     await shot(page, 'q20-free-settings', true);
+    await page.getByRole('button', { name: 'Second thought, Off, Pro', exact: true }).click();
+    await see(page, 'Second thought is part of Plainlimit Pro.');
+    if ((await page.getByRole('switch', { name: 'Second thought' }).count()) > 0) throw new Error('the Second thought switch shows without Pro');
+    await shot(page, 'q20a-free-second-thought', true);
+    await page.goBack();
     await page.getByRole('button', { name: /^Plainlimit Pro/ }).click();
     await page.getByTestId('pro-screen').waitFor();
     await shot(page, 'q21-pro-screen');

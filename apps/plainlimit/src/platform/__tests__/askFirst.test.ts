@@ -203,3 +203,33 @@ describe('turning the list off', () => {
     expect((phone.defaults.get(`shieldConfigurationForSelection_${ASK_ID}`) as { subtitle: string }).subtitle).toContain('opens for 10 minutes');
   });
 });
+
+describe('without Pro (the store says the list may not run)', () => {
+  it('counts as off whatever its switch says: the cover and screen come off and nothing puts them back', async () => {
+    const { phone, ask } = load();
+    await ask.applyAskFirst(minutes, { empty: false, recharge: '6:00 AM' });
+    expect(phone.log).toContain('cover');
+    expect(ask.askActive(minutes)).toBe(true);
+    ask.allowAskFirst(false);
+    expect(ask.askActive(minutes)).toBe(false);
+    expect(ask.askCoverActions(minutes)).toEqual([]);
+    phone.log.length = 0;
+    await ask.applyAskFirst(minutes, { empty: false, recharge: '6:00 AM' });
+    expect([...phone.held.keys()]).toEqual([]);
+    expect(phone.log[phone.log.length - 1]).toBe('uncover');
+    expect(phone.defaults.has(`shieldConfigurationForSelection_${ASK_ID}`)).toBe(false);
+    ask.coverAskAgain(minutes);
+    expect(phone.log).not.toContain('cover');
+  });
+
+  it('runs again as it was once Pro is back', async () => {
+    const { phone, ask } = load();
+    ask.allowAskFirst(false);
+    await ask.applyAskFirst(minutes, { empty: false, recharge: '6:00 AM' });
+    expect(phone.log).not.toContain('cover');
+    ask.allowAskFirst(true);
+    await ask.applyAskFirst(minutes, { empty: false, recharge: '6:00 AM' });
+    expect(phone.log[phone.log.length - 1]).toBe('cover');
+    expect(phone.held.has(ASK_WATCH)).toBe(true);
+  });
+});

@@ -2,11 +2,11 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
-import { ASK_ID, DEFAULT_ASK_FIRST, askShownOn, openShort } from '@/domain/askFirst';
+import { ASK_ID, askShownOn, openShort } from '@/domain/askFirst';
 import { CELLS, cellWords } from '@/domain/battery';
 import { clockLabel, clockLabelOf, dayWord, durationLabel } from '@/domain/day';
 import { chosenGoal, goalFree } from '@/domain/goal';
-import { sumLevelFor } from '@/domain/pro';
+import { askFirstFor, sumLevelFor } from '@/domain/pro';
 import { topUpPlan, type SumLevel } from '@/domain/puzzle';
 import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import type { EmptyLevel } from '@/domain/types';
@@ -68,11 +68,13 @@ export default function Settings() {
   // On setup's own day every change starts at once (goal.ts); the note says so, and what happens after.
   const firstDay = goalFree(useDoc());
   // The extras, each a tile that says where it stands (the owner's pick of "Tiles", 2026-11-22).
-  const ask = settings.askFirst ?? DEFAULT_ASK_FIRST;
+  const ask = askFirstFor(settings, isPro);
   const extras: readonly { icon: RowIcon; label: string; value: string; to: '/ask-first' | '/lock-message' | '/sums' | '/recharge' | '/pro'; pro?: boolean }[] = [
-    { icon: { name: 'secondThought', bg: tiles.purple }, label: 'Second thought', value: askShownOn(ask, askPicked, SCREEN_TIME_AVAILABLE || MOCK_PHONE) ? `On, ${openShort(ask)}` : 'Off', to: '/ask-first' },
+    // Second thought is Pro: without it the tile says Off and its screen shows what it does, and where to get it.
+    { icon: { name: 'secondThought', bg: tiles.purple }, label: 'Second thought', value: askShownOn(ask, askPicked, SCREEN_TIME_AVAILABLE || MOCK_PHONE) ? `On, ${openShort(ask)}` : 'Off', to: '/ask-first', pro: !isPro },
     { icon: { name: 'lockMessage', bg: tiles.teal }, label: 'Lock message', value: settings.lockMessage ? 'On' : 'Off', to: '/lock-message' },
-    { icon: { name: 'sums', bg: tiles.pink }, label: 'Sums', value: SUM_LEVEL_NAME[sumLevelFor(settings, isPro)], to: '/sums' },
+    // Easy and hard sums are Pro; normal ones are free, and the tile says which are in use.
+    { icon: { name: 'sums', bg: tiles.pink }, label: 'Sums', value: SUM_LEVEL_NAME[sumLevelFor(settings, isPro)], to: '/sums', pro: !isPro },
     // Choosing the recharge time is Pro: without it the tile shows the time and opens what Pro adds.
     { icon: { name: 'recharge', bg: tiles.orange }, label: 'Recharge time', value: clockLabel(chosenRecharge(settings)), to: isPro ? '/recharge' : '/pro', pro: !isPro },
   ];

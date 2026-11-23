@@ -51,9 +51,21 @@ function picked(): number {
   }
 }
 
-/** On, with something picked. */
+/**
+ * Second thought is part of Pro. The store says here whether it may run
+ * (store.ts, `setPro`); while it may not, the list counts as off whatever its
+ * switch says, so its cover and screen come off the phone and stay off. True
+ * until the store has spoken, so a start of the app never takes them off for
+ * a moment before Pro's answer has been read.
+ */
+let allowed = true;
+export function allowAskFirst(on: boolean): void {
+  allowed = on;
+}
+
+/** On, with something picked, and allowed to run. */
 export function askActive(askFirst: AskFirst | undefined): boolean {
-  return askFirst?.on === true && picked() > 0;
+  return allowed && askFirst?.on === true && picked() > 0;
 }
 
 /** Every timer the list runs after a sum. */

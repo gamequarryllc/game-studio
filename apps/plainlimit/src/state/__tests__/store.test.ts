@@ -45,6 +45,7 @@ function fakePhone(): Fake {
 function fakeAsk(): Fake {
   return {
     __esModule: true,
+    allowAskFirst: jest.fn(),
     applyAskFirst: jest.fn(async () => {}),
     openAsk: jest.fn(async () => ({ until: new Date(Date.now() + 10 * 60_000), inUse: false })),
   };
@@ -589,7 +590,7 @@ describe('emergency passes', () => {
 describe('Pro', () => {
   const withAsk = (on: boolean) => saved(30, { settings: { goalMinutes: 180, rechargeMinute: 360, countMode: 'custom', emptyLevel: 'work', allowed: [], askFirst: { on, openMinutes: 10 } } });
 
-  it('without it, the recharge time stays and sums stay normal; Second thought and the ready-made lock messages are free, own words are not', async () => {
+  it('without it, the recharge time stays, sums stay normal and Second thought can\'t be switched on; the ready-made lock messages are free, own words are not', async () => {
     const phone = fakePhone();
     const { store } = load(phone, saved(30));
     await store.start();
@@ -598,8 +599,11 @@ describe('Pro', () => {
     store.setSumLevel('hard');
     expect(store.get().doc.settings.rechargeMinute).toBe(360);
     expect(store.get().doc.settings.sumLevel).toBe('normal');
+    const before = store.get().doc.settings.askFirst;
     store.setAskFirst({ on: true, openMinutes: 15, whileInUse: false });
-    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 15, whileInUse: false });
+    store.askPicksChanged(3);
+    expect(store.get().doc.settings.askFirst).toEqual(before);
+    expect(await store.openAskFirst()).toBeNull();
     store.setLockMessage('  Go   outside. ');
     expect(store.get().doc.settings.lockMessage).toBeUndefined();
     store.setLockMessage('  Text someone   you miss. ');
@@ -691,13 +695,37 @@ describe('Pro', () => {
     expect(store.get().doc.settings.rechargeMinute).toBe(420);
   });
 
-  it('leaves Second thought and the lock message alone when the phone is known not to have Pro', async () => {
-    const { store } = load(fakePhone(), withAsk(true));
+  it('when the phone is known not to have Pro, Second thought stops running with its choices kept, and runs again once Pro is back; the lock message stays', async () => {
+    const ask = fakeAsk();
+    const { store } = load(fakePhone(), withAsk(true), ask);
     await store.start();
     store.setPro(true, true);
     store.setLockMessage('Go outside.');
+    const applied = (ask.applyAskFirst as jest.Mock).mock.calls.length;
+    // A refund, or "Act as the free version".
     store.setPro(false, true);
-    expect(store.get().doc.settings.askFirst?.on).toBe(true);
+    expect(ask.allowAskFirst).toHaveBeenLastCalledWith(false);
+    expect((ask.applyAskFirst as jest.Mock).mock.calls.length).toBe(applied + 1);
+    expect(store.get().doc.settings.askFirst).toEqual({ on: true, openMinutes: 10 });
     expect(store.get().doc.settings.lockMessage).toBe('Go outside.');
+    // A pass no longer opens a list that isn't running.
+    (ask.openAsk as jest.Mock).mockClear();
+    store.usePass();
+    expect(ask.openAsk).not.toHaveBeenCalled();
+    store.setPro(true, true);
+    expect(ask.allowAskFirst).toHaveBeenLastCalledWith(true);
+    expect((ask.applyAskFirst as jest.Mock).mock.calls.length).toBe(applied + 2);
+  });
+
+  it('takes nothing of Second thought away before Pro\'s answer has been read', async () => {
+    const ask = fakeAsk();
+    const { store } = load(fakePhone(), withAsk(true), ask);
+    await store.start();
+    const applied = (ask.applyAskFirst as jest.Mock).mock.calls.length;
+    // The app has started and the saved answer is not in yet.
+    store.setPro(false, false);
+    expect(ask.allowAskFirst).not.toHaveBeenCalledWith(false);
+    expect((ask.applyAskFirst as jest.Mock).mock.calls.length).toBe(applied);
+    expect(await store.openAskFirst()).not.toBeNull();
   });
 });

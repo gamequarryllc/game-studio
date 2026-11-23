@@ -12,7 +12,7 @@ import { stepChosenRecharge } from '@/domain/recharge';
 import { cleanLockMessage, isLockMessageIdea } from '@/domain/settings';
 import type { SumLevel } from '@/domain/puzzle';
 import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
-import { applyAskFirst, openAsk, type AskOpen } from '@/platform/askFirst';
+import { allowAskFirst, applyAskFirst, openAsk, type AskOpen } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
 
@@ -355,10 +355,23 @@ function syncAskFirst() {
 
 /**
  * Whether this phone has Pro (src/pro/pro.ts tells the store through `setPro`).
- * Losing it (a refund) turns nothing off: the recharge time stays as chosen,
- * and the sums fall back to normal by themselves (see `sumLevelFor`).
+ * Losing it (a refund) changes no saved setting: the recharge time stays as
+ * chosen, the sums fall back to normal by themselves (see `sumLevelFor`), and
+ * Second thought stops running with its choices kept (see `askAllowed`).
  */
 let proOn = false;
+/** Whether Pro's saved answer has been read yet; until then nothing is taken away. */
+let proKnown = false;
+
+/**
+ * Second thought is Pro (the owner, 2026-11-23). Until Pro's answer is in,
+ * it is left as it was: a start of the app must not take its covers off for
+ * the moment before the answer is read (that would also forget a stretch
+ * that a sum has just opened).
+ */
+function askAllowed(): boolean {
+  return proOn || !proKnown;
+}
 
 function withSettings(change: (s: Settings) => Settings, wait = PLAN_WAIT_MS) {
   if (settingsLocked()) return;
@@ -620,18 +633,24 @@ export const store = {
     screenTime.refreshScreens(settings, snapshot.doc.day.topUps);
   },
   /** Pro was bought, restored, refunded or read at start (src/pro/pro.ts). `known` is false until the saved answer is read. */
-  setPro(on: boolean, _known: boolean) {
+  setPro(on: boolean, known: boolean) {
+    const allowedBefore = askAllowed();
     proOn = on;
+    proKnown = known;
+    allowAskFirst(askAllowed());
     if (loaded) shareRecord();
+    // Bought, restored or refunded: Second thought's covers go on or come off now.
+    if (askAllowed() !== allowedBefore) syncAskFirst();
   },
   hasPro(): boolean {
     return proOn;
   },
   /**
-   * Ask first's settings. Not closed while the battery is empty: nothing here
-   * can open an app that counts (see `syncAskFirst`).
+   * Ask first's settings (Pro). Not closed while the battery is empty: nothing
+   * here can open an app that counts (see `syncAskFirst`).
    */
   setAskFirst(change: Partial<AskFirst>) {
+    if (!askAllowed()) return;
     const settings = snapshot.doc.settings;
     set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...(settings.askFirst ?? DEFAULT_ASK_FIRST), ...change } } });
     syncAskFirst();
@@ -642,6 +661,7 @@ export const store = {
    * switch never says off beside apps just picked (the owner, 2026-11-21).
    */
   askPicksChanged(picked: number) {
+    if (!askAllowed()) return;
     const settings = snapshot.doc.settings;
     set({ ...snapshot.doc, settings: { ...settings, askFirst: { ...(settings.askFirst ?? DEFAULT_ASK_FIRST), on: onAfterPicking(picked) } } });
     syncAskFirst();
@@ -651,6 +671,7 @@ export const store = {
    * While the battery's covers are up, apps that also count stay covered.
    */
   async openAskFirst(): Promise<AskOpen | null> {
+    if (!askAllowed()) return null;
     const { settings } = snapshot.doc;
     const now = new Date();
     const open = await openAsk(settings.askFirst ?? DEFAULT_ASK_FIRST, nextRecharge(now, settings.rechargeMinute).getTime(), now);
@@ -679,7 +700,7 @@ export const store = {
     const day = { ...doc.day, unlockedUntil };
     set({ ...doc, record: used, day });
     if (screenTime.isOn()) void screenTime.grantExtraTime(new Date(unlockedUntil), doc.settings, day.topUps, now);
-    if (doc.settings.askFirst?.on) void openAsk({ ...doc.settings.askFirst, openMinutes: 15, whileInUse: false }, recharge, now);
+    if (doc.settings.askFirst?.on && askAllowed()) void openAsk({ ...doc.settings.askFirst, openMinutes: 15, whileInUse: false }, recharge, now);
     return true;
   },
   /** Developer: pretend this many more minutes were used. */

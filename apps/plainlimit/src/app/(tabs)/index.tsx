@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { wordFor } from '@/domain/battery';
 import { clockLabelOf, durationLabel, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
+import { askFirstFor } from '@/domain/pro';
 import { topUpPlan } from '@/domain/puzzle';
 import { passActive, passRow } from '@/domain/record';
 import { batteryEnd } from '@/domain/recharge';
@@ -90,7 +91,7 @@ export default function Today() {
         <View style={styles.rest}>
           <CountingProblem health={problem} />
           {/* Only while counting: with it off, nothing would send one. */}
-          {counting ? <NoticesOff asks={settings.emptyLevel === 'work' || settings.askFirst?.on === true} /> : null}
+          {counting ? <NoticesOff asks={settings.emptyLevel === 'work' || askFirstFor(settings, store.hasPro()).on} /> : null}
           {held > 0 ? (
             <View style={styles.strip}>
               <Text style={styles.body}>Nothing locks until {clockLabelOf(new Date(held))}. Today was already past your goal when you set up.</Text>
