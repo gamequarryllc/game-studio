@@ -23,7 +23,7 @@ export default function Sums() {
   const locked = settingsLocked();
   const level = sumLevelFor(settings, isPro);
   // Easy and hard sums are Pro: without it, choosing one shows what Pro adds.
-  const choose = (next: SumLevel) => (next === 'normal' || isPro ? store.setSumLevel(next) : router.push('/pro'));
+  const choose = (next: SumLevel) => (next === 'normal' || isPro ? store.setSumLevel(next) : router.push('/pro?show=sums'));
 
   return (
     <Page header top={8}>

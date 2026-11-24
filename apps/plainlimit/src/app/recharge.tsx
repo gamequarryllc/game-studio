@@ -60,7 +60,7 @@ export default function Recharge() {
         {isPro ? null : <Text style={styles.note}>Choosing the time is part of Plainlimit Pro.</Text>}
       </Card>
 
-      {isPro ? null : <BigButton label="See Plainlimit Pro" onPress={() => router.push('/pro')} />}
+      {isPro ? null : <BigButton label="See Plainlimit Pro" onPress={() => router.push('/pro?show=recharge')} />}
     </Page>
   );
 }

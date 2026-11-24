@@ -11,14 +11,28 @@ import type { SumLevel } from './puzzle';
 import type { RecordView } from './record';
 import type { Settings } from './types';
 
-/** The lines on the Pro screen, in the order they are shown. */
-export const PRO_FEATURES: readonly { title: string; line: string }[] = [
-  { title: 'Second thought', line: 'One sum before the apps you open without thinking' },
-  { title: 'Your recharge time', line: 'Recharge at 5 AM, 7 AM, midnight or any half hour' },
-  { title: 'Sum difficulty', line: 'Easy, normal or hard sums when you earn time' },
-  { title: 'Large widget', line: 'Your battery, streak, passes and week on the Home Screen' },
-  { title: 'Your own lock message', line: 'Your words on the screen when an app is locked' },
+/** What Pro adds, one card each on the Pro screen, in the order they are shown. */
+export type ProFeatureKey = 'secondThought' | 'recharge' | 'sums' | 'widget' | 'lockMessage';
+
+export interface ProFeature {
+  key: ProFeatureKey;
+  title: string;
+  line: string;
+}
+
+export const PRO_FEATURES: readonly ProFeature[] = [
+  { key: 'secondThought', title: 'Second thought', line: 'A pause before the apps you open without thinking.' },
+  { key: 'recharge', title: 'Your recharge time', line: 'Recharge at 5 AM, 7 AM, midnight or any half hour.' },
+  { key: 'sums', title: 'Sum difficulty', line: 'Easy, normal or hard sums when you earn time.' },
+  { key: 'widget', title: 'Large widget', line: 'Your battery, streak, passes and week on the Home Screen.' },
+  { key: 'lockMessage', title: 'Your own lock message', line: 'Your words on the screen when an app is locked.' },
 ];
+
+/** Where the Pro screen opens: on the card asked for (`/pro?show=sums`), else the first. */
+export function proStartIndex(show: unknown): number {
+  const at = PRO_FEATURES.findIndex((f) => f.key === show);
+  return at < 0 ? 0 : at;
+}
 
 /** The sums someone gets: their choice with Pro, normal without it (a refund falls back to normal). */
 export function sumLevelFor(settings: Settings, isPro: boolean): SumLevel {

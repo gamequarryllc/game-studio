@@ -141,7 +141,7 @@ async function main() {
     await page.getByTestId('pro-screen').waitFor();
     await see('Your recharge time');
     await shot('02b-pro');
-    await press('Unlock Pro · $9.99');
+    await press('Unlock all five · $9.99');
     await see('Nothing can be bought in this build. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.');
     await back();
     await page.getByRole('button', { name: 'Recharge time, 6:00 AM, Pro', exact: true }).waitFor();
@@ -149,7 +149,9 @@ async function main() {
     await press('Sums, Normal, Pro');
     await shot('02c-sums');
     await page.getByRole('radio', { name: /^Hard/ }).click();
-    await see('Your recharge time');
+    // The Pro screen opens on the card of the extra that sent someone there.
+    await page.getByTestId('pro-screen').waitFor();
+    await see('Sum difficulty');
     await back();
     assert.strictEqual(await page.getByRole('radio', { name: /^Normal/ }).getAttribute('aria-checked'), 'true', 'normal sums stay chosen');
     await back();
@@ -162,7 +164,10 @@ async function main() {
     await shot('02c-second-thought-free');
     await press('See Plainlimit Pro');
     await page.getByTestId('pro-screen').waitFor();
-    await see('One sum before the apps you open without thinking');
+    await page.getByRole('img', { name: 'An app on your list asks first: one sum, then it opens for 10 minutes.' }).waitFor();
+    // Its tiles go to the other extras.
+    await press('Large widget');
+    await see('Your battery, streak, passes and week on the Home Screen.');
     await back();
     await back();
     await page.getByRole('button', { name: 'Second thought, Off, Pro', exact: true }).waitFor();

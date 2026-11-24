@@ -66,9 +66,10 @@ export function GlowBattery({ cells, color, height }: { cells: number; color: st
  * the battery and gone `reach` points below its middle (`centre`, from the top
  * of the page), so nothing under it is tinted: the phone draws the day's
  * figure on the plain ground. Drawn as many rings laid over each other, each
- * so faint that no edge shows.
+ * so faint that no edge shows. `strength` makes the whole light brighter (1 is
+ * Today's).
  */
-export function GlowField({ color, width, centre, reach }: { color: string; width: number; centre: number; reach: number }) {
+export function GlowField({ color, width, centre, reach, strength = 1 }: { color: string; width: number; centre: number; reach: number; strength?: number }) {
   const rings = 30;
   return (
     <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={{ position: 'absolute', top: 0, left: 0, width, height: centre + reach, overflow: 'hidden' }}>
@@ -76,7 +77,7 @@ export function GlowField({ color, width, centre, reach }: { color: string; widt
         const k = 1 - (i / rings) * 0.88; // 1 for the widest ring
         const w = width * 1.5 * k;
         const h = reach * 2 * k;
-        return <View key={i} style={{ position: 'absolute', left: (width - w) / 2, top: centre - h / 2, width: w, height: h, borderRadius: h / 2, backgroundColor: color, opacity: 0.0085 }} />;
+        return <View key={i} style={{ position: 'absolute', left: (width - w) / 2, top: centre - h / 2, width: w, height: h, borderRadius: h / 2, backgroundColor: color, opacity: 0.0085 * strength }} />;
       })}
     </View>
   );

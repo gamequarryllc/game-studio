@@ -76,7 +76,7 @@ export default function AskFirstSettings() {
         <Lead>A pause before the apps you open without thinking.</Lead>
         <SecondThoughtPicture open={open} accent={accent} />
         <Text style={styles.hint}>Second thought is part of Plainlimit Pro.</Text>
-        <BigButton label="See Plainlimit Pro" onPress={() => router.push('/pro')} />
+        <BigButton label="See Plainlimit Pro" onPress={() => router.push('/pro?show=secondThought')} />
       </Page>
     );
   }

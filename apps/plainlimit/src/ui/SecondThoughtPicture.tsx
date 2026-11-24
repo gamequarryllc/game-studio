@@ -21,33 +21,44 @@ export function SecondThoughtPicture({ open, accent }: { open: OpenChoice; accen
   const { width } = useWindowDimensions();
   // The phone takes about two fifths of the card, so the lines beside it still fit on a small iPhone.
   const phoneW = Math.max(108, Math.min(140, Math.round((width - 72) * 0.42)));
-  const k = phoneW / 140;
   return (
     <View
       accessible
       accessibilityRole="image"
       accessibilityLabel={use ? 'Your app asks first. Solve one sum. It stays open until you leave it, then it asks again.' : `Your app asks first. Solve one sum. It opens for ${open} minutes, then it asks again.`}
       style={styles.card}>
-      <View style={[styles.phone, { width: phoneW, height: phoneW * 1.62, borderRadius: 24 * k, padding: 5 * k }]}>
-        <View style={[styles.screen, { borderRadius: 19 * k, paddingTop: 30 * k, paddingHorizontal: 10 * k, paddingBottom: 10 * k }]}>
-          <View style={[styles.island, { top: 7 * k, width: 40 * k, height: 11 * k, borderRadius: 6 * k }]} />
-          <Icon name="hand.raised" size={34 * k} color={c.ink} />
-          <Text style={[styles.shieldTitle, { fontSize: 13 * k, lineHeight: 16 * k, marginTop: 10 * k }]}>Second thought</Text>
-          <Text style={[styles.shieldLine, { fontSize: 9.5 * k, lineHeight: 12.5 * k, marginTop: 5 * k }]}>
-            {use ? 'One sum, then your app stays open until you leave it.' : `One sum, then your app opens for ${open} minutes.`}
-          </Text>
-          <View style={{ flex: 1 }} />
-          <View style={[styles.shieldButton, { height: 28 * k, borderRadius: 9 * k }]}>
-            <Text style={[styles.shieldButtonText, { fontSize: 10.5 * k }]}>Not now</Text>
-          </View>
-          <Text style={[styles.shieldSecond, { fontSize: 10.5 * k, lineHeight: 24 * k, marginTop: 2 * k }]}>Solve one sum</Text>
-        </View>
-      </View>
+      <AskPhone width={phoneW} open={open} />
 
       <View style={styles.lines}>
         <Line glyph="hand.raised" words="Your app asks first" />
         <Line glyph="plus" words="Solve one sum" />
         <Line glyph="timer" words={use ? 'Open until you leave it, then it asks again' : `Open ${open} min, then it asks again`} tint={accent} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The small phone showing the screen an app on the list puts up. Also drawn
+ * on the Pro screen's Second thought card.
+ */
+export function AskPhone({ width, open }: { width: number; open: OpenChoice }) {
+  const use = open === 'use';
+  const k = width / 140;
+  return (
+    <View style={[styles.phone, { width, height: width * 1.62, borderRadius: 24 * k, padding: 5 * k }]}>
+      <View style={[styles.screen, { borderRadius: 19 * k, paddingTop: 30 * k, paddingHorizontal: 10 * k, paddingBottom: 10 * k }]}>
+        <View style={[styles.island, { top: 7 * k, width: 40 * k, height: 11 * k, borderRadius: 6 * k }]} />
+        <Icon name="hand.raised" size={34 * k} color={c.ink} />
+        <Text style={[styles.shieldTitle, { fontSize: 13 * k, lineHeight: 16 * k, marginTop: 10 * k }]}>Second thought</Text>
+        <Text style={[styles.shieldLine, { fontSize: 9.5 * k, lineHeight: 12.5 * k, marginTop: 5 * k }]}>
+          {use ? 'One sum, then your app stays open until you leave it.' : `One sum, then your app opens for ${open} minutes.`}
+        </Text>
+        <View style={{ flex: 1 }} />
+        <View style={[styles.shieldButton, { height: 28 * k, borderRadius: 9 * k }]}>
+          <Text style={[styles.shieldButtonText, { fontSize: 10.5 * k }]}>Not now</Text>
+        </View>
+        <Text style={[styles.shieldSecond, { fontSize: 10.5 * k, lineHeight: 24 * k, marginTop: 2 * k }]}>Solve one sum</Text>
       </View>
     </View>
   );

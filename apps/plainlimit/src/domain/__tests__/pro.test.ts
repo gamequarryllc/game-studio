@@ -1,4 +1,4 @@
-import { PRO_FEATURES, askFirstFor, sumLevelFor, widgetRecord } from '../pro';
+import { PRO_FEATURES, askFirstFor, proStartIndex, sumLevelFor, widgetRecord } from '../pro';
 import { DEFAULT_SETTINGS } from '../settings';
 
 describe('what Pro changes', () => {
@@ -18,6 +18,15 @@ describe('what Pro changes', () => {
 
   it('lists Second thought among what Pro adds', () => {
     expect(PRO_FEATURES.map((f) => f.title)).toContain('Second thought');
+  });
+
+  it('opens the Pro screen on the card a screen asks for, and on the first one otherwise', () => {
+    expect(new Set(PRO_FEATURES.map((f) => f.key)).size).toBe(PRO_FEATURES.length);
+    expect(PRO_FEATURES[proStartIndex('sums')].key).toBe('sums');
+    expect(PRO_FEATURES[proStartIndex('lockMessage')].key).toBe('lockMessage');
+    expect(proStartIndex(undefined)).toBe(0);
+    expect(proStartIndex('nonsense')).toBe(0);
+    expect(proStartIndex(['sums'])).toBe(0);
   });
 });
 

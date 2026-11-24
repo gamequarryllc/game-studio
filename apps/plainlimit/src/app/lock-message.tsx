@@ -78,7 +78,7 @@ export default function LockMessage() {
               accessibilityLabel="Write your own, Pro"
               onPress={() => {
                 tap();
-                router.push('/pro');
+                router.push('/pro?show=lockMessage');
               }}
               style={({ pressed }) => [styles.idea, styles.proRow, pressed ? { opacity: 0.7 } : null]}>
               <Text style={styles.ideaText}>Write your own</Text>

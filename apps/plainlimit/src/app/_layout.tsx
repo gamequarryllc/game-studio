@@ -86,7 +86,7 @@ export default function RootLayout() {
             <Stack.Screen name="tips" options={{ title: '' }} />
             <Stack.Screen name="ask-first" options={{ title: '' }} />
             <Stack.Screen name="record" options={{ title: '' }} />
-            <Stack.Screen name="pro" options={{ title: '' }} />
+            <Stack.Screen name="pro" options={{ headerShown: false, title: 'Plainlimit Pro' }} />
             <Stack.Screen name="sums" options={{ title: '' }} />
             <Stack.Screen name="recharge" options={{ title: '' }} />
             <Stack.Screen name="lock-message" options={{ title: '' }} />

@@ -469,7 +469,7 @@ struct BatteryWidgetView: View {
               .font(.system(size: 13, weight: .medium))
               .foregroundStyle(paper.opacity(0.62))
           }
-          .widgetURL(URL(string: "plainlimit://pro"))
+          .widgetURL(URL(string: "plainlimit://pro?show=widget"))
         }
       }
     } else {

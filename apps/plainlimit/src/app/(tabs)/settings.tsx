@@ -69,14 +69,14 @@ export default function Settings() {
   const firstDay = goalFree(useDoc());
   // The extras, each a tile that says where it stands (the owner's pick of "Tiles", 2026-11-22).
   const ask = askFirstFor(settings, isPro);
-  const extras: readonly { icon: RowIcon; label: string; value: string; to: '/ask-first' | '/lock-message' | '/sums' | '/recharge' | '/pro'; pro?: boolean }[] = [
+  const extras: readonly { icon: RowIcon; label: string; value: string; to: '/ask-first' | '/lock-message' | '/sums' | '/recharge' | '/pro?show=recharge'; pro?: boolean }[] = [
     // Second thought is Pro: without it the tile says Off and its screen shows what it does, and where to get it.
     { icon: { name: 'secondThought', bg: tiles.purple }, label: 'Second thought', value: askShownOn(ask, askPicked, SCREEN_TIME_AVAILABLE || MOCK_PHONE) ? `On, ${openShort(ask)}` : 'Off', to: '/ask-first', pro: !isPro },
     { icon: { name: 'lockMessage', bg: tiles.teal }, label: 'Lock message', value: settings.lockMessage ? 'On' : 'Off', to: '/lock-message' },
     // Easy and hard sums are Pro; normal ones are free, and the tile says which are in use.
     { icon: { name: 'sums', bg: tiles.pink }, label: 'Sums', value: SUM_LEVEL_NAME[sumLevelFor(settings, isPro)], to: '/sums', pro: !isPro },
     // Choosing the recharge time is Pro: without it the tile shows the time and opens what Pro adds.
-    { icon: { name: 'recharge', bg: tiles.orange }, label: 'Recharge time', value: clockLabel(chosenRecharge(settings)), to: isPro ? '/recharge' : '/pro', pro: !isPro },
+    { icon: { name: 'recharge', bg: tiles.orange }, label: 'Recharge time', value: clockLabel(chosenRecharge(settings)), to: isPro ? '/recharge' : '/pro?show=recharge', pro: !isPro },
   ];
 
   return (
