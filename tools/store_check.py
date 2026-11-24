@@ -259,7 +259,10 @@ def main():
                 bad(f"{key} is missing")
             elif len(text) > limit:
                 bad(f"{key} is {len(text)} characters (limit {limit})")
-        text_all = " ".join(str(d.get(k, "")) for k in LIMITS)
+        # "What's New" is only for an update, so it may be absent; Apple's limit is 4000.
+        if len(d.get("whats_new", "")) > 4000:
+            bad(f"whats_new is {len(d['whats_new'])} characters (limit 4000)")
+        text_all = " ".join(str(d.get(k, "")) for k in (*LIMITS, "whats_new"))
         if re.search(r"arson", text_all, re.I):
             bad('the word "arson" must not appear')
         if "!" in text_all:

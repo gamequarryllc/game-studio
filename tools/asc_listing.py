@@ -14,9 +14,13 @@ What it writes, each only when it differs from what is there:
   - the one in-app purchase: the product, its name and description, its price, where it is
     sold, and the screenshot App Review asks for
   - the app's name, subtitle, privacy policy link and categories
-  - the version being prepared: description, keywords, promotional text, support link,
-    copyright, the screenshots, the notes for App Review, and (if asked) the build
+  - the version being prepared (made, when every earlier one has gone to review): description,
+    keywords, promotional text, support link, "What's New" for an update, copyright, the
+    screenshots, the notes for App Review, and (if asked) the build
   - the app's price (free) and where it is sold
+
+With "draft_submission": true in the listing it also puts the version in a draft submission
+for App Review, which leaves the owner one button: Submit.
 
 What it never does: submit anything for review, answer the App Privacy questions (Apple
 has no API for them), or enter the contact person for App Review (personal details do not
@@ -251,9 +255,12 @@ class Run:
         price = f"{p['price_usd']:.2f}"
         schedule = self.c.get_or_none(f"/v2/inAppPurchases/{ident}/iapPriceSchedule", include="manualPrices,baseTerritory")
         has_price = bool(schedule and schedule.get("data", {}).get("relationships", {}).get("manualPrices", {}).get("data"))
-        if has_price:
-            self.say("a price is set (check the amount in App Store Connect if it was not set by this tool)")
+        current = self.iap_price_usd(schedule["data"]["id"]) if has_price else None
+        if has_price and current is not None and float(current) == float(price):
+            self.say(f"price ${price} (United States) is as listed")
         else:
+            if has_price:
+                self.say(f"price now: ${current if current is not None else '(could not be read)'}; listed: ${price}")
             points = self.c.all(f"/v2/inAppPurchases/{ident}/pricePoints", **{"filter[territory]": "USA", "limit": 200})
             point = next(pt for pt in points if pt["attributes"]["customerPrice"] in (price, price.rstrip("0").rstrip(".")))
             body = {
@@ -274,6 +281,7 @@ class Run:
                     }
                 ],
             }
+            # A new schedule replaces the old one; the price changes at once and needs no App Review.
             self.change(f"price ${price} (United States; other countries follow)", lambda: self.c.call("POST", "/v1/inAppPurchasePriceSchedules", body))
 
         # Where it is sold: everywhere the app is.
@@ -311,6 +319,23 @@ class Run:
             self.change("review note on the purchase", lambda: self.c.call("PATCH", f"/v2/inAppPurchases/{ident}", {"data": {"type": "inAppPurchases", "id": ident, "attributes": {"reviewNote": note}}}))
         state = self.c.get(f"/v2/inAppPurchases/{ident}")["data"]["attributes"].get("state")
         self.say(f"purchase state now: {state}")
+
+    def iap_price_usd(self, schedule_id):
+        """The purchase's current US price as Apple shows it ("5.99"), or None when it can't be read."""
+        try:
+            got = self.c.get(f"/v1/inAppPurchasePriceSchedules/{schedule_id}/manualPrices", include="inAppPurchasePricePoint,territory", limit=50)
+        except ApiError:
+            return None
+        points = {i["id"]: i["attributes"].get("customerPrice") for i in got.get("included", []) if i["type"] == "inAppPurchasePricePoints"}
+        today = time.strftime("%Y-%m-%d", time.gmtime())
+        for row in got.get("data", []):
+            r = row.get("relationships", {})
+            if ((r.get("territory") or {}).get("data") or {}).get("id") != "USA":
+                continue
+            a = row.get("attributes", {})
+            if (a.get("startDate") or "0000") <= today and (a.get("endDate") or "9999") > today:
+                return points.get(((r.get("inAppPurchasePricePoint") or {}).get("data") or {}).get("id"))
+        return None
 
     # ---- name, subtitle, categories, age rating
 
@@ -350,6 +375,17 @@ class Run:
         # The app has none of it: no violence, no gambling, no web access, no ads, no chat, nothing made by other users.
         want = {k: ("NONE" if k in AGE_ENUMS else False) for k in unanswered if k in AGE_ENUMS or k in AGE_FLAGS}
         unknown = [k for k in unanswered if k not in want]
+        # Questions Apple added after this tool was written. A listing may answer them itself
+        # ("age_rating": {"more_none": [...]}): each is tried as a no, then as "NONE", since
+        # Apple asks some as yes/no and some as none/infrequent/frequent.
+        for k in [k for k in unknown if k in self.listing.get("age_rating", {}).get("more_none", [])]:
+            def answer(key=k):
+                try:
+                    self.c.call("PATCH", f"/v1/ageRatingDeclarations/{decl['id']}", {"data": {"type": "ageRatingDeclarations", "id": decl["id"], "attributes": {key: False}}})
+                except ApiError:
+                    self.c.call("PATCH", f"/v1/ageRatingDeclarations/{decl['id']}", {"data": {"type": "ageRatingDeclarations", "id": decl["id"], "attributes": {key: "NONE"}}})
+            self.change(f"age rating: {k}: none", answer)
+            unknown.remove(k)
         if unknown:
             self.say("questions this tool does not know (answer them in App Store Connect): " + ", ".join(unknown))
         if want:
@@ -361,11 +397,23 @@ class Run:
         versions = self.c.get(f"/v1/apps/{self.app}/appStoreVersions", **{"filter[platform]": "IOS", "limit": 20})["data"]
         # READY_FOR_REVIEW: added to a draft submission that has not been sent; still the owner's to change.
         open_states = ("PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY")
-        ver = next(v for v in versions if (v["attributes"].get("appVersionState") or v["attributes"].get("appStoreState")) in open_states)
+        ver = next((v for v in versions if (v["attributes"].get("appVersionState") or v["attributes"].get("appStoreState")) in open_states), None)
+        want_version = self.listing.get("version", "1.0.0")
+        if ver is None:
+            # Every version so far has gone to review: an update needs a new one. Apple copies the
+            # listing text and screenshots of the version before it into the new one.
+            have = ", ".join(f"{v['attributes']['versionString']} ({v['attributes'].get('appVersionState') or v['attributes'].get('appStoreState')})" for v in versions) or "none"
+            self.say(f"no version is open for changes (versions: {have})")
+            body = {"data": {"type": "appStoreVersions", "attributes": {"platform": "IOS", "versionString": want_version, "copyright": self.listing["copyright"], "releaseType": "AFTER_APPROVAL"}, "relationships": {"app": rel("apps", self.app)}}}
+            made = self.change(f"new version {want_version}", lambda: self.c.call("POST", "/v1/appStoreVersions", body))
+            if not made:
+                self.say("(the rest of the version's sections run once it exists)")
+                return
+            ver = made["data"]
         self.ver = ver["id"]
         a = ver["attributes"]
         self.say(f"version {a['versionString']}, state {a.get('appVersionState') or a.get('appStoreState')}, copyright {a.get('copyright')!r}, release {a.get('releaseType')}")
-        want = {"versionString": self.listing.get("version", "1.0.0"), "copyright": self.listing["copyright"]}
+        want = {"versionString": want_version, "copyright": self.listing["copyright"]}
         diff = {k: v for k, v in want.items() if a.get(k) != v}
         if diff:
             self.change("version: " + ", ".join(f"{k} {v}" for k, v in diff.items()), lambda: self.c.call("PATCH", f"/v1/appStoreVersions/{self.ver}", {"data": {"type": "appStoreVersions", "id": self.ver, "attributes": diff}}))
@@ -374,6 +422,9 @@ class Run:
         en = next(l for l in locs if l["attributes"]["locale"] == "en-US")
         self.loc = en["id"]
         want = {"description": self.listing["description"], "keywords": self.listing["keywords"], "promotionalText": self.listing["promotional_text"], "supportUrl": self.listing["support_url"]}
+        # "What's New" belongs to an update; Apple refuses it on an app's first version.
+        if self.listing.get("whats_new") and any(v["id"] != self.ver for v in versions):
+            want["whatsNew"] = self.listing["whats_new"]
         diff = {k: v for k, v in want.items() if (en["attributes"].get(k) or "") != v}
         if diff:
             self.change("listing text: " + ", ".join(diff), lambda: self.c.call("PATCH", f"/v1/appStoreVersionLocalizations/{self.loc}", {"data": {"type": "appStoreVersionLocalizations", "id": self.loc, "attributes": diff}}))
@@ -464,6 +515,34 @@ class Run:
             raise ValueError(f"build {self.build} is not ready (state {b['attributes'].get('processingState')})")
         self.change(f"attach build {self.build}", lambda: self.c.call("PATCH", f"/v1/appStoreVersions/{self.ver}/relationships/build", {"data": {"type": "builds", "id": b["id"]}}))
 
+    def draft_submission(self):
+        """Puts the version in a draft submission for App Review, so the owner's one step is Submit. Never submits."""
+        state = self.c.get(f"/v1/appStoreVersions/{self.ver}")["data"]["attributes"]
+        state = state.get("appVersionState") or state.get("appStoreState")
+        self.say(f"version state: {state}")
+        if state not in ("PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY", "READY_FOR_REVIEW"):
+            self.say("the version is not open for a new submission")
+            return
+        subs = self.c.get("/v1/reviewSubmissions", **{"filter[app]": self.app, "filter[platform]": "IOS", "filter[state]": "READY_FOR_REVIEW", "limit": 5})["data"]
+        if subs:
+            sub = subs[0]["id"]
+            self.say("a draft submission exists")
+        else:
+            made = self.change("new draft submission", lambda: self.c.call("POST", "/v1/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": "IOS"}, "relationships": {"app": rel("apps", self.app)}}}))
+            if not made:
+                self.todo.append("add the version to the draft submission")
+                return
+            sub = made["data"]["id"]
+        items = self.c.get(f"/v1/reviewSubmissions/{sub}/items", include="appStoreVersion", limit=20)["data"]
+        inside = [((i.get("relationships", {}).get("appStoreVersion") or {}).get("data") or {}).get("id") for i in items]
+        if self.ver in inside:
+            self.say("the version is in the draft submission: the owner's Submit is all that is left")
+            return
+        self.change(
+            "add the version to the draft submission (not submitted)",
+            lambda: self.c.call("POST", "/v1/reviewSubmissionItems", {"data": {"type": "reviewSubmissionItems", "relationships": {"reviewSubmission": rel("reviewSubmissions", sub), "appStoreVersion": rel("appStoreVersions", self.ver)}}}),
+        )
+
     # ---- price and where it is sold
 
     def price(self):
@@ -523,6 +602,8 @@ class Run:
         if hasattr(self, "ver"):
             self.section("Notes for App Review", self.review_notes)
             self.section("Build", self.attach_build)
+            if self.listing.get("draft_submission"):
+                self.section("Draft submission for App Review", self.draft_submission)
         self.section("Price", self.price)
         self.section("Where it is sold", self.availability)
         print()
