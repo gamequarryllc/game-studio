@@ -1,18 +1,18 @@
-// Makes the App Store screenshots: opens the web build with a believable day and
-// week written straight into its storage, stands in for a phone that is counting
-// ("?mock=counting,store": no test tools, no box for the list only a phone can
-// draw), photographs five screens and sets each under a short caption on a
-// 1320 x 2868 page (the 6.9-inch iPhone size App Store Connect asks for), inside a
-// plain phone outline with a status bar. The first picture is drawn instead
-// (e2e/store-essentials.cjs): the essentials beside a full battery, everything
-// else beside a draining one.
+// Makes the App Store screenshots: opens the web build with a believable day,
+// week and record written straight into its storage, stands in for a phone that
+// is counting ("?mock=counting,store": no test tools, no box for the list only a
+// phone can draw), photographs its screens and sets each under a short caption
+// on a 1320 x 2868 page (the 6.9-inch iPhone size App Store Connect asks for),
+// inside a plain phone outline with a status bar, on the dark ground lit in the
+// colour the picture is about. Some pictures are drawn instead (e2e/store-drawn.cjs):
+// the essentials beside two batteries, the rising cost of each unlock, the Second
+// thought screen and the widgets, which only an iPhone draws.
 //
 //   APP_BASE_URL=/game-studio/apps/plainlimit EXPO_OFFLINE=1 npx expo export --platform web
 //   node e2e/store-shots.cjs [out folder]      (default: store/plainlimit/screenshots)
 //
-// The pictures come from the web build, which draws the same screens from the same
-// code. What only an iPhone draws (Apple's list of apps, the screens over a locked
-// app, the widget) is not in them.
+// The photographed pictures come from the web build, which draws the same screens
+// from the same code.
 
 const fs = require('fs');
 const os = require('os');
@@ -20,7 +20,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const { listen } = require('./serve.cjs');
-const { essentialsHtml } = require('./store-essentials.cjs');
+const { essentialsHtml, ladderHtml, secondThoughtScreen, homeScreen, GLOW, PRO_GOLD, hexA } = require('./store-drawn.cjs');
 
 const OUT = path.resolve(process.argv[2] || path.join(__dirname, '..', '..', '..', 'store', 'plainlimit', 'screenshots'));
 const RAW = fs.mkdtempSync(path.join(os.tmpdir(), 'plainlimit-store-'));
@@ -39,13 +39,19 @@ const GROUND = '#0E1011';
 
 // Search results show the first three. The Essentials screen itself is left out: its steps name other companies'
 // apps and read like a manual at this size (the fresh-eyes review, 2026-11-16); the drawn first picture says what
-// it is for instead (the owner's pick, 2026-11-19). `raw` names the photographed screen; `drawn` replaces the phone.
+// it is for instead (the owner's pick, 2026-11-19). Each picture is one of: `raw` (a photographed screen in the
+// phone), `screen` (a drawn screen in the phone), `drawn` (a drawn picture in place of the phone), or `drawn` with
+// `raw` and `phoneTop` (the picture above, the top of the phone below it). `*words*` in a caption are lit in `glow`.
+// `pro` marks a Pro feature, as App Review asks (guideline 2.3.2). The captions state what Plainlimit does, never a
+// comparison with other apps. The last one is the owner's own story (2026-11-22).
 const SHOTS = [
-  { file: '01-essentials', drawn: essentialsHtml, caption: 'Your essentials\nare free.' },
-  { file: '02-today', raw: 'today', caption: 'One battery a day\nfor everything else.' },
-  { file: '03-empty', raw: 'empty', caption: 'When it runs out,\nthe scroll locks.' },
-  { file: '04-sums', raw: 'sums', caption: 'Need a little more?\nEarn it with sums.' },
-  { file: '05-settings', raw: 'settings', caption: 'Recharges at 6 AM,\nnot midnight.' },
+  { file: '01-essentials', drawn: essentialsHtml, glow: GLOW[6], caption: 'Your essentials\n*never count.*' },
+  { file: '02-today', raw: 'today', glow: GLOW[5], caption: 'One battery a day\nfor *everything else.*' },
+  { file: '03-unlocks', drawn: ladderHtml, raw: 'sums', phoneTop: 1760, glow: GLOW[1], caption: 'Each unlock gets\n*shorter and harder.*' },
+  { file: '04-empty', raw: 'empty', glow: GLOW[0], caption: 'When it runs out,\n*the scroll locks.*' },
+  { file: '05-second-thought', screen: secondThoughtScreen, glow: '#A27BFF', pro: true, caption: 'A *second thought*\nbefore you scroll.' },
+  { file: '06-widget', screen: homeScreen, glow: GLOW[5], caption: 'Your battery on\nyour *Home Screen.*' },
+  { file: '07-history', raw: 'record', glow: GLOW[6], caption: 'Made by a phone addict,\n*for phone addicts.*', sub: 'No account. No ads. No subscription.' },
 ];
 
 // The clock the pictures are taken at: 9:41 AM today, as in the status bar, so the countdown to the recharge agrees.
@@ -64,22 +70,34 @@ function periodStart(rechargeMinute, now = NOW) {
   return start;
 }
 
-/** Six finished days before today: mostly under a 3 h 30 min goal, one over with earned time. */
-function week() {
+/** Finished days before today, newest last: mostly under a 3 h 30 min goal, now and then over with earned time. */
+function history(days = 84) {
   const today = periodStart(360);
-  const days = [
-    [165, 0],
-    [192, 0],
-    [236, 1],
-    [148, 0],
-    [201, 0],
-    [174, 0],
-  ];
-  return days.map(([used, topUps], i) => {
+  // The last six are the week Today shows.
+  const pattern = [183, 158, 199, 171, 140, 205, 188, 162, 151, 176, 165, 192, 236, 148, 201, 174];
+  return Array.from({ length: days }, (_, k) => {
+    const back = days - k;
+    const used = back <= 6 ? pattern[pattern.length - back] : pattern[back % 10] + (back % 23 === 0 ? 40 : 0);
     const start = new Date(today);
-    start.setDate(start.getDate() - (6 - i));
-    return { start: start.toISOString(), goalMinutes: GOAL, usedMinutes: used, topUps, state: 'counted' };
+    start.setDate(start.getDate() - back);
+    return { start: start.toISOString(), goalMinutes: GOAL, usedMinutes: used, topUps: used > GOAL ? 1 : 0, state: 'counted' };
   });
+}
+
+/** Monday of the week, as the record keeps it (weekKey in src/domain/record.ts). */
+function mondayKey(d) {
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+  return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+}
+
+/** Twelve weeks of record: one emergency pass used 23 days ago, two saved. */
+function record() {
+  const since = periodStart(360);
+  since.setDate(since.getDate() - 84);
+  const used = periodStart(360);
+  used.setDate(used.getDate() - 23);
+  used.setHours(22, 10);
+  return { passes: 2, lastAdded: mondayKey(NOW), since: since.toISOString(), uses: [used.toISOString()], passUntil: null };
 }
 
 function doc(used, emptyLevel = 'work') {
@@ -90,12 +108,13 @@ function doc(used, emptyLevel = 'work') {
     day: { periodStart: periodStart(360).toISOString(), usedMinutes: used, topUps, unlockedUntil: null, uncounted: false },
     watching: true,
     setupDone: true,
-    history: week(),
+    history: history(),
+    record: record(),
   };
 }
 
 /** A plain phone: dark edge, rounded corners, a camera cut-out, a status bar and the bar at the foot. */
-function phoneHtml(img) {
+function phoneHtml({ img, screen }) {
   const scale = 2.672; // points to pixels on the page
   const px = (n) => `${(n * scale).toFixed(1)}px`;
   const ink = '#F4F5F2';
@@ -106,7 +125,8 @@ function phoneHtml(img) {
       <div class="btn" style="left:-31px;top:${px(306)};height:${px(60)}"></div>
       <div class="btn" style="right:-31px;top:${px(262)};height:${px(96)}"></div>
       <div class="screen" style="border-radius:${px(50)};background:${GROUND}">
-        <img src="data:image/png;base64,${img}" style="position:absolute;left:0;top:${px(STATUS)};width:${px(APP.width)};height:${px(APP.height)}">
+        ${img ? `<img src="data:image/png;base64,${img}" style="position:absolute;left:0;top:${px(STATUS)};width:${px(APP.width)};height:${px(APP.height)}">` : ''}
+        ${screen ? `<div style="position:absolute;left:0;top:0;width:${SCREEN.width}px;height:${SCREEN.height}px;transform:scale(${scale});transform-origin:0 0">${screen}</div>` : ''}
         <div style="position:absolute;left:${px(40)};top:${px(18)};font:600 ${px(16.5)}/${px(22)} system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;letter-spacing:-0.3px;color:${ink}">9:41</div>
         <div style="position:absolute;left:50%;top:${px(11)};width:${px(122)};height:${px(35)};margin-left:${px(-61)};border-radius:${px(20)};background:#000"></div>
         <svg style="position:absolute;right:${px(30)};top:${px(21)}" width="${px(78)}" height="${px(14)}" viewBox="0 0 78 14" fill="${ink}">
@@ -164,12 +184,12 @@ async function main() {
       await context.close();
     }
 
-    // 3: Settings, with the default "Work for it".
+    // 3: History: 23 days without an emergency pass, and twelve weeks day by day.
     {
-      const { page, context } = await open(doc(95));
-      await tab(page, 'Settings');
-      await page.getByText('Daily goal', { exact: true }).first().waitFor();
-      await raw(page, 'settings');
+      const { page, context } = await open(doc(47));
+      await page.getByRole('button', { name: /^History/ }).first().click();
+      await page.getByText('days without an emergency pass', { exact: false }).first().waitFor();
+      await raw(page, 'record');
       await context.close();
     }
 
@@ -198,25 +218,54 @@ async function main() {
 
     if (errors.length > 0) throw new Error('page errors: ' + errors.join('; '));
 
-    // Each picture under its caption, on the app's own dark ground.
+    // Each picture under its caption, on the app's own dark ground lit in the picture's colour.
     const font = fs.readFileSync(FONT).toString('base64');
     const semi = fs.readFileSync(FONT_SEMI).toString('base64');
     const sheet = await browser.newPage({ viewport: PAGE, deviceScaleFactor: 1 });
     for (const shot of SHOTS) {
-      const picture = shot.drawn ? shot.drawn() : phoneHtml(fs.readFileSync(path.join(RAW, `${shot.raw}.png`)).toString('base64'));
-      const lines = shot.caption.split('\n').map((l) => `<div>${l}</div>`).join('');
+      const img = shot.raw ? fs.readFileSync(path.join(RAW, `${shot.raw}.png`)).toString('base64') : null;
+      let picture;
+      let phoneTop = shot.sub ? 520 : 450;
+      if (shot.drawn) {
+        picture = shot.drawn();
+        if (img) {
+          picture += phoneHtml({ img });
+          phoneTop = shot.phoneTop;
+        }
+      } else {
+        picture = phoneHtml({ img, screen: shot.screen ? shot.screen() : null });
+      }
+      const lit = (line) => line.replace(/\*([^*]+)\*/g, `<span style="color:${shot.glow};text-shadow:0 0 40px ${hexA(shot.glow, 0.45)}">$1</span>`);
+      const lines = shot.caption.split('\n').map((l) => `<div class="line">${lit(l)}</div>`).join('');
+      const pro = shot.pro ? `<div class="pro">PRO</div>` : '';
+      const sub = shot.sub ? `<div class="sub">${shot.sub}</div>` : '';
       await sheet.setContent(`<!doctype html><html><head><style>
         @font-face { font-family: Display; font-weight: 700; src: url(data:font/ttf;base64,${font}); }
         @font-face { font-family: Display; font-weight: 600; src: url(data:font/ttf;base64,${semi}); }
         html, body { margin: 0; width: ${PAGE.width}px; height: ${PAGE.height}px; overflow: hidden;
-                     background: radial-gradient(1200px 900px at 50% 1500px, #16231A 0%, ${GROUND} 70%); }
-        .caption { position: absolute; top: 170px; left: 0; right: 0; text-align: center; font: 700 96px/108px Display, sans-serif; letter-spacing: -2px; color: #F4F5F2; }
-        .phone { position: absolute; top: 450px; left: 50%; transform: translateX(-50%); box-sizing: content-box; border: 22px solid #050606; border-radius: 156px;
+                     background: radial-gradient(1300px 1100px at 50% 1500px, ${hexA(shot.glow, 0.13)} 0%, ${hexA(shot.glow, 0)} 70%), ${GROUND}; }
+        .top { position: absolute; top: ${shot.pro ? 120 : 170}px; left: 60px; right: 60px; text-align: center; }
+        .caption { font: 700 96px/108px Display, sans-serif; letter-spacing: -2px; color: #F4F5F2; }
+        .line { white-space: nowrap; }
+        .pro { display: inline-block; margin-bottom: 26px; padding: 8px 22px; border-radius: 14px; background: ${PRO_GOLD}; color: #10120F; font: 700 40px/48px Display, sans-serif; letter-spacing: 1px; }
+        .sub { margin-top: 26px; font: 600 46px/56px Display, sans-serif; color: #A9AEB3; }
+        .phone { position: absolute; top: ${phoneTop}px; left: 50%; transform: translateX(-50%); box-sizing: content-box; border: 22px solid #050606; border-radius: 156px;
                  box-shadow: 0 0 0 4px #3A3E43, 0 0 0 6px #1B1D20, 0 60px 140px rgba(0, 0, 0, 0.55); background: #050606; }
         .btn { position: absolute; width: 9px; border-radius: 4px; background: #34383D; }
         .screen { position: absolute; inset: 0; overflow: hidden; }
-      </style></head><body><div class="caption">${lines}</div>${picture}</body></html>`);
+      </style></head><body><div class="top">${pro}<div class="caption">${lines}</div>${sub}</div>${picture}</body></html>`);
       await sheet.evaluate(() => document.fonts.ready);
+      // A caption line too wide for the page is set smaller, never cut.
+      await sheet.evaluate(() => {
+        const caption = document.querySelector('.caption');
+        const room = document.querySelector('.top').clientWidth;
+        let size = 96;
+        while (size > 60 && [...caption.querySelectorAll('.line')].some((l) => l.scrollWidth > room)) {
+          size -= 2;
+          caption.style.fontSize = `${size}px`;
+          caption.style.lineHeight = `${Math.round(size * 1.125)}px`;
+        }
+      });
       await sheet.waitForTimeout(250);
       await sheet.screenshot({ path: path.join(OUT, `${shot.file}.png`), omitBackground: false });
     }
