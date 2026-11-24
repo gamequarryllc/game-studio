@@ -40,6 +40,8 @@ export const SAVED = {
   askOpenUntil: 'plainlimit_ask_open_until',
   /** 1 while that open stretch is "Until I leave it": the phone covers the list again by itself once it goes unused. */
   askOpenInUse: 'plainlimit_ask_open_in_use',
+  /** The battery (its start, in ms) for which the app last counted again by itself after a miscount: once a battery. */
+  recountedFor: 'plainlimit_recounted_for',
   /** When counting was first seen not working, in a run of bad checks. */
   wrongSince: 'plainlimit_wrong_since',
   /** What the widget draws from: the goal, the recharge, when counting began, and the rounds. */

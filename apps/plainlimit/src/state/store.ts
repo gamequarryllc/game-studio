@@ -258,6 +258,20 @@ function checkHealth(doc: Doc): Doc {
     void screenTime.applyPlan(doc.settings, doc.day.topUps).then(() => store.tick(new Date()));
     return doc;
   }
+  // The phone sent a report that cannot be true (a burst of them, 24 November):
+  // nothing locked on it, and the part of the day it stood for cannot lock until
+  // counting is set up again. Done here by itself, once a battery, while the
+  // battery is not empty (an empty one is locked for real and stays so); after
+  // that, Today offers Count again.
+  if (state === 'miscounted' && recountedFor !== doc.day.periodStart && cellsLeft(doc.day.usedMinutes, doc.settings.goalMinutes) > 0 && screenTime.recountDue(new Date(doc.day.periodStart))) {
+    // Kept here as well as on the phone, so a phone that will not save it cannot set off one recount after another.
+    recountedFor = doc.day.periodStart;
+    screenTime.markRecounted(new Date(doc.day.periodStart));
+    // What is known now guards the registration that follows (see `Guard`).
+    screenTime.noteKnown(doc.settings, doc.day.usedMinutes);
+    void screenTime.countAgain(doc.settings, doc.day.topUps, new Date(doc.day.periodStart)).then(() => redrawAndLookAgain());
+    return doc;
+  }
   if (doc.day.uncounted) return doc;
   // Only a fault that lasts: a single bad reading between good ones loses nothing.
   const since = screenTime.wrongSince(now);
@@ -265,6 +279,9 @@ function checkHealth(doc: Doc): Doc {
   screenTime.noteHistoryLoss(`today marked not fully counted (${state} for ${Math.round((now - since) / 60000)} min)`);
   return { ...doc, day: { ...doc.day, uncounted: true } };
 }
+
+/** The battery the app last counted again for by itself (see checkHealth). */
+let recountedFor: string | null = null;
 
 /** How long counting must look wrong before today is marked not fully counted. */
 const WRONG_FOR_MS = 2 * 60 * 1000;

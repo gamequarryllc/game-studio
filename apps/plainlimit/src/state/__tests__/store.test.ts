@@ -20,6 +20,8 @@ function fakePhone(): Fake {
     busyRegistering: jest.fn(() => false),
     clearPicks: jest.fn(),
     countAgain: jest.fn(async () => true),
+    recountDue: jest.fn(() => true),
+    markRecounted: jest.fn(),
     coverAgain: jest.fn(),
     fixOldPicks: jest.fn(() => 'fine'),
     coverEmptyNow: jest.fn(),
@@ -162,6 +164,35 @@ describe('marking a day not fully counted', () => {
     phone.wrongSince = jest.fn((now: number) => now - 60 * 60 * 1000);
     store.tick(new Date());
     expect(store.get().doc.day.uncounted).toBe(false);
+  });
+
+  it('counts again by itself, once a battery, after a report that cannot be true', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(80));
+    await store.start();
+    phone.health = jest.fn(() => 'miscounted');
+    store.tick(new Date());
+    // Lets the recount finish (and its redraw set its timers) while the timers are still fake.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(phone.countAgain).toHaveBeenCalledTimes(1);
+    expect(phone.markRecounted).toHaveBeenCalledTimes(1);
+    // Noted first, so the registration that follows is guarded by what is known now.
+    expect(phone.noteKnown).toHaveBeenCalledWith(expect.anything(), 80);
+    expect(store.get().doc.day.uncounted).toBe(false);
+    // Already done for this battery: Today offers Count again instead.
+    phone.recountDue = jest.fn(() => false);
+    store.tick(new Date());
+    expect(phone.countAgain).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not count again by itself while the battery is empty: that lock is real', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(180));
+    await store.start();
+    phone.health = jest.fn(() => 'miscounted');
+    store.tick(new Date());
+    expect(phone.countAgain).not.toHaveBeenCalled();
   });
 
   it('clears the run of bad readings when counting looks fine again', async () => {

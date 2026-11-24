@@ -1,6 +1,6 @@
-import { asGuard, believable, checkpointsFor, GUARD_MS, guardFor, guardFrom, judgedFrom, mostByNow, roundName, type Guard } from '../checkpoints';
+import { asGuard, believable, checkpointsFor, GUARD_MS, guardFor, guardFrom, judgedFrom, keepsPace, minuteTicksFor, mostByNow, paceRules, roundName, type Guard } from '../checkpoints';
 import { earliestTrue, lockNotBefore } from '../monitorPlan';
-import { countDay, doubtful, miscounted, roundSettled, type Report, type Rounds } from '../reports';
+import { countDay, doubtful, marksOf, miscounted, roundSettled, type Report, type Rounds } from '../reports';
 
 /** A clock for one day in November 2026, in milliseconds. */
 const november = (date: number) => (h: number, m = 0, s = 0) => new Date(2026, 10, date, h, m, s).getTime();
@@ -59,6 +59,53 @@ describe('the guard after a registration', () => {
   });
 });
 
+describe('keeping pace with the clock', () => {
+  const clock = november(24);
+  const minute = 60000;
+
+  it('takes a report for M minutes as false if it came sooner than M - L minutes after one for L, less twenty', () => {
+    const earlier = [{ minutes: 60, at: clock(14, 11) }];
+    expect(keepsPace(120, clock(14, 27), earlier, 0)).toBe(false);
+    expect(keepsPace(120, clock(14, 51), earlier, 0)).toBe(true);
+    // Within twenty minutes of an earlier report, anything goes (the phone may have been slow with it).
+    expect(keepsPace(80, clock(14, 11, 30), earlier, 0)).toBe(true);
+  });
+
+  it('is only judged against earlier reports for fewer minutes', () => {
+    expect(keepsPace(120, clock(14, 27), [{ minutes: 60, at: clock(14, 30) }], 0)).toBe(true);
+    expect(keepsPace(60, clock(14, 27), [{ minutes: 120, at: clock(14, 26) }], 0)).toBe(true);
+  });
+
+  it('leaves out reports made just after a registration: the phone re-reports the day then, with fresh times', () => {
+    const registered = clock(15);
+    const reReported = [{ minutes: 60, at: registered + 5000 }];
+    expect(keepsPace(100, clock(15, 15), reReported, 0)).toBe(false);
+    expect(keepsPace(100, clock(15, 15), reReported, registered)).toBe(true);
+    // Once the guard has closed, reports count again.
+    expect(keepsPace(100, clock(15, 15), [{ minutes: 60, at: registered + GUARD_MS + minute }], registered)).toBe(false);
+  });
+
+  it('gives the phone, for each checkpoint, how long after each lower one it may first act', () => {
+    const all = [...checkpointsFor(120), ...minuteTicksFor(120)].map((c) => ({ name: c.id, minutes: c.minutes }));
+    const rules = paceRules(120, all);
+    expect(rules).toContainEqual({ name: 'cell-3', ms: 40 * minute });
+    expect(rules).toContainEqual({ name: 'cell-1', ms: 80 * minute });
+    // Twenty minutes below or closer says nothing.
+    expect(rules.find((r) => r.name === 'cell-5')).toBeUndefined();
+    expect(rules.find((r) => r.name === 'empty')).toBeUndefined();
+  });
+});
+
+/** The monitor extension's check (patches/react-native-device-activity+0.6.1.patch, plainlimitTooSoon). */
+function phoneSaysTooSoon(rules: { name: string; ms: number }[], stored: Record<string, number>, now: number, skipFrom = 0, skipTo = 0): boolean {
+  return rules.some(({ name, ms }) => {
+    const at = stored[name] ?? 0;
+    if (!(at > 0)) return false;
+    if (skipTo > skipFrom && at >= skipFrom && at <= skipTo) return false;
+    return at < now && now < at + ms;
+  });
+}
+
 // Real days from the owner's phone, replayed through the same rules the app,
 // the phone's locks and the widget use. Every phone bug found becomes one of these.
 describe('replaying real days', () => {
@@ -80,6 +127,69 @@ describe('replaying real days', () => {
     expect(countDay({ reports, goalMinutes: 210, dayStart, rounds: oneRound('r'), guard: build72, now: clock(19, 40) })).toBe(35);
     expect(lockNotBefore(new Date(dayStart), build72, 210).getTime()).toBeGreaterThan(clock(21));
     expect(lockNotBefore(new Date(dayStart), guard, 210)).toEqual(earliestTrue(new Date(dayStart), 210));
+  });
+
+  it('24 November, build 150: a burst of reports for nothing locks nothing and counts for nothing', () => {
+    // Goal 2:00, counted from 6 AM, registered the evening before. The 60-minute
+    // mark came at 2:11:12 PM; then, with the phone charging, empty, the last
+    // warning and the fifth cell within two seconds at 2:27; the fourth cell
+    // only at 2:34. The phone's own report said 1:15 used at 2:27.
+    const clock = november(24);
+    const dayStart = clock(6);
+    const registeredAt = new Date(2026, 10, 23, 20, 58, 57).getTime();
+    const guard: Guard = { from: new Date(2026, 10, 23, 19, 18, 57).getTime(), opens: registeredAt, closes: registeredAt + GUARD_MS };
+    const reports = [
+      report('cell-1', 'r', clock(10, 22, 44)),
+      report('cell-2', 'r', clock(10, 44, 21)),
+      report('cell-3', 'r', clock(14, 11, 12)),
+      report('empty', 'r', clock(14, 27, 49)),
+      report('final-warning', 'r', clock(14, 27, 50)),
+      report('cell-5', 'r', clock(14, 27, 51)),
+      report('cell-4', 'r', clock(14, 34, 22)),
+    ];
+    const count = (now: number, upTo = reports) => countDay({ reports: upTo.filter((r) => r.at <= now), goalMinutes: 120, dayStart, rounds: oneRound('r'), guard, now, registeredAt });
+    // Build 150 believed it: judged from the day's start alone, empty at 2:27 could be true.
+    const empty = checkpointsFor(120).find((c) => c.id === 'empty');
+    if (!empty) throw new Error('no empty');
+    expect(believable(empty, new Date(dayStart), guard, new Date(clock(14, 27, 49)))).toBe(true);
+    // Paced, the burst is thrown out: 1:00 known at 2:28, and the fourth cell at 2:34 is real.
+    expect(count(clock(14, 28))).toBe(60);
+    expect(count(clock(14, 35))).toBe(80);
+    expect(names(doubtful(reports, 120, 'r', new Date(dayStart), guard, registeredAt))).toEqual([roundName('cell-5', 'r'), roundName('empty', 'r'), roundName('final-warning', 'r')].sort());
+    expect(miscounted(reports, 120, 'r', new Date(dayStart), guard, registeredAt)).toBe(true);
+
+    // On the phone: each of the burst's actions (the empty lock, the last warning, the fifth cell's screen) is held back...
+    const all = [...checkpointsFor(120), ...minuteTicksFor(120)].map((c) => ({ name: roundName(c.id, 'r'), minutes: c.minutes }));
+    const storedBy = (now: number) => Object.fromEntries(reports.filter((r) => r.at < now).map((r) => [r.name, r.at]));
+    for (const [id, minutes] of [['empty', 120], ['final-warning', 113], ['cell-5', 100]] as const) {
+      const at = reports.find((r) => r.name === roundName(id, 'r'))?.at ?? 0;
+      expect(phoneSaysTooSoon(paceRules(minutes, all), storedBy(at), at, registeredAt, registeredAt + GUARD_MS)).toBe(true);
+    }
+    // ...while the real reports before it would all have acted.
+    for (const [id, minutes] of [['cell-1', 20], ['cell-2', 40], ['cell-3', 60], ['cell-4', 80]] as const) {
+      const at = reports.find((r) => r.name === roundName(id, 'r'))?.at ?? 0;
+      expect(phoneSaysTooSoon(paceRules(minutes, all), storedBy(at), at, registeredAt, registeredAt + GUARD_MS)).toBe(false);
+    }
+    // The real empty, had it come at its time (an hour after the 60-minute mark), acts.
+    const realEmpty = clock(15, 12);
+    expect(phoneSaysTooSoon(paceRules(120, all), { [roundName('cell-3', 'r')]: clock(14, 11, 12), [roundName('cell-4', 'r')]: clock(14, 34, 22) }, realEmpty)).toBe(false);
+    expect(marksOf(reports, 120, 'r', dayStart)).toHaveLength(7);
+  });
+
+  it('after counting again, the re-reported day does not make the real end look too soon', () => {
+    // Counted again at 3:00 PM: the phone re-reports 1:20 within seconds; 40
+    // minutes of real use later the battery runs out.
+    const clock = november(24);
+    const dayStart = clock(6);
+    const registeredAt = clock(15);
+    const guard = guardFor({ at: clock(14, 59), most: 110 }, registeredAt, new Date(dayStart));
+    const again = registeredAt + 3000;
+    const reports = ['cell-1', 'cell-2', 'cell-3', 'cell-4'].map((id) => report(id, 'r', again)).concat([report('cell-5', 'r', clock(15, 20)), report('final-warning', 'r', clock(15, 33)), report('empty', 'r', clock(15, 40))]);
+    expect(countDay({ reports, goalMinutes: 120, dayStart, rounds: oneRound('r'), guard, now: clock(15, 41), registeredAt })).toBe(120);
+    expect(doubtful(reports, 120, 'r', new Date(dayStart), guard, registeredAt)).toEqual([]);
+    const all = [...checkpointsFor(120), ...minuteTicksFor(120)].map((c) => ({ name: roundName(c.id, 'r'), minutes: c.minutes }));
+    const stored = Object.fromEntries(reports.filter((r) => r.at < clock(15, 40)).map((r) => [r.name, r.at]));
+    expect(phoneSaysTooSoon(paceRules(120, all), stored, clock(15, 40), registeredAt, registeredAt + GUARD_MS)).toBe(false);
   });
 
   it('14 November, build 49: turning counting off and on keeps the day', () => {

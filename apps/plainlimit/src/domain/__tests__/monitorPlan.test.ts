@@ -1,5 +1,5 @@
 import { wordFor } from '../battery';
-import { checkpointsFor, GUARD_KEY, guardFor } from '../checkpoints';
+import { checkpointsFor, GUARD_KEY, GUARD_MS, guardFor, PACE_SLACK_MINUTES } from '../checkpoints';
 import {
   ACTIVITY,
   COUNTED_ID,
@@ -206,6 +206,14 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain('reached("cell-\\(emptied)"');
     expect(Object.keys(monitorPlan(settings()).widget).sort()).toEqual(['countFrom', 'goalMinutes', 'rechargeMinute']);
     expect(swift).toContain('plan["countFrom"]');
+    // The pace rule (checkpoints.ts, keepsPace) with the same numbers as the app.
+    expect(swift).toContain(`let paceSlackMinutes = ${PACE_SLACK_MINUTES.toFixed(1)}`);
+    expect(swift).toContain(`let guardMs = ${GUARD_MS.toLocaleString('en-US').replace(/,/g, '_')}.0`);
+    expect(swift).toContain('plan["marks"]');
+    expect(swift).toContain('keepsPace(at, minutes)');
+    // The monitor extension's side of it, in the library patch, reads what screenTime.ts writes with each action.
+    const patch = require('fs').readFileSync(require('path').join(__dirname, '../../../patches/react-native-device-activity+0.6.1.patch'), 'utf8');
+    for (const part of ['action["pace"]', '"onlyIfTooSoon"', 'pace["skipFrom"]', 'pace["skipTo"]', 'pace["after"]', 'rule["key"]', 'rule["ms"]']) expect(patch).toContain(part);
     expect(swift).toContain('plan["goalMinutes"]');
     expect(swift).toContain('plan["rechargeMinute"]');
     // The guard the app saves at each registration, with the same key and fields.

@@ -177,9 +177,69 @@ export function guardFrom(dayStart: Date, guard: Guard | null): Date {
   return guard ? new Date(Math.max(dayStart.getTime(), guard.from)) : dayStart;
 }
 
+/**
+ * How far a report may run ahead of an earlier one before it is taken for a
+ * false one: room for the phone being slow with the earlier report, the same
+ * twenty minutes `mostByNow` allows.
+ */
+export const PACE_SLACK_MINUTES = 20;
+
+/** A report of a checkpoint today, with the minutes it stands for: what later reports are paced against. */
+export interface Mark {
+  minutes: number;
+  at: number;
+}
+
+/**
+ * Whether an earlier report says anything about the pace of one for `minutes`
+ * arriving at `arrivedAt`: it came first, it is for fewer minutes, and it did
+ * not come in the minutes after the day was last registered, when the phone
+ * re-reports the day so far with fresh times (a report made then was reached
+ * earlier, so its time proves nothing).
+ */
+function pacedBy(earlier: Mark, minutes: number, arrivedAt: number, registeredAt: number): boolean {
+  const reReported = registeredAt > 0 && earlier.at >= registeredAt && earlier.at <= registeredAt + GUARD_MS;
+  return earlier.at < arrivedAt && earlier.minutes < minutes && !reReported;
+}
+
+/**
+ * Whether a report keeps pace with the clock. Nobody uses minutes faster than
+ * they pass, so a report for M minutes cannot come sooner than M - L minutes
+ * after an earlier one for L, less the allowance for a slow phone. (24
+ * November, build 150: the 60-minute mark came at 2:11 PM; at 2:27 the 100,
+ * 113 and 120-minute marks came within two seconds of each other, with the
+ * phone on its charger, and the battery emptied with 1:15 of 2:00 used. iOS 26
+ * fires checkpoints for nothing at times, often when a phone is picked up or
+ * plugged in. The guard after a registration could not catch it: the day had
+ * been registered the evening before.) A report that came early never makes a
+ * later one look too soon (it only pulls the bar earlier), so every earlier
+ * report can be used; only a late one could, which is what the allowance is for.
+ */
+export function keepsPace(minutes: number, arrivedAt: number, earlier: readonly Mark[], registeredAt: number, slackMinutes = PACE_SLACK_MINUTES): boolean {
+  return earlier.every((mark) => !pacedBy(mark, minutes, arrivedAt, registeredAt) || arrivedAt >= mark.at + (minutes - mark.minutes - slackMinutes) * 60000);
+}
+
+/**
+ * The pace rule as the phone applies it, for a checkpoint's actions: for each
+ * checkpoint far enough below it to matter, how long after that one's report
+ * it may first act. (The monitor extension reads the reports' times as it
+ * goes; src/platform/screenTime.ts writes these with the actions, and the
+ * library patch in patches/ checks them.)
+ */
+export function paceRules<T extends { name: string; minutes: number }>(minutes: number, all: readonly T[], slackMinutes = PACE_SLACK_MINUTES): { name: string; ms: number }[] {
+  return all.filter((c) => minutes - c.minutes - slackMinutes > 0).map((c) => ({ name: c.name, ms: Math.round((minutes - c.minutes - slackMinutes) * 60000) }));
+}
+
+/** What a report is paced against: the day's earlier reports, and when the day was last registered. */
+export interface Pace {
+  earlier: readonly Mark[];
+  registeredAt: number;
+}
+
 /** A report from today's count that can be true. */
-export function believable(checkpoint: Checkpoint, dayStart: Date, guard: Guard | null, arrivedAt: Date): boolean {
-  return arrivedAt.getTime() >= dayStart.getTime() && isPlausible(checkpoint, judgedFrom(dayStart, guard, arrivedAt), arrivedAt);
+export function believable(checkpoint: Checkpoint, dayStart: Date, guard: Guard | null, arrivedAt: Date, pace: Pace | null = null): boolean {
+  if (arrivedAt.getTime() < dayStart.getTime() || !isPlausible(checkpoint, judgedFrom(dayStart, guard, arrivedAt), arrivedAt)) return false;
+  return pace === null || keepsPace(checkpoint.minutes, arrivedAt.getTime(), pace.earlier, pace.registeredAt);
 }
 
 /**

@@ -19,6 +19,9 @@ let appGroup = "group.com.gamequarry.plainlimit"
 let activityName = "plday"
 let cellCount = 6
 let slackMinutes = 2.0
+/// checkpoints.ts: PACE_SLACK_MINUTES and GUARD_MS.
+let paceSlackMinutes = 20.0
+let guardMs = 600_000.0
 
 struct BatteryState {
   var isSetUp: Bool
@@ -168,11 +171,33 @@ func readState(now: Date) -> BatteryState {
   let nowMs = now.timeIntervalSince1970 * 1000
   let counting = (picksAt >= start && !anyNew && nowMs - picksAt < 60_000) ? roundBefore : round
 
+  // Every checkpoint the phone reports (the cells and the minute ones), for
+  // pacing: a report for M minutes cannot come sooner than M - L minutes after
+  // an earlier one for L, less twenty for a slow phone (checkpoints.ts,
+  // keepsPace). Reports in the minutes after a registration are left out:
+  // the phone re-reports the day then, with fresh times.
+  let registeredAt = (plan["registeredAt"] as? NSNumber)?.doubleValue ?? 0
+  let marks: [(at: Double, minutes: Double)] = (plan["marks"] as? [[String: Any]] ?? []).compactMap { (mark: [String: Any]) -> (at: Double, minutes: Double)? in
+    guard let activity = mark["activity"] as? String, let name = mark["name"] as? String,
+      let minutes = (mark["minutes"] as? NSNumber)?.doubleValue
+    else { return nil }
+    let key = counting.isEmpty ? name : "\(name)~\(counting)"
+    let at = defaults.double(forKey: "events_\(activity)_eventDidReachThreshold_\(key)")
+    let reReported = registeredAt > 0 && at >= registeredAt && at <= registeredAt + guardMs
+    return at >= start && !reReported ? (at, minutes) : nil
+  }
+  func keepsPace(_ at: Double, _ minutes: Double) -> Bool {
+    marks.allSatisfy { mark in
+      mark.at >= at || mark.minutes >= minutes || at >= mark.at + (minutes - mark.minutes - paceSlackMinutes) * 60_000
+    }
+  }
+
   // A checkpoint for N minutes of use cannot honestly arrive sooner than N minutes
-  // into the day. iOS has been seen to deliver them early; those are ignored.
+  // into the day, nor faster than the clock after an earlier one. iOS has been
+  // seen to deliver them early, and in bursts for nothing; those are ignored.
   func reached(_ name: String, afterMinutes minutes: Double) -> Bool {
     let at = stored(name, counting)
-    return at >= start && at >= judgedFrom(at) + max(0, minutes - slackMinutes) * 60_000
+    return at >= start && at >= judgedFrom(at) + max(0, minutes - slackMinutes) * 60_000 && keepsPace(at, minutes)
   }
 
   var cells = cellCount

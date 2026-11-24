@@ -5,7 +5,7 @@
  * cannot disagree about a report.
  */
 
-import { believable, checkpointsFor, minuteTicksFor, picksSettled, roundName, splitName, usedFloor, type Checkpoint, type Guard } from './checkpoints';
+import { believable, checkpointsFor, minuteTicksFor, picksSettled, roundName, splitName, usedFloor, type Checkpoint, type Guard, type Mark, type Pace } from './checkpoints';
 
 /** A report as the phone keeps it: the checkpoint's registered name (with its round) and when it came. */
 export interface Report {
@@ -35,6 +35,25 @@ export function roundSettled(reports: readonly Report[], rounds: Rounds, dayStar
   return picksSettled(now, rounds.picksChangedAt, fresh.length > 0 ? Math.max(...fresh) : null);
 }
 
+/** The latest report under `name`, or null. */
+function latestOf(reports: readonly Report[], name: string): Report | null {
+  return reports.filter((r) => r.name === name).reduce<Report | null>((best, r) => (best && best.at >= r.at ? best : r), null);
+}
+
+/**
+ * Today's reports in one round, each with the minutes it stands for: what
+ * every report is paced against (`keepsPace`). The cells and the minute
+ * checkpoints alike, from the day's start to its end.
+ */
+export function marksOf(reports: readonly Report[], goalMinutes: number, round: string, dayStart: number, periodEnd = Number.POSITIVE_INFINITY): Mark[] {
+  const out: Mark[] = [];
+  for (const checkpoint of [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)]) {
+    const latest = latestOf(reports, roundName(checkpoint.id, round));
+    if (latest && latest.at >= dayStart && latest.at < periodEnd) out.push({ minutes: checkpoint.minutes, at: latest.at });
+  }
+  return out;
+}
+
 /**
  * The minutes known to be used, from the checkpoints the phone has reported
  * in the day's count: the latest report for each, if it can be true. Only one
@@ -50,6 +69,8 @@ export function countDay(input: {
   rounds: Rounds;
   guard: Guard | null;
   now: number;
+  /** When the day was last registered (0 if not known): reports just after it are no use for pacing. */
+  registeredAt?: number;
 }): number {
   const { reports, rounds, guard } = input;
   const from = new Date(input.dayStart);
@@ -60,31 +81,33 @@ export function countDay(input: {
     round = rounds.roundBefore;
     goal = rounds.goalBefore || input.goalMinutes;
   }
+  const pace: Pace = { earlier: marksOf(reports, goal, round, input.dayStart, to), registeredAt: input.registeredAt ?? 0 };
   const arrived = [...checkpointsFor(goal), ...minuteTicksFor(goal)].filter((checkpoint) => {
-    const name = roundName(checkpoint.id, round);
-    const latest = reports.filter((r) => r.name === name).reduce<Report | null>((best, r) => (best && best.at >= r.at ? best : r), null);
-    return latest !== null && latest.at < to && believable(checkpoint, from, guard, new Date(latest.at));
+    const latest = latestOf(reports, roundName(checkpoint.id, round));
+    return latest !== null && latest.at < to && believable(checkpoint, from, guard, new Date(latest.at), pace);
   });
   return usedFloor(arrived);
 }
 
 /**
  * The day's own checkpoints (the cells, the warnings, empty) reported under
- * `round` in today's count that cannot be true. The phone has acted on none of
- * them (it was told not to before they could be true) and will not report
- * them again today, so that part of the day cannot lock until counting is set
- * up again.
+ * `round` in today's count that cannot be true: too soon after the day began,
+ * or too soon after an earlier report (`keepsPace`). The phone has acted on
+ * none of them (it was told not to before they could be true) and will not
+ * report them again today, so that part of the day cannot lock until counting
+ * is set up again (Count again, which the app also does by itself once a day).
  */
-export function doubtful(reports: readonly Report[], goalMinutes: number, round: string, dayStart: Date, guard: Guard | null): Report[] {
+export function doubtful(reports: readonly Report[], goalMinutes: number, round: string, dayStart: Date, guard: Guard | null, registeredAt = 0): Report[] {
   const own = new Map<string, Checkpoint>(checkpointsFor(goalMinutes).map((c) => [c.id, c]));
+  const pace: Pace = { earlier: marksOf(reports, goalMinutes, round, dayStart.getTime()), registeredAt };
   return reports.filter((r) => {
     const { id, round: madeIn } = splitName(r.name);
     const checkpoint = own.get(id);
-    return madeIn === round && checkpoint !== undefined && r.at >= dayStart.getTime() && !believable(checkpoint, dayStart, guard, new Date(r.at));
+    return madeIn === round && checkpoint !== undefined && r.at >= dayStart.getTime() && !believable(checkpoint, dayStart, guard, new Date(r.at), pace);
   });
 }
 
 /** Whether the phone has miscounted the day: one of its own checkpoints came too soon to be true (see `doubtful`). */
-export function miscounted(reports: readonly Report[], goalMinutes: number, round: string, dayStart: Date, guard: Guard | null): boolean {
-  return doubtful(reports, goalMinutes, round, dayStart, guard).length > 0;
+export function miscounted(reports: readonly Report[], goalMinutes: number, round: string, dayStart: Date, guard: Guard | null, registeredAt = 0): boolean {
+  return doubtful(reports, goalMinutes, round, dayStart, guard, registeredAt).length > 0;
 }

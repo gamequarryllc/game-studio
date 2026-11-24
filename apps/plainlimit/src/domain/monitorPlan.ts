@@ -153,6 +153,17 @@ function shieldFor(id: ShieldId, settings: Settings, topUpsSoFar: number): PlanS
   return { id, copy: emptyCopy(settings, topUpsSoFar), primary: 'close', secondary, background: rgbOf(tone.bg), text: LIGHT, accent: LIGHT, button: rgbOf(tone.bg), buttonText: LIGHT, icon: 'battery.0percent' };
 }
 
+/**
+ * Sent in place of a checkpoint's own actions when it came faster than the
+ * clock allows (`keepsPace`): nothing locked, and the app counts again once
+ * it is opened. One notification however many checkpoints came at once.
+ */
+export const TOO_SOON_NOTICE = {
+  id: 'plainlimit-too-soon',
+  title: 'Wrong reading caught',
+  body: 'Your iPhone counted more time than you used, so nothing locked. Tap to keep counting.',
+} as const;
+
 /** The notification that carries someone from the empty screen to the sums. */
 export function puzzleNotice(topUpsSoFar: number): { title: string; body: string; route: string } {
   const plan = topUpPlan(topUpsSoFar);

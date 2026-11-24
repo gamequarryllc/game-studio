@@ -1,8 +1,57 @@
 diff --git a/node_modules/react-native-device-activity/ios/Shared.swift b/node_modules/react-native-device-activity/ios/Shared.swift
-index 4839430..178aefa 100644
+index 4839430..a019c10 100644
 --- a/node_modules/react-native-device-activity/ios/Shared.swift
 +++ b/node_modules/react-native-device-activity/ios/Shared.swift
-@@ -1452,9 +1452,10 @@ func updateBlockInternal(
+@@ -110,6 +110,21 @@ func executeGenericAction(
+ ) {
+   let type = action["type"] as? String
+ 
++  // Plainlimit: an action carrying a pace rule runs only if its checkpoint came
++  // no faster than the clock allows after the earlier ones (or, with mode
++  // "onlyIfTooSoon", only if it came faster). See keepsPace in the app's
++  // src/domain/checkpoints.ts.
++  if let pace = action["pace"] as? [String: Any] {
++    let tooSoon = plainlimitTooSoon(pace: pace)
++    let wantsTooSoon = (pace["mode"] as? String) == "onlyIfTooSoon"
++    if tooSoon != wantsTooSoon {
++      logger.log(
++        "plainlimit pace: skipping \(type ?? "action", privacy: .public) for \(triggeredBy, privacy: .public) (too soon: \(tooSoon, privacy: .public))"
++      )
++      return
++    }
++  }
++
+   if let sleepBefore = action["sleepBefore"] as? Int {
+     sleep(ms: sleepBefore)
+   }
+@@ -296,6 +311,26 @@ func executeGenericAction(
+   }
+ }
+ 
++/// Plainlimit: whether a checkpoint came sooner than its pace rule allows:
++/// less than `ms` after the stored time of any listed earlier report. Reports
++/// stored between `skipFrom` and `skipTo` (just after the day was registered,
++/// when the phone re-reports the day with fresh times) are left out.
++func plainlimitTooSoon(pace: [String: Any]) -> Bool {
++  let now = Date().timeIntervalSince1970 * 1000
++  let skipFrom = (pace["skipFrom"] as? NSNumber)?.doubleValue ?? 0
++  let skipTo = (pace["skipTo"] as? NSNumber)?.doubleValue ?? 0
++  guard let after = pace["after"] as? [[String: Any]] else { return false }
++  CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
++  for rule in after {
++    guard let key = rule["key"] as? String, let ms = (rule["ms"] as? NSNumber)?.doubleValue,
++      let at = (userDefaults?.object(forKey: key) as? NSNumber)?.doubleValue, at > 0
++    else { continue }
++    if skipTo > skipFrom && at >= skipFrom && at <= skipTo { continue }
++    if at < now && now < at + ms { return true }
++  }
++  return false
++}
++
+ func sendNotification(contents: [String: Any], placeholders: [String: String?]) {
+   let content = UNMutableNotificationContent()
+ 
+@@ -1452,9 +1487,10 @@ func updateBlockInternal(
      store.shield.applicationCategories = .all(
        except: currentWhitelist.applicationTokens
      )

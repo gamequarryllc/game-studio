@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { GUARD_MS, guardFor, roundName, splitName, mostByNow, type Noted } from '@/domain/checkpoints';
+import { GUARD_MS, guardFor, paceRules, roundName, splitName, mostByNow, type Noted } from '@/domain/checkpoints';
 import { countDay, doubtful, miscounted, roundSettled, type Report, type Rounds } from '@/domain/reports';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
@@ -17,6 +17,7 @@ import {
   monitorPlan,
   puzzleNotice,
   topUpWindow,
+  TOO_SOON_NOTICE,
   type ButtonEffect,
   type PlanAction,
   type PlanShield,
@@ -643,16 +644,68 @@ function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: 
   const held = holdUntil();
   const named = round();
   const mode = essentialsMode();
+  const registered = registeredAt();
+  // Every checkpoint the phone reports, under the key the monitor extension keeps its time in.
+  const all = [
+    ...plan.events.map((e) => ({ name: eventKey(plan.activity, roundName(e.name, named)), minutes: e.minutes })),
+    ...plan.ticks.map((t) => ({ name: eventKey(TICKS_ACTIVITY, roundName(t.name, named)), minutes: t.minutes })),
+  ];
   for (const event of plan.events) {
     const notBefore = new Date(Math.max(lockNotBefore(dayStart, guard, event.minutes).getTime(), held));
-    DeviceActivity.configureActions({
-      activityName: plan.activity,
-      callbackName: 'eventDidReachThreshold',
-      eventName: roundName(event.name, named),
-      actions: event.actions.map((a) => ({ ...toAction(a, mode), neverTriggerBefore: notBefore })),
-    });
+    const actions: PacedAction[] = event.actions.map((a) => ({ ...toAction(a, mode), neverTriggerBefore: notBefore }));
+    if (actions.length > 0) {
+      // Not faster than the clock (keepsPace): checked by the monitor extension
+      // against the times of the reports before this one (patches/react-native-device-activity).
+      const pace: PaceSpec = { skipFrom: registered, skipTo: registered > 0 ? registered + GUARD_MS : 0, after: paceRules(event.minutes, all).map((r) => ({ key: r.name, ms: r.ms })) };
+      for (const action of actions) action.pace = pace;
+      // ...and when it is too soon, the one notification that brings the person back to count again.
+      actions.push({
+        type: 'sendNotification',
+        payload: { identifier: TOO_SOON_NOTICE.id, title: TOO_SOON_NOTICE.title, body: TOO_SOON_NOTICE.body, sound: 'default', userInfo: {} },
+        neverTriggerBefore: notBefore,
+        pace: { ...pace, mode: 'onlyIfTooSoon' },
+      } as PacedAction);
+    }
+    DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'eventDidReachThreshold', eventName: roundName(event.name, named), actions: actions as Action[] });
   }
 }
+
+/** Every checkpoint of a plan with its minutes, for the widget's pacing (targets/widget, keepsPace). */
+function marksFor(plan: ReturnType<typeof monitorPlan>): { activity: string; name: string; minutes: number }[] {
+  return [...plan.events.map((e) => ({ activity: plan.activity, name: e.name, minutes: e.minutes })), ...plan.ticks.map((t) => ({ activity: TICKS_ACTIVITY, name: t.name, minutes: t.minutes }))];
+}
+
+/**
+ * Gives a widget plan saved before pacing existed what it needs for it, so the
+ * widget paces from the first launch of a build that has it, not from the next
+ * registration. Only when the saved plan is for the same goal.
+ */
+function sharePaceWithWidget(plan: ReturnType<typeof monitorPlan>) {
+  const saved = DeviceActivity.userDefaultsGet<Record<string, unknown>>(SAVED.widgetPlan);
+  if (!saved || typeof saved !== 'object' || Array.isArray(saved.marks) || saved.goalMinutes !== plan.widget.goalMinutes) return;
+  save('widgetPlan', { ...saved, registeredAt: registeredAt(), marks: marksFor(plan) });
+}
+
+/** Where the monitor extension keeps the time of a checkpoint's latest report (the library's `userDefaultKeyForEvent`). */
+function eventKey(activity: string, name: string): string {
+  return `events_${activity}_eventDidReachThreshold_${name}`;
+}
+
+/**
+ * The pace rule for one checkpoint's actions, read by the library patch: act
+ * only if, for each listed earlier report, at least `ms` have passed since it,
+ * leaving out reports made between `skipFrom` and `skipTo` (the minutes after
+ * a registration, when the phone re-reports the day with fresh times). With
+ * `mode` 'onlyIfTooSoon' the action runs only when the rule is broken.
+ */
+interface PaceSpec {
+  skipFrom: number;
+  skipTo: number;
+  after: { key: string; ms: number }[];
+  mode?: 'onlyIfTooSoon';
+}
+
+type PacedAction = Action & { pace?: PaceSpec };
 
 /**
  * Writes the covering screens' look and words, and what happens at each
@@ -667,6 +720,7 @@ export function refreshScreens(settings: Settings, topUpsSoFar: number) {
     for (const shield of plan.shields) writeShield(shield, topUpsSoFar);
     // Today's "not before" times, so the guard against early checkpoints holds on each day the app is opened.
     writeCheckpointActions(plan, settings, new Date());
+    sharePaceWithWidget(plan);
   } catch (error) {
     note('the screens', error);
   }
@@ -823,7 +877,8 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'intervalDidEnd', actions: [...UNCOVER, STOP_EARNED_TIME, ...askCoverActions(settings.askFirst)] });
 
     const named = round();
-    save('widgetPlan', { ...plan.widget, round: named, roundBefore: readString('roundBefore'), picksChangedAt: picksChangedAt() });
+    // The widget paces reports as the app does (keepsPace): it needs every checkpoint's minutes and when this registration was.
+    save('widgetPlan', { ...plan.widget, round: named, roundBefore: readString('roundBefore'), picksChangedAt: picksChangedAt(), registeredAt: now.getTime(), marks: marksFor(plan) });
 
     await DeviceActivity.startMonitoring(
       plan.activity,
@@ -879,7 +934,7 @@ export function health(settings: Settings, periodStart: Date, watching: boolean)
     if (pickCount(COUNTED_ID) === 0) return 'nothingPicked';
     if (!DeviceActivity.getActivities().includes(ACTIVITY)) return 'notRegistered';
     if (tooManyApps()) return 'tooManyApps';
-    return miscounted(phoneReports([ACTIVITY]), roundGoal(settings.goalMinutes), round(), dayStartOf(periodStart), savedGuard()) ? 'miscounted' : 'fine';
+    return miscounted(phoneReports(), roundGoal(settings.goalMinutes), round(), dayStartOf(periodStart), savedGuard(), registeredAt()) ? 'miscounted' : 'fine';
   } catch {
     return 'fine';
   }
@@ -906,13 +961,27 @@ function rounds(): Rounds {
 export async function countAgain(settings: Settings, topUpsSoFar: number, periodStart: Date): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
-    for (const report of doubtful(phoneReports([ACTIVITY]), roundGoal(settings.goalMinutes), round(), dayStartOf(periodStart), savedGuard())) {
+    for (const report of doubtful(phoneReports(), roundGoal(settings.goalMinutes), round(), dayStartOf(periodStart), savedGuard(), registeredAt())) {
       DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.name}`);
     }
   } catch (error) {
     note('counting again', error);
   }
   return applyPlan(settings, topUpsSoFar);
+}
+
+/** Whether the app may still count again by itself for this battery (store.ts, checkHealth): once a battery. */
+export function recountDue(periodStart: Date): boolean {
+  if (!SCREEN_TIME_AVAILABLE) return false;
+  return readNumber('recountedFor') !== periodStart.getTime();
+}
+
+export function markRecounted(periodStart: Date) {
+  try {
+    save('recountedFor', periodStart.getTime());
+  } catch (error) {
+    note('counting again', error);
+  }
 }
 
 /** Stops counting and takes any covering screen away. */
@@ -946,6 +1015,7 @@ export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Da
       rounds: rounds(),
       guard: savedGuard(),
       now: Date.now(),
+      registeredAt: registeredAt(),
     });
   } catch {
     return null;
@@ -977,12 +1047,14 @@ export function diagnostics(settings: Settings): string[] {
     lines.push(`Health: ${health(settings, periodStartOf(new Date(), settings.rechargeMinute), true)}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
     const from = dayStartOf(periodStartOf(new Date(), settings.rechargeMinute));
-    const ignored = new Set(doubtful(phoneReports([ACTIVITY]), roundGoal(settings.goalMinutes), round(), from, guard).map((r) => r.name));
+    const ignored = new Set(doubtful(phoneReports(), roundGoal(settings.goalMinutes), round(), from, guard, registeredAt()).map((r) => r.name));
+    // The minute checkpoints too, in the order they came: a burst of them is what a false reading looks like (keepsPace).
     const reported = DeviceActivity.getEvents()
-      .filter((e) => e.activityName === ACTIVITY || e.activityName === TOPUP_ACTIVITY)
+      .filter((e) => e.activityName === ACTIVITY || e.activityName === TICKS_ACTIVITY || e.activityName === TOPUP_ACTIVITY)
+      .sort((a, b) => a.lastCalledAt.getTime() - b.lastCalledAt.getTime())
       .map((e) => {
         const early = e.activityName === ACTIVITY && e.eventName !== undefined && e.eventName !== null && ignored.has(e.eventName);
-        return `${e.eventName ?? e.callbackName}: ${timeOf(e.lastCalledAt.getTime())}${early ? ' (too early to be true, ignored)' : ''}`;
+        return `${e.eventName ?? `${e.activityName} ${e.callbackName}`}: ${timeOf(e.lastCalledAt.getTime())}${early ? ' (too soon to be true, ignored)' : ''}`;
       });
     lines.push(reported.length ? `Reported by the phone:\n  ${reported.join('\n  ')}` : 'Reported by the phone: nothing yet');
     lines.push(`Monitor asked for a widget redraw: ${timeOf(readNumber('reloadAsked'))}`);
