@@ -29,6 +29,9 @@ const DRAWN: Record<IconName, (c: string) => string> = {
   battery: (c) => `<rect x="2.5" y="7" width="16.5" height="10" rx="2.6" ${stroke(c, 2)}/><path d="M21.5 10.5v3" ${stroke(c, 2)}/><rect x="5.3" y="9.8" width="7" height="4.4" rx="1" fill="${c}"/>`,
   bell: (c) => `<path fill="${c}" d="M12 3.2a6 6 0 0 0-6 6v3.6l-1.6 3a.9.9 0 0 0 .8 1.4h13.6a.9.9 0 0 0 .8-1.4l-1.6-3V9.2a6 6 0 0 0-6-6zM9.6 18.6a2.4 2.4 0 0 0 4.8 0z"/>`,
   bellOff: (c) => `<path fill="${c}" opacity=".9" d="M12 3.2a6 6 0 0 0-6 6v3.6l-1.6 3a.9.9 0 0 0 .8 1.4h13.6a.9.9 0 0 0 .8-1.4l-1.6-3V9.2a6 6 0 0 0-6-6z"/><path d="M5 5l14 14" ${stroke(c, 2.4)}/>`,
+  refresh: (c) => `<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.2h-4.2" ${stroke(c)}/>`,
+  edit: (c) => `<path d="M5 19l1-4.2L15.6 5.2a1.9 1.9 0 0 1 2.7 0l.5.5a1.9 1.9 0 0 1 0 2.7L9.2 18zM13.5 7.3l3.2 3.2" ${stroke(c, 2.1)}/>`,
+  check: (c) => `<path d="M5 12.5l4.5 4.5L19 7.5" ${stroke(c, 2.8)}/>`,
 };
 
 export function Icon({ name, size, color }: { name: IconName; size: number; color: string }) {

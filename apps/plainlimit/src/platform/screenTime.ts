@@ -228,6 +228,16 @@ export function essentialsCount(): number {
   return meta ? meta.applicationCount + sitesIn(meta) : 0;
 }
 
+/**
+ * The essentials as Apple's picker handed them over (null: none chosen), for
+ * the icon grid on the Essentials screen. iOS draws the icons from it; the
+ * app never learns which apps they are.
+ */
+export function essentialsPicks(): string | null {
+  if (!SCREEN_TIME_AVAILABLE) return null;
+  return tokenOf(ESSENTIALS_ID) || null;
+}
+
 /** Whether the essentials model is in use: the apps were shown and the essentials chosen (none is a choice too). */
 export function essentialsMode(): boolean {
   if (MOCK_PHONE) return !MOCK_OLD_LIST();

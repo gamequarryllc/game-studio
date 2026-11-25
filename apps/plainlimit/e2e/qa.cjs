@@ -304,8 +304,8 @@ async function main() {
     await shot(page, 'q09b-empty-recharge-time');
     await page.goBack();
     await page.getByRole('button', { name: /^Essentials/ }).click();
-    await see(page, "This can't change while the battery is empty");
-    await see(page, '14 essentials stay free');
+    await see(page, 'Locked while the battery is empty');
+    await page.getByLabel('14 essential apps, always open.', { exact: true }).waitFor();
     for (const name of ['Change essentials', 'Refresh the app list']) {
       if ((await page.getByRole('button', { name, exact: true }).count()) > 0) throw new Error(`Essentials offered "${name}" while empty`);
     }
@@ -317,7 +317,9 @@ async function main() {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
     await tab(page, 'Settings');
     await page.getByRole('button', { name: 'Essentials, 14 apps', exact: true }).click();
-    await see(page, '14 essentials stay free. Everything else counts, and locks when the battery is empty. 120 apps found.');
+    await see(page, 'Never counted. Never locked.');
+    await page.getByLabel('14 essential apps, always open.', { exact: true }).waitFor();
+    await page.getByLabel('Your essential apps', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Refresh the app list', exact: true }).waitFor();
     await shot(page, 'q10b-what-counts-open');

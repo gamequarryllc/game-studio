@@ -1,12 +1,15 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { ALL_ID, ESSENTIALS_ID, ESSENTIALS_LIMIT, appsBefore, appsShown, essentialsBefore, essentialsCount, essentialsMode } from '@/platform/screenTime';
+import { tap } from '@/platform/haptics';
+import { ALL_ID, ESSENTIALS_ID, ESSENTIALS_LIMIT, appsBefore, appsShown, essentialsBefore, essentialsCount, essentialsMode, essentialsPicks } from '@/platform/screenTime';
 import { store } from '@/state/store';
 
+import { AppIcons } from './AppIcons';
 import { AppPicker } from './AppPicker';
-import { CHOOSE_HOW, MISSED_APPS, keptWords, shownWords, tooManyKept } from './countWords';
+import { CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, tooManyKept } from './countWords';
+import { Icon } from './icons';
 import { BigButton, Card } from './kit';
 import { c, display } from './theme';
 
@@ -29,6 +32,8 @@ export type Essentials = {
   shown: number;
   /** Essentials ticked. */
   kept: number;
+  /** The essentials as Apple's picker handed them over, for iOS to draw their icons (null: none). */
+  picks: string | null;
   /** The essentials are chosen. */
   ready: boolean;
   /** How many were ticked when the last try was turned down for being too many (0: none was). */
@@ -99,6 +104,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
   return {
     shown: appsShown(),
     kept: essentialsCount(),
+    picks: essentialsPicks(),
     ready: essentialsMode(),
     refused,
     missed,
@@ -117,12 +123,22 @@ export function useEssentials(onChosen?: () => void): Essentials {
 /**
  * The card. `locked`: the battery is empty, so the essentials can't change (a
  * way round the lock). `mainInFoot`: the screen has its own big button
- * (setup), so only "change" buttons are drawn here.
+ * (setup), so only "change" buttons are drawn here, and quietly.
  */
 export function EssentialsSteps({ e, locked = false, mainInFoot = false }: { e: Essentials; locked?: boolean; mainInFoot?: boolean }) {
+  if (e.ready) return <Chosen e={e} locked={locked} quiet={mainInFoot} />;
   return (
-    <Card style={{ paddingVertical: e.ready ? 14 : 18, gap: 10 }}>
-      {e.ready ? <Text style={how}>{`${keptWords(e.kept)} ${shownWords(e.shown)}`}</Text> : <Pictures firstDone={e.shown > 0} />}
+    <Card style={{ paddingVertical: 18, gap: 10 }}>
+      <Pictures firstDone={e.shown > 0} />
+      <Warnings e={e} />
+      {mainInFoot ? null : <BigButton label={e.busy ? 'One moment…' : 'Choose essentials'} disabled={e.busy} onPress={e.start} />}
+    </Card>
+  );
+}
+
+function Warnings({ e }: { e: Essentials }) {
+  return (
+    <>
       {e.missed ? (
         <Text accessibilityRole="alert" style={warn}>
           {MISSED_APPS}
@@ -133,17 +149,82 @@ export function EssentialsSteps({ e, locked = false, mainInFoot = false }: { e: 
           {tooManyKept(e.refused, ESSENTIALS_LIMIT)}
         </Text>
       ) : null}
-      {locked ? null : e.ready ? (
-        <View style={{ gap: 10 }}>
-          <BigButton quiet label="Change essentials" onPress={e.start} />
-          <BigButton quiet label="Refresh the app list" onPress={e.showApps} />
-        </View>
-      ) : mainInFoot ? null : (
-        <BigButton label={e.busy ? 'One moment…' : 'Choose essentials'} disabled={e.busy} onPress={e.start} />
-      )}
-    </Card>
+    </>
   );
 }
+
+/** The most icons drawn: four rows of six, the last one "+N" when there are more. */
+const MOST_ICONS = 24;
+
+/**
+ * The essentials once chosen: how many, big, and the apps themselves as their
+ * own icons, lit green. The owner found the sentences that stood here
+ * ("18 essentials stay free. Everything else counts…") boring and wordy
+ * (2026-11-25) and picked this from three drafts. Under it, one button to
+ * change them, and a small link for apps installed since.
+ */
+function Chosen({ e, locked, quiet }: { e: Essentials; locked: boolean; quiet: boolean }) {
+  return (
+    <View style={{ gap: 14 }}>
+      <View style={glow.card}>
+        <View accessible accessibilityLabel={essentialsLabel(e.kept)} style={glow.head}>
+          <Text style={glow.count}>{e.kept}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={glow.unit}>{e.kept === 1 ? 'app' : 'apps'}</Text>
+            <Text style={glow.sub}>always open</Text>
+          </View>
+          <View style={glow.tick}>
+            <Icon name="check" size={20} color={c.onTone} />
+          </View>
+        </View>
+        {e.kept > 0 ? <AppIcons selection={e.picks} count={e.kept} limit={MOST_ICONS} label="Your essential apps" /> : <Text style={glow.none}>Every app uses the battery.</Text>}
+      </View>
+      <Warnings e={e} />
+      {locked ? (
+        <View style={glow.locked}>
+          <Icon name="lock" size={17} color={c.ink3} />
+          <Text style={glow.lockedText}>{ESSENTIALS_LOCKED}</Text>
+        </View>
+      ) : (
+        <>
+          <BigButton quiet={quiet} label="Change essentials" onPress={e.start} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Refresh the app list"
+            accessibilityHint="For apps installed since"
+            hitSlop={8}
+            onPress={() => {
+              tap();
+              e.showApps();
+            }}
+            style={({ pressed }) => [glow.refresh, pressed ? { opacity: 0.6 } : null]}>
+            <Icon name="refresh" size={16} color={c.ink3} />
+            <Text style={glow.refreshText}>
+              New app? <Text style={{ color: c.ink, fontWeight: '600' }}>Refresh list</Text>
+            </Text>
+          </Pressable>
+        </>
+      )}
+    </View>
+  );
+}
+
+/** The green of the essentials: they never use up the battery. */
+const FREE = '#57E389';
+
+const glow = {
+  card: { borderRadius: 26, backgroundColor: '#13201A', borderWidth: 1, borderColor: 'rgba(87,227,137,0.32)', padding: 18, gap: 18, shadowColor: '#46CC70', shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 8 } },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  count: { fontFamily: display.bold, fontSize: 60, lineHeight: 64, letterSpacing: -2, color: FREE },
+  unit: { fontSize: 19, lineHeight: 23, fontWeight: '600', color: c.ink },
+  sub: { fontSize: 17, lineHeight: 22, color: c.ink3 },
+  tick: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#46CC70', alignItems: 'center', justifyContent: 'center' },
+  none: { fontSize: 15, lineHeight: 21, color: c.ink2 },
+  locked: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44 },
+  lockedText: { fontSize: 15, lineHeight: 21, color: c.ink2 },
+  refresh: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 40 },
+  refreshText: { fontSize: 15, lineHeight: 20, color: c.ink3 },
+} as const;
 
 /**
  * The two lists in a few words and two small pictures: few people read a
@@ -239,5 +320,4 @@ const pic = {
   tick: { fontSize: 12, lineHeight: 15, fontWeight: '800', color: '#FFFFFF' },
 } as const;
 
-const how = { fontSize: 15, lineHeight: 21, color: c.ink2 } as const;
 const warn = { fontSize: 15, lineHeight: 21, color: '#F79200' } as const;

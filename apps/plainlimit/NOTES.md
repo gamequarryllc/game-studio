@@ -544,3 +544,15 @@ Now:
 - **A change of goal alone sets a floor** (`Floor`, `withFloor`; saved as `roundFloor` at the registration): the same apps on the same day can't have been used less than before the change, so the count for the new round never goes under the figure known just before it, however the phone's re-report trickles in. A change of picks or recharge time sets none (either can honestly take minutes off), and counting again or starting over forgets it. The readout shows it ("Kept through the goal change").
 
 Only the app uses the floor; the widget may still dip for a moment if the phone re-reports in pieces. To check on a phone: on a day past the goal, lower or raise the goal a few times in a row; Today stays at the right battery throughout.
+
+## Essentials shows your own apps (the owner, 2026-11-25, after build 155)
+
+The owner found the Essentials screen "pretty boring" and "very wordy": a paragraph under the title, "18 essentials stay free. Everything else counts, and locks when the battery is empty. 58 apps found." in a card, two outlined buttons, and a note on apps installed later and iOS's Always Allowed list. Of three drafts (an icon wall, essentials beside a full battery and the rest beside a draining one, and every app with the essentials lit), the icon wall was built:
+- Under the title only "Never counted. Never locked."
+- A green-lit card: the count, big, beside "apps / always open" and a tick, and under it **the person's own essentials as their real icons**, six to a row, four rows at most (the 24th square says "+N" for the rest).
+- One light button, "Change essentials", and a small link "New app? Refresh list" (the first of Apple's two lists again, for apps installed since). While the battery is empty both give way to one line with a lock: "Locked while the battery is empty".
+- The note on iOS's Always Allowed list went; so did "N apps found".
+
+The icons are drawn by iOS: `AppIconsView` in `modules/plainlimit-widgets/ios/PlainlimitIconsModule.swift` (a second module, `PlainlimitIcons`, beside the widgets one) is handed the essentials as Apple's picker saved them and draws each with FamilyControls' `Label(token)`, icon only, measured and scaled to the square. The tokens are sealed, so Plainlimit still never learns which apps they are. The order is fixed by each token's written form, so it holds from launch to launch. The view can also leave out one set of picks and draw the rest grey (`minus`, `dim`), for an "every other app" grid if it is ever wanted. In a browser the grid shows stand-in icons (`src/ui/AppIcons.tsx`); sizes are in `src/ui/iconGrid.ts`. The same card shows in setup if the person goes back to "Your essentials" after choosing, with its button quiet beside setup's own.
+
+To check on a phone: Settings → Essentials shows your essentials' real icons at the right size, in rows of six, and the same ones after closing and opening the app; change them and the grid follows; with the battery empty the button and link are gone and the lock line shows.

@@ -1,4 +1,5 @@
-import { essentialsValue, keptWords, shownWords, tooManyKept } from '../countWords';
+import { essentialsLabel, essentialsValue, tooManyKept } from '../countWords';
+import { gridHeight, iconSize, squares } from '../iconGrid';
 
 describe('essentialsValue', () => {
   it('names how many essentials are ticked', () => {
@@ -18,17 +19,34 @@ describe('essentialsValue', () => {
 });
 
 describe('choosing the essentials', () => {
-  it('says how many apps were found, and how many stay free', () => {
-    expect(shownWords(120)).toBe('120 apps found.');
-    expect(shownWords(1)).toBe('1 app found.');
-    expect(keptWords(14)).toContain('14 essentials stay free');
-    expect(keptWords(1)).toContain('1 essential stays free');
-    expect(keptWords(0)).toContain('every app counts');
+  it('reads out how many essentials there are', () => {
+    expect(essentialsLabel(18)).toBe('18 essential apps, always open.');
+    expect(essentialsLabel(1)).toBe('1 essential app, always open.');
+    expect(essentialsLabel(0)).toContain('every app uses the battery');
   });
   it('turns down too many essentials with the numbers', () => {
     const line = tooManyKept(63, 50);
     expect(line).toContain('63 apps');
     expect(line).toContain('at most 50');
     expect(line).toContain('wasn’t changed');
+  });
+});
+
+describe('the icon grid', () => {
+  it('fits six icons across a phone-wide card, no bigger than 52 points', () => {
+    expect(iconSize(317, 6)).toBe(44);
+    expect(iconSize(800, 6)).toBe(52);
+    expect(iconSize(0, 6)).toBe(0);
+  });
+  it('draws at most the limit, the last square standing for the rest', () => {
+    expect(squares(18, 24)).toBe(18);
+    expect(squares(50, 24)).toBe(24);
+    expect(squares(50, 0)).toBe(50);
+  });
+  it('is as tall as its rows', () => {
+    expect(gridHeight(18, 6, 44)).toBe(3 * 44 + 2 * 12);
+    expect(gridHeight(19, 6, 44)).toBe(4 * 44 + 3 * 12);
+    expect(gridHeight(50, 6, 44, 24)).toBe(4 * 44 + 3 * 12);
+    expect(gridHeight(0, 6, 44)).toBe(0);
   });
 });
