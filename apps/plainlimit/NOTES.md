@@ -557,3 +557,16 @@ The owner found the Essentials screen "pretty boring" and "very wordy": a paragr
 The icons are drawn by iOS: `AppIconsView` in `modules/plainlimit-widgets/ios/PlainlimitIconsModule.swift` (a second module, `PlainlimitIcons`, beside the widgets one) is handed Apple's saved picks and draws each with FamilyControls' `Label(token)`, icon only, measured and scaled to the square. For "Everything else" it is handed every app shown (`allPicks`) with the essentials as `minus`, and `dim`. The tokens are sealed, so Plainlimit still never learns which apps they are. The order is fixed by each token's written form, so it holds from launch to launch. In a browser the grids show stand-in icons (`src/ui/AppIcons.tsx`); sizes are in `src/ui/iconGrid.ts`. The same cards show in setup if the person goes back to "Your essentials" after choosing, with the button quiet beside setup's own.
 
 To check on a phone: Settings → Essentials shows your essentials' real icons at the right size in rows of six, and a grey row of other apps with none of the essentials in it; the same after closing and opening the app; change the essentials and both follow; with the battery empty the button and link are gone and the lock line shows.
+
+## The streak on Today, beside the day's figure (the owner, 2026-11-25, after build 155)
+
+The streak (days in a row without an emergency pass, today included: `streakDays`) was only on History, one tap away. The owner wanted it always in sight on Today. Of four mock-ups (a corner badge above the battery, a scoreboard beside the day's figure, the History row turned into a streak row, a lit line under the week) the owner took **Scoreboard**, then said "day streak" alone didn't say what was counted; of four labels the owner took **D: "day streak" with a small line under it**.
+- The row under the recharge line is now two numbers side by side with a thin rule between: "2:46" over "used of 3:00" (the label moved under the figure; it was beside it), and a flame with the streak over "day streak" and, small, "without a pass".
+- On the day a pass is used the streak is 0, the flame and number go grey, and the small line says "starts again tomorrow" (`streakLine` in `src/domain/record.ts`, tested).
+- Tapping the streak opens History, as the History row does.
+- The flame is Apple's `flame.fill` on a phone (`streak` in `src/ui/icons.tsx`) and a drawn look-alike in the web preview; always the same orange, whatever the battery's colour.
+- The phone still draws its own figure over the app's; its box is now the left half of the row (it was as wide as the app's figure).
+- Mock-ups: the project's `plainlimit/streak-on-today-mockups/` (not in the repo).
+- The App Store picture of Today shows the old row until the pictures are taken again.
+
+To check on a phone: Today shows "2:46 used of 3:00" and the streak side by side, with the phone's own figure in place over the left number (no doubled or clipped digits); the streak matches History's big number; tapping it opens History; on a day a pass is used it reads 0, grey, "starts again tomorrow".

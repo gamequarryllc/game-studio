@@ -602,6 +602,8 @@ async function main() {
     await see(page, 'Emergency pass: settings are open until');
     if ((await page.getByText(/^Empty$/).count()) > 0) throw new Error('the battery stayed empty after the goal went up');
     await shot(page, 'q23c-pass-battery-takes-over');
+    // Today's streak, beside the day's figure, is 0 on the day a pass was used, and says when it starts again.
+    await page.getByRole('button', { name: '0 day streak, starts again tomorrow', exact: true }).waitFor({ state: 'visible', timeout: 8000 });
     await page.getByRole('button', { name: /^History/ }).click();
     // The pass just used ends the streak, and its day wears the mark.
     await see(page, 'A pass was used today. A new streak starts tomorrow.');

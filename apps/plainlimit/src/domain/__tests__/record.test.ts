@@ -1,4 +1,4 @@
-import { addWeeklyPasses, freshRecord, nextPassDate, passActive, passCheck, passRow, recordView, repairRecord, settingsLockedNotice, spendPass, weekKey, type PassRecord } from '../record';
+import { addWeeklyPasses, freshRecord, nextPassDate, passActive, passCheck, passRow, recordView, repairRecord, settingsLockedNotice, spendPass, streakLine, weekKey, type PassRecord } from '../record';
 import type { DaySummary } from '../types';
 
 const at = (m: number, d: number, h = 12, min = 0) => new Date(2026, m - 1, d, h, min);
@@ -98,6 +98,12 @@ describe('the record', () => {
     const today: PassRecord = { ...used, uses: [...used.uses, at(11, 18, 9).toISOString()] };
     expect(recordView(today, [], day(11, 18, 40), now).streakDays).toBe(0);
     expect(recordView(today, [], day(11, 18, 40), now).bestDays).toBe(9);
+  });
+
+  it('says under the streak on Today what it counts, and when a broken one starts again', () => {
+    expect(streakLine(12)).toBe('without a pass');
+    expect(streakLine(1)).toBe('without a pass');
+    expect(streakLine(0)).toBe('starts again tomorrow');
   });
 
   it('breaks the streak on the battery day a pass was used in', () => {
