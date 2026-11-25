@@ -16,9 +16,15 @@ export const COUNTS_SHORT = 'These never count and never lock.';
  * then the essentials), and each time its top line says what to tap. The
  * screen shows this as two short steps with pictures; these words are what is read out.
  */
-export const CHOOSE_HOW = 'Apple’s list opens twice. First, as one-time setup, tap All Apps & Categories, then Done. Then tick only your essential apps: they are never counted and never locked.';
+export const CHOOSE_HOW = 'Apple’s list opens twice. First, as one-time setup, tick All Apps & Categories, then the check mark at the top right. Then tick only your essential apps: they are never counted and never locked.';
 /** The first list was closed with nothing ticked. */
-export const MISSED_APPS = 'Nothing was ticked. Tap Choose essentials again, then All Apps & Categories at the top, then Done.';
+export const MISSED_APPS = 'Nothing was ticked. Tap Choose essentials again, tick All Apps & Categories at the top, then ✓ at the top right.';
+/**
+ * Apple's list hides its ✓ while a search is open, until the search's ✕ is
+ * tapped (iOS 26; the owner looked for it after searching for an app,
+ * 2026-11-25). Ticks made in the search are kept.
+ */
+export const AFTER_SEARCH = 'Searched? Tap ✕ by the search to get ✓ back.';
 /** The head of the essentials card, read out. */
 export function essentialsLabel(kept: number): string {
   if (kept === 0) return 'Always open: no essentials yet.';

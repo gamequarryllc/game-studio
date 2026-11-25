@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Pressable, Text, View } from 'react-native';
 
@@ -9,7 +9,7 @@ import { store } from '@/state/store';
 import { AppIcons } from './AppIcons';
 import { AppPicker } from './AppPicker';
 import { GlowBattery } from './GlowBattery';
-import { CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, othersLabel, tooManyKept } from './countWords';
+import { AFTER_SEARCH, CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, othersLabel, tooManyKept } from './countWords';
 import { Icon } from './icons';
 import { BigButton, Card } from './kit';
 import { c, display } from './theme';
@@ -17,7 +17,7 @@ import { c, display } from './theme';
 // Choosing the essentials, shared by its own screen and setup. To the person
 // it is one button. Behind it Apple's list opens twice, one straight after
 // the other:
-// 1. the phone shows Plainlimit its apps (everything ticked, then Done);
+// 1. the phone shows Plainlimit its apps (everything ticked, then ✓);
 // 2. the person ticks only their essentials.
 // iOS never tells an app what is installed, and can only count apps it has
 // been handed by name, so the first list can't be left out. Each list says at
@@ -27,6 +27,12 @@ import { c, display } from './theme';
 
 /** The pause between Apple's two lists: the first sheet has to be gone before the second can come up. */
 const BETWEEN_MS = 300;
+/**
+ * After Apple's list closes, the picks are read again at these moments, so
+ * the icons follow a change without leaving the screen (build 157: a new
+ * essential showed only after going back and in again).
+ */
+const LOOK_AGAIN_MS = [400, 1500];
 
 export type Essentials = {
   /** Apps the phone has shown (0: not yet). */
@@ -61,6 +67,14 @@ export function useEssentials(onChosen?: () => void): Essentials {
   const [missed, setMissed] = useState(false);
   const chain = useRef(false);
   const [busy, setBusy] = useState(false);
+  // Bumped to draw again with the picks as the phone has them now.
+  const [, setLook] = useState(0);
+  const looks = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const lookAgain = () => {
+    looks.current.forEach(clearTimeout);
+    looks.current = LOOK_AGAIN_MS.map((ms) => setTimeout(() => setLook((n) => n + 1), ms));
+  };
+  useEffect(() => () => looks.current.forEach(clearTimeout), []);
   const choose = () => {
     setBusy(false);
     setRefused(0);
@@ -74,10 +88,11 @@ export function useEssentials(onChosen?: () => void): Essentials {
         id={ALL_ID}
         wholeCategories
         open={open === 'apps'}
-        header="Step 1 of 2 (one-time setup): tap All Apps & Categories, then Done"
+        header={`Step 1 of 2 (one-time setup): tick All Apps & Categories, then ✓ at the top right.`}
         onClose={() => {
           setOpen(null);
           store.appsShownClosed();
+          lookAgain();
           const then = chain.current;
           chain.current = false;
           if (appsShown() === 0) setMissed(true);
@@ -91,10 +106,11 @@ export function useEssentials(onChosen?: () => void): Essentials {
         id={ESSENTIALS_ID}
         wholeCategories
         open={open === 'keep'}
-        header={`Step 2 of 2: tick only your essential apps (up to ${ESSENTIALS_LIMIT}), then Done. They are never counted or locked.`}
+        header={`Step 2 of 2: tick your essential apps (up to ${ESSENTIALS_LIMIT}), then ✓ at the top right. ${AFTER_SEARCH}`}
         onClose={() => {
           setOpen(null);
           const tooMany = store.essentialsClosed();
+          lookAgain();
           setRefused(tooMany);
           if (tooMany === 0 && essentialsMode()) onChosen?.();
         }}
@@ -267,21 +283,22 @@ const glow = {
  * The two lists in a few words and two small pictures: few people read a
  * paragraph in setup (the owner, build 107), and the owner picked this
  * shorter card from five drafts (build 115). Step 1 is Apple's top row and
- * its Done button; step 2 is a handful of example essentials. Read out as one
+ * its ✓ button ("Done" before iOS 26); step 2 is a handful of example essentials. Read out as one
  * sentence.
  */
 function Pictures({ firstDone }: { firstDone: boolean }) {
   return (
     <View accessible accessibilityLabel={CHOOSE_HOW} style={{ gap: 16 }}>
-      <Step n={firstDone ? '✓' : '1'} title="Tick All, then Done" faded={firstDone}>
+      <Step n={firstDone ? '✓' : '1'} title="Tick All, then ✓" faded={firstDone}>
         <View style={pic.allRow}>
           <View style={pic.pill}>
             <Tick />
             <Text style={pic.pillText}>All Apps</Text>
           </View>
           <Text style={pic.then}>›</Text>
-          <View style={pic.pill}>
-            <Text style={[pic.pillText, { color: APPLE_BLUE }]}>Done</Text>
+          {/* Apple's round blue ✓ at the top right of its list (iOS 26; "Done" before). */}
+          <View style={pic.doneMark}>
+            <Text style={pic.doneTick}>✓</Text>
           </View>
         </View>
       </Step>
@@ -354,6 +371,8 @@ const pic = {
   icon: { width: 26, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 9, height: 9, borderRadius: 5 },
   box: { width: 20, height: 20, borderRadius: 10, backgroundColor: APPLE_BLUE, alignItems: 'center', justifyContent: 'center' },
+  doneMark: { width: 36, height: 36, borderRadius: 18, backgroundColor: APPLE_BLUE, alignItems: 'center', justifyContent: 'center' },
+  doneTick: { fontSize: 18, lineHeight: 22, fontWeight: '800', color: '#FFFFFF' },
   tick: { fontSize: 12, lineHeight: 15, fontWeight: '800', color: '#FFFFFF' },
 } as const;
 
