@@ -168,7 +168,7 @@ async function main() {
     await shot(page, 'q04b-too-many-today');
     await page.getByRole('button', { name: 'Set essentials', exact: true }).click();
     await see(page, 'Your list from before still applies until you choose your essentials.');
-    await see(page, 'Tick All, then Done');
+    await see(page, 'Tick All, then ✓');
     await see(page, 'Tick what stays open');
     await see(page, 'Codes');
     // One button, and it is open.

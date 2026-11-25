@@ -70,6 +70,10 @@ class AppIconsView: ExpoView {
   var dim: Bool = false { didSet { if dim != oldValue { rebuild() } } }
 
   private var host: UIHostingController<AnyView>?
+  /// Bumped on every rebuild, so the grid is drawn afresh: in build 157 a new
+  /// essential (Hinge) only showed after leaving the screen and coming back,
+  /// the old grid kept on screen though the picks had changed.
+  private var generation = 0
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -139,10 +143,12 @@ class AppIconsView: ExpoView {
   }
 
   private func rebuild() {
+    generation += 1
     let grid = AnyView(
       IconGrid(items: items(), size: CGFloat(size), gap: CGFloat(gap), columns: max(1, columns), dim: dim)
         .allowsHitTesting(false)
-        .ignoresSafeArea())
+        .ignoresSafeArea()
+        .id(generation))
     if let host {
       host.rootView = grid
     } else {
@@ -207,28 +213,19 @@ struct IconGrid: View {
   }
 }
 
-/// Apple's icon for a token, at `size`. Apple sizes it from the font, by its
-/// own rule, so it is drawn once at a guess, measured, and scaled to fit.
+/// Apple's icon for a token, at about `size`. Apple sizes it from the font,
+/// by its own rule: in build 157 a font of 0.8 of the square drew icons 0.61
+/// of it (27 points in 44), so the font is now 1.3 of the square. The icon
+/// keeps its own size and is centred in the square, never squeezed.
 struct TokenIcon<Content: View>: View {
   let size: CGFloat
   @ViewBuilder let label: () -> Content
-  @State private var natural: CGFloat = 0
 
   var body: some View {
     label()
       .labelStyle(.iconOnly)
-      .font(.system(size: size * 0.8))
+      .font(.system(size: size * 1.3))
       .fixedSize()
-      .background(GeometryReader { g in Color.clear.preference(key: IconSizeKey.self, value: max(g.size.width, g.size.height)) })
-      .onPreferenceChange(IconSizeKey.self) { natural = $0 }
-      .scaleEffect(natural > 0 ? size / natural : 1)
       .frame(width: size, height: size)
-  }
-}
-
-private struct IconSizeKey: PreferenceKey {
-  static let defaultValue: CGFloat = 0
-  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-    value = max(value, nextValue())
   }
 }

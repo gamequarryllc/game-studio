@@ -558,6 +558,11 @@ The icons are drawn by iOS: `AppIconsView` in `modules/plainlimit-widgets/ios/Pl
 
 To check on a phone: Settings → Essentials shows your essentials' real icons at the right size in rows of six, and a grey row of other apps with none of the essentials in it; the same after closing and opening the app; change the essentials and both follow; with the battery empty the button and link are gone and the lock line shows.
 
+**Build 157 on the phone (the owner, 2026-11-25):** the screen works and shows the real icons. Three things followed:
+- After adding Hinge as an essential the cards kept the old apps until the owner left the screen and came back. The grid is now drawn afresh on every change of picks (`generation` and `.id` in `AppIconsView`, as the usage report already does), and the screen reads the picks again 0.4 s and 1.5 s after either of Apple's lists closes (`LOOK_AGAIN_MS` in `EssentialsSteps.tsx`).
+- The icons filled only about 0.61 of their squares (27 points in 44): Apple sizes `Label(token)`'s icon from the font, and measuring it did not scale it. The font is now 1.3 of the square, with no measuring; the icon is centred in its square.
+- The owner searched Apple's list for Hinge and found no ✓ to finish: on iOS 26 the list's search screen hides the ✓ until the ✕ beside the search is tapped, and what was ticked in the search stays ticked. That is Apple's own screen, which the app can't change; the line Plainlimit puts at its top now says "then ✓ at the top right. Searched? Tap ✕ by the search to get ✓ back." (`AFTER_SEARCH`). Every place that said "then Done" now says ✓, and setup's first step shows Apple's round blue ✓ instead of a "Done" pill.
+
 ## The streak on Today, beside the day's figure (the owner, 2026-11-25, after build 155)
 
 The streak (days in a row without an emergency pass, today included: `streakDays`) was only on History, one tap away. The owner wanted it always in sight on Today. Of four mock-ups (a corner badge above the battery, a scoreboard beside the day's figure, the History row turned into a streak row, a lit line under the week) the owner took **Scoreboard**, then said "day streak" alone didn't say what was counted; of four labels the owner took **D: "day streak" with a small line under it**.
