@@ -52,6 +52,13 @@ export interface DayState {
   startGoalMinutes?: number;
   /** The battery setup finished in: until the next recharge, the goal changes freely (goal.ts). */
   firstDay?: boolean;
+  /**
+   * The phone has been through this battery's start for the essentials: a
+   * list waiting for the recharge was started, and the list in force noted as
+   * the one the battery started with (essentials.ts). Missing on a battery
+   * the app has not looked at yet.
+   */
+  essentialsNoted?: boolean;
 }
 
 /** What is kept of a finished day, for the week view. */

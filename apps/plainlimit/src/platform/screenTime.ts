@@ -6,6 +6,7 @@ import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'r
 import { GUARD_MS, guardFor, paceRules, roundName, splitName, mostByNow, type Noted } from '@/domain/checkpoints';
 import { countDay, doubtful, miscounted, roundSettled, roundStanding, withFloor, type Report, type Rounds } from '@/domain/reports';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
+import { essentialsAtRecharge, withApps, withEssentials, type AppsChange, type EssentialsChange, type Lists } from '@/domain/essentials';
 import {
   ACTIVITY,
   COUNTED_ID,
@@ -59,6 +60,7 @@ export type Permission = 'unknown' | 'denied' | 'approved';
  * ("nothingPicked", "tooManyApps", "accessOff", "notRegistered", "miscounted"),
  * "held" (setup's "start tomorrow": nothing locks before the recharge),
  * "noAskPicks" (nothing picked yet for Second thought),
+ * "essentialsWaiting" (two new essentials wait for the next recharge),
  * "noticesOff" (notifications turned off; read in notices.ts) and
  * "store" (the App Store screenshots: no test tools, and no box for the list
  * only a phone can draw). Never on a phone. The words are read in mock.ts.
@@ -181,6 +183,22 @@ export const ALL_ID = 'plall';
 export const ESSENTIALS_ID = 'plkeep';
 /** The most apps iOS will leave out of an "everything" lock. */
 export const ESSENTIALS_LIMIT = 50;
+/**
+ * A change to either list can wait for the next recharge (essentials.ts), so
+ * Apple's picker never works on the lists in force. It is handed a copy of
+ * the list as chosen (ALL_PICK_ID, ESSENTIALS_PICK_ID), and when it closes
+ * the rule decides what starts now and what waits:
+ * - ESSENTIALS_NEXT_ID: the essentials as chosen, when they hold a new one;
+ * - ESSENTIALS_START_ID: the essentials this battery started with, which
+ *   today's can go back up to;
+ * - ALL_NEXT_ID: the phone's apps as last ticked, when that left some out.
+ * A picker closed by the app being shut changes nothing.
+ */
+export const ALL_PICK_ID = 'plallpick';
+export const ALL_NEXT_ID = 'plallnext';
+export const ESSENTIALS_PICK_ID = 'plkeeppick';
+export const ESSENTIALS_NEXT_ID = 'plkeepnext';
+export const ESSENTIALS_START_ID = 'plkeepstart';
 
 function metaOf(id: string): DeviceActivity.ActivitySelectionMetadata | null {
   try {
@@ -199,16 +217,50 @@ function tokenOf(id: string): string {
   }
 }
 
-/** Puts a list back as it was ('' means there was none). */
-function putBack(id: string, token: string) {
-  if (token !== '') {
-    DeviceActivity.setFamilyActivitySelectionId({ id, familyActivitySelection: token });
-    return;
+/** Writes several of the phone's lists in one go ('' takes a list away), so they never disagree. */
+function putLists(changes: Record<string, string>) {
+  const all = { ...(DeviceActivity.userDefaultsGet<Record<string, string>>('familyActivitySelectionIds') ?? {}) };
+  for (const [id, token] of Object.entries(changes)) {
+    if (token === '') delete all[id];
+    else all[id] = token;
   }
-  const all = DeviceActivity.userDefaultsGet<Record<string, string>>('familyActivitySelectionIds') ?? {};
-  const rest = { ...all };
-  delete rest[id];
-  DeviceActivity.userDefaultsSet('familyActivitySelectionIds', rest);
+  DeviceActivity.userDefaultsSet('familyActivitySelectionIds', all);
+}
+
+/** How many apps (and sites) a list holds, counted as the essentials are. '' is no list. */
+function appsIn(token: string): number {
+  if (token === '') return 0;
+  const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionToken: token });
+  return meta ? meta.applicationCount + sitesIn(meta) : 0;
+}
+
+/** One of the phone's own ways of putting two lists together, as a list ('' when no app is left). Throws if the phone gives none. */
+function combine(how: 'intersection' | 'union' | 'difference', a: string, b: string): string {
+  const out = DeviceActivity[how]({ activitySelectionToken: a }, { activitySelectionToken: b }, {});
+  const token = out?.familyActivitySelection;
+  if (!out || typeof token !== 'string' || token === '') throw new Error('the phone gave no list');
+  return out.applicationCount + sitesIn(out) === 0 ? '' : token;
+}
+
+/** The rule's questions (essentials.ts), answered by the phone on Apple's sealed picks. */
+const phoneLists: Lists<string> = {
+  both: (a, b) => (a === '' || b === '' ? '' : combine('intersection', a, b)),
+  either: (a, b) => (a === '' ? b : b === '' ? a : combine('union', a, b)),
+  less: (a, b) => (a === '' || b === '' ? a : combine('difference', a, b)),
+  size: appsIn,
+};
+
+/**
+ * The rule's answer, or `plain` (the change starts at once, as before the
+ * rule) if the phone could not compare the lists. Said in the readout.
+ */
+function ruled<T>(rule: () => T, plain: T): T {
+  try {
+    return rule();
+  } catch (error) {
+    note('the waiting rule', `the lists could not be compared, so the change started at once (${error instanceof Error ? error.message : String(error)})`);
+    return plain;
+  }
 }
 
 const MOCK_OLD_LIST = () => MOCK.has('nothingPicked') || MOCK.has('tooManyApps') || MOCK.has('oldList');
@@ -333,57 +385,87 @@ function keepEssentialsOpen(mode: boolean) {
   }
 }
 
-/** Call as Apple's picker opens on the phone's whole list of apps. */
+/** Call as Apple's picker opens on the phone's whole list of apps: it is handed a copy of the list as last ticked. */
 export function appsBefore(): void {
   if (!SCREEN_TIME_AVAILABLE) return;
-  picksBefore();
   try {
-    save('appsBefore', tokenOf(ALL_ID));
-  } catch {
-    // Without it an emptied list can't be put back.
-  }
-}
-
-/** Call as that picker closes. An emptied list is not kept. */
-export function appsAfter(): void {
-  if (!SCREEN_TIME_AVAILABLE) return;
-  try {
-    const before = readString('appsBefore');
-    forget('appsBefore');
-    if ((metaOf(ALL_ID)?.applicationCount ?? 0) === 0 && before !== '') putBack(ALL_ID, before);
-    if (readNumber('essentialsSet') > 0) deriveCounted();
+    putLists({ [ALL_PICK_ID]: tokenOf(ALL_NEXT_ID) || tokenOf(ALL_ID) });
   } catch (error) {
     note('the app list', error);
   }
 }
 
-/** Call as Apple's picker opens on the essentials. */
-export function essentialsBefore(): void {
+/**
+ * Call as that picker closes. An emptied list is not kept. Apps new to the
+ * list count from now; apps left off it go on counting until the next
+ * recharge, unless the day is `free` (essentials.ts).
+ */
+export function appsAfter(free: boolean): void {
   if (!SCREEN_TIME_AVAILABLE) return;
+  // What counts is as it was until here: Apple's picker only had a copy.
   picksBefore();
   try {
-    save('essentialsBefore', tokenOf(ESSENTIALS_ID));
-  } catch {
-    // Without it a list that is too long can't be put back.
+    const picked = tokenOf(ALL_PICK_ID);
+    const ticked = picked === '' ? 0 : (DeviceActivity.activitySelectionMetadata({ activitySelectionToken: picked })?.applicationCount ?? 0);
+    if (ticked === 0) {
+      putLists({ [ALL_PICK_ID]: '' });
+      return;
+    }
+    const before = tokenOf(ALL_ID);
+    // Until the essentials are chosen the list is not in use: nothing to wait for.
+    const inUse = readNumber('essentialsSet') > 0;
+    const plain: AppsChange<string> = { today: picked, next: null };
+    const change = ruled(() => withApps(picked, before, free || !inUse, phoneLists), plain);
+    putLists({ [ALL_PICK_ID]: '', [ALL_ID]: change.today, [ALL_NEXT_ID]: change.next ?? '' });
+    if (inUse) deriveCounted();
+  } catch (error) {
+    note('the app list', error);
+  }
+}
+
+/** The essentials this battery started with: today's list, if none was ever noted (a build before the rule). */
+function essentialsStart(): string {
+  return readNumber('essentialsStartSet') > 0 ? tokenOf(ESSENTIALS_START_ID) : tokenOf(ESSENTIALS_ID);
+}
+
+/** Call as Apple's picker opens on the essentials: it is handed a copy of the list as chosen. */
+export function essentialsBefore(): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    putLists({ [ESSENTIALS_PICK_ID]: tokenOf(ESSENTIALS_NEXT_ID) || tokenOf(ESSENTIALS_ID) });
+  } catch (error) {
+    note('the essentials', error);
   }
 }
 
 /**
  * Call as that picker closes. More essentials than iOS can keep open are not
- * kept: the list from before goes back, and the number ticked is returned so
- * the screen can say so (0 when the list was kept).
+ * kept: nothing changes, and the number ticked is returned so the screen can
+ * say so (0 when the choice was kept). Otherwise the rule decides
+ * (essentials.ts): apps taken out, and apps this battery started with, are
+ * today's at once; a new essential waits for the next recharge, unless the
+ * day is `free` or the essentials are being chosen for the first time.
  */
-export function essentialsAfter(): number {
+export function essentialsAfter(free: boolean): number {
   if (!SCREEN_TIME_AVAILABLE) return 0;
+  // What counts is as it was until here: Apple's picker only had a copy.
+  picksBefore();
   try {
-    const before = readString('essentialsBefore');
-    forget('essentialsBefore');
-    const ticked = metaOf(ESSENTIALS_ID)?.applicationCount ?? 0;
+    const picked = tokenOf(ESSENTIALS_PICK_ID);
+    const ticked = picked === '' ? 0 : (DeviceActivity.activitySelectionMetadata({ activitySelectionToken: picked })?.applicationCount ?? 0);
     if (ticked > ESSENTIALS_LIMIT) {
-      putBack(ESSENTIALS_ID, before);
+      putLists({ [ESSENTIALS_PICK_ID]: '' });
       return ticked;
     }
-    if (appsShown() === 0) return 0;
+    if (appsShown() === 0) {
+      putLists({ [ESSENTIALS_PICK_ID]: '', [ESSENTIALS_ID]: picked });
+      return 0;
+    }
+    const first = readNumber('essentialsSet') === 0;
+    const plain: EssentialsChange<string> = { today: picked, start: picked, next: null };
+    const change = first ? plain : ruled(() => withEssentials(picked, essentialsStart(), free, phoneLists), plain);
+    putLists({ [ESSENTIALS_PICK_ID]: '', [ESSENTIALS_ID]: change.today, [ESSENTIALS_START_ID]: change.start, [ESSENTIALS_NEXT_ID]: change.next ?? '' });
+    save('essentialsStartSet', Date.now());
     save('essentialsSet', Date.now());
     deriveCounted();
     keepEssentialsOpen(true);
@@ -391,6 +473,67 @@ export function essentialsAfter(): number {
   } catch (error) {
     note('the essentials', error);
     return 0;
+  }
+}
+
+/**
+ * Starts the lists that wait for a recharge (the essentials as chosen, the
+ * phone's apps as last ticked), and notes the essentials then in force as
+ * the ones this battery started with. Called by the store on its first look
+ * at a new battery (`newDay`), and when an emergency pass is used: a pass
+ * skips the wait, and with nothing waiting it changes nothing. True if a
+ * waiting list started: the caller then treats it as a change of picks
+ * (`picksBefore` has been called). Throws if the phone refuses, so the caller
+ * can try again on its next look.
+ */
+export function startWaitingPicks(newDay: boolean): boolean {
+  if (!SCREEN_TIME_AVAILABLE) return false;
+  try {
+    const next = tokenOf(ESSENTIALS_NEXT_ID);
+    const apps = tokenOf(ALL_NEXT_ID);
+    const started = next !== '' || apps !== '';
+    if (!started && !newDay) return false;
+    if (started) picksBefore();
+    const day = essentialsAtRecharge(tokenOf(ESSENTIALS_ID), next === '' ? null : next);
+    const lists: Record<string, string> = { [ESSENTIALS_ID]: day.today, [ESSENTIALS_START_ID]: day.start, [ESSENTIALS_NEXT_ID]: '', [ALL_NEXT_ID]: '' };
+    if (apps !== '') lists[ALL_ID] = apps;
+    putLists(lists);
+    save('essentialsStartSet', Date.now());
+    if (started && readNumber('essentialsSet') > 0) {
+      deriveCounted();
+      keepEssentialsOpen(essentialsMode());
+    }
+    return started;
+  } catch (error) {
+    note('the waiting essentials', error);
+    throw error;
+  }
+}
+
+let joiningFor = '';
+let joiningNow: { picks: string; count: number } | null = null;
+
+/**
+ * The apps that become essentials at the next recharge: the list waiting,
+ * less today's, for iOS to draw their icons, and how many. Null when none
+ * waits. (Worked out by the phone once for each pair of lists.)
+ */
+export function essentialsJoining(): { picks: string | null; count: number } | null {
+  if (MOCK_PHONE) return MOCK.has('essentialsWaiting') && !MOCK_OLD_LIST() ? { picks: null, count: 2 } : null;
+  if (!SCREEN_TIME_AVAILABLE) return null;
+  try {
+    const next = tokenOf(ESSENTIALS_NEXT_ID);
+    if (next === '') return null;
+    const today = tokenOf(ESSENTIALS_ID);
+    const key = `${next}\n${today}`;
+    if (key !== joiningFor) {
+      const picks = phoneLists.less(next, today);
+      joiningNow = picks === '' ? null : { picks, count: appsIn(picks) };
+      joiningFor = key;
+    }
+    return joiningNow;
+  } catch {
+    return null;
   }
 }
 
@@ -540,7 +683,7 @@ function startRound(now: Date, goalBefore: number) {
   save('picksChangedAt', now.getTime());
 }
 
-/** Call as Apple's picker opens. */
+/** Call before the lists that decide what counts are changed (`picksAfter` then says whether they did). */
 export function picksBefore(): void {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
@@ -550,7 +693,7 @@ export function picksBefore(): void {
   }
 }
 
-/** Call as Apple's picker closes, before the day is registered again. True if the list changed. */
+/** Call once they are changed, before the day is registered again. True if what counts changed. */
 export function picksAfter(goalMinutes: number, now = new Date()): boolean {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
@@ -866,6 +1009,8 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     // Held for two hours at most, in case setup is left half done.
     if (hold) save('holdUntil', now.getTime() + 2 * 3600 * 1000);
     else if (fresh) forget('holdUntil');
+    // The picks changed since the day was last registered (a recharge can start a waiting goal and waiting essentials together).
+    const picksMoved = picksChangedAt() > registeredAt();
     save('registeredAt', now.getTime());
     // A different goal gives the same checkpoint names other minutes, and a
     // different recharge time counts them from another moment.
@@ -875,8 +1020,9 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     const rechargeMoved = lastRecharge !== null && lastRecharge !== settings.rechargeMinute;
     if (!fresh && (goalMoved || rechargeMoved)) {
       // Only the goal moved: today's use stays what it is now while the phone re-reports the day for the new goal (Floor).
+      // Not when the picks moved too: a new essential honestly takes off what it used.
       const day = dayStartOf(periodStartOf(now, settings.rechargeMinute)).getTime();
-      const floor = goalMoved && !rechargeMoved ? usedSoFar(lastGoal, periodStartOf(now, settings.rechargeMinute)) : null;
+      const floor = goalMoved && !rechargeMoved && !picksMoved ? usedSoFar(lastGoal, periodStartOf(now, settings.rechargeMinute)) : null;
       startRound(now, lastGoal > 0 ? lastGoal : settings.goalMinutes);
       if (floor !== null && floor > 0) save('roundFloor', { round: round(), dayStart: day, minutes: floor });
       else forget('roundFloor');
@@ -1126,6 +1272,10 @@ export function diagnostics(settings: Settings): string[] {
     lines.push(`Lock: ${essentialsMode() ? 'everything except your essentials' : 'the older ticked list'}`);
     lines.push(`Apps shown: ${kinds(metaOf(ALL_ID))}`);
     lines.push(`Essentials: ${kinds(metaOf(ESSENTIALS_ID))}`);
+    // The waiting rule (essentials.ts): what starts at the next recharge, and what today's essentials can go back up to.
+    lines.push(`Essentials waiting for the recharge: ${tokenOf(ESSENTIALS_NEXT_ID) ? kinds(metaOf(ESSENTIALS_NEXT_ID)) : 'none'}`);
+    lines.push(`Battery started with: ${readNumber('essentialsStartSet') > 0 ? `${kinds(metaOf(ESSENTIALS_START_ID))} (noted ${timeOf(readNumber('essentialsStartSet'))})` : 'not noted yet'}`);
+    if (tokenOf(ALL_NEXT_ID)) lines.push(`Apps shown from the recharge: ${kinds(metaOf(ALL_NEXT_ID))}`);
     lines.push(`Counted: ${kinds(metaOf(COUNTED_ID))}`);
     lines.push(`Asked to cover: ${kinds(DeviceActivity.activitySelectionMetadata({ currentBlocklist: true }))}`);
     lines.push(`Kept open whatever is covered: ${kinds(DeviceActivity.activitySelectionMetadata({ currentWhitelist: true }))}`);

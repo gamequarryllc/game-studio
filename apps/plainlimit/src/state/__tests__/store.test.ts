@@ -33,6 +33,9 @@ function fakePhone(): Fake {
     noteKnown: jest.fn(),
     onCheckpoint: jest.fn(() => () => {}),
     picksAfter: jest.fn(() => false),
+    appsAfter: jest.fn(),
+    essentialsAfter: jest.fn(() => 0),
+    startWaitingPicks: jest.fn(() => false),
     refreshScreens: jest.fn(),
     releaseLocks: jest.fn(),
     reloadWidget: jest.fn(),
@@ -850,5 +853,123 @@ describe('Pro', () => {
     expect(ask.allowAskFirst).not.toHaveBeenCalledWith(false);
     expect((ask.applyAskFirst as jest.Mock).mock.calls.length).toBe(applied);
     expect(await store.openAskFirst()).not.toBeNull();
+  });
+});
+
+describe('essentials that wait for the recharge', () => {
+  it('the first look at a battery starts what waits for it, once, and treats it as a change of picks', async () => {
+    const phone = fakePhone();
+    phone.startWaitingPicks = jest.fn(() => true);
+    phone.picksAfter = jest.fn(() => true);
+    const { store } = load(phone, saved(60));
+    await store.start();
+    expect(phone.startWaitingPicks).toHaveBeenCalledTimes(1);
+    expect(phone.startWaitingPicks).toHaveBeenCalledWith(true);
+    expect(phone.picksAfter).toHaveBeenCalled();
+    expect(store.get().doc.day.essentialsNoted).toBe(true);
+    // Not again on the same battery.
+    store.tick(new Date());
+    jest.advanceTimersByTime(60_000);
+    store.tick(new Date());
+    expect(phone.startWaitingPicks).toHaveBeenCalledTimes(1);
+  });
+
+  it('a battery already looked at is left alone', async () => {
+    const phone = fakePhone();
+    const raw = saved(60);
+    const { store } = load(phone, { ...raw, day: { ...raw.day, essentialsNoted: true } });
+    await store.start();
+    store.tick(new Date());
+    expect(phone.startWaitingPicks).not.toHaveBeenCalled();
+  });
+
+  it('the recharge starts them again for the new battery', async () => {
+    jest.setSystemTime(new Date(2026, 10, 20, 9, 0));
+    const phone = fakePhone();
+    const raw = saved(60);
+    const { store } = load(phone, { ...raw, day: { ...raw.day, essentialsNoted: true } });
+    await store.start();
+    expect(phone.startWaitingPicks).not.toHaveBeenCalled();
+    jest.setSystemTime(new Date(2026, 10, 21, 6, 1));
+    store.tick(new Date());
+    expect(store.get().doc.day.periodStart).toBe(new Date(2026, 10, 21, 6, 0).toISOString());
+    expect(phone.startWaitingPicks).toHaveBeenCalledTimes(1);
+    expect(store.get().doc.day.essentialsNoted).toBe(true);
+  });
+
+  it('a new essential waits on an ordinary day, and starts at once on setup\'s own day or under a pass', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(60));
+    await store.start();
+    store.essentialsClosed();
+    expect(phone.essentialsAfter).toHaveBeenLastCalledWith(false);
+    store.appsShownClosed();
+    expect(phone.appsAfter).toHaveBeenLastCalledWith(false);
+
+    const first = fakePhone();
+    const raw = saved(60);
+    const day1 = load(first, { ...raw, day: { ...raw.day, firstDay: true } });
+    await day1.store.start();
+    day1.store.essentialsClosed();
+    expect(first.essentialsAfter).toHaveBeenLastCalledWith(true);
+
+    const pass = fakePhone();
+    const empty = load(pass, saved(180));
+    await empty.store.start();
+    expect(empty.store.usePass()).toBe(true);
+    empty.store.essentialsClosed();
+    expect(pass.essentialsAfter).toHaveBeenLastCalledWith(true);
+    empty.store.appsShownClosed();
+    expect(pass.appsAfter).toHaveBeenLastCalledWith(true);
+  });
+
+  it('using a pass starts the ones that wait: a pass skips the wait', async () => {
+    const phone = fakePhone();
+    const raw = saved(180);
+    const { store } = load(phone, { ...raw, day: { ...raw.day, essentialsNoted: true } });
+    await store.start();
+    phone.startWaitingPicks = jest.fn(() => true);
+    phone.picksAfter = jest.fn(() => true);
+    expect(store.usePass()).toBe(true);
+    expect(phone.startWaitingPicks).toHaveBeenCalledWith(false);
+    expect(phone.picksAfter).toHaveBeenCalled();
+    // The pass has the apps open: the covers are not put back up for the new list.
+    expect(phone.coverAgain).toHaveBeenLastCalledWith(false, expect.anything(), expect.any(Number));
+  });
+
+  it('a recharge that passed while Apple\'s list was open comes first', async () => {
+    jest.setSystemTime(new Date(2026, 10, 20, 23, 0));
+    const phone = fakePhone();
+    const order: string[] = [];
+    phone.startWaitingPicks = jest.fn(() => {
+      order.push('day');
+      return false;
+    });
+    phone.essentialsAfter = jest.fn(() => {
+      order.push('picked');
+      return 0;
+    });
+    const raw = saved(60);
+    const { store } = load(phone, { ...raw, day: { ...raw.day, essentialsNoted: true } });
+    await store.start();
+    jest.setSystemTime(new Date(2026, 10, 21, 6, 0, 30));
+    store.essentialsClosed();
+    expect(order).toEqual(['day', 'picked']);
+  });
+
+  it('a phone that throws while starting them is tried again on the next look', async () => {
+    const phone = fakePhone();
+    let broken = true;
+    phone.startWaitingPicks = jest.fn(() => {
+      if (broken) throw new Error('native module gone');
+      return false;
+    });
+    const { store } = load(phone, saved(60));
+    await store.start();
+    expect(store.get().state).toBe('ready');
+    expect(store.get().doc.day.essentialsNoted).toBeUndefined();
+    broken = false;
+    store.tick(new Date());
+    expect(store.get().doc.day.essentialsNoted).toBe(true);
   });
 });

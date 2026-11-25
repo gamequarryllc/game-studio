@@ -36,6 +36,34 @@ export function othersLabel(others: number): string {
   return `Everything else: ${others === 1 ? '1 app uses' : `${others} apps use`} your battery.`;
 }
 
+/**
+ * A new essential waits for the next recharge (domain/essentials.ts). Its
+ * card on the Essentials screen says when it starts, with the apps' own
+ * icons. `day` is "today", "tomorrow" or a weekday (`dayWord`); `recharge`
+ * is that recharge's time ("6:00 AM"). In the small hours the recharge is
+ * today's, so the card names the time instead of the day.
+ */
+export function joinsTitle(day: string, recharge: string): string {
+  if (day === 'today') return `Joining at ${recharge}`;
+  return day === 'tomorrow' ? 'Joining tomorrow' : `Joining on ${day}`;
+}
+
+/** Under the icons of that card, beside the essentials' "Never counted": until then these count like any other app. */
+export function joinsLine(day: string, recharge: string): string {
+  return day === 'today' ? 'Counted until then' : `Counted until ${recharge}`;
+}
+
+/** That card, read out. */
+export function joinsLabel(joining: number, day: string, recharge: string): string {
+  const when = day === 'today' ? `at ${recharge}` : day === 'tomorrow' ? `tomorrow at ${recharge}` : `on ${day} at ${recharge}`;
+  return joining === 1 ? `1 app becomes an essential ${when}. It is counted until then.` : `${joining} apps become essentials ${when}. They are counted until then.`;
+}
+
+/** Beside the count on Settings' Essentials row while some wait: "14 apps, 2 more tomorrow". */
+export function joinsShort(joining: number, day: string, recharge: string): string {
+  return `${joining} more ${day === 'today' ? `at ${recharge}` : day === 'tomorrow' ? 'tomorrow' : `on ${day}`}`;
+}
+
 /** Said when more essentials were ticked than iOS can keep open: the list is not kept. */
 export function tooManyKept(ticked: number, limit: number): string {
   return `That was ${ticked} apps, and iOS can keep at most ${limit} open. Your list wasn’t changed. Tick fewer and try again.`;

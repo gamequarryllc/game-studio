@@ -3,13 +3,13 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Pressable, Text, View } from 'react-native';
 
 import { tap } from '@/platform/haptics';
-import { ALL_ID, ESSENTIALS_ID, ESSENTIALS_LIMIT, allPicks, appsBefore, appsShown, countedAppsCount, essentialsBefore, essentialsCount, essentialsMode, essentialsPicks } from '@/platform/screenTime';
+import { ALL_PICK_ID, ESSENTIALS_LIMIT, ESSENTIALS_PICK_ID, allPicks, appsBefore, appsShown, countedAppsCount, essentialsBefore, essentialsCount, essentialsJoining, essentialsMode, essentialsPicks } from '@/platform/screenTime';
 import { store } from '@/state/store';
 
 import { AppIcons } from './AppIcons';
 import { AppPicker } from './AppPicker';
 import { GlowBattery } from './GlowBattery';
-import { AFTER_SEARCH, CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, othersLabel, tooManyKept } from './countWords';
+import { AFTER_SEARCH, CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, joinsLabel, joinsLine, joinsTitle, othersLabel, tooManyKept } from './countWords';
 import { Icon } from './icons';
 import { BigButton, Card } from './kit';
 import { c, display } from './theme';
@@ -24,6 +24,11 @@ import { c, display } from './theme';
 // its top what to tap. (Builds 90 to 95 drew the two as numbered cards with a
 // button each and a trip back to the screen in between; the owner got lost in
 // it on a fresh install.) The app learns how many were picked, never which.
+//
+// Apple's lists work on copies (ALL_PICK_ID, ESSENTIALS_PICK_ID): when one
+// closes, the rule in domain/essentials.ts decides what starts now and what
+// waits for the next recharge. A new essential waits, and shows in a card of
+// its own until then ("Joining tomorrow").
 
 /** The pause between Apple's two lists: the first sheet has to be gone before the second can come up. */
 const BETWEEN_MS = 300;
@@ -45,6 +50,8 @@ export type Essentials = {
   allPicks: string | null;
   /** How many apps use the battery. */
   others: number;
+  /** New essentials waiting for the next recharge, for iOS to draw, and how many (null: none wait). */
+  joining: { picks: string | null; count: number } | null;
   /** The essentials are chosen. */
   ready: boolean;
   /** How many were ticked when the last try was turned down for being too many (0: none was). */
@@ -62,6 +69,11 @@ export type Essentials = {
 
 /** `onChosen`: called once the essentials are saved (setup moves on by itself). */
 export function useEssentials(onChosen?: () => void): Essentials {
+  // Read from the phone afresh on every drawing. The React Compiler would
+  // otherwise keep the first answers for as long as the screen is up: a
+  // change of essentials showed only after leaving the screen and coming
+  // back (build 157), and the timers below redrew the same old figures.
+  'use no memo';
   const [open, setOpen] = useState<'apps' | 'keep' | null>(null);
   const [refused, setRefused] = useState(0);
   const [missed, setMissed] = useState(false);
@@ -85,7 +97,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
   const pickers = (
     <>
       <AppPicker
-        id={ALL_ID}
+        id={ALL_PICK_ID}
         wholeCategories
         open={open === 'apps'}
         header={`Step 1 of 2 (one-time setup): tick All Apps & Categories, then ✓ at the top right.`}
@@ -103,7 +115,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
         }}
       />
       <AppPicker
-        id={ESSENTIALS_ID}
+        id={ESSENTIALS_PICK_ID}
         wholeCategories
         open={open === 'keep'}
         header={`Step 2 of 2: tick your essential apps (up to ${ESSENTIALS_LIMIT}), then ✓ at the top right. ${AFTER_SEARCH}`}
@@ -128,6 +140,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
     picks: essentialsPicks(),
     allPicks: allPicks(),
     others: countedAppsCount(),
+    joining: essentialsJoining(),
     ready: essentialsMode(),
     refused,
     missed,
@@ -143,13 +156,17 @@ export function useEssentials(onChosen?: () => void): Essentials {
   };
 }
 
+/** When essentials that wait start: the day ("today", "tomorrow", a weekday) and the time of that recharge. */
+export type JoinsWhen = { day: string; recharge: string };
+
 /**
  * The card. `locked`: the battery is empty, so the essentials can't change (a
  * way round the lock). `mainInFoot`: the screen has its own big button
- * (setup), so only "change" buttons are drawn here, and quietly.
+ * (setup), so only "change" buttons are drawn here, and quietly. `when`: when
+ * new essentials that wait start (setup has none: there every change is at once).
  */
-export function EssentialsSteps({ e, locked = false, mainInFoot = false }: { e: Essentials; locked?: boolean; mainInFoot?: boolean }) {
-  if (e.ready) return <Chosen e={e} locked={locked} quiet={mainInFoot} />;
+export function EssentialsSteps({ e, locked = false, mainInFoot = false, when = null }: { e: Essentials; locked?: boolean; mainInFoot?: boolean; when?: JoinsWhen | null }) {
+  if (e.ready) return <Chosen e={e} locked={locked} quiet={mainInFoot} when={when} />;
   return (
     <Card style={{ paddingVertical: 18, gap: 10 }}>
       <Pictures firstDone={e.shown > 0} />
@@ -178,6 +195,8 @@ function Warnings({ e }: { e: Essentials }) {
 
 /** The most essentials drawn: four rows of six, the last one "+N" when there are more. */
 const MOST_ICONS = 24;
+/** New essentials that wait get two rows at most. */
+const JOINING_ICONS = 12;
 /** The apps that use the battery get one row. */
 const OTHER_ICONS = 6;
 
@@ -188,8 +207,14 @@ const OTHER_ICONS = 6;
  * that stood here ("18 essentials stay free. Everything else counts…") boring
  * and wordy (2026-11-25), and picked this from three drafts. Under them, one
  * button to change the essentials, and a small link for apps installed since.
+ *
+ * Between the two, while new essentials wait for the next recharge
+ * (domain/essentials.ts): a card in outline with their icons, "Joining
+ * tomorrow", and that they are counted until then. They are still among
+ * "Everything else" today.
  */
-function Chosen({ e, locked, quiet }: { e: Essentials; locked: boolean; quiet: boolean }) {
+function Chosen({ e, locked, quiet, when }: { e: Essentials; locked: boolean; quiet: boolean; when: JoinsWhen | null }) {
+  const joining = when && e.joining && e.joining.count > 0 ? e.joining : null;
   return (
     <View style={{ gap: 12 }}>
       <View style={glow.free}>
@@ -207,6 +232,21 @@ function Chosen({ e, locked, quiet }: { e: Essentials; locked: boolean; quiet: b
           <Text style={[glow.footText, { color: FREE }]}>Never counted</Text>
         </View>
       </View>
+      {joining && when ? (
+        <View style={glow.joins}>
+          <View accessible accessibilityLabel={joinsLabel(joining.count, when.day, when.recharge)} style={glow.head}>
+            <Text style={glow.name}>{joinsTitle(when.day, when.recharge)}</Text>
+            <View style={glow.pillJoins}>
+              <Text style={glow.pillJoinsText}>{appsWord(joining.count)}</Text>
+            </View>
+          </View>
+          <AppIcons selection={joining.picks} count={joining.count} limit={JOINING_ICONS} label="The apps that become essentials" />
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={glow.foot}>
+            <Icon name="recharge" size={18} color={c.ink3} />
+            <Text style={[glow.footText, { color: c.ink2 }]}>{joinsLine(when.day, when.recharge)}</Text>
+          </View>
+        </View>
+      ) : null}
       <View style={glow.rest}>
         <View accessible accessibilityLabel={othersLabel(e.others)} style={glow.head}>
           <Text style={[glow.name, { color: c.ink2 }]}>Everything else</Text>
@@ -264,6 +304,10 @@ const DRAINING = '#E5CC1C';
 const glow = {
   free: { borderRadius: 26, backgroundColor: '#13201A', borderWidth: 1, borderColor: 'rgba(87,227,137,0.38)', padding: 18, gap: 16, shadowColor: '#46CC70', shadowOpacity: 0.2, shadowRadius: 22, shadowOffset: { width: 0, height: 8 } },
   rest: { borderRadius: 26, backgroundColor: c.card, borderWidth: 1, borderColor: c.rule, padding: 18, gap: 14 },
+  // In outline, like the day a waiting goal starts on in Settings: not in force yet.
+  joins: { borderRadius: 26, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(87,227,137,0.5)', padding: 18, gap: 14 },
+  pillJoins: { borderRadius: 12, borderWidth: 1, borderColor: 'rgba(87,227,137,0.6)', paddingHorizontal: 10, paddingVertical: 2 },
+  pillJoinsText: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: FREE },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   name: { flexShrink: 1, fontFamily: display.bold, fontSize: 22, lineHeight: 27, letterSpacing: -0.3, color: c.ink },
   pillFree: { borderRadius: 12, backgroundColor: FREE, paddingHorizontal: 10, paddingVertical: 3 },

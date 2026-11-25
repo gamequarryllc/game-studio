@@ -1,4 +1,4 @@
-import { essentialsLabel, essentialsValue, othersLabel, tooManyKept } from '../countWords';
+import { essentialsLabel, essentialsValue, joinsLabel, joinsLine, joinsShort, joinsTitle, othersLabel, tooManyKept } from '../countWords';
 import { gridHeight, iconSize, squares } from '../iconGrid';
 
 describe('essentialsValue', () => {
@@ -50,5 +50,30 @@ describe('the icon grid', () => {
     expect(gridHeight(19, 6, 44)).toBe(4 * 44 + 3 * 12);
     expect(gridHeight(50, 6, 44, 24)).toBe(4 * 44 + 3 * 12);
     expect(gridHeight(0, 6, 44)).toBe(0);
+  });
+});
+
+describe('new essentials that wait for the recharge', () => {
+  it('names the day they start, or the time when the recharge is today\'s', () => {
+    expect(joinsTitle('tomorrow', '6:00 AM')).toBe('Joining tomorrow');
+    expect(joinsTitle('today', '6:00 AM')).toBe('Joining at 6:00 AM');
+    expect(joinsTitle('Friday', '8:00 AM')).toBe('Joining on Friday');
+  });
+
+  it('says they are counted until then', () => {
+    expect(joinsLine('tomorrow', '6:00 AM')).toBe('Counted until 6:00 AM');
+    expect(joinsLine('today', '6:00 AM')).toBe('Counted until then');
+  });
+
+  it('reads the card out in full', () => {
+    expect(joinsLabel(1, 'tomorrow', '6:00 AM')).toBe('1 app becomes an essential tomorrow at 6:00 AM. It is counted until then.');
+    expect(joinsLabel(3, 'today', '6:00 AM')).toBe('3 apps become essentials at 6:00 AM. They are counted until then.');
+    expect(joinsLabel(2, 'Friday', '8:00 AM')).toBe('2 apps become essentials on Friday at 8:00 AM. They are counted until then.');
+  });
+
+  it('is short on the Settings row', () => {
+    expect(joinsShort(2, 'tomorrow', '6:00 AM')).toBe('2 more tomorrow');
+    expect(joinsShort(1, 'today', '6:00 AM')).toBe('1 more at 6:00 AM');
+    expect(joinsShort(1, 'Friday', '8:00 AM')).toBe('1 more on Friday');
   });
 });

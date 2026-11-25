@@ -1,6 +1,6 @@
 // What the app remembers about the current battery, and how it moves on.
 
-import { goalAfterRecharge, repairNextGoal } from './goal';
+import { goalAfterRecharge, rechargePassed, repairNextGoal } from './goal';
 import { startWaitingRecharge } from './recharge';
 import { freshRecord, repairRecord } from './record';
 import { nextRecharge, periodStart } from './day';
@@ -22,7 +22,8 @@ export const HISTORY_DAYS = 98;
  * last word on that day, when it has one; the larger of it and what the app
  * last knew is kept. Days in between that the app never saw are not made up.
  * A higher goal chosen during the day that ended starts now (goal.ts), and
- * so does a new recharge time (recharge.ts).
+ * so does a new recharge time (recharge.ts). The new battery is not yet
+ * `essentialsNoted`: the store starts essentials waiting for it (essentials.ts).
  */
 export function advance(given: Doc, now: Date, closingUsed: number | null = null, counting = given.watching === true): Doc {
   // A recharge time waiting for this battery's end starts now (recharge.ts); the battery may run on to it.
@@ -34,6 +35,8 @@ export function advance(given: Doc, now: Date, closingUsed: number | null = null
   const old = doc.day;
   const next = goalAfterRecharge(old, doc.settings, now);
   const day: DayState = { ...fresh, ...next.day };
+  // Only a real recharge starts essentials that wait for one (essentials.ts): a battery begun by a moved recharge time is the same day to them.
+  if (old.essentialsNoted && !rechargePassed(old, now)) day.essentialsNoted = true;
   const summary: DaySummary = {
     start: old.periodStart,
     goalMinutes: doc.settings.goalMinutes,
@@ -122,6 +125,7 @@ export function repairDoc(raw: unknown, now: Date, closingUsed?: (day: DayState,
     const startGoal = typeof d.startGoalMinutes === 'number' && Number.isFinite(d.startGoalMinutes) ? clampGoal(d.startGoalMinutes) : settings.goalMinutes;
     day.startGoalMinutes = Math.max(startGoal, settings.goalMinutes);
     if (d.firstDay === true) day.firstDay = true;
+    if (d.essentialsNoted === true) day.essentialsNoted = true;
   }
   const savedSettings = (r.settings && typeof r.settings === 'object' ? r.settings : {}) as Record<string, unknown>;
   const nextGoal = repairNextGoal(savedSettings.nextGoalMinutes, day, settings);

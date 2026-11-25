@@ -325,7 +325,26 @@ async function main() {
     await see(page, 'Uses your battery');
     await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Refresh the app list', exact: true }).waitFor();
+    // Nothing waits for the recharge, so no card says so.
+    if ((await page.getByText(/^Joining/).count()) > 0) throw new Error('Essentials showed apps joining with none waiting');
     await shot(page, 'q10b-what-counts-open');
+    await context.close();
+  });
+
+  await scenario('new essentials wait for the recharge: a card of their own, and a word on the Settings row', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting,essentialsWaiting');
+    await tab(page, 'Settings');
+    // "tomorrow", or the time itself in the small hours before the recharge.
+    await page.getByRole('button', { name: /^Essentials, 14 apps, 2 more (tomorrow|at 6:00 AM)$/ }).click();
+    await page.getByLabel(/^2 apps become essentials (tomorrow )?at 6:00 AM\. They are counted until then\.$/).waitFor();
+    await page.getByLabel('The apps that become essentials', { exact: true }).waitFor();
+    await page.getByText(/^Joining (tomorrow|at 6:00 AM)$/).first().waitFor();
+    await page.getByText(/^Counted until (6:00 AM|then)$/).first().waitFor();
+    // They wait: today's essentials are the same 14, and the rest still use the battery.
+    await page.getByLabel('Always open: 14 essential apps, never counted.', { exact: true }).waitFor();
+    await page.getByLabel('Everything else: 106 apps use your battery.', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
+    await shot(page, 'q10c-what-counts-waiting', true);
     await context.close();
   });
 

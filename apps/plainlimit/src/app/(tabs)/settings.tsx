@@ -13,12 +13,12 @@ import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import type { EmptyLevel } from '@/domain/types';
 import { EXPECTED_PRICE } from '@/pro/config';
 import { pro, usePro } from '@/pro/pro';
-import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCount, essentialsMode, isOn, pickCount } from '@/platform/screenTime';
+import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCount, essentialsJoining, essentialsMode, isOn, pickCount } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { tap } from '@/platform/haptics';
 import { Icon, type IconName } from '@/ui/icons';
 import { BigButton, Card, Chevron, IconTile, Label, LinkRow, Page, ProBadge, StepButton, Title, tiles, type RowIcon } from '@/ui/kit';
-import { essentialsValue } from '@/ui/countWords';
+import { essentialsValue, joinsShort } from '@/ui/countWords';
 import { TIPS } from '@/ui/tips';
 import { ScreenTimeCard, TestBuildTools } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
@@ -39,12 +39,15 @@ export default function Settings() {
   // are picked takes a moment, and the screen caught on each tap (build 127).
   const [countedValue, setCountedValue] = useState(essentialsNow);
   const [essentialTiles, setEssentialTiles] = useState(essentialTilesNow);
+  // New essentials wait for the next recharge (domain/essentials.ts); the row says how many do.
+  const [joining, setJoining] = useState(joiningNow);
   // Second thought is on only with apps picked, as on its own screen's switch; the phone is asked the same way.
   const [askPicked, setAskPicked] = useState(askPickedNow);
   useFocusEffect(
     useCallback(() => {
       setCountedValue(essentialsNow());
       setEssentialTiles(essentialTilesNow());
+      setJoining(joiningNow());
       setAskPicked(askPickedNow());
     }, []),
   );
@@ -174,7 +177,7 @@ export default function Settings() {
       <Card>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Essentials, ${countedValue}`}
+          accessibilityLabel={`Essentials, ${countedValue}${joining > 0 ? `, ${joinsShort(joining, startDay, recharge)}` : ''}`}
           onPress={() => {
             tap();
             router.push('/what-counts');
@@ -183,7 +186,7 @@ export default function Settings() {
           <View style={{ flex: 1, gap: 1 }}>
             <Text style={styles.rowLabel}>Essentials</Text>
             <Text numberOfLines={1} style={styles.proLine}>
-              {countedValue}, always free
+              {countedValue}, {joining > 0 ? joinsShort(joining, startDay, recharge) : 'always free'}
             </Text>
           </View>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={{ flexDirection: 'row', gap: 5 }}>
@@ -344,6 +347,11 @@ function askPickedNow(): number {
 
 /** The sums' level in a word, for its tile. */
 const SUM_LEVEL_NAME: Record<SumLevel, string> = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
+
+/** How many new essentials wait for the next recharge, as the phone has it now. */
+function joiningNow(): number {
+  return essentialsJoining()?.count ?? 0;
+}
 
 /** The Essentials row's example tiles, in the order they are shown. */
 const ESSENTIAL_TILES: RowIcon[] = [

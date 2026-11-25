@@ -7,7 +7,7 @@ import { widgetRecord } from '@/domain/pro';
 import { addWeeklyPasses, freshRecord, passActive, passCheck, recordView, spendPass } from '@/domain/record';
 import { clockLabel, nextRecharge } from '@/domain/day';
 import { advance, freshDoc, grantTopUp, isUnlocked, repairDoc, rollOver, withUse, freshDay } from '@/domain/dayState';
-import { canStepGoal, goalAtRecharge, stepChosenGoal } from '@/domain/goal';
+import { canStepGoal, goalAtRecharge, goalFree, stepChosenGoal } from '@/domain/goal';
 import { stepChosenRecharge } from '@/domain/recharge';
 import { cleanLockMessage, isLockMessageIdea } from '@/domain/settings';
 import type { SumLevel } from '@/domain/puzzle';
@@ -385,6 +385,35 @@ function catchUpPhone(doc: Doc, now: Date) {
 }
 
 /**
+ * Whether a change to the essentials starts at once whatever it is, as a
+ * higher goal does: during setup, on its own day, and while an emergency pass
+ * runs (essentials.ts). Otherwise a new essential waits for the recharge.
+ */
+function essentialsFree(doc: Doc, now: Date): boolean {
+  return goalFree(doc) || passActive(doc.record, now);
+}
+
+/**
+ * The first look at a battery: essentials waiting for it start now, and the
+ * list in force is noted as the one the battery started with (essentials.ts).
+ * Like a waiting goal, the phone cannot do this by itself, so until the app
+ * is opened after the recharge it holds to the old list, the stricter one;
+ * what a new essential used in between stops counting once it has started.
+ * Once a battery (`essentialsNoted`).
+ */
+function startEssentialsDay() {
+  try {
+    const doc = snapshot.doc;
+    if (!loaded || doc.day.essentialsNoted || !screenTime.SCREEN_TIME_AVAILABLE) return;
+    const started = screenTime.startWaitingPicks(true);
+    set({ ...doc, day: { ...doc.day, essentialsNoted: true } });
+    if (started) store.picksChanged();
+  } catch {
+    // Tried again on the next look.
+  }
+}
+
+/**
  * Setup is through: from now until the next recharge the goal still changes
  * freely, to get a feel for it (goal.ts).
  */
@@ -470,6 +499,7 @@ export const store = {
     set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
     catchUpPhone(doc, new Date());
+    startEssentialsDay();
     screenTime.onCheckpoint(() => store.tick(new Date()));
     // Picks from before build 71 may list more single apps than iOS will lock.
     if (screenTime.fixOldPicks() === 'fixed') store.picksChanged();
@@ -499,10 +529,14 @@ export const store = {
       const moved = advanced(snapshot.doc, now);
       const doc = withPasses(checkHealth({ ...moved, day: withRealUse(moved, moved.day) }), now);
       uncoverWithCharge(doc, now);
-      if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history && doc.record === snapshot.doc.record) return;
+      if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history && doc.record === snapshot.doc.record) {
+        startEssentialsDay();
+        return;
+      }
       const recharged = doc.day.periodStart !== snapshot.doc.day.periodStart;
       set(doc);
       if (recharged) catchUpPhone(doc, now);
+      startEssentialsDay();
       // The app has just learned something the widget may not have drawn yet.
       if (screenTime.isOn()) screenTime.reloadWidget();
     } catch {
@@ -599,6 +633,8 @@ export const store = {
     const day = { ...freshDay(now, next.settings.rechargeMinute), ...next.day };
     // The fresh day first: while the phone is being told, nothing may act on the old one.
     set({ ...snapshot.doc, settings: next.settings, day });
+    // ...and essentials waiting for it start, so the count that starts now is for the new list.
+    startEssentialsDay();
     await screenTime.applyPlan(snapshot.doc.settings, 0, true);
     set({ ...snapshot.doc, day: withRealUse(snapshot.doc, snapshot.doc.day) });
   },
@@ -624,15 +660,30 @@ export const store = {
     planSoon();
     set({ ...snapshot.doc }, false);
   },
-  /** Apple's picker closed on the phone's whole list of apps. */
+  /**
+   * Apple's picker closed on the phone's whole list of apps. Apps left off
+   * it go on counting until the recharge, except on a free day (essentials.ts).
+   */
   appsShownClosed() {
-    screenTime.appsAfter();
+    // A recharge that passed while Apple's list was open comes first.
+    const now = new Date();
+    store.tick(now);
+    startEssentialsDay();
+    screenTime.appsAfter(essentialsFree(snapshot.doc, now));
     store.picksChanged();
     redrawAndLookAgain();
   },
-  /** Apple's picker closed on the essentials. Returns how many were ticked if that was too many to keep (0 when kept). */
+  /**
+   * Apple's picker closed on the essentials. An app taken out, or one this
+   * battery started with put back: today, at once. A new essential: from the
+   * next recharge, or today on a free day (essentials.ts). Returns how many
+   * were ticked if that was too many to keep (0 when kept).
+   */
   essentialsClosed(): number {
-    const refused = screenTime.essentialsAfter();
+    const now = new Date();
+    store.tick(now);
+    startEssentialsDay();
+    const refused = screenTime.essentialsAfter(essentialsFree(snapshot.doc, now));
     store.picksChanged();
     // A warning about the older list is settled by this; Today has to hear of it (build 90 kept "Not locking" up).
     redrawAndLookAgain();
@@ -764,6 +815,12 @@ export const store = {
     set({ ...doc, record: used, day });
     if (screenTime.isOn()) void screenTime.grantExtraTime(new Date(unlockedUntil), doc.settings, day.topUps, now);
     if (doc.settings.askFirst?.on && askAllowed()) void openAsk({ ...doc.settings.askFirst, openMinutes: 15, whileInUse: false }, recharge, now);
+    // A pass skips the wait: essentials waiting for the recharge start now (essentials.ts).
+    try {
+      if (screenTime.startWaitingPicks(false)) store.picksChanged();
+    } catch {
+      // They start at the recharge, as they would have.
+    }
     return true;
   },
   /** Developer: pretend this many more minutes were used. */
