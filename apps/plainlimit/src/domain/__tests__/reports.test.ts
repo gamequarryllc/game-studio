@@ -1,12 +1,44 @@
 import { asGuard, believable, checkpointsFor, GUARD_MS, guardFor, guardFrom, judgedFrom, keepsPace, minuteTicksFor, mostByNow, paceRules, roundName, type Guard } from '../checkpoints';
 import { earliestTrue, lockNotBefore } from '../monitorPlan';
-import { countDay, doubtful, marksOf, miscounted, roundSettled, type Report, type Rounds } from '../reports';
+import { countDay, doubtful, marksOf, miscounted, roundSettled, roundStanding, withFloor, type Report, type Rounds } from '../reports';
 
 /** A clock for one day in November 2026, in milliseconds. */
 const november = (date: number) => (h: number, m = 0, s = 0) => new Date(2026, 10, date, h, m, s).getTime();
 const oneRound = (round: string): Rounds => ({ round, roundBefore: '', goalBefore: 0, picksChangedAt: 0 });
 const report = (id: string, round: string, at: number): Report => ({ name: roundName(id, round), at });
 const names = (reports: Report[]) => reports.map((r) => r.name).sort();
+
+describe('a change of goal while the phone re-reports the day (build 154: "Plenty left" for 20 seconds after lowering the goal)', () => {
+  const day = november(24);
+  const start = day(6);
+  // 2:07 used, under a 2:30 goal registered in round "a": cells of 25 minutes.
+  const inA = ['cell-1', 'cell-2', 'cell-3', 'cell-4', 'cell-5'].map((id, i) => report(id, 'a', day(9 + i)));
+
+  it('keeps the round with reports standing when the one ending has none yet', () => {
+    expect(roundStanding(new Set(['a']), 'b', 'a')).toBe('a');
+    expect(roundStanding(new Set(['a', 'b']), 'b', 'a')).toBe('b');
+    // Nothing reported anywhere: the ending round, as before.
+    expect(roundStanding(new Set(), 'b', 'a')).toBe('b');
+  });
+
+  it('counts from that round until the new one has been re-reported, so the battery does not show full', () => {
+    // Lowered at 10:36 PM (round b, from a), then again at 10:36:51 (round c): b never got a report.
+    const changedAt = day(22, 36, 51);
+    const stands = roundStanding(new Set(['a']), 'b', 'a');
+    const rounds: Rounds = { round: 'c', roundBefore: stands, goalBefore: 150, picksChangedAt: changedAt };
+    expect(countDay({ reports: inA, goalMinutes: 90, dayStart: start, rounds, guard: null, now: changedAt + 25_000 })).toBeGreaterThanOrEqual(125);
+  });
+
+  it('never counts less than was known when only the goal changed, while the new round fills in', () => {
+    const floor = { round: 'c', dayStart: start, minutes: 125 };
+    expect(withFloor(0, floor, 'c', start)).toBe(125);
+    expect(withFloor(130, floor, 'c', start)).toBe(130);
+    // Another round (new picks) or another day: no floor.
+    expect(withFloor(40, floor, 'd', start)).toBe(40);
+    expect(withFloor(40, floor, 'c', day(30))).toBe(40);
+    expect(withFloor(40, null, 'c', start)).toBe(40);
+  });
+});
 
 describe('a miscounted day', () => {
   const start = new Date(2026, 10, 11, 6, 0);

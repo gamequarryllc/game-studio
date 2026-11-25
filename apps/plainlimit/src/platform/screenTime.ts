@@ -4,7 +4,7 @@ import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
 import { GUARD_MS, guardFor, paceRules, roundName, splitName, mostByNow, type Noted } from '@/domain/checkpoints';
-import { countDay, doubtful, miscounted, roundSettled, type Report, type Rounds } from '@/domain/reports';
+import { countDay, doubtful, miscounted, roundSettled, roundStanding, withFloor, type Report, type Rounds } from '@/domain/reports';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import {
   ACTIVITY,
@@ -27,7 +27,7 @@ import type { WidgetRecord } from '@/domain/pro';
 import type { Settings } from '@/domain/types';
 
 import { askCoverActions, coverAskAgain, stopAskFirst } from './askFirst';
-import { countingSince, earnedUntil, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readNumberOrNull, readString, registeredAt, round, save, SAVED, savedGuard } from './saved';
+import { countingSince, earnedUntil, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readNumberOrNull, readString, registeredAt, round, save, SAVED, savedFloor, savedGuard } from './saved';
 import { MOCK } from './mock';
 
 // The one file that talks to Apple's Screen Time.
@@ -495,19 +495,24 @@ export function noteKnown(settings: Settings, usedFloorNow: number, now = new Da
  * did ("cell-3" is 90 minutes of a 3-hour goal, 120 of a 4-hour one).
  */
 function startRound(now: Date, goalBefore: number) {
-  // Only the round now ending is still read (as the previous one, while the
-  // phone re-reports); reports from any older round are no use any more.
+  // Only one earlier round is still read (as the previous one, while the
+  // phone re-reports): the one ending, or the one before it if the phone has
+  // reported nothing for the one ending yet (roundStanding). Reports from any
+  // other round are no use any more.
   const ending = round();
+  let stands = ending;
   try {
-    for (const e of [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)]) {
-      if (e.callbackName !== 'eventDidReachThreshold' || !e.eventName) continue;
-      if (splitName(e.eventName).round !== ending) DeviceActivity.userDefaultsRemove(`events_${e.activityName}_eventDidReachThreshold_${e.eventName}`);
+    const reports = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)].filter((e) => e.callbackName === 'eventDidReachThreshold' && !!e.eventName);
+    stands = roundStanding(new Set(reports.map((e) => splitName(e.eventName as string).round)), ending, readString('roundBefore'));
+    for (const e of reports) {
+      if (splitName(e.eventName as string).round !== stands) DeviceActivity.userDefaultsRemove(`events_${e.activityName}_eventDidReachThreshold_${e.eventName}`);
     }
   } catch {
     // Tidying only.
   }
-  save('roundBefore', ending);
-  save('roundGoalBefore', goalBefore);
+  save('roundBefore', stands);
+  // The goal the standing round was registered with: unchanged when it is the older one.
+  if (stands === ending) save('roundGoalBefore', goalBefore);
   save('round', now.getTime().toString(36));
   save('picksChangedAt', now.getTime());
 }
@@ -845,13 +850,21 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     const lastRecharge = readNumberOrNull('registeredRecharge');
     const goalMoved = lastGoal > 0 && lastGoal !== settings.goalMinutes;
     const rechargeMoved = lastRecharge !== null && lastRecharge !== settings.rechargeMinute;
-    if (!fresh && (goalMoved || rechargeMoved)) startRound(now, lastGoal > 0 ? lastGoal : settings.goalMinutes);
+    if (!fresh && (goalMoved || rechargeMoved)) {
+      // Only the goal moved: today's use stays what it is now while the phone re-reports the day for the new goal (Floor).
+      const day = dayStartOf(periodStartOf(now, settings.rechargeMinute)).getTime();
+      const floor = goalMoved && !rechargeMoved ? usedSoFar(lastGoal, periodStartOf(now, settings.rechargeMinute)) : null;
+      startRound(now, lastGoal > 0 ? lastGoal : settings.goalMinutes);
+      if (floor !== null && floor > 0) save('roundFloor', { round: round(), dayStart: day, minutes: floor });
+      else forget('roundFloor');
+    }
     save('registeredGoal', settings.goalMinutes);
     save('registeredRecharge', settings.rechargeMinute);
     if (fresh) {
       // Counting starts (or starts over) now: forget earlier checkpoints and take every cover away.
       stopEarnedTimer();
       forget('earnedUntil');
+      forget('roundFloor');
       DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY]);
       DeviceActivity.userDefaultsClearWithPrefix(`events_${ACTIVITY}`);
       DeviceActivity.userDefaultsClearWithPrefix(`events_${TICKS_ACTIVITY}`);
@@ -964,6 +977,8 @@ function rounds(): Rounds {
 export async function countAgain(settings: Settings, topUpsSoFar: number, periodStart: Date): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
+    // Counting again is to drop a figure that can't be true: nothing held from before may keep it up.
+    forget('roundFloor');
     for (const report of doubtful(phoneReports(), roundGoal(settings.goalMinutes), round(), dayStartOf(periodStart), savedGuard(), registeredAt())) {
       DeviceActivity.userDefaultsRemove(`events_${ACTIVITY}_eventDidReachThreshold_${report.name}`);
     }
@@ -1012,16 +1027,19 @@ export function turnOff() {
 export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Date): number | null {
   if (!SCREEN_TIME_AVAILABLE) return null;
   try {
-    return countDay({
+    const dayStart = dayStartOf(periodStart).getTime();
+    const counted = countDay({
       reports: phoneReports(),
       goalMinutes: roundGoal(goalMinutes),
-      dayStart: dayStartOf(periodStart).getTime(),
+      dayStart,
       periodEnd: periodEnd?.getTime(),
       rounds: rounds(),
       guard: savedGuard(),
       now: Date.now(),
       registeredAt: registeredAt(),
     });
+    // After a change of goal alone, never less than was known before it (Floor).
+    return withFloor(counted, savedFloor(), round(), dayStart);
   } catch {
     return null;
   }
@@ -1048,6 +1066,8 @@ export function diagnostics(settings: Settings): string[] {
     const notedNow = noted();
     lines.push(`Counting since: ${countingSince() ? timeOf(countingSince()) : 'the recharge'}`);
     lines.push(`Known: ${notedNow ? `at most ${Math.round(notedNow.most)} min at ${timeOf(notedNow.at)}` : 'nothing yet'}${holdUntil() > Date.now() ? ' (locks held for setup)' : ''}`);
+    const floor = savedFloor();
+    if (floor && floor.round === round()) lines.push(`Kept through the goal change: at least ${Math.round(floor.minutes)} min`);
     // Earned time or an emergency pass: no checkpoint covers anything before it ends (grantExtraTime).
     if (earnedUntil() > Date.now()) lines.push(`Open time until: ${timeOf(earnedUntil())} (checkpoints wait for it)`);
     lines.push(`Registered at: ${timeOf(registeredAt())}${guard ? `; reports until ${timeOf(guard.closes)} judged from ${timeOf(guard.from)}` : ''}`);

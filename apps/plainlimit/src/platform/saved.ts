@@ -10,6 +10,7 @@ import * as DeviceActivity from 'react-native-device-activity';
 
 import { asGuard, GUARD_KEY, type Guard, type Noted } from '@/domain/checkpoints';
 import { WIDGET_PLAN_KEY } from '@/domain/monitorPlan';
+import type { Floor } from '@/domain/reports';
 
 export const SAVED = {
   /** When counting was started over by the test build ("count from now"); otherwise the day counts from the recharge. */
@@ -38,6 +39,8 @@ export const SAVED = {
   round: 'plainlimit_round',
   roundBefore: 'plainlimit_round_before',
   roundGoalBefore: 'plainlimit_round_goal_before',
+  /** The minutes used when only the goal changed: today's count holds at least that through the round (see `Floor`). */
+  roundFloor: 'plainlimit_round_floor',
   /** While the Ask first list is open after a sum: until then (see askFirst.ts). */
   askOpenUntil: 'plainlimit_ask_open_until',
   /** 1 while that open stretch is "Until I leave it": the phone covers the list again by itself once it goes unused. */
@@ -115,6 +118,11 @@ export function noted(): Noted | null {
 
 export function savedGuard(): Guard | null {
   return asGuard(get('guard'));
+}
+
+export function savedFloor(): Floor | null {
+  const value = get('roundFloor') as Partial<Floor> | undefined;
+  return value && typeof value.round === 'string' && typeof value.dayStart === 'number' && typeof value.minutes === 'number' ? { round: value.round, dayStart: value.dayStart, minutes: value.minutes } : null;
 }
 
 export const registeredAt = () => readNumber('registeredAt');

@@ -534,3 +534,13 @@ Now:
 - Stopping the earned-time timer used to report its end, which covers the apps; it is now told to do nothing first (`stopEarnedTimer`), also when counting is turned off or started over.
 
 To check on a phone (needs an empty battery and a pass): (1) use the pass, go to Settings, raise the goal: it changes today, with the pass note; (2) raised well past what is used, the apps stay open after the pass's 15 minutes and lock when the new battery runs out; (3) make a counted app an essential during a pass: the other apps stay open to the pass's end, and the new essential stays open after it.
+
+## The battery holds its figure through a change of goal (the owner, 2026-11-24, build 154)
+
+After lowering the goal (2:07 used, the goal down to 1:30), Today showed "Plenty left" with six full cells for about 20 seconds, then corrected itself to Empty. The readout taken in that window had no checkpoint reports on record at all. A change of goal registers the day under a new round of names, and until the phone has re-reported the day for it, the battery counts from the round before. But a new round kept only the reports of the round that was ending, so when that one had nothing reported yet (a second change soon after the first, or a phone slow to re-report), the day's figure was thrown away, and the count fell to nothing until the re-report arrived.
+
+Now:
+- **A new round keeps the round with reports** (`roundStanding` in `src/domain/reports.ts`, used by `startRound`): if the ending round has nothing reported yet, the one before it stays as the round counted from, with the goal it was made for. The widget reads the same saved round, so it gets this too.
+- **A change of goal alone sets a floor** (`Floor`, `withFloor`; saved as `roundFloor` at the registration): the same apps on the same day can't have been used less than before the change, so the count for the new round never goes under the figure known just before it, however the phone's re-report trickles in. A change of picks or recharge time sets none (either can honestly take minutes off), and counting again or starting over forgets it. The readout shows it ("Kept through the goal change").
+
+Only the app uses the floor; the widget may still dip for a moment if the phone re-reports in pieces. To check on a phone: on a day past the goal, lower or raise the goal a few times in a row; Today stays at the right battery throughout.

@@ -35,6 +35,37 @@ export function roundSettled(reports: readonly Report[], rounds: Rounds, dayStar
   return picksSettled(now, rounds.picksChangedAt, fresh.length > 0 ? Math.max(...fresh) : null);
 }
 
+/**
+ * The round whose reports a new round leaves standing, to count from while
+ * the phone re-reports the day: the one ending, unless the phone has reported
+ * nothing for it yet (it began moments ago, or the phone is slow to re-report
+ * after a registration). Then the round before it still holds the day's
+ * figure. Two changes in a row (build 154: the goal lowered twice) used to
+ * throw that figure away, and the battery showed full until the phone had
+ * re-reported the day.
+ */
+export function roundStanding(reportedRounds: ReadonlySet<string>, ending: string, before: string): string {
+  return !reportedRounds.has(ending) && reportedRounds.has(before) ? before : ending;
+}
+
+/**
+ * The minutes known to be used when the goal changed, for the round
+ * registered with the new goal. Only the goal changed (the same apps, the
+ * same day), so the day's use cannot be less than that, whatever the phone
+ * has re-reported so far. A change of picks or of recharge time sets none: it
+ * can honestly take minutes off.
+ */
+export interface Floor {
+  round: string;
+  dayStart: number;
+  minutes: number;
+}
+
+/** `count`, but never under a floor set for this round on this day. */
+export function withFloor(count: number, floor: Floor | null, round: string, dayStart: number): number {
+  return floor !== null && floor.round === round && floor.dayStart === dayStart ? Math.max(count, floor.minutes) : count;
+}
+
 /** The latest report under `name`, or null. */
 function latestOf(reports: readonly Report[], name: string): Report | null {
   return reports.filter((r) => r.name === name).reduce<Report | null>((best, r) => (best && best.at >= r.at ? best : r), null);
