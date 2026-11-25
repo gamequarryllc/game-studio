@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { wordFor } from '@/domain/battery';
@@ -8,7 +8,7 @@ import { clockLabelOf, durationLabel, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { askFirstFor } from '@/domain/pro';
 import { topUpPlan } from '@/domain/puzzle';
-import { passActive, passRow } from '@/domain/record';
+import { passActive, passRow, streakLine } from '@/domain/record';
 import { batteryEnd } from '@/domain/recharge';
 import { glowAt } from '@/domain/tone';
 import { weekView } from '@/domain/week';
@@ -17,6 +17,7 @@ import { store, useDoc } from '@/state/store';
 import { CountingProblem } from '@/ui/CountingProblem';
 import { NoticesOff } from '@/ui/NoticesOff';
 import { GlowBattery, GlowField } from '@/ui/GlowBattery';
+import { Icon } from '@/ui/icons';
 import { BigButton, Card, LinkRow, StatusBand, tiles } from '@/ui/kit';
 import { PassRow } from '@/ui/PassRow';
 import { useRecord, weekday } from '@/ui/RecordCard';
@@ -27,10 +28,10 @@ import { useDay } from '@/ui/useDay';
 
 // Today, in the look of the app's icon and widget (the owner's pick,
 // 2026-11-22): a dark page, a battery whose cells shine in the day's colour,
-// and only today on it: the word, the recharge, what has been used, and the
-// week as seven bars. The record, the passes and the list of apps are one tap
-// away, on History. Up to build 129 the top of the page was a flat field of
-// the day's colour and everything was on one long scroll.
+// and only today on it: the word, the recharge, what has been used beside the
+// streak, and the week as seven bars. The rest of the record and the passes are
+// one tap away, on History. Up to build 129 the top of the page was a flat field
+// of the day's colour and everything was on one long scroll.
 
 export default function Today() {
   const router = useRouter();
@@ -122,14 +123,32 @@ export default function Today() {
             </View>
           ) : null}
 
-          {/* Used, of the goal. The phone draws its own figure, to the minute, over the app's stepped one. */}
-          <View accessible accessibilityLabel={`${durationLabel(day.usedMinutes)} used of ${durationLabel(settings.goalMinutes)}, since ${recharge}, not counting essentials`} style={styles.usedRow}>
-            <View>
-              {/* Holds the figure's room; the phone's own figure is drawn over it. */}
-              <View style={counting ? { opacity: 0 } : null}>{figure}</View>
-              {counting ? <TodayTotal settings={settings} now={now} fallback={figure} style={styles.usedPhone} /> : null}
+          {/* Two numbers side by side (the owner's "Scoreboard", 2026-11-25): used of the goal, and the streak, which
+              was only on History. The phone draws its own figure, to the minute, over the app's stepped one. */}
+          <View style={styles.board}>
+            <View accessible accessibilityLabel={`${durationLabel(day.usedMinutes)} used of ${durationLabel(settings.goalMinutes)}, since ${recharge}, not counting essentials`} style={styles.side}>
+              <View>
+                {/* Holds the figure's room; the phone's own figure is drawn over it. */}
+                <View style={counting ? { opacity: 0 } : null}>{figure}</View>
+                {counting ? <TodayTotal settings={settings} now={now} fallback={figure} style={styles.usedPhone} /> : null}
+              </View>
+              <Text style={styles.under}>used of {durationLabel(settings.goalMinutes)}</Text>
             </View>
-            <Text style={styles.usedOf}>used of {durationLabel(settings.goalMinutes)}</Text>
+            <View style={styles.boardRule} />
+            {/* The streak: days in a row without an emergency pass. "day streak" alone didn't say what it counts, so a small line does. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${record.streakDays} day streak, ${streakLine(record.streakDays)}`}
+              accessibilityHint="Opens History"
+              onPress={() => router.push('/record')}
+              style={({ pressed }) => [styles.side, pressed ? { opacity: 0.6 } : null]}>
+              <View style={styles.streakFigure}>
+                <Icon name="streak" size={34} color={record.streakDays > 0 ? FLAME : c.outline} />
+                <Text style={[styles.used, record.streakDays > 0 ? null : { color: c.ink3 }]}>{record.streakDays}</Text>
+              </View>
+              <Text style={styles.under}>day streak</Text>
+              <Text style={styles.streakLine}>{streakLine(record.streakDays)}</Text>
+            </Pressable>
           </View>
 
           <WeekView compact week={weekView(history, day, settings, now, !SCREEN_TIME_AVAILABLE || watching === true, doc.record?.uses)} />
@@ -165,6 +184,11 @@ export default function Today() {
   );
 }
 
+/** The streak's flame: the warm orange of a flame, the same on every battery level. Grey on a day a pass was used. */
+const FLAME = '#FF8A3D';
+/** The small line under "day streak": quieter than the words above it, still easy to read on the dark ground. */
+const QUIET = '#7A8086';
+
 const styles = StyleSheet.create({
   field: { paddingHorizontal: 24 },
   // "Today" is said to screen readers; the tab bar already shows it.
@@ -178,11 +202,15 @@ const styles = StyleSheet.create({
   until: { fontSize: 17, fontWeight: '400', color: c.ink3 },
   rest: { paddingHorizontal: 24, paddingTop: 32, gap: 24 },
   strip: { borderWidth: 1.5, borderColor: c.outline, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16 },
+  board: { flexDirection: 'row' },
+  side: { flex: 1 },
+  boardRule: { width: 1, backgroundColor: c.rule, marginTop: 6, marginBottom: 4, marginRight: 22 },
   // The figure's box is a little wider than the app's own figure: the phone's may be a digit's width off.
-  usedRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   used: { fontFamily: display.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.6, color: c.ink, fontVariant: ['tabular-nums'], paddingRight: 10 },
   usedPhone: { position: 'absolute', left: 0, top: 0, right: 0, height: 52, alignSelf: 'auto' },
-  usedOf: { fontFamily: display.semi, fontSize: 19, lineHeight: 24, letterSpacing: -0.2, color: c.ink3, paddingBottom: 7 },
+  under: { fontFamily: display.semi, fontSize: 19, lineHeight: 24, letterSpacing: -0.2, color: c.ink3 },
+  streakFigure: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 52 },
+  streakLine: { fontFamily: display.semi, fontSize: 15, lineHeight: 19, letterSpacing: -0.1, color: QUIET },
   body: { fontSize: 15, lineHeight: 21, color: c.ink2 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
 });

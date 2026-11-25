@@ -384,6 +384,8 @@ async function main() {
   await step('the week view shows the last seven days and plain counts', async () => {
     // Today shows the week as bars; its words are on History.
     await page.getByLabel(/^Today: at least 0:00 of 3:00, so far$/).first().waitFor();
+    // Beside the day's figure, the streak and what it counts: 1 on the first day.
+    await page.getByRole('button', { name: '1 day streak, without a pass', exact: true }).waitFor();
     await press('History');
     // History leads with the streak: the days without an emergency pass, 1 on the first day.
     await see('day without an emergency pass');
@@ -393,7 +395,8 @@ async function main() {
     await tab('Settings');
     await press('Fill the last week');
     await tab('Today');
-    await press('History');
+    // The streak beside the day's figure opens History too.
+    await page.getByRole('button', { name: /^\d+ day streak, without a pass$/ }).click();
     // The pretend week shows as lights, a day each. Its days count for the streak, over the goal or not: only a pass ends it.
     await see('days without an emergency pass');
     await page.getByRole('img', { name: /^The last 5 weeks, a light for each day/ }).waitFor();

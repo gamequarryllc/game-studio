@@ -32,6 +32,7 @@ const DRAWN: Record<IconName, (c: string) => string> = {
   refresh: (c) => `<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.2h-4.2" ${stroke(c)}/>`,
   edit: (c) => `<path d="M5 19l1-4.2L15.6 5.2a1.9 1.9 0 0 1 2.7 0l.5.5a1.9 1.9 0 0 1 0 2.7L9.2 18zM13.5 7.3l3.2 3.2" ${stroke(c, 2.1)}/>`,
   check: (c) => `<path d="M5 12.5l4.5 4.5L19 7.5" ${stroke(c, 2.8)}/>`,
+  streak: (c) => `<path fill="${c}" d="M12.6 1.8c.7 3.4-1.1 5.6-2.9 7.6C8 11.3 6.2 13.2 6.2 16c0 3.4 2.6 6.2 5.8 6.2s5.8-2.8 5.8-6.2c0-2.6-1.2-4.6-2.6-6.2-.3 1.6-1.1 2.8-2.3 3.4.5-4.3-.6-8.2-2.3-11.4z"/>`,
 };
 
 export function Icon({ name, size, color }: { name: IconName; size: number; color: string }) {

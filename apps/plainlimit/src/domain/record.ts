@@ -108,6 +108,14 @@ export function passRow(pass: ReturnType<typeof passCheck>, locked: boolean, str
   return { usable: true, sub: streakDays > 0 ? `${PASS_MINUTES} min of everything.\nEnds your streak.` : `${PASS_MINUTES} minutes of everything` };
 }
 
+/**
+ * The small line under "day streak" on Today, beside the day's figure (the owner's pick of four labels,
+ * 2026-11-25: "day streak" alone didn't say what was counted). The streak is 0 only on a day a pass was used.
+ */
+export function streakLine(streakDays: number): string {
+  return streakDays > 0 ? 'without a pass' : 'starts again tomorrow';
+}
+
 /** Why the settings are locked, naming the emergency pass only when one can be used now. */
 export function settingsLockedNotice(rechargeLabel: string, pass: ReturnType<typeof passCheck>): string {
   const locked = `The battery is empty, so these settings are locked until it recharges at ${rechargeLabel}.`;

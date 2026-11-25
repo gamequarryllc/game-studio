@@ -563,6 +563,19 @@ To check on a phone: Settings → Essentials shows your essentials' real icons a
 - The icons filled only about 0.61 of their squares (27 points in 44): Apple sizes `Label(token)`'s icon from the font, and measuring it did not scale it. The font is now 1.3 of the square, with no measuring; the icon is centred in its square.
 - The owner searched Apple's list for Hinge and found no ✓ to finish: on iOS 26 the list's search screen hides the ✓ until the ✕ beside the search is tapped, and what was ticked in the search stays ticked. That is Apple's own screen, which the app can't change; the line Plainlimit puts at its top now says "then ✓ at the top right. Searched? Tap ✕ by the search to get ✓ back." (`AFTER_SEARCH`). Every place that said "then Done" now says ✓, and setup's first step shows Apple's round blue ✓ instead of a "Done" pill.
 
+## The streak on Today, beside the day's figure (the owner, 2026-11-25, after build 155)
+
+The streak (days in a row without an emergency pass, today included: `streakDays`) was only on History, one tap away. The owner wanted it always in sight on Today. Of four mock-ups (a corner badge above the battery, a scoreboard beside the day's figure, the History row turned into a streak row, a lit line under the week) the owner took **Scoreboard**, then said "day streak" alone didn't say what was counted; of four labels the owner took **D: "day streak" with a small line under it**.
+- The row under the recharge line is now two numbers side by side with a thin rule between: "2:46" over "used of 3:00" (the label moved under the figure; it was beside it), and a flame with the streak over "day streak" and, small, "without a pass".
+- On the day a pass is used the streak is 0, the flame and number go grey, and the small line says "starts again tomorrow" (`streakLine` in `src/domain/record.ts`, tested).
+- Tapping the streak opens History, as the History row does.
+- The flame is Apple's `flame.fill` on a phone (`streak` in `src/ui/icons.tsx`) and a drawn look-alike in the web preview; always the same orange, whatever the battery's colour.
+- The phone still draws its own figure over the app's; its box is now the left half of the row (it was as wide as the app's figure).
+- Mock-ups: the project's `plainlimit/streak-on-today-mockups/` (not in the repo).
+- The App Store picture of Today shows the old row until the pictures are taken again.
+
+To check on a phone: Today shows "2:46 used of 3:00" and the streak side by side, with the phone's own figure in place over the left number (no doubled or clipped digits); the streak matches History's big number; tapping it opens History; on a day a pass is used it reads 0, grey, "starts again tomorrow".
+
 ## New essentials wait for the recharge (the owner, 2026-11-25, after build 157)
 
 The owner asked whether the essentials could wait for the next day "like changing the daily goal", to stop a way round the battery: an app made an essential stops counting what it used today (the phone counts the day again for the new list), so ticking the app that ate the battery gave the time back. The rule is now the goal's (`src/domain/essentials.ts`, written over plain set questions so it is tested without a phone):
