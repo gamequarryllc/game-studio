@@ -27,7 +27,7 @@ import type { WidgetRecord } from '@/domain/pro';
 import type { Settings } from '@/domain/types';
 
 import { askCoverActions, coverAskAgain, stopAskFirst } from './askFirst';
-import { countingSince, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readNumberOrNull, readString, registeredAt, round, save, SAVED, savedGuard } from './saved';
+import { countingSince, earnedUntil, forget, holdUntil, noted, picksChangedAt, readLines, readNumber, readNumberOrNull, readString, registeredAt, round, save, SAVED, savedGuard } from './saved';
 import { MOCK } from './mock';
 
 // The one file that talks to Apple's Screen Time.
@@ -641,7 +641,8 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
 function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: Settings, now: Date) {
   const dayStart = dayStartOf(periodStartOf(now, settings.rechargeMinute));
   const guard = savedGuard();
-  const held = holdUntil();
+  // Nothing acts while setup holds the locks, nor while earned time or an emergency pass runs (`grantExtraTime`).
+  const held = Math.max(holdUntil(), earnedUntil());
   const named = round();
   const mode = essentialsMode();
   const registered = registeredAt();
@@ -849,7 +850,9 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     save('registeredRecharge', settings.rechargeMinute);
     if (fresh) {
       // Counting starts (or starts over) now: forget earlier checkpoints and take every cover away.
-      DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
+      stopEarnedTimer();
+      forget('earnedUntil');
+      DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY]);
       DeviceActivity.userDefaultsClearWithPrefix(`events_${ACTIVITY}`);
       DeviceActivity.userDefaultsClearWithPrefix(`events_${TICKS_ACTIVITY}`);
       DeviceActivity.userDefaultsClearWithPrefix(`events_${TOPUP_ACTIVITY}`);
@@ -988,7 +991,9 @@ export function markRecounted(periodStart: Date) {
 export function turnOff() {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
-    DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY, TOPUP_ACTIVITY]);
+    stopEarnedTimer();
+    forget('earnedUntil');
+    DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY]);
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
     stopAskFirst();
@@ -1043,6 +1048,8 @@ export function diagnostics(settings: Settings): string[] {
     const notedNow = noted();
     lines.push(`Counting since: ${countingSince() ? timeOf(countingSince()) : 'the recharge'}`);
     lines.push(`Known: ${notedNow ? `at most ${Math.round(notedNow.most)} min at ${timeOf(notedNow.at)}` : 'nothing yet'}${holdUntil() > Date.now() ? ' (locks held for setup)' : ''}`);
+    // Earned time or an emergency pass: no checkpoint covers anything before it ends (grantExtraTime).
+    if (earnedUntil() > Date.now()) lines.push(`Open time until: ${timeOf(earnedUntil())} (checkpoints wait for it)`);
     lines.push(`Registered at: ${timeOf(registeredAt())}${guard ? `; reports until ${timeOf(guard.closes)} judged from ${timeOf(guard.from)}` : ''}`);
     lines.push(`Health: ${health(settings, periodStartOf(new Date(), settings.rechargeMinute), true)}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
@@ -1203,10 +1210,15 @@ export function onCheckpoint(listener: () => void): () => void {
 }
 
 /**
- * The sums were solved: uncover the apps now, and have the phone cover them
- * again at `until`, by the clock, however much or little they are used in
- * between. If that is at or past the recharge, the day's own ending takes
- * over and nothing more is scheduled.
+ * The sums were solved (or an emergency pass used): uncover the apps now, and
+ * have the phone cover them again at `until`, by the clock, however much or
+ * little they are used in between. If that is at or past the recharge, the
+ * day's own ending takes over and nothing more is scheduled.
+ *
+ * Until then no checkpoint covers anything. The day can be registered again
+ * in the meantime (an emergency pass opens the settings: new essentials, a
+ * new goal), and the phone then reports again the checkpoints already passed,
+ * which would cover the apps in the middle of the time just given.
  */
 export async function grantExtraTime(until: Date, settings: Settings, topUpsAfter: number, now: Date): Promise<void> {
   if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return;
@@ -1220,7 +1232,11 @@ export async function grantExtraTime(until: Date, settings: Settings, topUpsAfte
     const empty = plan.shields.find((s) => s.id === 'empty');
     if (empty) writeShield(empty, topUpsAfter);
 
-    DeviceActivity.stopMonitoring([TOPUP_ACTIVITY]);
+    save('earnedUntil', until.getTime());
+    // The checkpoints as the phone has them registered, with that in their "never before" times.
+    writeCheckpointActions(monitorPlan({ ...settings, goalMinutes: roundGoal(settings.goalMinutes) }, topUpsAfter, countingSince()), settings, now);
+
+    stopEarnedTimer();
     const dayEnds = nextRecharge(now, settings.rechargeMinute).getTime() - 60_000;
     if (until.getTime() >= dayEnds || until.getTime() <= now.getTime()) return;
 
@@ -1231,6 +1247,32 @@ export async function grantExtraTime(until: Date, settings: Settings, topUpsAfte
   } catch (error) {
     // The apps are uncovered; the app covers them again itself the next time it is opened after `until`.
     note('earned time', error);
+  }
+}
+
+/**
+ * Stops the timer that covers the apps when earned time ends, without it
+ * covering them: the phone reports an end for a timer stopped while it runs
+ * (Apple's documentation), so its end is told to do nothing first.
+ */
+function stopEarnedTimer() {
+  DeviceActivity.configureActions({ activityName: TOPUP_ACTIVITY, callbackName: 'intervalDidEnd', actions: [] });
+  DeviceActivity.stopMonitoring([TOPUP_ACTIVITY]);
+}
+
+/**
+ * Ends earned time (or an emergency pass) early, covering nothing: the
+ * battery has charge again and holds out longer (a pass let today's goal go
+ * up). From now the battery's own checkpoints cover the apps when it is empty;
+ * the caller registers the day again, which writes them without the wait.
+ */
+export function endExtraTime() {
+  if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return;
+  try {
+    forget('earnedUntil');
+    stopEarnedTimer();
+  } catch (error) {
+    note('ending earned time', error);
   }
 }
 

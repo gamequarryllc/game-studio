@@ -517,3 +517,20 @@ The rule (`keepsPace` in `src/domain/checkpoints.ts`): a report for M minutes ca
 - **The widget:** the plan saved for it now lists every checkpoint's minutes and the registration time (`marks`, `registeredAt`), and `reached` paces too. A plan saved before this gets them on the next launch (`sharePaceWithWidget`).
 
 After a miscount the app now counts again by itself (forgets the doubtful reports and registers the day), once a battery, while the battery is not empty by its own count (an empty one is locked for real). After that, Today offers Count again as before. The readout lists the minute checkpoints too, in the order they came. Tests replay 24 November (`reports.test.ts`), including the extension's check. To check on a phone: nothing to do on purpose; on a day the phone sends a burst, nothing locks early, the notification comes, and opening Plainlimit shows the right battery with no "Not counting" box.
+
+## An emergency pass opens the goal too (the owner, 2026-11-24, after build 153)
+
+The owner was locked out and needed Spotify, kept doing sums, and in the end deleted the app to make Spotify an essential. They asked whether a pass lets you change your essentials, and said it should, and probably let you raise the daily goal too: "There's a little bit of cheese there, but there's also the guilt of ruining their streak, and they can only use one pass per day, and they only accrue one per week." (That day's pass had already been used, so it could not have helped that evening.)
+
+How it stood: a pass already opened Settings and Essentials for its 15 minutes (`settingsLocked`), and the pass screen said "make an app an essential, or change your goal". But a higher goal still waited for the recharge (the goal rule), and the phone side had two holes for any change made during a pass:
+- **Registering the day again re-reports the checkpoints already passed**, and the empty one covered the apps at once, in the middle of the pass.
+- **The pass's end covers the apps by the clock** (the earned-time timer), even when the change had put charge back in the battery (a higher goal, or a new essential whose minutes stop counting). Nothing took that cover off until the recharge.
+
+Now:
+- **A higher goal starts today while a pass runs** (`withGoal(..., passOn)` in `src/domain/goal.ts`) and becomes the day's own start, so going down and back up after the pass stays today's. After the pass, the usual rule again. Settings says so in the goal card ("Emergency pass: more time starts today", until when).
+- **Nothing covers an app before earned time or a pass ends** (`earnedUntil`, saved by `grantExtraTime`; every checkpoint's "never before" time waits for it, as it does for setup's held locks). The timer at the end covers the apps as before.
+- **When a higher goal gives a battery that outlasts the pass's open time** (even with the apps in use all along), the open time ends there and the battery takes over (`batteryTakesOver` in the store, `endExtraTime`): the timer is stopped without covering, and the day is registered with the new goal. Today then says "Emergency pass: settings are open until ..." instead of "everything is open". A smaller raise lets the pass run on.
+- **Earned time or a pass that ends with charge in the battery takes its cover off**, once, when the app next looks (`uncoverWithCharge`). That covers new essentials during a pass and a smaller raise. Until the app is opened after the pass, the apps stay covered.
+- Stopping the earned-time timer used to report its end, which covers the apps; it is now told to do nothing first (`stopEarnedTimer`), also when counting is turned off or started over.
+
+To check on a phone (needs an empty battery and a pass): (1) use the pass, go to Settings, raise the goal: it changes today, with the pass note; (2) raised well past what is used, the apps stay open after the pass's 15 minutes and lock when the new battery runs out; (3) make a counted app an essential during a pass: the other apps stay open to the pass's end, and the new essential stays open after it.

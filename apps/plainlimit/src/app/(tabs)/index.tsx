@@ -103,6 +103,11 @@ export default function Today() {
                 {passOn ? `Emergency pass: everything is open until ${clockLabelOf(new Date(day.unlockedUntil as string))}, settings too.` : `Earned time runs until ${clockLabelOf(new Date(day.unlockedUntil as string))}.`}
               </Text>
             </View>
+          ) : passOn && doc.record?.passUntil ? (
+            // A pass that raised today's goal: the battery has taken over the apps, and the settings stay open to the pass's end.
+            <View style={[styles.strip, { borderColor: glow }]}>
+              <Text style={styles.body}>Emergency pass: settings are open until {clockLabelOf(new Date(doc.record.passUntil))}.</Text>
+            </View>
           ) : null}
           {/* An empty battery: what can be done about it sits right under it. */}
           {empty && !unlocked && held === 0 && (settings.emptyLevel !== 'warn' || pass.usable) ? (

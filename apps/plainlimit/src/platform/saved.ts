@@ -25,6 +25,8 @@ export const SAVED = {
   registeredRecharge: 'plainlimit_registered_recharge',
   /** Locks held back until then: setup holds them while it shows the starting figure. */
   holdUntil: 'plainlimit_hold_until',
+  /** Earned time (or an emergency pass) runs until then: nothing the phone reports covers an app before it (see `grantExtraTime`). */
+  earnedUntil: 'plainlimit_earned_until',
   /** When the ticked apps last changed, and the list as it was when Apple's picker opened. */
   picksChangedAt: 'plainlimit_picks_changed_at',
   picksBefore: 'plainlimit_picks_before',
@@ -117,5 +119,6 @@ export function savedGuard(): Guard | null {
 
 export const registeredAt = () => readNumber('registeredAt');
 export const holdUntil = () => readNumber('holdUntil');
+export const earnedUntil = () => readNumber('earnedUntil');
 export const picksChangedAt = () => readNumber('picksChangedAt');
 export const round = () => readString('round');

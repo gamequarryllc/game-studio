@@ -585,7 +585,18 @@ async function main() {
     await page.getByLabel('Emergency pass, 0 saved. Open now', { exact: true }).first().waitFor({ state: 'visible', timeout: 8000 });
     await tab(page, 'Settings');
     if (await page.getByRole('button', { name: 'More time', exact: true }).isDisabled()) throw new Error('settings stayed locked during the pass');
+    // During a pass more time starts today, without waiting for the recharge (goal.ts).
+    for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'More time', exact: true }).click();
+    await see(page, 'Emergency pass: more time starts today');
+    await page.getByLabel('Daily goal, 3:45', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
+    if ((await page.getByText('Today keeps its goal.').count()) > 0) throw new Error('the higher goal waited for tomorrow during a pass');
+    await shot(page, 'q23b-pass-goal-today');
+    // 25 minutes of battery outlast the pass: the battery takes over, and the settings stay open to the pass's end.
+    await page.waitForTimeout(3000);
     await tab(page, 'Today');
+    await see(page, 'Emergency pass: settings are open until');
+    if ((await page.getByText(/^Empty$/).count()) > 0) throw new Error('the battery stayed empty after the goal went up');
+    await shot(page, 'q23c-pass-battery-takes-over');
     await page.getByRole('button', { name: /^History/ }).click();
     // The pass just used ends the streak, and its day wears the mark.
     await see(page, 'A pass was used today. A new streak starts tomorrow.');

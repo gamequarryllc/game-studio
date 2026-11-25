@@ -10,6 +10,10 @@
 // Lowering stops above what is already used. One tap too many would otherwise
 // empty the battery, which locks the settings until the recharge, and the
 // lowering could not be undone.
+//
+// An emergency pass opens everything, the goal included (the owner,
+// 2026-11-24): while one runs, a higher goal starts today too. A pass ends the
+// streak and there is one a day at most, so it is no free way round.
 
 import { nextRecharge, wrapMinute } from './day';
 import { GOAL_MIN, GOAL_STEP, clampGoal, stepGoal } from './settings';
@@ -53,8 +57,11 @@ export function todayFloor(doc: Doc): number {
  * back up to the day's own start: today's goal, at once. Higher than that:
  * today goes back up to the day's start, and `target` waits for the recharge.
  * A lowering stops at `todayFloor`, or does nothing if today is already there.
+ * With `passOn` (an emergency pass is running), higher starts today as well,
+ * and becomes the day's own start, so going back down and up again after the
+ * pass stays today's.
  */
-export function withGoal(doc: Doc, target: number): Doc {
+export function withGoal(doc: Doc, target: number, passOn = false): Doc {
   let goal = clampGoal(target);
   const today = doc.settings.goalMinutes;
   if (goal < today) goal = Math.max(goal, Math.min(todayFloor(doc), today));
@@ -62,17 +69,18 @@ export function withGoal(doc: Doc, target: number): Doc {
   if (goalFree(doc)) return { ...doc, settings: { ...settings, goalMinutes: goal }, day: { ...doc.day, startGoalMinutes: goal } };
   const cap = todayCap(doc.day, doc.settings);
   if (goal <= cap) return { ...doc, settings: { ...settings, goalMinutes: goal } };
+  if (passOn) return { ...doc, settings: { ...settings, goalMinutes: goal }, day: { ...doc.day, startGoalMinutes: goal } };
   return { ...doc, settings: { ...settings, goalMinutes: cap, nextGoalMinutes: goal } };
 }
 
-/** One step up or down from the chosen goal (the stepper in Settings and setup). */
-export function stepChosenGoal(doc: Doc, direction: 1 | -1): Doc {
-  return withGoal(doc, stepGoal(chosenGoal(doc.settings), direction));
+/** One step up or down from the chosen goal (the stepper in Settings and setup). `passOn`: see `withGoal`. */
+export function stepChosenGoal(doc: Doc, direction: 1 | -1, passOn = false): Doc {
+  return withGoal(doc, stepGoal(chosenGoal(doc.settings), direction), passOn);
 }
 
 /** Whether a step that way changes anything: the stepper's buttons look closed when it wouldn't. */
-export function canStepGoal(doc: Doc, direction: 1 | -1): boolean {
-  return chosenGoal(stepChosenGoal(doc, direction).settings) !== chosenGoal(doc.settings);
+export function canStepGoal(doc: Doc, direction: 1 | -1, passOn = false): boolean {
+  return chosenGoal(stepChosenGoal(doc, direction, passOn).settings) !== chosenGoal(doc.settings);
 }
 
 /**

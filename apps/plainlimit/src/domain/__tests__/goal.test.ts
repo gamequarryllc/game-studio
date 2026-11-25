@@ -117,6 +117,45 @@ describe('the first day is free', () => {
   });
 });
 
+describe('while an emergency pass runs', () => {
+  const passUp = (d: Doc, times = 1) => Array.from({ length: times }).reduce<Doc>((x) => stepChosenGoal(x, 1, true), d);
+
+  it('raises today\'s goal at once, even on an empty battery', () => {
+    const empty = doc(200);
+    expect(cellsLeft(200, empty.settings.goalMinutes)).toBe(0);
+    const raised = passUp(empty, 4);
+    expect(raised.settings.goalMinutes).toBe(240);
+    expect(raised.settings.nextGoalMinutes).toBeUndefined();
+    expect(cellsLeft(200, raised.settings.goalMinutes)).toBeGreaterThan(0);
+    expect(canStepGoal(empty, 1, true)).toBe(true);
+  });
+
+  it('makes the raised goal the day\'s own start, so down and up again after the pass stays today\'s', () => {
+    const raised = passUp(doc(200), 4);
+    expect(raised.day.startGoalMinutes).toBe(240);
+    expect(todayCap(raised.day, raised.settings)).toBe(240);
+    const after = up(down(raised));
+    expect(after.settings).toMatchObject({ goalMinutes: 240 });
+    expect(after.settings.nextGoalMinutes).toBeUndefined();
+    // Past it, the usual rule again: from the recharge.
+    expect(up(after).settings).toMatchObject({ goalMinutes: 240, nextGoalMinutes: 255 });
+  });
+
+  it('starts a goal that was waiting for the recharge today, one step on from it', () => {
+    const waiting = up(doc(200), 4);
+    expect(waiting.settings).toMatchObject({ goalMinutes: 180, nextGoalMinutes: 240 });
+    const raised = passUp(waiting);
+    expect(raised.settings.goalMinutes).toBe(255);
+    expect(raised.settings.nextGoalMinutes).toBeUndefined();
+  });
+
+  it('lowers as usual, keeping the day\'s start', () => {
+    const lowered = stepChosenGoal(doc(100), -1, true);
+    expect(lowered.settings.goalMinutes).toBe(165);
+    expect(lowered.day.startGoalMinutes).toBe(180);
+  });
+});
+
 describe('at the recharge', () => {
   const waiting = up(doc(170), 4);
 

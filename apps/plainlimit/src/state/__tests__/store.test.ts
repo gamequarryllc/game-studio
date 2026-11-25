@@ -26,6 +26,7 @@ function fakePhone(): Fake {
     fixOldPicks: jest.fn(() => 'fine'),
     coverEmptyNow: jest.fn(),
     grantExtraTime: jest.fn(async () => {}),
+    endExtraTime: jest.fn(),
     holdLocks: jest.fn(),
     locksHeldUntil: jest.fn(() => 0),
     noteHistoryLoss: jest.fn(),
@@ -444,6 +445,22 @@ describe('picks over the 50-app lock limit', () => {
     expect(phone.coverAgain).toHaveBeenLastCalledWith(false, expect.anything(), expect.any(Number));
   });
 
+  it('when new picks leave charge in the battery, the covers come off once the earned time has run out', async () => {
+    const phone = fakePhone();
+    phone.picksAfter = jest.fn(() => true);
+    const { store } = load(phone, saved(180));
+    await store.start();
+    store.earnTopUp();
+    store.picksChanged();
+    // The phone re-reports the day for the new picks: what the new essentials used today no longer counts.
+    phone.usedSoFar = jest.fn(() => 150);
+    jest.advanceTimersByTime(20 * 60_000);
+    (phone.coverAgain as jest.Mock).mockClear();
+    store.tick(new Date());
+    expect(store.get().doc.day.usedMinutes).toBe(150);
+    expect(phone.coverAgain).toHaveBeenCalledWith(false, expect.anything(), expect.any(Number));
+  });
+
   it('does not mark the day for too many apps: counting still works', async () => {
     const phone = fakePhone();
     const { store } = load(phone, saved(40));
@@ -604,6 +621,81 @@ describe('emergency passes', () => {
     await store.start();
     expect(store.usePass()).toBe(true);
     expect(ask.openAsk).toHaveBeenLastCalledWith({ on: true, openMinutes: 15, whileInUse: false }, expect.any(Number), expect.any(Date));
+  });
+
+  /** A phone that holds whatever goal it was last given, and the store on an empty battery (3:20 used of 3:00) with the pass just used. */
+  async function passUsed() {
+    const phone = fakePhone();
+    let registered = 180;
+    phone.applyPlan = jest.fn(async (s: { goalMinutes: number }) => {
+      registered = s.goalMinutes;
+      return true;
+    });
+    phone.registeredGoal = jest.fn(() => registered);
+    const loaded = load(phone, saved(200));
+    await loaded.store.start();
+    jest.advanceTimersByTime(1000);
+    expect(loaded.store.usePass()).toBe(true);
+    // Start-up covered the empty battery; only what comes after the pass matters here.
+    (phone.coverEmptyNow as jest.Mock).mockClear();
+    return { phone, ...loaded, registered: () => registered };
+  }
+
+  it('while it runs, more time starts today; a battery that outlasts the pass takes over from it, covering nothing', async () => {
+    const { phone, store, settingsLocked, STEP_SETTLE_MS, registered } = await passUsed();
+    expect(settingsLocked()).toBe(false);
+    expect(store.canStepGoal(1)).toBe(true);
+    for (let i = 0; i < 4; i++) store.stepGoal(1);
+    expect(store.get().doc.settings.goalMinutes).toBe(240);
+    expect(store.get().doc.settings.nextGoalMinutes).toBeUndefined();
+    expect(phone.endExtraTime).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(STEP_SETTLE_MS + 100);
+    // 40 minutes of battery outlast the pass's 15: the pass's timer stops without covering, and the battery goes on.
+    expect(registered()).toBe(240);
+    expect(phone.endExtraTime).toHaveBeenCalledTimes(1);
+    expect(store.get().doc.day.unlockedUntil).toBeNull();
+    expect(phone.coverAgain).toHaveBeenLastCalledWith(false, expect.objectContaining({ goalMinutes: 240 }), 0);
+    // The settings stay open for the rest of the pass, and after it too while the battery has charge.
+    expect(store.passCheck()).toBe('running');
+    jest.advanceTimersByTime(16 * 60_000);
+    store.tick(new Date());
+    expect(settingsLocked()).toBe(false);
+    expect(phone.coverEmptyNow).not.toHaveBeenCalled();
+  });
+
+  it('a raise that gives less than the pass has left lets the pass run; with charge left at its end, the covers come off once', async () => {
+    const { phone, store, STEP_SETTLE_MS, registered } = await passUsed();
+    store.stepGoal(1);
+    store.stepGoal(1);
+    jest.advanceTimersByTime(STEP_SETTLE_MS + 100);
+    expect(registered()).toBe(210);
+    expect(phone.endExtraTime).not.toHaveBeenCalled();
+    expect(store.get().doc.day.unlockedUntil).not.toBeNull();
+    // The phone covers the apps by the clock as the pass ends; the app finds 10 minutes left in the battery.
+    jest.advanceTimersByTime(16 * 60_000);
+    (phone.coverAgain as jest.Mock).mockClear();
+    store.tick(new Date());
+    store.tick(new Date());
+    expect(phone.coverAgain).toHaveBeenCalledTimes(1);
+    expect(phone.coverAgain).toHaveBeenCalledWith(false, expect.objectContaining({ goalMinutes: 210 }), 0);
+    expect(phone.coverEmptyNow).not.toHaveBeenCalled();
+  });
+
+  it('ending on a battery still empty, the covers stay up', async () => {
+    const { phone, store } = await passUsed();
+    jest.advanceTimersByTime(16 * 60_000);
+    (phone.coverAgain as jest.Mock).mockClear();
+    store.tick(new Date());
+    expect(phone.coverEmptyNow).toHaveBeenCalledTimes(1);
+    expect(phone.coverAgain).not.toHaveBeenCalled();
+  });
+
+  it('without a pass, more time still waits for the recharge', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(100));
+    await store.start();
+    store.stepGoal(1);
+    expect(store.get().doc.settings).toMatchObject({ goalMinutes: 180, nextGoalMinutes: 195 });
   });
 
   it('with none in the bank, nothing opens', async () => {

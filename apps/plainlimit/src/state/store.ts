@@ -84,6 +84,7 @@ function planSoon(wait = PLAN_WAIT_MS) {
 function planNow() {
   if (replan) clearTimeout(replan);
   replan = null;
+  batteryTakesOver(new Date());
   const { settings, day } = snapshot.doc;
   try {
     // Back up after a lowering the phone was told of: the screen the lower goal put up no longer applies.
@@ -100,6 +101,48 @@ function planNow() {
 /** A change still waiting to reach the phone goes now: the app is being left. */
 function planWaiting() {
   if (replan) planNow();
+}
+
+/**
+ * An emergency pass let today's goal go up (goal.ts), and the day is about to
+ * be registered with it. If the battery that gives holds out longer than the
+ * pass's open time has left, even with the apps in use all along, the open time
+ * ends now and the battery takes over: otherwise the phone would cover the
+ * apps at the pass's end with charge still in the battery. If it doesn't, the
+ * open time runs on and the phone covers the apps at its end as usual (and if
+ * some charge is still left then, `uncoverWithCharge` takes the covers off).
+ */
+function batteryTakesOver(now: Date) {
+  try {
+    const doc = snapshot.doc;
+    const { day, settings } = doc;
+    if (!screenTime.isOn() || day.unlockedUntil === null || !isUnlocked(day, now)) return;
+    if (settings.goalMinutes <= screenTime.registeredGoal()) return;
+    const openLeft = (new Date(day.unlockedUntil).getTime() - now.getTime()) / 60000;
+    if (settings.goalMinutes - day.usedMinutes < openLeft) return;
+    screenTime.endExtraTime();
+    set({ ...doc, day: { ...day, unlockedUntil: null } });
+  } catch {
+    // The open time runs on; `uncoverWithCharge` puts its end right.
+  }
+}
+
+/**
+ * Earned time or a pass has ended and the phone covered the apps by the
+ * clock, but the battery has charge: a change made while the settings were
+ * open took minutes off (new essentials stop counting what they used today)
+ * or gave it more (a higher goal). Once the count has settled, the covers come off,
+ * once for each stretch of open time; the battery's own checkpoints cover
+ * the apps again when it is empty.
+ */
+let uncoveredAfter: string | null = null;
+function uncoverWithCharge(doc: Doc, now: Date) {
+  const { day, settings } = doc;
+  if (!screenTime.isOn() || day.unlockedUntil === null) return;
+  if (isUnlocked(day, now) || uncoveredAfter === day.unlockedUntil) return;
+  if (cellsLeft(day.usedMinutes, settings.goalMinutes) === 0 || screenTime.busyRegistering() || screenTime.locksHeldUntil() > 0) return;
+  uncoveredAfter = day.unlockedUntil;
+  screenTime.coverAgain(false, settings, day.topUps);
 }
 
 /**
@@ -455,6 +498,7 @@ export const store = {
       coverWhenEarnedTimeIsUp(snapshot.doc, now);
       const moved = advanced(snapshot.doc, now);
       const doc = withPasses(checkHealth({ ...moved, day: withRealUse(moved, moved.day) }), now);
+      uncoverWithCharge(doc, now);
       if (doc.day === snapshot.doc.day && doc.history === snapshot.doc.history && doc.record === snapshot.doc.record) return;
       const recharged = doc.day.periodStart !== snapshot.doc.day.periodStart;
       set(doc);
@@ -596,13 +640,15 @@ export const store = {
   },
   /**
    * One step on the goal's stepper. Lower, or back up to the goal the day
-   * started with: today, at once. Higher than that: from the next recharge
-   * (goal.ts). The phone is told only when today's goal changes.
+   * started with: today, at once. Higher than that: from the next recharge,
+   * or today while an emergency pass runs (goal.ts). The phone is told only
+   * when today's goal changes.
    */
   stepGoal(direction: 1 | -1) {
     if (settingsLocked()) return;
+    const now = new Date();
     const before = snapshot.doc.settings.goalMinutes;
-    set(stepChosenGoal(advanced(snapshot.doc, new Date()), direction));
+    set(stepChosenGoal(advanced(snapshot.doc, now), direction, passActive(snapshot.doc.record, now)));
     const after = snapshot.doc.settings.goalMinutes;
     if (after === before) return;
     // A tap only redraws; the phone hears of the goal once the taps stop (planSoon).
@@ -611,7 +657,7 @@ export const store = {
   },
   /** Whether the goal's stepper can go that way: not past its limits, nor below what today has used (goal.ts). */
   canStepGoal(direction: 1 | -1): boolean {
-    return !settingsLocked() && canStepGoal(snapshot.doc, direction);
+    return !settingsLocked() && canStepGoal(snapshot.doc, direction, passActive(snapshot.doc.record, new Date()));
   },
   /**
    * Changing the recharge time is Pro. A time chosen before Pro existed (1.0)

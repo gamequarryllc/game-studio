@@ -8,6 +8,7 @@ import { clockLabel, clockLabelOf, dayWord, durationLabel } from '@/domain/day';
 import { chosenGoal, goalFree } from '@/domain/goal';
 import { askFirstFor, sumLevelFor } from '@/domain/pro';
 import { topUpPlan, type SumLevel } from '@/domain/puzzle';
+import { passActive } from '@/domain/record';
 import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import type { EmptyLevel } from '@/domain/types';
 import { EXPECTED_PRICE } from '@/pro/config';
@@ -66,7 +67,10 @@ export default function Settings() {
   const startDay = dayWord(nextBattery, now);
   const starts = `${startDay === 'today' || startDay === 'tomorrow' ? startDay : `on ${startDay}`} at ${recharge}`;
   // On setup's own day every change starts at once (goal.ts); the note says so, and what happens after.
-  const firstDay = goalFree(useDoc());
+  const doc = useDoc();
+  const firstDay = goalFree(doc);
+  // While an emergency pass runs, more time starts today too (goal.ts); a note says until when.
+  const passUntil = !firstDay && passActive(doc.record, now) ? doc.record?.passUntil ?? null : null;
   // The extras, each a tile that says where it stands (the owner's pick of "Tiles", 2026-11-22).
   const ask = askFirstFor(settings, isPro);
   const extras: readonly { icon: RowIcon; label: string; value: string; to: '/ask-first' | '/lock-message' | '/sums' | '/recharge' | '/pro?show=recharge'; pro?: boolean }[] = [
@@ -123,6 +127,12 @@ export default function Settings() {
           <View style={styles.firstDay}>
             <Text style={styles.firstDayTitle}>Your first day: changes start now</Text>
             <Text style={styles.firstDayLine}>From tomorrow, more time waits for the {recharge} recharge. Less time always starts right away.</Text>
+          </View>
+        ) : null}
+        {passUntil ? (
+          <View style={styles.firstDay}>
+            <Text style={styles.firstDayTitle}>Emergency pass: more time starts today</Text>
+            <Text style={styles.firstDayLine}>Until {clockLabelOf(new Date(passUntil))}. After that, more time waits for the {recharge} recharge again.</Text>
           </View>
         ) : null}
       </Card>
