@@ -9,7 +9,7 @@ import { store } from '@/state/store';
 import { AppIcons } from './AppIcons';
 import { AppPicker } from './AppPicker';
 import { GlowBattery } from './GlowBattery';
-import { AFTER_SEARCH, CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, othersLabel, tooManyKept } from './countWords';
+import { CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, othersLabel, tooManyKept } from './countWords';
 import { Icon } from './icons';
 import { BigButton, Card } from './kit';
 import { c, display } from './theme';
@@ -106,7 +106,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
         id={ESSENTIALS_ID}
         wholeCategories
         open={open === 'keep'}
-        header={`Step 2 of 2: tick your essential apps (up to ${ESSENTIALS_LIMIT}), then ✓ at the top right. ${AFTER_SEARCH}`}
+        header={`Step 2 of 2: tick your essential apps (up to ${ESSENTIALS_LIMIT}), then ✓ at the top right.`}
         onClose={() => {
           setOpen(null);
           const tooMany = store.essentialsClosed();
