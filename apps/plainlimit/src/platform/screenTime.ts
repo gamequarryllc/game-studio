@@ -238,6 +238,19 @@ export function essentialsPicks(): string | null {
   return tokenOf(ESSENTIALS_ID) || null;
 }
 
+/** Every app the phone has shown Plainlimit, as Apple's picker handed them over: with the essentials left out, the apps that count. */
+export function allPicks(): string | null {
+  if (!SCREEN_TIME_AVAILABLE) return null;
+  return tokenOf(ALL_ID) || null;
+}
+
+/** How many apps use the battery: every app shown, less the essential apps. */
+export function countedAppsCount(): number {
+  if (MOCK_PHONE) return MOCK_OLD_LIST() ? 0 : 106;
+  if (!SCREEN_TIME_AVAILABLE) return 0;
+  return Math.max(0, appsShown() - (metaOf(ESSENTIALS_ID)?.applicationCount ?? 0));
+}
+
 /** Whether the essentials model is in use: the apps were shown and the essentials chosen (none is a choice too). */
 export function essentialsMode(): boolean {
   if (MOCK_PHONE) return !MOCK_OLD_LIST();

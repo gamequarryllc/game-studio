@@ -26,7 +26,8 @@ export default function WhatCounts() {
   return (
     <Page header top={8}>
       <Title>Essentials</Title>
-      <Lead>{COUNTS_LEAD}</Lead>
+      {/* Once chosen, the two cards say it: "Never counted" and "Uses your battery". */}
+      {e.ready ? null : <Lead>{COUNTS_LEAD}</Lead>}
       {SCREEN_TIME_AVAILABLE || MOCK_PHONE ? (
         <>
           {oldList ? <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>{OLD_LIST_NOTE}</Text> : null}

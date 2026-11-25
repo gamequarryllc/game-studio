@@ -10,6 +10,10 @@ import { Icon, type IconName } from './icons';
 
 interface NativeProps {
   selection: string | null;
+  /** Picks left out of `selection`. */
+  minus: string | null;
+  /** Grey and faded. */
+  dim: boolean;
   size: number;
   gap: number;
   columns: number;
@@ -21,11 +25,28 @@ interface NativeProps {
 const NativeIcons = SCREEN_TIME_AVAILABLE ? requireNativeView<NativeProps>('PlainlimitIcons') : null;
 
 /**
- * The person's own app icons in a grid (`count` of them, from `selection`).
- * On an iPhone, iOS draws them: Plainlimit hands back Apple's sealed picks
- * and never learns which apps they are. In a browser, stand-in icons.
+ * The person's own app icons in a grid (`count` of them, from `selection`,
+ * less any in `minus`; `dim` draws them grey). On an iPhone, iOS draws them:
+ * Plainlimit hands back Apple's sealed picks and never learns which apps they
+ * are. In a browser, stand-in icons.
  */
-export function AppIcons({ selection, count, columns = 6, limit = 0, label }: { selection: string | null; count: number; columns?: number; limit?: number; label: string }) {
+export function AppIcons({
+  selection,
+  minus = null,
+  dim = false,
+  count,
+  columns = 6,
+  limit = 0,
+  label,
+}: {
+  selection: string | null;
+  minus?: string | null;
+  dim?: boolean;
+  count: number;
+  columns?: number;
+  limit?: number;
+  label: string;
+}) {
   const [width, setWidth] = useState(0);
   const size = iconSize(width, columns);
   const height = width > 0 ? gridHeight(count, columns, size, limit) : 0;
@@ -37,9 +58,9 @@ export function AppIcons({ selection, count, columns = 6, limit = 0, label }: { 
       pointerEvents="none"
       style={{ alignSelf: 'stretch', height, minHeight: width > 0 ? 0 : 1 }}>
       {width === 0 || count === 0 ? null : NativeIcons ? (
-        <NativeIcons selection={selection} size={size} gap={GAP} columns={columns} limit={limit} style={{ flex: 1 }} />
+        <NativeIcons selection={selection} minus={minus} dim={dim} size={size} gap={GAP} columns={columns} limit={limit} style={{ flex: 1 }} />
       ) : (
-        <StandIns count={count} columns={columns} size={size} limit={limit} />
+        <StandIns count={count} columns={columns} size={size} limit={limit} dim={dim} />
       )}
     </View>
   );
@@ -59,15 +80,15 @@ const STAND_INS: { icon: IconName; bg: string }[] = [
   { icon: 'history', bg: '#8B5CF6' },
 ];
 
-function StandIns({ count, columns, size, limit }: { count: number; columns: number; size: number; limit: number }) {
+function StandIns({ count, columns, size, limit, dim }: { count: number; columns: number; size: number; limit: number; dim: boolean }) {
   const shown = squares(count, limit);
   const more = shown < count ? count - shown + 1 : 0;
   const square = (i: number) => {
     const last = more > 0 && i === shown - 1;
     const look = STAND_INS[i % STAND_INS.length];
     return (
-      <View key={i} style={{ width: size, height: size, borderRadius: size * 0.225, backgroundColor: last ? '#24272B' : look.bg, alignItems: 'center', justifyContent: 'center' }}>
-        {last ? <Text style={{ fontSize: size * 0.34, fontWeight: '600', color: '#A9AEB3' }}>{`+${more}`}</Text> : <Icon name={look.icon} size={size * 0.55} color="#FFFFFF" />}
+      <View key={i} style={{ width: size, height: size, borderRadius: size * 0.225, backgroundColor: last ? '#24272B' : dim ? '#2A2D31' : look.bg, alignItems: 'center', justifyContent: 'center' }}>
+        {last ? <Text style={{ fontSize: size * 0.34, fontWeight: '600', color: '#A9AEB3' }}>{`+${more}`}</Text> : <Icon name={look.icon} size={size * 0.55} color={dim ? '#6B7076' : '#FFFFFF'} />}
       </View>
     );
   };

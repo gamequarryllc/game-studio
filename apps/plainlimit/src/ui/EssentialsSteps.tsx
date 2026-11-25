@@ -3,12 +3,13 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Pressable, Text, View } from 'react-native';
 
 import { tap } from '@/platform/haptics';
-import { ALL_ID, ESSENTIALS_ID, ESSENTIALS_LIMIT, appsBefore, appsShown, essentialsBefore, essentialsCount, essentialsMode, essentialsPicks } from '@/platform/screenTime';
+import { ALL_ID, ESSENTIALS_ID, ESSENTIALS_LIMIT, allPicks, appsBefore, appsShown, countedAppsCount, essentialsBefore, essentialsCount, essentialsMode, essentialsPicks } from '@/platform/screenTime';
 import { store } from '@/state/store';
 
 import { AppIcons } from './AppIcons';
 import { AppPicker } from './AppPicker';
-import { CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, tooManyKept } from './countWords';
+import { GlowBattery } from './GlowBattery';
+import { CHOOSE_HOW, ESSENTIALS_LOCKED, MISSED_APPS, essentialsLabel, othersLabel, tooManyKept } from './countWords';
 import { Icon } from './icons';
 import { BigButton, Card } from './kit';
 import { c, display } from './theme';
@@ -34,6 +35,10 @@ export type Essentials = {
   kept: number;
   /** The essentials as Apple's picker handed them over, for iOS to draw their icons (null: none). */
   picks: string | null;
+  /** Every app shown, the same way: less the essentials, the apps that use the battery. */
+  allPicks: string | null;
+  /** How many apps use the battery. */
+  others: number;
   /** The essentials are chosen. */
   ready: boolean;
   /** How many were ticked when the last try was turned down for being too many (0: none was). */
@@ -105,6 +110,8 @@ export function useEssentials(onChosen?: () => void): Essentials {
     shown: appsShown(),
     kept: essentialsCount(),
     picks: essentialsPicks(),
+    allPicks: allPicks(),
+    others: countedAppsCount(),
     ready: essentialsMode(),
     refused,
     missed,
@@ -153,31 +160,51 @@ function Warnings({ e }: { e: Essentials }) {
   );
 }
 
-/** The most icons drawn: four rows of six, the last one "+N" when there are more. */
+/** The most essentials drawn: four rows of six, the last one "+N" when there are more. */
 const MOST_ICONS = 24;
+/** The apps that use the battery get one row. */
+const OTHER_ICONS = 6;
 
 /**
- * The essentials once chosen: how many, big, and the apps themselves as their
- * own icons, lit green. The owner found the sentences that stood here
- * ("18 essentials stay free. Everything else counts…") boring and wordy
- * (2026-11-25) and picked this from three drafts. Under it, one button to
- * change them, and a small link for apps installed since.
+ * The essentials once chosen, as two cards: the essentials as their own
+ * icons beside a full battery ("Never counted"), and every other app, grey,
+ * beside a draining one ("Uses your battery"). The owner found the sentences
+ * that stood here ("18 essentials stay free. Everything else counts…") boring
+ * and wordy (2026-11-25), and picked this from three drafts. Under them, one
+ * button to change the essentials, and a small link for apps installed since.
  */
 function Chosen({ e, locked, quiet }: { e: Essentials; locked: boolean; quiet: boolean }) {
   return (
-    <View style={{ gap: 14 }}>
-      <View style={glow.card}>
+    <View style={{ gap: 12 }}>
+      <View style={glow.free}>
         <View accessible accessibilityLabel={essentialsLabel(e.kept)} style={glow.head}>
-          <Text style={glow.count}>{e.kept}</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={glow.unit}>{e.kept === 1 ? 'app' : 'apps'}</Text>
-            <Text style={glow.sub}>always open</Text>
-          </View>
-          <View style={glow.tick}>
-            <Icon name="check" size={20} color={c.onTone} />
+          <Text style={glow.name}>Always open</Text>
+          <View style={glow.pillFree}>
+            <Text style={glow.pillFreeText}>{appsWord(e.kept)}</Text>
           </View>
         </View>
-        {e.kept > 0 ? <AppIcons selection={e.picks} count={e.kept} limit={MOST_ICONS} label="Your essential apps" /> : <Text style={glow.none}>Every app uses the battery.</Text>}
+        {e.kept > 0 ? <AppIcons selection={e.picks} count={e.kept} limit={MOST_ICONS} label="Your essential apps" /> : null}
+        <View style={glow.foot}>
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={glow.battery}>
+            <GlowBattery cells={6} color={FREE} height={26} />
+          </View>
+          <Text style={[glow.footText, { color: FREE }]}>Never counted</Text>
+        </View>
+      </View>
+      <View style={glow.rest}>
+        <View accessible accessibilityLabel={othersLabel(e.others)} style={glow.head}>
+          <Text style={[glow.name, { color: c.ink2 }]}>Everything else</Text>
+          <View style={glow.pillRest}>
+            <Text style={glow.pillRestText}>{appsWord(e.others)}</Text>
+          </View>
+        </View>
+        {e.others > 0 ? <AppIcons selection={e.allPicks} minus={e.picks} dim count={e.others} limit={OTHER_ICONS} label="The apps that use your battery" /> : null}
+        <View style={glow.foot}>
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={glow.battery}>
+            <GlowBattery cells={2} color={DRAINING} height={26} />
+          </View>
+          <Text style={[glow.footText, { color: c.ink2 }]}>Uses your battery</Text>
+        </View>
       </View>
       <Warnings e={e} />
       {locked ? (
@@ -186,7 +213,7 @@ function Chosen({ e, locked, quiet }: { e: Essentials; locked: boolean; quiet: b
           <Text style={glow.lockedText}>{ESSENTIALS_LOCKED}</Text>
         </View>
       ) : (
-        <>
+        <View style={{ gap: 4, marginTop: 6 }}>
           <BigButton quiet={quiet} label="Change essentials" onPress={e.start} />
           <Pressable
             accessibilityRole="button"
@@ -203,26 +230,36 @@ function Chosen({ e, locked, quiet }: { e: Essentials; locked: boolean; quiet: b
               New app? <Text style={{ color: c.ink, fontWeight: '600' }}>Refresh list</Text>
             </Text>
           </Pressable>
-        </>
+        </View>
       )}
     </View>
   );
 }
 
+function appsWord(n: number): string {
+  return n === 1 ? '1 app' : `${n} apps`;
+}
+
 /** The green of the essentials: they never use up the battery. */
 const FREE = '#57E389';
+/** The battery with two cells left, as Today draws it. */
+const DRAINING = '#E5CC1C';
 
 const glow = {
-  card: { borderRadius: 26, backgroundColor: '#13201A', borderWidth: 1, borderColor: 'rgba(87,227,137,0.32)', padding: 18, gap: 18, shadowColor: '#46CC70', shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 8 } },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  count: { fontFamily: display.bold, fontSize: 60, lineHeight: 64, letterSpacing: -2, color: FREE },
-  unit: { fontSize: 19, lineHeight: 23, fontWeight: '600', color: c.ink },
-  sub: { fontSize: 17, lineHeight: 22, color: c.ink3 },
-  tick: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#46CC70', alignItems: 'center', justifyContent: 'center' },
-  none: { fontSize: 15, lineHeight: 21, color: c.ink2 },
+  free: { borderRadius: 26, backgroundColor: '#13201A', borderWidth: 1, borderColor: 'rgba(87,227,137,0.38)', padding: 18, gap: 16, shadowColor: '#46CC70', shadowOpacity: 0.2, shadowRadius: 22, shadowOffset: { width: 0, height: 8 } },
+  rest: { borderRadius: 26, backgroundColor: c.card, borderWidth: 1, borderColor: c.rule, padding: 18, gap: 14 },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  name: { flexShrink: 1, fontFamily: display.bold, fontSize: 22, lineHeight: 27, letterSpacing: -0.3, color: c.ink },
+  pillFree: { borderRadius: 12, backgroundColor: FREE, paddingHorizontal: 10, paddingVertical: 3 },
+  pillFreeText: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: c.onTone },
+  pillRest: { borderRadius: 12, backgroundColor: c.raised, paddingHorizontal: 10, paddingVertical: 3 },
+  pillRestText: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: c.ink2 },
+  foot: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  battery: { width: 96 },
+  footText: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
   locked: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44 },
   lockedText: { fontSize: 15, lineHeight: 21, color: c.ink2 },
-  refresh: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 40 },
+  refresh: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44 },
   refreshText: { fontSize: 15, lineHeight: 20, color: c.ink3 },
 } as const;
 

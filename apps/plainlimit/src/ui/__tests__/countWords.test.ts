@@ -1,4 +1,4 @@
-import { essentialsLabel, essentialsValue, tooManyKept } from '../countWords';
+import { essentialsLabel, essentialsValue, othersLabel, tooManyKept } from '../countWords';
 import { gridHeight, iconSize, squares } from '../iconGrid';
 
 describe('essentialsValue', () => {
@@ -19,10 +19,12 @@ describe('essentialsValue', () => {
 });
 
 describe('choosing the essentials', () => {
-  it('reads out how many essentials there are', () => {
-    expect(essentialsLabel(18)).toBe('18 essential apps, always open.');
-    expect(essentialsLabel(1)).toBe('1 essential app, always open.');
-    expect(essentialsLabel(0)).toContain('every app uses the battery');
+  it('reads out how many essentials there are, and how many apps use the battery', () => {
+    expect(essentialsLabel(18)).toBe('Always open: 18 essential apps, never counted.');
+    expect(essentialsLabel(1)).toBe('Always open: 1 essential app, never counted.');
+    expect(essentialsLabel(0)).toBe('Always open: no essentials yet.');
+    expect(othersLabel(40)).toBe('Everything else: 40 apps use your battery.');
+    expect(othersLabel(1)).toBe('Everything else: 1 app uses your battery.');
   });
   it('turns down too many essentials with the numbers', () => {
     const line = tooManyKept(63, 50);

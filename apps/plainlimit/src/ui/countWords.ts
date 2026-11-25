@@ -19,10 +19,15 @@ export const COUNTS_SHORT = 'These never count and never lock.';
 export const CHOOSE_HOW = 'Apple’s list opens twice. First, as one-time setup, tap All Apps & Categories, then Done. Then tick only your essential apps: they are never counted and never locked.';
 /** The first list was closed with nothing ticked. */
 export const MISSED_APPS = 'Nothing was ticked. Tap Choose essentials again, then All Apps & Categories at the top, then Done.';
-/** The count at the top of the chosen essentials, read out. */
+/** The head of the essentials card, read out. */
 export function essentialsLabel(kept: number): string {
-  if (kept === 0) return 'No essentials: every app uses the battery.';
-  return `${kept === 1 ? '1 essential app' : `${kept} essential apps`}, always open.`;
+  if (kept === 0) return 'Always open: no essentials yet.';
+  return `Always open: ${kept === 1 ? '1 essential app' : `${kept} essential apps`}, never counted.`;
+}
+
+/** The head of the card for every other app, read out. */
+export function othersLabel(others: number): string {
+  return `Everything else: ${others === 1 ? '1 app uses' : `${others} apps use`} your battery.`;
 }
 
 /** Said when more essentials were ticked than iOS can keep open: the list is not kept. */
