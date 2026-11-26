@@ -5,6 +5,9 @@
 // owner, 2026-11-18), a lock message in one's own words (2026-11-21; the
 // ready-made messages stay free) and Second thought (2026-11-23: it was free
 // while it was being tried on a phone, and was always meant for Pro).
+// Earning time with push-ups instead of sums came after (the owner,
+// 2026-11-26: "Sums is still the default this will likely be another paid
+// feature").
 
 import { DEFAULT_ASK_FIRST, type AskFirst } from './askFirst';
 import type { SumLevel } from './puzzle';
@@ -12,7 +15,7 @@ import type { RecordView } from './record';
 import type { Settings } from './types';
 
 /** What Pro adds, one card each on the Pro screen, in the order they are shown. */
-export type ProFeatureKey = 'secondThought' | 'recharge' | 'sums' | 'widget' | 'lockMessage';
+export type ProFeatureKey = 'secondThought' | 'pushUps' | 'recharge' | 'sums' | 'widget' | 'lockMessage';
 
 export interface ProFeature {
   key: ProFeatureKey;
@@ -22,6 +25,7 @@ export interface ProFeature {
 
 export const PRO_FEATURES: readonly ProFeature[] = [
   { key: 'secondThought', title: 'Second thought', line: 'A pause before the apps you open without thinking.' },
+  { key: 'pushUps', title: 'Push-ups', line: 'Earn more time with push-ups instead of sums.' },
   { key: 'recharge', title: 'Your recharge time', line: 'Recharge at 5 AM, 7 AM, midnight or any half hour.' },
   { key: 'sums', title: 'Sum difficulty', line: 'Easy, normal or hard sums when you earn time.' },
   { key: 'widget', title: 'Large widget', line: 'Your battery, streak, passes and week on the Home Screen.' },

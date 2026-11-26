@@ -764,10 +764,10 @@ function toAction(action: PlanAction, mode: boolean): Action {
   return { type: 'sendNotification', payload: { title: action.title, body: action.body, sound: 'default', userInfo: action.route ? { route: action.route } : {} } };
 }
 
-function buttonAction(effect: ButtonEffect, topUpsSoFar: number): ShieldAction {
+function buttonAction(effect: ButtonEffect, topUpsSoFar: number, earnWith: PlanShield['earnWith']): ShieldAction {
   if (effect === 'uncover') return { behavior: 'defer', actions: UNCOVER };
   if (effect === 'puzzle') {
-    const notice = puzzleNotice(topUpsSoFar);
+    const notice = puzzleNotice(topUpsSoFar, earnWith);
     return {
       behavior: 'close',
       actions: [{ type: 'sendNotification', payload: { title: notice.title, body: notice.body, sound: 'default', interruptionLevel: 'active', userInfo: { route: notice.route } } }],
@@ -793,8 +793,8 @@ function shieldParts(shield: PlanShield, topUpsSoFar: number): { look: ShieldCon
     secondaryButtonLabelColor: shield.text,
   };
   if (shield.copy.secondary && shield.secondary) look.secondaryButtonLabel = shield.copy.secondary;
-  const buttons: ShieldActions = { primary: buttonAction(shield.primary, topUpsSoFar) };
-  if (shield.copy.secondary && shield.secondary) buttons.secondary = buttonAction(shield.secondary, topUpsSoFar);
+  const buttons: ShieldActions = { primary: buttonAction(shield.primary, topUpsSoFar, shield.earnWith) };
+  if (shield.copy.secondary && shield.secondary) buttons.secondary = buttonAction(shield.secondary, topUpsSoFar, shield.earnWith);
   return { look, buttons };
 }
 

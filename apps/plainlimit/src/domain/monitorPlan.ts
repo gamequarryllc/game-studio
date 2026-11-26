@@ -5,7 +5,8 @@
 
 import { checkpointsFor, guardFrom, minuteTicksFor, type Guard } from './checkpoints';
 import { wrapMinute } from './day';
-import { topUpPlan } from './puzzle';
+import { countWords, earnStep, earnWithOf } from './earn';
+import type { EarnWith } from './pushUps';
 import { emptyCopy, warningCopy, type ShieldCopy } from './shield';
 import { toneForCells } from './tone';
 import type { Settings } from './types';
@@ -68,6 +69,8 @@ export interface PlanShield {
   button: Rgb;
   buttonText: Rgb;
   icon: string;
+  /** The empty screen's "I need more time": what its notification offers, sums or push-ups. */
+  earnWith?: EarnWith;
 }
 
 export interface Rgb {
@@ -150,7 +153,7 @@ function shieldFor(id: ShieldId, settings: Settings, topUpsSoFar: number): PlanS
   }
   const tone = toneForCells(0);
   const secondary: ButtonEffect | null = settings.emptyLevel === 'warn' ? 'uncover' : settings.emptyLevel === 'work' ? 'puzzle' : null;
-  return { id, copy: emptyCopy(settings, topUpsSoFar), primary: 'close', secondary, background: rgbOf(tone.bg), text: LIGHT, accent: LIGHT, button: rgbOf(tone.bg), buttonText: LIGHT, icon: 'battery.0percent' };
+  return { id, copy: emptyCopy(settings, topUpsSoFar), primary: 'close', secondary, background: rgbOf(tone.bg), text: LIGHT, accent: LIGHT, button: rgbOf(tone.bg), buttonText: LIGHT, icon: 'battery.0percent', earnWith: earnWithOf(settings) };
 }
 
 /**
@@ -164,10 +167,10 @@ export const TOO_SOON_NOTICE = {
   body: 'Your iPhone counted more time than you used, so nothing locked. Tap to keep counting.',
 } as const;
 
-/** The notification that carries someone from the empty screen to the sums. */
-export function puzzleNotice(topUpsSoFar: number): { title: string; body: string; route: string } {
-  const plan = topUpPlan(topUpsSoFar);
-  return { title: 'Earn more time', body: `Tap to solve ${plan.sums} sums for ${plan.minutes} more minutes.`, route: '/puzzle' };
+/** The notification that carries someone from the empty screen to the sums (or the push-ups, Pro). */
+export function puzzleNotice(topUpsSoFar: number, earnWith: EarnWith = 'sums'): { title: string; body: string; route: string } {
+  const step = earnStep(earnWith, topUpsSoFar);
+  return { title: 'Earn more time', body: `Tap to ${step.with === 'pushUps' ? 'do' : 'solve'} ${countWords(step)} for ${step.minutes} more minutes.`, route: '/puzzle' };
 }
 
 /**

@@ -141,12 +141,12 @@ async function main() {
     await page.getByTestId('pro-screen').waitFor();
     await see('Your recharge time');
     await shot('02b-pro');
-    await press('Unlock all five · $9.99');
+    await press('Unlock all six · $9.99');
     await see('Nothing can be bought in this build. To try Pro, turn on “Pretend Pro is bought” in Settings, under Developer.');
     await back();
     await page.getByRole('button', { name: 'Recharge time, 6:00 AM, Pro', exact: true }).waitFor();
     // Sums carries the Pro mark too: normal ones are free, easy and hard are Pro.
-    await press('Sums, Normal, Pro');
+    await press('Earn time, Normal sums, Pro');
     await shot('02c-sums');
     await page.getByRole('radio', { name: /^Hard/ }).click();
     // The Pro screen opens on the card of the extra that sent someone there.
@@ -194,11 +194,11 @@ async function main() {
     await press('Recharge earlier');
     await page.getByLabel('Recharges at 6:00 AM', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
     await back();
-    await press('Sums, Normal');
+    await press('Earn time, Normal sums');
     await page.getByRole('radio', { name: /^Hard/ }).click();
     assert.strictEqual(await page.getByRole('radio', { name: /^Hard/ }).getAttribute('aria-checked'), 'true', 'hard sums chosen');
     await back();
-    await press('Sums, Hard');
+    await press('Earn time, Hard sums');
     await page.getByRole('radio', { name: /^Normal/ }).click();
     await back();
     await press('Lock message, Off');

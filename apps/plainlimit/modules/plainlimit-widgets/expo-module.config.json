@@ -5,7 +5,8 @@
   "apple": {
     "modules": [
       "PlainlimitWidgetsModule",
-      "PlainlimitIconsModule"
+      "PlainlimitIconsModule",
+      "PlainlimitPushUpsModule"
     ]
   }
 }

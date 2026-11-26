@@ -371,7 +371,7 @@ async function main() {
     const { page, context } = await open(saved, '', PHONE, { withPro: false });
     await tab(page, 'Settings');
     await page.getByRole('button', { name: 'Recharge time, 7:00 AM, Pro', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Sums, Normal, Pro', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Earn time, Normal sums, Pro', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Second thought, Off, Pro', exact: true }).waitFor();
     if ((await page.getByRole('button', { name: 'Recharge later', exact: true }).count()) > 0) throw new Error('the recharge stepper shows without Pro');
     await shot(page, 'q20-free-settings', true);
@@ -663,6 +663,107 @@ async function main() {
     await page.getByRole('img', { name: /Passes used on 2 days\.$/ }).waitFor({ state: 'visible', timeout: 8000 });
     await shot(page, 'q26-record-lived-in', true);
     await context.close();
+  });
+
+  // Push-ups (Pro): the web preview's stand-in camera has a "Count a push-up" button (PushUpCamera.web.tsx).
+  const pushUpDoc = (extra) => {
+    const saved = doc(extra);
+    saved.settings.earnWith = 'pushUps';
+    return saved;
+  };
+  const countPushUps = async (page, n) => {
+    for (let i = 0; i < n; i++) await page.getByRole('button', { name: 'Count a push-up', exact: true }).click();
+  };
+
+  await scenario('push-ups (Pro): chosen on Earn time, tried there, then offered on Today and counted to earn the time', async () => {
+    const { page, context } = await open(doc({ used: 60 }));
+    await tab(page, 'Settings');
+    await see(page, 'Solve sums to get 15 more minutes');
+    await page.getByRole('button', { name: 'Earn time, Normal sums', exact: true }).click();
+    await page.getByRole('radio', { name: 'Push-ups', exact: true }).click();
+    await see(page, 'The front camera counts each push-up.');
+    await see(page, '10 push-ups for 15 minutes, then 15 for 10, then 20 for 5.');
+    await see(page, 'Second thought still asks for one sum.');
+    await shot(page, 'p01-earn-time-push-ups', true);
+    await page.getByRole('button', { name: 'Try it now', exact: true }).click();
+    await see(page, 'Try push-ups');
+    await see(page, 'Plainlimit counts 3 push-ups with the front camera.');
+    await shot(page, 'p02-push-ups-camera-ask');
+    await page.getByRole('button', { name: 'Turn on the camera', exact: true }).click();
+    await page.getByLabel('0 of 3 push-ups. Go down.', { exact: true }).waitFor();
+    await countPushUps(page, 2);
+    await page.getByLabel('2 of 3 push-ups. Go down.', { exact: true }).waitFor();
+    await shot(page, 'p03-push-ups-try');
+    await countPushUps(page, 1);
+    await see(page, '3 push-ups counted');
+    await see(page, 'When your battery is empty, 10 push-ups earn 15 more minutes.');
+    await page.getByRole('button', { name: 'Done', exact: true }).click();
+    await page.goBack();
+    await page.getByRole('button', { name: 'Earn time, Push-ups', exact: true }).waitFor();
+    await see(page, 'Do push-ups to get 15 more minutes');
+    await context.close();
+
+    // An empty battery: Today offers push-ups, and they earn the time.
+    const empty = await open(pushUpDoc({ used: 200 }));
+    await empty.page.getByRole('button', { name: 'Do 10 push-ups for 15 more minutes', exact: true }).click();
+    await see(empty.page, 'Earn 15 minutes');
+    await empty.page.getByRole('button', { name: 'Turn on the camera', exact: true }).click();
+    await empty.page.getByLabel('0 of 10 push-ups. Go down.', { exact: true }).waitFor();
+    // "Do sums this time" is only for a camera that can't be used, or sees no face at all.
+    if ((await empty.page.getByRole('button', { name: 'Do sums this time', exact: true }).count()) > 0) throw new Error('sums offered while the camera works');
+    await countPushUps(empty.page, 6);
+    await empty.page.getByLabel('6 of 10 push-ups. Go down.', { exact: true }).waitFor();
+    await shot(empty.page, 'p04-push-ups-counting');
+    await countPushUps(empty.page, 4);
+    await see(empty.page, '15 minutes earned');
+    await see(empty.page, 'Next time it\u2019s 15 push-ups for 10 minutes.');
+    await shot(empty.page, 'p05-push-ups-earned');
+    await empty.page.getByRole('button', { name: 'Done', exact: true }).click();
+    await see(empty.page, 'Earned time runs until');
+    await empty.context.close();
+
+    // The empty screen's words say push-ups too.
+    const screen = await open(pushUpDoc({ used: 200 }), '');
+    await screen.page.goto(url + 'screens/empty');
+    await see(screen.page, 'Do 10 push-ups for 15 more minutes, or wait until it recharges at 6:00 AM.');
+    await screen.context.close();
+  });
+
+  await scenario('push-ups fit a small phone', async () => {
+    const { page, context } = await open(pushUpDoc({ used: 200 }), '', SMALL);
+    await page.getByRole('button', { name: 'Do 10 push-ups for 15 more minutes', exact: true }).click();
+    await page.getByRole('button', { name: 'Turn on the camera', exact: true }).click();
+    await countPushUps(page, 3);
+    await page.getByLabel('3 of 10 push-ups. Go down.', { exact: true }).waitFor();
+    await shot(page, 'p06-push-ups-small');
+    await context.close();
+  });
+
+  await scenario('the camera turned off: said plainly, with Settings and sums this time', async () => {
+    const { page, context } = await open(pushUpDoc({ used: 200 }), '?mock=cameraOff');
+    await page.getByRole('button', { name: 'Do 10 push-ups for 15 more minutes', exact: true }).click();
+    await see(page, 'The camera is off');
+    await page.getByRole('button', { name: 'Open Settings', exact: true }).waitFor();
+    await shot(page, 'p07-push-ups-camera-off');
+    await page.getByRole('button', { name: 'Do sums this time', exact: true }).click();
+    await see(page, 'Sum 1 of 3');
+    await context.close();
+  });
+
+  await scenario('without Pro, push-ups carry the Pro mark and open the Pro screen on their card; push-ups saved before go back to sums', async () => {
+    const { page, context } = await open(doc({ used: 60 }), '', PHONE, { withPro: false });
+    await tab(page, 'Settings');
+    await page.getByRole('button', { name: 'Earn time, Normal sums, Pro', exact: true }).click();
+    await page.getByRole('radio', { name: 'Push-ups, Pro', exact: true }).click();
+    await page.getByTestId('pro-screen').waitFor();
+    await see(page, 'Earn more time with push-ups instead of sums.');
+    await page.getByRole('img', { name: 'Push-ups counted by the camera: 7 of 10, with the phone flat on the floor under your face.' }).waitFor();
+    await shot(page, 'p08-pro-push-ups');
+    await context.close();
+    // Pro gone (a refund): Today offers sums again.
+    const gone = await open(pushUpDoc({ used: 200 }), '', PHONE, { withPro: false });
+    await gone.page.getByRole('button', { name: 'Solve 3 sums for 15 more minutes', exact: true }).waitFor();
+    await gone.context.close();
   });
 
   await scenario('an unknown page offers a way back', async () => {

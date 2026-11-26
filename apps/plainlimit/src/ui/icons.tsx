@@ -7,7 +7,7 @@ import type { SFSymbol } from './tipDemos/parts';
 // symbols; the web preview (and the App Store pictures taken from it) draws
 // look-alikes: icons.web.tsx.
 
-export type IconName = 'essentials' | 'lock' | 'recharge' | 'widget' | 'tips' | 'pro' | 'secondThought' | 'lockMessage' | 'sums' | 'history' | 'pass' | 'warn' | 'phone' | 'message' | 'map' | 'iphone' | 'battery' | 'bell' | 'bellOff' | 'refresh' | 'edit' | 'check' | 'streak';
+export type IconName = 'essentials' | 'lock' | 'recharge' | 'widget' | 'tips' | 'pro' | 'secondThought' | 'lockMessage' | 'sums' | 'history' | 'pass' | 'warn' | 'phone' | 'message' | 'map' | 'iphone' | 'battery' | 'bell' | 'bellOff' | 'refresh' | 'edit' | 'check' | 'streak' | 'pushUps';
 
 const SF: Record<IconName, SFSymbol> = {
   essentials: 'heart.fill',
@@ -33,6 +33,8 @@ const SF: Record<IconName, SFSymbol> = {
   edit: 'pencil',
   check: 'checkmark',
   streak: 'flame.fill',
+  // There is no push-up figure among Apple's symbols; this one is a workout.
+  pushUps: 'figure.strengthtraining.functional',
 };
 
 export function Icon({ name, size, color }: { name: IconName; size: number; color: string }) {

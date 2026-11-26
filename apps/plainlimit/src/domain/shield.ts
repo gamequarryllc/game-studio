@@ -2,7 +2,7 @@
 // drawing, so the preview and the iPhone's own screens say the same thing.
 
 import { clockLabel, durationLabel } from './day';
-import { topUpPlan } from './puzzle';
+import { doWords, earnStep, earnWithOf } from './earn';
 import type { Settings } from './types';
 
 export interface ShieldCopy {
@@ -47,10 +47,10 @@ function emptyCopyPlain(settings: Settings, topUpsSoFar: number): ShieldCopy {
     return { title: "Battery's empty", line: `You're past your ${goalInWords(settings.goalMinutes)}. It recharges at ${at}.`, primary: 'Close this app', secondary: 'Keep going anyway' };
   }
   if (settings.emptyLevel === 'work') {
-    const plan = topUpPlan(topUpsSoFar);
+    const step = earnStep(earnWithOf(settings), topUpsSoFar);
     return {
       title: "Battery's empty",
-      line: `Solve ${plan.sums} sums for ${plan.minutes} more minutes, or wait until it recharges at ${at}.`,
+      line: `${doWords(step)} for ${step.minutes} more minutes, or wait until it recharges at ${at}.`,
       primary: 'Close this app',
       secondary: 'I need more time',
     };

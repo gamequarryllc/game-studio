@@ -4,6 +4,7 @@
 import { DEFAULT_ASK_FIRST, repairAskFirst } from './askFirst';
 import { wrapMinute } from './day';
 import { SUM_LEVELS, type SumLevel } from './puzzle';
+import { EARN_WITH, type EarnWith } from './pushUps';
 import type { CountMode, EmptyLevel, Settings } from './types';
 
 export const GOAL_MIN = 30;
@@ -93,6 +94,8 @@ export function repairSettings(raw: unknown): Settings {
   }
   const sumLevel = SUM_LEVELS.includes(r.sumLevel as SumLevel) ? (r.sumLevel as SumLevel) : 'normal';
   const lockMessage = typeof r.lockMessage === 'string' ? cleanLockMessage(r.lockMessage) : '';
+  // Sums are the default and are not written down; only push-ups are.
+  const earnWith = EARN_WITH.includes(r.earnWith as EarnWith) ? (r.earnWith as EarnWith) : 'sums';
   return {
     goalMinutes: goal,
     rechargeMinute: recharge,
@@ -103,5 +106,6 @@ export function repairSettings(raw: unknown): Settings {
     askFirst: repairAskFirst(r.askFirst),
     sumLevel,
     ...(lockMessage ? { lockMessage } : {}),
+    ...(earnWith === 'pushUps' ? { earnWith } : {}),
   };
 }

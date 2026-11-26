@@ -4,6 +4,7 @@ import type { ProFeatureKey } from '@/domain/pro';
 import { glowForCells, toneAt } from '@/domain/tone';
 
 import { Battery } from './Battery';
+import { FloorPicture } from './FloorPicture';
 import { GlowBattery, GlowField } from './GlowBattery';
 import { Icon } from './icons';
 import { tiles } from './kit';
@@ -19,6 +20,7 @@ import { c, display } from './theme';
 /** The colour of each extra: the same as its tile under Settings > Do more. */
 export const PRO_COLOURS: Record<ProFeatureKey, string> = {
   secondThought: tiles.purple,
+  pushUps: tiles.green,
   recharge: tiles.orange,
   sums: tiles.pink,
   widget: tiles.blue,
@@ -28,6 +30,7 @@ export const PRO_COLOURS: Record<ProFeatureKey, string> = {
 /** What each card shows, for screen readers. */
 const SPOKEN: Record<ProFeatureKey, string> = {
   secondThought: 'An app on your list asks first: one sum, then it opens for 10 minutes.',
+  pushUps: 'Push-ups counted by the camera: 7 of 10, with the phone flat on the floor under your face.',
   recharge: 'The recharge time set to 5:30 AM.',
   sums: 'Sums from easy to hard: 47 plus 8, 47 plus 38, 347 plus 86.',
   widget: 'The large widget: the battery, a 12 day streak, 2 passes saved, 3 perfect weeks and this week.',
@@ -48,6 +51,8 @@ function picture(feature: ProFeatureKey, k: number) {
   switch (feature) {
     case 'secondThought':
       return <AskPhone width={Math.round(150 * k)} open={10} />;
+    case 'pushUps':
+      return <PushUps k={k} />;
     case 'recharge':
       return <Recharge k={k} />;
     case 'sums':
@@ -57,6 +62,19 @@ function picture(feature: ProFeatureKey, k: number) {
     case 'lockMessage':
       return <LockedApp k={k} />;
   }
+}
+
+/** Push-ups being counted: the number so far, over the phone on the floor under the face. */
+function PushUps({ k }: { k: number }) {
+  return (
+    <View style={{ alignItems: 'center', gap: 14 * k }}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 * k }}>
+        <Text style={{ fontFamily: display.bold, fontSize: 88 * k, lineHeight: 92 * k, letterSpacing: -3.5 * k, color: '#FFFFFF' }}>7</Text>
+        <Text style={{ fontSize: 18 * k, fontWeight: '600', color: c.ink3 }}>of 10</Text>
+      </View>
+      <FloorPicture accent={PRO_COLOURS.pushUps} k={0.9 * k} />
+    </View>
+  );
 }
 
 /** A sunrise over a wheel of times, stopped on 5:30 AM. */

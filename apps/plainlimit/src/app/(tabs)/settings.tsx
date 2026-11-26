@@ -8,6 +8,8 @@ import { clockLabel, clockLabelOf, dayWord, durationLabel } from '@/domain/day';
 import { chosenGoal, goalFree } from '@/domain/goal';
 import { askFirstFor, sumLevelFor } from '@/domain/pro';
 import { topUpPlan, type SumLevel } from '@/domain/puzzle';
+import { earnWithOf } from '@/domain/earn';
+import type { EarnWith } from '@/domain/pushUps';
 import { passActive } from '@/domain/record';
 import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import type { EmptyLevel } from '@/domain/types';
@@ -80,8 +82,8 @@ export default function Settings() {
     // Second thought is Pro: without it the tile says Off and its screen shows what it does, and where to get it.
     { icon: { name: 'secondThought', bg: tiles.purple }, label: 'Second thought', value: askShownOn(ask, askPicked, SCREEN_TIME_AVAILABLE || MOCK_PHONE) ? `On, ${openShort(ask)}` : 'Off', to: '/ask-first', pro: !isPro },
     { icon: { name: 'lockMessage', bg: tiles.teal }, label: 'Lock message', value: settings.lockMessage ? 'On' : 'Off', to: '/lock-message' },
-    // Easy and hard sums are Pro; normal ones are free, and the tile says which are in use.
-    { icon: { name: 'sums', bg: tiles.pink }, label: 'Sums', value: SUM_LEVEL_NAME[sumLevelFor(settings, isPro)], to: '/sums', pro: !isPro },
+    // How time is earned: sums (easy and hard ones are Pro, normal ones free) or push-ups (Pro). The tile says which.
+    { icon: { name: earnWithOf(settings) === 'pushUps' ? 'pushUps' : 'sums', bg: tiles.pink }, label: 'Earn time', value: earnValue(earnWithOf(settings), sumLevelFor(settings, isPro)), to: '/sums', pro: !isPro },
     // Choosing the recharge time is Pro: without it the tile shows the time and opens what Pro adds.
     { icon: { name: 'recharge', bg: tiles.orange }, label: 'Recharge time', value: clockLabel(chosenRecharge(settings)), to: isPro ? '/recharge' : '/pro?show=recharge', pro: !isPro },
   ];
@@ -150,7 +152,7 @@ export default function Settings() {
               <Pressable
                 key={level}
                 accessibilityRole="radio"
-                accessibilityLabel={`${title}, ${emptyLine(level, first.minutes)}`}
+                accessibilityLabel={`${title}, ${emptyLine(level, first.minutes, earnWithOf(settings))}`}
                 accessibilityState={{ checked: chosen, disabled: locked }}
                 aria-checked={chosen}
                 disabled={locked}
@@ -169,7 +171,7 @@ export default function Settings() {
             );
           })}
         </View>
-        <Text style={styles.modeLine}>{emptyLine(settings.emptyLevel, first.minutes)}</Text>
+        <Text style={styles.modeLine}>{emptyLine(settings.emptyLevel, first.minutes, earnWithOf(settings))}</Text>
       </Card>
 
       {/* Essentials: example tiles (the phone never says which apps were picked), and how many there are.
@@ -328,9 +330,9 @@ const EMPTY_CHOICES: readonly { level: EmptyLevel; title: string; icon: IconName
 ];
 
 /** One line on what a choice does. */
-function emptyLine(level: EmptyLevel, minutes: number): string {
+function emptyLine(level: EmptyLevel, minutes: number, earnWith: EarnWith): string {
   if (level === 'warn') return 'Red screen, then tap through';
-  if (level === 'work') return `Solve sums to get ${minutes} more minutes`;
+  if (level === 'work') return `${earnWith === 'pushUps' ? 'Do push-ups' : 'Solve sums'} to get ${minutes} more minutes`;
   return 'Counted apps stay locked until it recharges';
 }
 
@@ -345,8 +347,13 @@ function askPickedNow(): number {
   return SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(ASK_ID) : 0;
 }
 
-/** The sums' level in a word, for its tile. */
-const SUM_LEVEL_NAME: Record<SumLevel, string> = { easy: 'Easy', normal: 'Normal', hard: 'Hard' };
+/** How time is earned, in a word or two, for its tile: "Normal sums", "Push-ups". */
+function earnValue(earnWith: EarnWith, level: SumLevel): string {
+  return earnWith === 'pushUps' ? 'Push-ups' : SUM_LEVEL_NAME[level];
+}
+
+/** The sums' level, for its tile. */
+const SUM_LEVEL_NAME: Record<SumLevel, string> = { easy: 'Easy sums', normal: 'Normal sums', hard: 'Hard sums' };
 
 /** How many new essentials wait for the next recharge, as the phone has it now. */
 function joiningNow(): number {

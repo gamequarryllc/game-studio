@@ -2,6 +2,7 @@
 
 import type { AskFirst } from './askFirst';
 import type { SumLevel } from './puzzle';
+import type { EarnWith } from './pushUps';
 import type { PassRecord } from './record';
 
 /** Which apps drain the battery. */
@@ -30,6 +31,8 @@ export interface Settings {
   sumLevel?: SumLevel;
   /** The person's own words on the empty battery's lock screen (Pro). Missing or empty: none. */
   lockMessage?: string;
+  /** How more time is earned once the battery is empty: sums, or push-ups (Pro). Missing reads as sums. */
+  earnWith?: EarnWith;
 }
 
 /** One battery's worth of time: from one recharge to the next. */

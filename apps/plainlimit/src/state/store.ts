@@ -11,6 +11,7 @@ import { canStepGoal, goalAtRecharge, goalFree, stepChosenGoal } from '@/domain/
 import { stepChosenRecharge } from '@/domain/recharge';
 import { cleanLockMessage, isLockMessageIdea } from '@/domain/settings';
 import type { SumLevel } from '@/domain/puzzle';
+import type { EarnWith } from '@/domain/pushUps';
 import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/types';
 import { allowAskFirst, applyAskFirst, openAsk, type AskOpen } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
@@ -462,6 +463,20 @@ function askAllowed(): boolean {
   return proOn || !proKnown;
 }
 
+/**
+ * Push-ups are Pro (the owner, 2026-11-26). Once Pro is known to be gone (a
+ * refund, or "Pretend Pro" switched off), time is earned with sums again. This
+ * one setting is changed rather than kept: the screens that cover an app are
+ * written by the phone from the saved settings, and must say what the app will
+ * ask for. Buying Pro again means choosing push-ups again.
+ */
+function dropPushUpsWithoutPro() {
+  if (!loaded || !proKnown || proOn || snapshot.doc.settings.earnWith !== 'pushUps') return;
+  const { earnWith: _gone, ...settings } = snapshot.doc.settings;
+  set({ ...snapshot.doc, settings });
+  screenTime.refreshScreens(settings, snapshot.doc.day.topUps);
+}
+
 function withSettings(change: (s: Settings) => Settings, wait = PLAN_WAIT_MS) {
   if (settingsLocked()) return;
   // A new recharge time can move the start of the current battery.
@@ -498,6 +513,7 @@ export const store = {
     loaded = true;
     set(doc);
     screenTime.refreshScreens(doc.settings, doc.day.topUps);
+    dropPushUpsWithoutPro();
     catchUpPhone(doc, new Date());
     startEssentialsDay();
     screenTime.onCheckpoint(() => store.tick(new Date()));
@@ -732,6 +748,18 @@ export const store = {
     withSettings((s) => ({ ...s, sumLevel }));
   },
   /**
+   * How more time is earned: sums (free, the default) or push-ups (Pro).
+   * Closed while the battery is empty, like the sums' level. The covering
+   * screens are written again at once, since they say what will be asked.
+   */
+  setEarnWith(earnWith: EarnWith) {
+    if ((earnWith === 'pushUps' && !proOn) || settingsLocked()) return;
+    const { earnWith: _old, ...rest } = snapshot.doc.settings;
+    const settings: Settings = earnWith === 'pushUps' ? { ...rest, earnWith } : rest;
+    set({ ...snapshot.doc, settings });
+    screenTime.refreshScreens(settings, snapshot.doc.day.topUps);
+  },
+  /**
    * The lock screen message (free for now; Pro once it has been tested, the
    * owner, 2026-11-18). Not closed while the battery is empty:
    * words cannot open anything. The covering screens are written again at once.
@@ -755,6 +783,7 @@ export const store = {
     if (loaded) shareRecord();
     // Bought, restored or refunded: Second thought's covers go on or come off now.
     if (askAllowed() !== allowedBefore) syncAskFirst();
+    dropPushUpsWithoutPro();
   },
   hasPro(): boolean {
     return proOn;

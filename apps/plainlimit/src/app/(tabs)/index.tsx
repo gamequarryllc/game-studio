@@ -7,7 +7,7 @@ import { wordFor } from '@/domain/battery';
 import { clockLabelOf, durationLabel, untilLabel } from '@/domain/day';
 import { isUnlocked } from '@/domain/dayState';
 import { askFirstFor } from '@/domain/pro';
-import { topUpPlan } from '@/domain/puzzle';
+import { doWords, earnStep, earnWithOf } from '@/domain/earn';
 import { passActive, passRow, streakLine } from '@/domain/record';
 import { batteryEnd } from '@/domain/recharge';
 import { glowAt } from '@/domain/tone';
@@ -66,7 +66,8 @@ export default function Today() {
   // The emergency pass is always on Today: red under an empty battery that is locking apps, grey beside History otherwise.
   const pass = passRow(store.passCheck(), empty && !unlocked && held === 0, record.streakDays, weekday(record.nextPass));
   const passLine = <PassRow usable={pass.usable} sub={pass.sub} passes={record.passes} color={glow} onPress={() => router.push('/pass')} />;
-  const next = topUpPlan(day.topUps);
+  // The next stretch of time: sums, or push-ups (Pro).
+  const next = earnStep(earnWithOf(settings), day.topUps);
   const figure = <Text style={styles.used}>{durationLabel(day.usedMinutes)}</Text>;
 
   return (
@@ -113,7 +114,7 @@ export default function Today() {
           {/* An empty battery: what can be done about it sits right under it. */}
           {empty && !unlocked && held === 0 && (settings.emptyLevel !== 'warn' || pass.usable) ? (
             <View style={{ gap: 12 }}>
-              {settings.emptyLevel === 'work' ? <BigButton label={`Solve ${next.sums} sums for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} /> : null}
+              {settings.emptyLevel === 'work' ? <BigButton label={`${doWords(next)} for ${next.minutes} more minutes`} onPress={() => router.push('/puzzle')} /> : null}
               {settings.emptyLevel === 'locked' ? (
                 <View style={styles.strip}>
                   <Text style={styles.body}>Locked until {recharge}. Apps that don&apos;t count still open.</Text>

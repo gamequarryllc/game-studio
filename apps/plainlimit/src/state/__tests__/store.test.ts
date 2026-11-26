@@ -739,6 +739,43 @@ describe('Pro', () => {
     expect(store.get().doc.settings.lockMessage).toBeUndefined();
   });
 
+  it('push-ups need Pro; with it they can be chosen, and the covering screens are written again at once', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(30));
+    await store.start();
+    store.setPro(false, true);
+    store.setEarnWith('pushUps');
+    expect(store.get().doc.settings.earnWith).toBeUndefined();
+    store.setPro(true, true);
+    store.setEarnWith('pushUps');
+    expect(store.get().doc.settings.earnWith).toBe('pushUps');
+    expect(phone.refreshScreens).toHaveBeenLastCalledWith(expect.objectContaining({ earnWith: 'pushUps' }), 0);
+    store.setEarnWith('sums');
+    expect(store.get().doc.settings.earnWith).toBeUndefined();
+  });
+
+  it('losing Pro goes back to sums, and the covering screens say so', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(30, { settings: { goalMinutes: 180, rechargeMinute: 360, countMode: 'custom', emptyLevel: 'work', allowed: [], earnWith: 'pushUps' } }));
+    await store.start();
+    // Not known yet (the start of the app): nothing changes.
+    store.setPro(false, false);
+    expect(store.get().doc.settings.earnWith).toBe('pushUps');
+    store.setPro(true, true);
+    expect(store.get().doc.settings.earnWith).toBe('pushUps');
+    store.setPro(false, true);
+    expect(store.get().doc.settings.earnWith).toBeUndefined();
+    expect(phone.refreshScreens).toHaveBeenLastCalledWith(expect.not.objectContaining({ earnWith: 'pushUps' }), 0);
+  });
+
+  it('the choice is closed while the battery is empty, like the sums', async () => {
+    const { store } = load(fakePhone(), saved(180));
+    await store.start();
+    store.setPro(true, true);
+    store.setEarnWith('pushUps');
+    expect(store.get().doc.settings.earnWith).toBeUndefined();
+  });
+
   it('with it, the lock message can be words of one\'s own', async () => {
     const { store } = load(fakePhone(), saved(30));
     await store.start();

@@ -1,23 +1,39 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cellsLeft } from '@/domain/battery';
 import { clockLabel, clockLabelOf } from '@/domain/day';
+import { earnWithOf } from '@/domain/earn';
 import { makeRandom, makeSums, topUpPlan, type Sum } from '@/domain/puzzle';
 import { success } from '@/platform/haptics';
 import { sumLevelFor } from '@/domain/pro';
 import { store } from '@/state/store';
 import { BigButton } from '@/ui/kit';
+import { PushUpsEarn } from '@/ui/PushUpsEarn';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
 import { useSumEntry } from '@/ui/useSumEntry';
 
 // "Work for it": a few sums for a little more time. Each top-up since the
-// last recharge asks for more sums and gives fewer minutes.
+// last recharge asks for more sums and gives fewer minutes. With push-ups
+// chosen (Pro), the same with push-ups, counted by the camera
+// (src/ui/PushUpsEarn.tsx); `?try=1`, from Settings, tries them with nothing
+// to earn.
 
 export default function Puzzle() {
+  const { settings } = useDay();
+  const { try: trying } = useLocalSearchParams<{ try?: string }>();
+  // Fixed when the screen opens. Sums stand in when the camera can't be used.
+  const [earnWith] = useState(() => earnWithOf(settings));
+  const [sumsInstead, setSumsInstead] = useState(false);
+  if (trying === '1') return <PushUpsEarn practice />;
+  if (earnWith === 'pushUps' && !sumsInstead) return <PushUpsEarn onSums={() => setSumsInstead(true)} />;
+  return <Sums />;
+}
+
+function Sums() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { settings, day, accent } = useDay();
