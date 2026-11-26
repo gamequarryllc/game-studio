@@ -159,6 +159,7 @@ export async function askPermission(): Promise<Permission> {
     lastRefusal = mocked.slice('refuse-'.length) as Refusal;
     return 'denied';
   }
+  if (MOCK_PHONE) return permission();
   if (!SCREEN_TIME_AVAILABLE) return 'unknown';
   lastRefusal = null;
   asking ??= requestAccess().finally(() => {
