@@ -1,7 +1,7 @@
 import { Text } from 'react-native';
 
-import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, COUNTED_ID, pickCount } from '@/platform/screenTime';
-import { settingsLocked, useDoc } from '@/state/store';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, COUNTED_ID, isOn, permission, pickCount } from '@/platform/screenTime';
+import { settingsLocked, store, useDoc } from '@/state/store';
 import { COUNTS_LEAD, COUNTS_NOTE, OLD_LIST_NOTE } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { Lead, Page, Title } from '@/ui/kit';
@@ -19,8 +19,12 @@ import { c } from '@/ui/theme';
 // locking at all.
 
 export default function WhatCounts() {
-  useDoc();
-  const e = useEssentials();
+  const doc = useDoc();
+  // Essentials chosen here after setup skipped them: counting starts now, as setup's last screen says it will.
+  // (Up to build 152 it waited for "Turn on Screen Time" in Settings, which nothing pointed to.)
+  const e = useEssentials(() => {
+    if (SCREEN_TIME_AVAILABLE && doc.setupDone && permission() === 'approved' && !isOn()) void store.turnOnScreenTime();
+  });
   const locked = settingsLocked() && e.ready;
   const oldList = !e.ready && pickCount(COUNTED_ID) > 0;
   return (

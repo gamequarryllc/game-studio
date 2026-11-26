@@ -17,6 +17,7 @@ function fakePhone(): Fake {
     registeredGoal: jest.fn(() => 180),
     registeredRecharge: jest.fn(() => 360),
     askPermission: jest.fn(async () => 'approved'),
+    somethingCounts: jest.fn(() => true),
     busyRegistering: jest.fn(() => false),
     clearPicks: jest.fn(),
     countAgain: jest.fn(async () => true),
@@ -463,6 +464,18 @@ describe('turning counting on', () => {
     const { store } = load(phone, saved(0, { watching: false }));
     await store.start();
     expect(await store.turnOnScreenTime()).toBe('denied');
+    expect(store.get().doc.watching).toBe(false);
+    expect(phone.applyPlan).not.toHaveBeenCalled();
+  });
+
+  it('says "nothingPicked" when access is on but the essentials were never chosen, and registers nothing', async () => {
+    // App Review, 1.1.0 on an iPad: setup's essentials skipped, then "Turn on Screen Time" said "would not start counting".
+    const phone = fakePhone();
+    phone.isOn = jest.fn(() => false);
+    phone.somethingCounts = jest.fn(() => false);
+    const { store } = load(phone, saved(0, { watching: false }));
+    await store.start();
+    expect(await store.turnOnScreenTime()).toBe('nothingPicked');
     expect(store.get().doc.watching).toBe(false);
     expect(phone.applyPlan).not.toHaveBeenCalled();
   });

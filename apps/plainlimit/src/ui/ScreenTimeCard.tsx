@@ -1,37 +1,61 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 
+import { refusalNeedsAlert, refusalWords } from '@/domain/access';
 import { clockLabel } from '@/domain/day';
 import { settingsLockedNotice } from '@/domain/record';
 import { askToNotify } from '@/platform/notices';
-import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission, testCover, testUncover } from '@/platform/screenTime';
+import { DEV_TOOLS, ESSENTIALS_LIMIT, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission, refusal, somethingCounts, testCover, testUncover } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
+import { tooManyKept } from '@/ui/countWords';
+import { useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, IconTile, Label, tiles } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
-const WOULD_NOT_START = 'The phone would not start counting. Check that Screen Time is on in the Settings app, then try again.';
+const WOULD_NOT_START = { title: 'Counting didn’t start', line: 'iOS would not start counting. Check that Screen Time is on in the Settings app, then try again.' };
+/** Apple's first list (the device's apps) was closed with nothing ticked. */
+const MISSED = { title: 'Nothing was ticked', line: 'Tap Turn on Screen Time again. In Apple’s list, tap All Apps & Categories at the top, then Done.' };
 
-/** Turning counting on: asks the phone, then for notices; `problem` says what went wrong, in words for the screen. */
+type Problem = { title: string; line: string };
+
+/**
+ * Turning counting on, all from the one button: asks iOS for access, then,
+ * if the essentials were never chosen (setup's "Skip for now"), opens Apple's
+ * lists for them and starts counting once they're saved; then asks for
+ * notices. Whatever stops it is said on the card, and when iOS refused
+ * without showing anything (no passcode, say) in a pop-up too, so a tap never
+ * looks like it did nothing. (App Review, 1.1.0 on an iPad, 2026-11-26: "the
+ * 'Turn on screen time' button was not functional".)
+ */
 function useTurnOn() {
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
-  const turnOn = async () => {
+  // Once the essentials are saved, carry on: this time there is something to count.
+  const essentials = useEssentials(() => void turnOn());
+  async function turnOn() {
     if (busy) return;
     setBusy(true);
     setProblem(null);
     try {
       const result = await store.turnOnScreenTime();
       if (result === 'on') await askToNotify();
-      if (result === 'denied') setProblem('Screen Time access was not given. Plainlimit cannot count your day without it.');
+      if (result === 'nothingPicked') essentials.start();
+      if (result === 'denied') {
+        const why = refusal() ?? 'declined';
+        const words = refusalWords(why);
+        setProblem(words);
+        if (refusalNeedsAlert(why)) Alert.alert(words.title, words.line);
+      }
       if (result === 'failed') setProblem(WOULD_NOT_START);
     } catch {
       setProblem(WOULD_NOT_START);
     } finally {
       setBusy(false);
     }
-  };
-  return { turnOn, busy, problem };
+  }
+  const shown = problem ?? (essentials.missed ? MISSED : essentials.refused > 0 ? { title: 'Too many essentials', line: tooManyKept(essentials.refused, ESSENTIALS_LIMIT) } : null);
+  return { turnOn, busy: busy || essentials.busy, problem: shown, pickers: essentials.pickers };
 }
 
 /**
@@ -47,7 +71,7 @@ export function ScreenTimeCard() {
   // Asks the phone whether counting is on as it draws: not to be kept by the React Compiler.
   'use no memo';
   const { settings } = useDoc();
-  const { turnOn, busy, problem } = useTurnOn();
+  const { turnOn, busy, problem, pickers } = useTurnOn();
   // Left out of the App Store screenshots, as the phone in them is counting.
   if ((!SCREEN_TIME_AVAILABLE && !MOCK_PHONE) || STORE_SHOTS) return null;
 
@@ -61,17 +85,25 @@ export function ScreenTimeCard() {
     );
   }
 
-  const denied = permission() === 'denied';
+  const access = permission();
   return (
     <Card style={{ paddingTop: 14, paddingBottom: 16, gap: 10 }}>
       <Label>Screen Time</Label>
       <Text style={body}>
-        {denied
+        {access === 'denied'
           ? 'Screen Time access is off for Plainlimit. Turn it on to have the battery follow your real day.'
-          : 'Let the battery follow your real screen time. The phone does the counting; Plainlimit only hears how much time has gone, never which apps you opened.'}
+          : access === 'approved' && !somethingCounts()
+            ? 'One step left: pick your essentials in Apple’s list. Then the battery follows your real screen time.'
+            : 'Let the battery follow your real screen time. The phone does the counting; Plainlimit only hears how much time has gone, never which apps you opened.'}
       </Text>
+      {problem ? (
+        <View accessibilityRole="alert" style={problemBox}>
+          <Text style={problemTitle}>{problem.title}</Text>
+          <Text style={[body, { color: c.ink }]}>{problem.line}</Text>
+        </View>
+      ) : null}
       <BigButton label={busy ? 'Asking…' : 'Turn on Screen Time'} onPress={() => void turnOn()} />
-      {problem ? <Text style={[body, { color: c.ink }]}>{problem}</Text> : null}
+      {pickers}
     </Card>
   );
 }
@@ -134,6 +166,8 @@ export function TestBuildTools() {
 }
 
 const body = { fontSize: 15, lineHeight: 21, color: c.ink2 } as const;
+const problemBox = { borderWidth: 1.5, borderColor: '#F79200', borderRadius: 14, padding: 12, gap: 4 } as const;
+const problemTitle = { fontSize: 15, lineHeight: 20, fontWeight: '700', color: '#F7B24D' } as const;
 
 /** The test build's readout, as the phone has it now. */
 function readoutNow(): string {
