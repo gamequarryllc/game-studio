@@ -58,7 +58,7 @@ export function CountingProblem({ health }: { health: Health }) {
       setProblem(`${words.title}. ${words.line}`);
       if (refusalNeedsAlert(why)) Alert.alert(words.title, words.line);
     }
-    if (result === 'failed') setProblem(health === 'miscounted' ? 'Counting again did not work. Try again in a moment.' : 'The phone would not start counting. Try again in a moment.');
+    if (result === 'failed') setProblem(health === 'miscounted' ? 'Counting again did not work. Try again in a moment.' : 'iOS would not start counting. Try again in a moment.');
   };
 
   return (

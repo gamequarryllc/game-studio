@@ -343,7 +343,7 @@ export default function Setup() {
         {phase === 'reading' ? (
           <Lead>Reading today so far. Nothing locks yet.</Lead>
         ) : phase === 'failed' ? (
-          <Lead>The phone would not start counting. You can turn it on later in Settings.</Lead>
+          <Lead>iOS would not start counting. You can turn it on later at the top of Settings.</Lead>
         ) : over ? (
           <Lead>{`You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock your counted apps until ${recharge}.`}</Lead>
         ) : null}

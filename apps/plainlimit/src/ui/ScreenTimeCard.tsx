@@ -14,6 +14,8 @@ import { BigButton, Card, IconTile, Label, tiles } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
 const WOULD_NOT_START = { title: 'Counting didn’t start', line: 'iOS would not start counting. Check that Screen Time is on in the Settings app, then try again.' };
+/** Every app was ticked as an essential, so nothing is left to count. */
+const ALL_ESSENTIAL = { title: 'Nothing left to count', line: 'Every app was ticked as an essential. Tap Turn on Screen Time again, and leave the apps you want limited unticked.' };
 /** Apple's first list (the device's apps) was closed with nothing ticked. */
 const MISSED = { title: 'Nothing was ticked', line: 'Tap Turn on Screen Time again. In Apple’s list, tap All Apps & Categories at the top, then Done.' };
 
@@ -32,24 +34,32 @@ function useTurnOn() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
   // Once the essentials are saved, carry on: this time there is something to count.
-  const essentials = useEssentials(() => void turnOn());
-  async function turnOn() {
+  const essentials = useEssentials(() => void turnOn(true));
+  /** `picked`: straight after Apple's lists closed, so they aren't opened again if still nothing counts. */
+  async function turnOn(picked = false) {
     if (busy) return;
     setBusy(true);
     setProblem(null);
     try {
       const result = await store.turnOnScreenTime();
       if (result === 'on') await askToNotify();
-      if (result === 'nothingPicked') essentials.start();
+      if (result === 'nothingPicked') {
+        if (picked) setProblem(ALL_ESSENTIAL);
+        else essentials.start();
+      }
       if (result === 'denied') {
         const why = refusal() ?? 'declined';
         const words = refusalWords(why);
         setProblem(words);
         if (refusalNeedsAlert(why)) Alert.alert(words.title, words.line);
       }
-      if (result === 'failed') setProblem(WOULD_NOT_START);
+      if (result === 'failed') {
+        setProblem(WOULD_NOT_START);
+        Alert.alert(WOULD_NOT_START.title, WOULD_NOT_START.line);
+      }
     } catch {
       setProblem(WOULD_NOT_START);
+      Alert.alert(WOULD_NOT_START.title, WOULD_NOT_START.line);
     } finally {
       setBusy(false);
     }
@@ -94,7 +104,7 @@ export function ScreenTimeCard() {
           ? 'Screen Time access is off for Plainlimit. Turn it on to have the battery follow your real day.'
           : access === 'approved' && !somethingCounts()
             ? 'One step left: pick your essentials in Apple’s list. Then the battery follows your real screen time.'
-            : 'Let the battery follow your real screen time. The phone does the counting; Plainlimit only hears how much time has gone, never which apps you opened.'}
+            : 'Let the battery follow your real screen time. iOS does the counting; Plainlimit only hears how much time has gone, never which apps you opened.'}
       </Text>
       {problem ? (
         <View accessibilityRole="alert" style={problemBox}>
