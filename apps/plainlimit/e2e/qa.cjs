@@ -698,6 +698,8 @@ async function main() {
     await see(page, '3 push-ups counted');
     await see(page, 'When your battery is empty, 10 push-ups earn 15 more minutes.');
     await page.getByRole('button', { name: 'Done', exact: true }).click();
+    // Back on Earn time, then Settings, whose tile says push-ups.
+    await page.getByRole('button', { name: 'Try it now', exact: true }).waitFor();
     await page.goBack();
     await page.getByRole('button', { name: 'Earn time, Push-ups', exact: true }).waitFor();
     await see(page, 'Do push-ups to get 15 more minutes');
