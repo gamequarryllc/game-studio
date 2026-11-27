@@ -348,8 +348,9 @@ export function essentialsPicks(): string | null {
 }
 
 /**
- * Whether the essentials have been chosen (none is a choice too). Until
- * then everything counts and everything locks, and Today offers to choose them.
+ * Whether the essentials have been chosen: Apple's list closed with at least
+ * one ticked, at some time. Until then everything counts and everything
+ * locks, and Today offers to choose them.
  */
 export function essentialsChosen(): boolean {
   if (MOCK_PHONE) return !MOCK.has('noEssentials');
@@ -445,6 +446,12 @@ export function essentialsBefore(): void {
  * (essentials.ts): apps taken out, and apps this battery started with, are
  * today's at once; a new essential waits for the next recharge, unless the
  * day is `free` or the essentials are being chosen for the first time.
+ *
+ * Closed with nothing ticked before any were ever chosen, nothing changes
+ * either: the essentials stay "not chosen", and Today goes on offering them.
+ * (Up to build 168 that counted as a choice of none. The owner opened the
+ * list from Today's card, swiped it away, and the card was gone for good,
+ * with the essentials only to be found in Settings.)
  */
 export function essentialsAfter(free: boolean): number {
   if (!SCREEN_TIME_AVAILABLE) return 0;
@@ -452,12 +459,19 @@ export function essentialsAfter(free: boolean): number {
   picksBefore();
   try {
     const picked = tokenOf(ESSENTIALS_PICK_ID);
-    const ticked = picked === '' ? 0 : (DeviceActivity.activitySelectionMetadata({ activitySelectionToken: picked })?.applicationCount ?? 0);
+    const meta = picked === '' ? null : (DeviceActivity.activitySelectionMetadata({ activitySelectionToken: picked }) ?? null);
+    const ticked = meta?.applicationCount ?? 0;
     if (ticked > ESSENTIALS_LIMIT) {
       putLists({ [ESSENTIALS_PICK_ID]: '' });
       return ticked;
     }
     const first = readNumber('essentialsSet') === 0;
+    // Apps, sites or whole categories: anything ticked at all.
+    const any = meta !== null && ticked + (meta.categoryCount ?? 0) + sitesIn(meta) > 0;
+    if (first && !any) {
+      putLists({ [ESSENTIALS_PICK_ID]: '' });
+      return 0;
+    }
     const plain: EssentialsChange<string> = { today: picked, start: picked, next: null };
     const change = first ? plain : ruled(() => withEssentials(picked, essentialsStart(), free, phoneLists), plain);
     putLists({ [ESSENTIALS_PICK_ID]: '', [ESSENTIALS_ID]: change.today, [ESSENTIALS_START_ID]: change.start, [ESSENTIALS_NEXT_ID]: change.next ?? '' });

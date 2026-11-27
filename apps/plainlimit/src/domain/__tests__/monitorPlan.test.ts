@@ -322,9 +322,13 @@ describe('the home screen widget agrees with the app', () => {
     expect(setup).not.toContain('<Heading>How much a day?</Heading>');
     expect(setup).not.toContain("'Moves the line'");
     for (const words of ['`${goal} of use`', '"Apps lock"', '`Back at ${recharge}`']) expect(story).toContain(words);
-    // The last screen: each figure named for what it is, and how much of the goal is used.
-    for (const words of ['Your whole day', 'Uses your battery', 'left today']) expect(setup).toContain(words);
-    expect(setup).not.toContain('>Plainlimit counts<');
+    // The last screen: each figure named for who counts it (the owner on build 168: what the iPhone tracks against
+    // what we count), how much of the goal is used, and the essentials in the iPhone's box but outside ours, free.
+    for (const words of ['>iPhone tracks<', '>Plainlimit counts<', 'left today', '<FreeRow />', 'You pick your essentials next.']) expect(setup).toContain(words);
+    expect(setup.indexOf('<FreeRow />')).toBeGreaterThan(setup.indexOf('>Plainlimit counts<'));
+    for (const words of ['Never counted', 'FREE']) expect(story).toContain(words);
+    // Nothing there may say the figure has the essentials taken out: none are chosen yet on a new phone.
+    expect(setup).not.toContain('without essentials');
     // On the chart, nothing is written where a bar's time can stand: the key to the shading is over it, and the
     // goal to try is a tag with a short pointer (the report extension), not a line across the bars.
     const report = at('src/ui/UsageReport.tsx');

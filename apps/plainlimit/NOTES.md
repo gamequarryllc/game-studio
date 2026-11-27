@@ -668,3 +668,11 @@ Only these three things are told. What an empty battery does (Warn, Work for it,
 On the chart two things lay over a bar's time: "Would lock", written inside the shaded zone, and the green line from the goal to try, right across the bars. The first is now the chart's key, over it beside "Your last 7 days" (the app's own, `SetupFigures`); the second is a short pointer at the tag (the report extension, `WeekBarsView`).
 
 To check on a phone: the three story screens read at a glance and the first one's battery runs; nothing overlaps on the chart at any goal; the last screen's bar and "left today" agree with the figure.
+
+### After build 168 (the owner, 2026-11-27, who passed all six checks on it)
+
+**"Ready" says who counts what.** The owner, looking at the last screen: it should make clear that this is the difference between what the iPhone tracks and what we track, and that we don't punish anyone for using their essentials. The two boxes are now named for who counts: "iPhone tracks" (everything, since midnight) around "Plainlimit counts" (since the recharge), and under the inner box, still inside the iPhone's, a row of the story's three made-up essentials, "Essentials", "Never counted", FREE (`FreeRow` in `src/ui/Story.tsx`). The picture is the point: the essentials are in the iPhone's count and outside ours. At this point in setup none are chosen yet, so the row is a promise, with "You pick your essentials next." under the boxes; it is not a figure with them taken out, and must never be worded as one. Drawn three ways for the owner first (project files, `plainlimit/setup-ready-vs-mockups/`).
+
+**Today's offer of the essentials stays until one is chosen.** Closing Apple's list with nothing ticked used to count as a choice of none, and the card went. The owner opened the list from the card, swiped it away, and could only find the essentials in Settings. Now the first list closed empty changes nothing (`essentialsAfter`): the essentials stay "not chosen", everything goes on counting, and the card stays. Once some have been chosen, taking them all out is still a choice, and Today does not offer again.
+
+**"Run setup again" is gone from the test builds** (see above): setup is tried on a fresh install.

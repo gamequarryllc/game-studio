@@ -11,9 +11,11 @@ import { c, display } from './theme';
 // (app/setup.tsx): everything counts from the first minute, so the
 // essentials are an offer made here, where the battery is. One button opens
 // Apple's list, and what is ticked stops counting at once: the first choice
-// never waits for the recharge, even on an empty battery. Closing the list
-// with nothing ticked is a choice too, and the card goes either way; after
-// that the essentials are changed in Settings, under Essentials.
+// never waits for the recharge, even on an empty battery. The card stays
+// until at least one is ticked: closing the list with nothing ticked leaves
+// it here (up to build 168 it went then too, and the owner, who had opened
+// the list and swiped it away, found the essentials only in Settings). After
+// a choice the essentials are changed in Settings, under Essentials.
 
 /** A few apps people keep open, as plain pictures: the same three as on Settings' Essentials row. */
 const EXAMPLES: RowIcon[] = [

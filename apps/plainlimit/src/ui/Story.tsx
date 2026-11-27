@@ -151,6 +151,42 @@ export function StoryEssentials({ chosenLater }: { chosenLater: boolean }) {
   );
 }
 
+/**
+ * The essentials on setup's last screen: the story's three made-up apps,
+ * small, marked FREE. The row lies in the iPhone's box and outside
+ * Plainlimit's: the iPhone tracks them, Plainlimit never counts them.
+ */
+export function FreeRow() {
+  return (
+    <View accessible accessibilityLabel="Essentials are never counted." style={styles.freeRow}>
+      <View style={styles.freeTiles}>
+        <SmallApp icon="phone" bg="#34C759" />
+        <SmallApp icon="message" bg="#2F8BFF" />
+        <SmallApp icon="map" bg="#12A594" />
+      </View>
+      <View style={styles.freeWords}>
+        <Text numberOfLines={1} style={styles.freeName}>
+          Essentials
+        </Text>
+        <Text numberOfLines={1} style={styles.freeNote}>
+          Never counted
+        </Text>
+      </View>
+      <View style={styles.pill}>
+        <Text style={styles.pillText}>FREE</Text>
+      </View>
+    </View>
+  );
+}
+
+function SmallApp({ icon, bg }: { icon: IconName; bg: string }) {
+  return (
+    <View style={[styles.smallApp, { backgroundColor: bg }]}>
+      <Icon name={icon} size={18} color="#FFFFFF" />
+    </View>
+  );
+}
+
 /** Whether a recharge time is in the morning, as the third screen's title says. */
 export function inTheMorning(rechargeMinute: number): boolean {
   return rechargeMinute >= 3 * 60 && rechargeMinute < 12 * 60;
@@ -221,6 +257,12 @@ const styles = StyleSheet.create({
   app: { flex: 1, alignItems: 'center', gap: 7 },
   appIcon: { width: 58, height: 58, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   appName: { fontSize: 13, lineHeight: 16, fontWeight: '600', color: c.ink2 },
+  freeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 2 },
+  freeTiles: { flexDirection: 'row', gap: 6 },
+  smallApp: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  freeWords: { flex: 1 },
+  freeName: { fontSize: 15, lineHeight: 19, fontWeight: '600', color: c.ink },
+  freeNote: { fontSize: 13.5, lineHeight: 18, color: c.ink3, marginTop: 2 },
   motto: { marginTop: 8, fontFamily: display.bold, fontSize: 22, lineHeight: 28, letterSpacing: -0.3, color: c.ink },
   after: { fontSize: 15, lineHeight: 21, color: c.ink3, marginTop: -6 },
   time: { fontFamily: display.bold, fontSize: 52, lineHeight: 56, letterSpacing: -1.6, color: c.ink },

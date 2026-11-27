@@ -123,13 +123,27 @@ describe('choosing the essentials for the first time', () => {
     expect(problem()).toBeUndefined();
   });
 
-  it('none at all is a choice too: everything counts, and Today stops offering', () => {
+  it('the list closed with nothing ticked is not a choice: everything still counts, and Today goes on offering (the owner, build 168)', () => {
     const { st, list, open, choose } = load();
+    expect(choose([])).toBe(0);
+    expect(st.essentialsChosen()).toBe(false);
+    expect(st.essentialsCount()).toBe(0);
+    for (const id of [st.ESSENTIALS_ID, st.ESSENTIALS_NEXT_ID, st.ESSENTIALS_START_ID, st.ESSENTIALS_PICK_ID]) expect(list(id)).toBeNull();
+    // Nothing was told to stay open, as nothing was chosen.
+    expect(open.apps).toBeNull();
+    // The choice after it is still the first: at once, whatever the day.
+    expect(choose(['Maps'])).toBe(0);
+    expect(st.essentialsChosen()).toBe(true);
+    expect(list(st.ESSENTIALS_ID)).toEqual(['Maps']);
+    expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
+  });
+
+  it('once some were chosen, taking them all out is a choice: none, and Today does not offer again', () => {
+    const { st, list, choose } = settled();
     expect(choose([])).toBe(0);
     expect(st.essentialsChosen()).toBe(true);
     expect(st.essentialsCount()).toBe(0);
     expect(list(st.ESSENTIALS_ID)).toBeNull();
-    expect(open.apps).toEqual([]);
   });
 
   it('the choice after it follows the waiting rule', () => {

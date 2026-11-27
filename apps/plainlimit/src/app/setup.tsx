@@ -15,7 +15,7 @@ import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { Icon } from '@/ui/icons';
 import { NotifyPicture, NotifyStory } from '@/ui/NotifyStep';
-import { GoalStory, StoryBattery, StoryEssentials, StoryMorning, inTheMorning } from '@/ui/Story';
+import { FreeRow, GoalStory, StoryBattery, StoryEssentials, StoryMorning, inTheMorning } from '@/ui/Story';
 import { SetupFigures, WHOLE, WakeScreenTime, WholeTotal } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
 import { useDay } from '@/ui/useDay';
@@ -323,8 +323,8 @@ export default function Setup() {
     const over = phase === 'ready' && day.usedMinutes >= settings.goalMinutes;
     // Plainlimit's own figure, until the phone has reported anything for today.
     const reading = phase === 'reading' && day.usedMinutes === 0;
-    // What uses the battery, beside the iPhone's own whole day.
-    const since = essentials.kept > 0 ? `Since ${recharge}, without essentials` : `Since ${recharge}`;
+    // What Plainlimit counts, beside everything the iPhone tracks.
+    const since = `Since ${recharge}`;
     const left = Math.max(0, settings.goalMinutes - day.usedMinutes);
     body = (
       <>
@@ -340,24 +340,30 @@ export default function Setup() {
           not know what either figure was. Now each says what it is in the person's own terms (the whole day; what uses
           the battery), and the inner one shows how much of the goal that is, as a bar with what is left under it (the
           owner picked this from three drafts, 2026-11-27).
+
+          On build 168 the owner wanted the screen to say outright what the two are: what the iPhone tracks against
+          what we count, and that nobody is punished for using their essentials. So the boxes are named for who
+          counts ("iPhone tracks", "Plainlimit counts"), and the essentials lie in the iPhone's box but outside
+          ours, marked FREE. They are not chosen yet at this point (Today offers them next), so the row is a
+          promise in the story's own picture, not a figure with them taken out.
         */}
         <View style={styles.whole}>
           <View style={styles.wholeRow}>
             <Icon name="iphone" size={18} color={c.ink2} />
             <View style={styles.wholeWords}>
-              <Text style={styles.wholeName}>Your whole day</Text>
-              <Text style={styles.wholeNote}>{wholeWindow(settings, now).sinceYesterday ? 'iPhone, since yesterday' : 'iPhone, since midnight'}</Text>
+              <Text style={styles.wholeName}>iPhone tracks</Text>
+              <Text style={styles.wholeNote}>{wholeWindow(settings, now).sinceYesterday ? 'Everything, since yesterday' : 'Everything, since midnight'}</Text>
             </View>
             <WholeTotal settings={settings} now={now} fallback={<WaitingDots size={6} height={WHOLE.height} />} />
           </View>
           <View
             accessible
-            accessibilityLabel={reading ? `Uses your battery: still reading. ${since}` : `Uses your battery: ${durationLabel(day.usedMinutes)} of ${durationLabel(settings.goalMinutes)}. ${since}. ${durationLabel(left)} left today`}
+            accessibilityLabel={reading ? `Plainlimit counts: still reading. ${since}` : `Plainlimit counts: ${durationLabel(day.usedMinutes)} of ${durationLabel(settings.goalMinutes)}. ${since}. ${durationLabel(left)} left today`}
             style={[styles.part, { borderColor: accent, backgroundColor: accent.length === 7 ? `${accent}1F` : 'transparent' }]}>
             <View style={styles.wholeRow}>
               <Icon name="battery" size={18} color={accent} />
               <View style={styles.wholeWords}>
-                <Text style={[styles.wholeName, { color: c.ink }]}>Uses your battery</Text>
+                <Text style={[styles.wholeName, { color: c.ink }]}>Plainlimit counts</Text>
                 <Text style={[styles.wholeNote, { color: c.ink2 }]}>{since}</Text>
               </View>
               {reading ? (
@@ -377,6 +383,7 @@ export default function Setup() {
               <Text style={styles.meterText}>{`of ${durationLabel(settings.goalMinutes)}`}</Text>
             </View>
           </View>
+          <FreeRow />
         </View>
         {phase === 'reading' ? <ReadingBar colour={accent} /> : null}
         {phase === 'reading' ? (
@@ -385,6 +392,8 @@ export default function Setup() {
           <Lead>iOS would not start counting. You can turn it on later at the top of Settings.</Lead>
         ) : over ? (
           <Lead>{`You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock ${essentials.kept > 0 ? 'everything but your essentials' : 'your apps'} until ${recharge}.`}</Lead>
+        ) : !essentials.ready ? (
+          <Text style={styles.next}>You pick your essentials next.</Text>
         ) : null}
       </>
     );
@@ -514,6 +523,7 @@ const styles = StyleSheet.create({
   say: { fontSize: 19, lineHeight: 27, color: c.ink },
   body: { fontSize: 15, lineHeight: 21, color: c.ink2 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
+  next: { fontSize: 16, lineHeight: 22, color: c.ink3, paddingHorizontal: 6 },
   ok: { fontSize: 16, fontWeight: '600', color: c.ink },
   warn: { fontSize: 15, lineHeight: 21, fontWeight: '600', color: '#FF7B6B' },
   refused: { alignSelf: 'stretch', borderWidth: 1.5, borderColor: '#F79200', borderRadius: 14, padding: 12, gap: 4 },
