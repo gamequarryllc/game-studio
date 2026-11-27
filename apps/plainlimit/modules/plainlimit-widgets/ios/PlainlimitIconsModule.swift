@@ -213,10 +213,18 @@ struct IconGrid: View {
   }
 }
 
-/// Apple's icon for a token, at about `size`. Apple sizes it from the font,
-/// by its own rule: in build 157 a font of 0.8 of the square drew icons 0.61
-/// of it (27 points in 44), so the font is now 1.3 of the square. The icon
-/// keeps its own size and is centred in the square, never squeezed.
+/// Apple's icon for a token, at `size`. Apple draws it about 20 points across
+/// whatever font or frame it is given, in a box of its own that does follow
+/// the font. So it is drawn as it comes and then scaled up to the square.
+///
+/// How that was learnt, on the owner's phone: build 157 measured the box and
+/// scaled it to the square, and the icons came out 27 points in 44 (a
+/// 20-point icon in a 32-point box, scaled by 44/32). Build 158 took that for
+/// the font's doing, dropped the scaling for a font of 1.3 of the square, and
+/// the icons went back to 20 points: in 42-point squares on the Essentials
+/// screen and on setup's last screen (builds 166 and 171), where they looked
+/// lost. The font is kept as it was on those builds, since 20 points is what
+/// it was measured to give; only the scaling is new.
 struct TokenIcon<Content: View>: View {
   let size: CGFloat
   @ViewBuilder let label: () -> Content
@@ -226,6 +234,10 @@ struct TokenIcon<Content: View>: View {
       .labelStyle(.iconOnly)
       .font(.system(size: size * 1.3))
       .fixedSize()
+      .scaleEffect(size / appleIconPoints)
       .frame(width: size, height: size)
   }
 }
+
+/// How big Apple draws a token's icon, in points (see TokenIcon).
+private let appleIconPoints: CGFloat = 20
