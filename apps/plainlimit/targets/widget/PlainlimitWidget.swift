@@ -3,8 +3,9 @@ import WidgetKit
 
 // The battery on the home screen and the lock screen.
 //
-// It draws from three things in the App Group's shared settings:
-//   plainlimit_plan                              written by the app: the goal, the recharge time, and when counting began
+// It draws from these things in the App Group's shared settings:
+//   plainlimit_plan                              written by the app: the goal, the recharge time, when counting
+//                                                began, and every checkpoint with its minutes (`marks`)
 //   events_plday_eventDidReachThreshold_<name>   written by the monitor extension each time a
 //                                                checkpoint is reached (milliseconds since 1970)
 //   plainlimit_guard                             written by the app at each registration: reports
@@ -12,7 +13,9 @@ import WidgetKit
 //   plainlimit_record                            written by the app: whether Pro is held, and the streak,
 //                                                passes, perfect weeks and this week for the large widget (pro.ts)
 // A checkpoint counts for today when it was reached after the last recharge.
-// The same rules live in the app's src/domain/ (battery.ts, day.ts, checkpoints.ts, tone.ts);
+// With essentials, the checkpoints count everything and the essentials have a
+// timer of their own (marks with `kept`); the battery is the one less the other.
+// The same rules live in the app's src/domain/ (battery.ts, day.ts, checkpoints.ts, tally.ts, tone.ts);
 // src/domain/__tests__/monitorPlan.test.ts checks the two stay in step.
 
 let appGroup = "group.com.gamequarry.plainlimit"
@@ -22,6 +25,8 @@ let slackMinutes = 2.0
 /// checkpoints.ts: PACE_SLACK_MINUTES and GUARD_MS.
 let paceSlackMinutes = 20.0
 let guardMs = 600_000.0
+/// tally.ts: SETTLE_MS.
+let settleMs = 60_000.0
 
 struct BatteryState {
   var isSetUp: Bool
@@ -177,19 +182,34 @@ func readState(now: Date) -> BatteryState {
   // keepsPace). Reports in the minutes after a registration are left out:
   // the phone re-reports the day then, with fresh times.
   let registeredAt = (plan["registeredAt"] as? NSNumber)?.doubleValue ?? 0
-  let marks: [(at: Double, minutes: Double)] = (plan["marks"] as? [[String: Any]] ?? []).compactMap { (mark: [String: Any]) -> (at: Double, minutes: Double)? in
-    guard let activity = mark["activity"] as? String, let name = mark["name"] as? String,
-      let minutes = (mark["minutes"] as? NSNumber)?.doubleValue
-    else { return nil }
-    let key = counting.isEmpty ? name : "\(name)~\(counting)"
-    let at = defaults.double(forKey: "events_\(activity)_eventDidReachThreshold_\(key)")
-    let reReported = registeredAt > 0 && at >= registeredAt && at <= registeredAt + guardMs
-    return at >= start && !reReported ? (at, minutes) : nil
-  }
-  func keepsPace(_ at: Double, _ minutes: Double) -> Bool {
-    marks.allSatisfy { mark in
-      mark.at >= at || mark.minutes >= minutes || at >= mark.at + (minutes - mark.minutes - paceSlackMinutes) * 60_000
+  // Today's reports of one timer, each with the minutes it stands for: the
+  // everything timer's (the cells, the minute ones and its rungs past the
+  // goal), or the essentials' own (`kept`, tally.ts).
+  let planMarks: [[String: Any]] = (plan["marks"] as? [[String: Any]]) ?? []
+  func reported(kept wanted: Bool) -> [(at: Double, minutes: Double)] {
+    var out: [(at: Double, minutes: Double)] = []
+    for mark in planMarks {
+      guard let activity = mark["activity"] as? String, let name = mark["name"] as? String,
+        let minutes = (mark["minutes"] as? NSNumber)?.doubleValue,
+        ((mark["kept"] as? Bool) ?? false) == wanted
+      else { continue }
+      let key = counting.isEmpty ? name : "\(name)~\(counting)"
+      let at = defaults.double(forKey: "events_\(activity)_eventDidReachThreshold_\(key)")
+      if at >= start { out.append((at: at, minutes: minutes)) }
     }
+    return out
+  }
+  func paced(_ at: Double, _ minutes: Double, _ earlier: [(at: Double, minutes: Double)]) -> Bool {
+    for mark in earlier {
+      let reReported = registeredAt > 0 && mark.at >= registeredAt && mark.at <= registeredAt + guardMs
+      if reReported || mark.at >= at || mark.minutes >= minutes { continue }
+      if at < mark.at + (minutes - mark.minutes - paceSlackMinutes) * 60_000 { return false }
+    }
+    return true
+  }
+  let marks = reported(kept: false)
+  func keepsPace(_ at: Double, _ minutes: Double) -> Bool {
+    return paced(at, minutes, marks)
   }
 
   // A checkpoint for N minutes of use cannot honestly arrive sooner than N minutes
@@ -209,6 +229,39 @@ func readState(now: Date) -> BatteryState {
       cells = cellCount - emptied
       break
     }
+  }
+
+  // With essentials the checkpoints above count everything, essentials
+  // included, so the battery is worked out again as the app does (tally.ts,
+  // usedKnown): each report of the everything timer, less the most the
+  // essentials can have used by then (anything short of their next rung), and
+  // the highest of those. A report in the settling after a registration is
+  // weighed against the essentials' reports as they stand when it is over.
+  var ladder: [Double] = []
+  for mark in planMarks where (mark["kept"] as? Bool) ?? false {
+    if let minutes = (mark["minutes"] as? NSNumber)?.doubleValue { ladder.append(minutes) }
+  }
+  if !ladder.isEmpty {
+    func canBeTrue(_ at: Double, _ minutes: Double, _ earlier: [(at: Double, minutes: Double)]) -> Bool {
+      return at >= judgedFrom(at) + max(0, minutes - slackMinutes) * 60_000 && paced(at, minutes, earlier)
+    }
+    let keptAll = reported(kept: true)
+    let kept = keptAll.filter { canBeTrue($0.at, $0.minutes, keptAll) }
+    var used = 0.0
+    for mark in marks where canBeTrue(mark.at, mark.minutes, marks) {
+      let settling = registeredAt > 0 && mark.at >= registeredAt && mark.at <= registeredAt + settleMs
+      let by = settling ? registeredAt + settleMs : mark.at
+      var known = 0.0
+      for report in kept where report.at <= by { known = max(known, report.minutes) }
+      var ceiling = 0.0
+      if known > 0 {
+        ceiling = Double.infinity
+        for rung in ladder where rung > known { ceiling = min(ceiling, rung) }
+      }
+      used = max(used, mark.minutes - ceiling)
+    }
+    used = min(goal, used)
+    cells = max(0, cellCount - Int((used * Double(cellCount) / goal).rounded(.down)))
   }
   return BatteryState(isSetUp: true, cells: cells, rechargeMinute: recharge, goalMinutes: goal)
 }

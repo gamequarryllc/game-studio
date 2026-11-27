@@ -1,30 +1,27 @@
-import { essentialsLabel, essentialsValue, joinsLabel, joinsLine, joinsShort, joinsTitle, othersLabel, tooManyKept } from '../countWords';
+import { CHOOSE_HOW, OTHERS_LABEL, essentialsLabel, essentialsValue, joinsLabel, joinsLine, joinsShort, joinsTitle, tooManyKept } from '../countWords';
 import { gridHeight, iconSize, squares } from '../iconGrid';
 
 describe('essentialsValue', () => {
   it('names how many essentials are ticked', () => {
-    expect(essentialsValue(120, 14)).toBe('14 apps');
-    expect(essentialsValue(120, 1)).toBe('1 app');
-    expect(essentialsValue(120, 0)).toBe('None');
+    expect(essentialsValue(14)).toBe('14 apps');
+    expect(essentialsValue(1)).toBe('1 app');
+    expect(essentialsValue(0)).toBe('None');
   });
-  it('names how many picks count for a list from an older version, never a bare "Set"', () => {
-    expect(essentialsValue(13)).toBe('13 count');
-    expect(essentialsValue(1)).toBe('1 count');
-  });
-  it('says when nothing is chosen, and when the phone has no picker', () => {
-    expect(essentialsValue(0)).toBe('Not chosen');
-    expect(essentialsValue(-1)).toBe('Your picks');
-    expect(essentialsValue(-1, 3)).toBe('Your picks');
+  it('says when they are not chosen yet, and when the phone has no picker', () => {
+    expect(essentialsValue(null)).toBe('Not chosen');
+    expect(essentialsValue(null, false)).toBe('Your picks');
+    expect(essentialsValue(3, false)).toBe('Your picks');
   });
 });
 
 describe('choosing the essentials', () => {
-  it('reads out how many essentials there are, and how many apps use the battery', () => {
+  it('reads out how many essentials there are, and that everything else uses the battery', () => {
     expect(essentialsLabel(18)).toBe('Always open: 18 essential apps, never counted.');
     expect(essentialsLabel(1)).toBe('Always open: 1 essential app, never counted.');
     expect(essentialsLabel(0)).toBe('Always open: no essentials yet.');
-    expect(othersLabel(40)).toBe('Everything else: 40 apps use your battery.');
-    expect(othersLabel(1)).toBe('Everything else: 1 app uses your battery.');
+    expect(OTHERS_LABEL).toBe('Everything else uses your battery.');
+    // Apple's list opens once, for the essentials alone: nothing asks for "All Apps" any more.
+    expect(CHOOSE_HOW).not.toMatch(/All Apps|twice/);
   });
   it('turns down too many essentials with the numbers', () => {
     const line = tooManyKept(63, 50);

@@ -45,10 +45,10 @@ index 8aee1f2..b15ef2e 100644
          // Deprecated iOS 15 API - uses completion handler
          try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
 diff --git a/node_modules/react-native-device-activity/ios/Shared.swift b/node_modules/react-native-device-activity/ios/Shared.swift
-index 4839430..a019c10 100644
+index 4839430..0625ac8 100644
 --- a/node_modules/react-native-device-activity/ios/Shared.swift
 +++ b/node_modules/react-native-device-activity/ios/Shared.swift
-@@ -110,6 +110,21 @@ func executeGenericAction(
+@@ -110,6 +110,33 @@ func executeGenericAction(
  ) {
    let type = action["type"] as? String
  
@@ -67,10 +67,22 @@ index 4839430..a019c10 100644
 +    }
 +  }
 +
++  // Plainlimit: an action carrying a tally waits on the essentials' own timer:
++  // it runs only once the essentials can have used no more than the room its
++  // checkpoint leaves. See plainlimitTally below and the app's src/domain/tally.ts.
++  if let tally = action["tally"] as? [String: Any] {
++    if !plainlimitTally(tally: tally) {
++      logger.log(
++        "plainlimit tally: skipping \(type ?? "action", privacy: .public) for \(triggeredBy, privacy: .public)"
++      )
++      return
++    }
++  }
++
    if let sleepBefore = action["sleepBefore"] as? Int {
      sleep(ms: sleepBefore)
    }
-@@ -296,6 +311,26 @@ func executeGenericAction(
+@@ -296,6 +323,160 @@ func executeGenericAction(
    }
  }
  
@@ -94,10 +106,144 @@ index 4839430..a019c10 100644
 +  return false
 +}
 +
++/// Plainlimit: for this long after the day is registered the phone re-reports
++/// the day so far, both timers at once and in no order (tally.ts, SETTLE_MS).
++let plainlimitSettleMs = 60_000.0
++/// Plainlimit: checkpoints.ts, PACE_SLACK_MINUTES and GUARD_MS.
++let plainlimitPaceSlackMinutes = 20.0
++let plainlimitGuardMs = 600_000.0
++
++/// Plainlimit: when today's count began, in milliseconds: the last recharge,
++/// or when counting was turned on if that was later.
++func plainlimitDayStart(rechargeMinute: Int, countFrom: Double, now: Date) -> Double {
++  let calendar = Calendar.current
++  let minute = min(max(rechargeMinute, 0), 24 * 60 - 1)
++  var recharge = calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: now) ?? now
++  if recharge > now {
++    let yesterday = calendar.date(byAdding: .day, value: -1, to: now) ?? now
++    recharge = calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: yesterday) ?? now
++  }
++  return max(recharge.timeIntervalSince1970 * 1000, countFrom)
++}
++
++/// Plainlimit: whether a report for `activity` can change what the widget
++/// draws. The minute checkpoints ("plmin") and the essentials' own timer
++/// ("plkept") change nothing by themselves, and Second thought's timers
++/// (names starting "plask") are not the battery's. The rungs past the goal
++/// ("plover") do, but not in the settling after a registration: they all
++/// come at once then, and the app redraws the widget when it is over.
++func plainlimitRedraws(activity: String) -> Bool {
++  if activity == "plmin" || activity == "plkept" || activity.hasPrefix("plask") { return false }
++  if activity == "plover" {
++    CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
++    let record = userDefaults?.dictionary(forKey: "plainlimit_tally")
++    let registeredAt = (record?["registeredAt"] as? NSNumber)?.doubleValue ?? 0
++    let now = Date().timeIntervalSince1970 * 1000
++    if registeredAt > 0 && now >= registeredAt && now <= registeredAt + plainlimitSettleMs { return false }
++  }
++  return true
++}
++
++/// Plainlimit: whether an action that waits on the essentials' own timer may
++/// act now. The battery is used by everything less the essentials, and the
++/// phone only says when a rung of either timer is reached, so the essentials
++/// are taken to have used anything short of their next rung. `room` is how
++/// far the action's checkpoint lies past its mark (the goal, for the lock):
++/// the action runs only if the essentials can have used no more than that.
++/// It does not run if one of `unless` has already run today, nor in the
++/// settling after a registration, and it notes its own `mark` when it runs.
++/// With `minutes` (the rungs past the goal) the report must also keep pace
++/// with the earlier ones (keepsPace). The app saves what this reads under
++/// "plainlimit_tally" (src/platform/screenTime.ts, writeCheckpointActions).
++func plainlimitTally(tally: [String: Any]) -> Bool {
++  CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
++  // No record: the day is registered without essentials, and nothing waits on them.
++  guard let record = userDefaults?.dictionary(forKey: "plainlimit_tally") else { return true }
++  let date = Date()
++  let now = date.timeIntervalSince1970 * 1000
++  let registeredAt = (record["registeredAt"] as? NSNumber)?.doubleValue ?? 0
++  if registeredAt > 0 && now >= registeredAt && now <= registeredAt + plainlimitSettleMs { return false }
++
++  let inRound = (record["round"] as? String) ?? ""
++  let rechargeMinute = (record["rechargeMinute"] as? NSNumber)?.intValue ?? 360
++  let countFrom = (record["countFrom"] as? NSNumber)?.doubleValue ?? 0
++  let start = plainlimitDayStart(rechargeMinute: rechargeMinute, countFrom: countFrom, now: date)
++
++  let unless: [String] = (tally["unless"] as? [String]) ?? []
++  for name in unless {
++    let done = (userDefaults?.object(forKey: "plainlimit_done_\(name)~\(inRound)") as? NSNumber)?.doubleValue ?? 0
++    if done >= start { return false }
++  }
++
++  // Today's reports of one timer, each with the minutes it stands for.
++  func reports(_ list: Any?) -> [(at: Double, minutes: Double)] {
++    var out: [(at: Double, minutes: Double)] = []
++    let entries: [[String: Any]] = (list as? [[String: Any]]) ?? []
++    for entry in entries {
++      guard let key = entry["key"] as? String,
++        let minutes = (entry["minutes"] as? NSNumber)?.doubleValue,
++        let at = (userDefaults?.object(forKey: key) as? NSNumber)?.doubleValue,
++        at > 0, at >= start
++      else { continue }
++      out.append((at: at, minutes: minutes))
++    }
++    return out
++  }
++  // Nobody uses minutes faster than they pass (checkpoints.ts, keepsPace).
++  func keepsPace(_ at: Double, _ minutes: Double, _ earlier: [(at: Double, minutes: Double)]) -> Bool {
++    for mark in earlier {
++      let reReported = registeredAt > 0 && mark.at >= registeredAt && mark.at <= registeredAt + plainlimitGuardMs
++      if reReported || mark.at >= at || mark.minutes >= minutes { continue }
++      if at < mark.at + (minutes - mark.minutes - plainlimitPaceSlackMinutes) * 60_000 { return false }
++    }
++    return true
++  }
++
++  if let minutes = (tally["minutes"] as? NSNumber)?.doubleValue {
++    if !keepsPace(now, minutes, reports(record["everything"])) { return false }
++  }
++
++  // The essentials' reports that can be true: not sooner than their own
++  // minutes into the day (judged from the guard's start while it is open),
++  // and in pace with each other.
++  let guardRecord = userDefaults?.dictionary(forKey: "plainlimit_guard")
++  let guardFrom = (guardRecord?["from"] as? NSNumber)?.doubleValue ?? 0
++  let guardOpens = (guardRecord?["opens"] as? NSNumber)?.doubleValue ?? 0
++  let guardCloses = (guardRecord?["closes"] as? NSNumber)?.doubleValue ?? 0
++  let kept = reports(record["kept"])
++  var known = 0.0
++  for mark in kept {
++    let guarded = guardRecord != nil && mark.at >= guardOpens && mark.at <= guardCloses
++    let from = guarded ? max(start, guardFrom) : start
++    if mark.at >= from + max(0, mark.minutes - 2) * 60_000 && keepsPace(mark.at, mark.minutes, kept) {
++      known = max(known, mark.minutes)
++    }
++  }
++
++  // The most the essentials can have used: anything short of their next rung.
++  var ceiling = 0.0
++  if known > 0 {
++    ceiling = Double.infinity
++    let rungs: [[String: Any]] = (record["kept"] as? [[String: Any]]) ?? []
++    for entry in rungs {
++      if let minutes = (entry["minutes"] as? NSNumber)?.doubleValue, minutes > known {
++        ceiling = min(ceiling, minutes)
++      }
++    }
++  }
++  let room = (tally["room"] as? NSNumber)?.doubleValue ?? 0
++  if ceiling > room { return false }
++
++  if let mark = tally["mark"] as? String {
++    userDefaults?.set(now.rounded(), forKey: "plainlimit_done_\(mark)~\(inRound)")
++  }
++  return true
++}
++
  func sendNotification(contents: [String: Any], placeholders: [String: String?]) {
    let content = UNMutableNotificationContent()
  
-@@ -1452,9 +1487,10 @@ func updateBlockInternal(
+@@ -1452,9 +1633,10 @@ func updateBlockInternal(
      store.shield.applicationCategories = .all(
        except: currentWhitelist.applicationTokens
      )

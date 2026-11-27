@@ -17,14 +17,16 @@ function fakePhone(): Fake {
     registeredGoal: jest.fn(() => 180),
     registeredRecharge: jest.fn(() => 360),
     askPermission: jest.fn(async () => 'approved'),
-    somethingCounts: jest.fn(() => true),
     busyRegistering: jest.fn(() => false),
     clearPicks: jest.fn(),
     countAgain: jest.fn(async () => true),
     recountDue: jest.fn(() => true),
     markRecounted: jest.fn(),
     coverAgain: jest.fn(),
-    fixOldPicks: jest.fn(() => 'fine'),
+    moveToEverything: jest.fn(() => false),
+    essentialsChosen: jest.fn(() => true),
+    forgetEssentials: jest.fn(),
+    countSettled: jest.fn(() => true),
     coverEmptyNow: jest.fn(),
     grantExtraTime: jest.fn(async () => {}),
     endExtraTime: jest.fn(),
@@ -34,7 +36,6 @@ function fakePhone(): Fake {
     noteKnown: jest.fn(),
     onCheckpoint: jest.fn(() => () => {}),
     picksAfter: jest.fn(() => false),
-    appsAfter: jest.fn(),
     essentialsAfter: jest.fn(() => 0),
     startWaitingPicks: jest.fn(() => false),
     refreshScreens: jest.fn(),
@@ -81,7 +82,7 @@ function load(phone: Fake, raw: unknown, ask: Fake = fakeAsk()) {
   jest.isolateModules(() => {
     jest.doMock('@/platform/screenTime', () => phone);
     jest.doMock('@/platform/askFirst', () => ask);
-    jest.doMock('@/platform/storage', () => ({ readSaved: jest.fn(async () => raw), writeSaved: jest.fn(async () => {}) }));
+    jest.doMock('@/platform/storage', () => ({ readSaved: jest.fn(async () => raw), writeSaved: jest.fn(async () => {}), readNote: jest.fn(async () => null), writeNote: jest.fn(async () => {}) }));
     // A fresh copy per test needs require inside isolateModules.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     mod = require('../store');
@@ -183,7 +184,7 @@ describe('marking a day not fully counted', () => {
     expect(phone.countAgain).toHaveBeenCalledTimes(1);
     expect(phone.markRecounted).toHaveBeenCalledTimes(1);
     // Noted first, so the registration that follows is guarded by what is known now.
-    expect(phone.noteKnown).toHaveBeenCalledWith(expect.anything(), 80);
+    expect(phone.noteKnown).toHaveBeenCalledWith(expect.objectContaining({ goalMinutes: 180 }));
     expect(store.get().doc.day.uncounted).toBe(false);
     // Already done for this battery: Today offers Count again instead.
     phone.recountDue = jest.fn(() => false);
@@ -416,16 +417,24 @@ describe('the daily goal', () => {
   });
 });
 
-describe('picks over the 50-app lock limit', () => {
-  it('rewrites old picks at start-up and treats it as a change of picks', async () => {
+describe('a change of what counts', () => {
+  it('a day registered by a version that counted a list of apps is registered again, counting everything', async () => {
     const phone = fakePhone();
-    phone.fixOldPicks = jest.fn(() => 'fixed');
-    phone.picksAfter = jest.fn(() => true);
+    phone.moveToEverything = jest.fn(() => true);
     const { store } = load(phone, saved(60));
     await store.start();
-    expect(phone.picksAfter).toHaveBeenCalled();
-    // Cells left: no covers are up, so none are put back.
-    expect(phone.coverAgain).not.toHaveBeenCalled();
+    expect(phone.moveToEverything).toHaveBeenCalledWith(180);
+    expect(phone.applyPlan).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(10);
+    expect(phone.applyPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it('a day already counting everything is left as it is', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(60));
+    await store.start();
+    jest.advanceTimersByTime(5000);
+    expect(phone.applyPlan).not.toHaveBeenCalled();
   });
 
   it('puts the covers up again from the new picks while the battery is empty', async () => {
@@ -465,14 +474,66 @@ describe('picks over the 50-app lock limit', () => {
     expect(phone.coverAgain).toHaveBeenCalledWith(false, expect.anything(), expect.any(Number));
   });
 
-  it('does not mark the day for too many apps: counting still works', async () => {
+  it('the first choice of essentials on an empty battery takes the covers off once the day is counted without them', async () => {
     const phone = fakePhone();
-    const { store } = load(phone, saved(40));
+    phone.essentialsChosen = jest.fn(() => false);
+    phone.picksAfter = jest.fn(() => true);
+    phone.usedSoFar = jest.fn(() => 180);
+    const { store } = load(phone, saved(180));
     await store.start();
-    phone.health = jest.fn(() => 'tooManyApps');
-    phone.wrongSince = jest.fn((now: number) => now - 60 * 60 * 1000);
-    store.tick(new Date());
-    expect(store.get().doc.day.uncounted).toBe(false);
+    // Apple's list closes on the first choice: from here the essentials are chosen.
+    phone.essentialsAfter = jest.fn(() => {
+      phone.essentialsChosen = jest.fn(() => true);
+      return 0;
+    });
+    expect(store.essentialsClosed()).toBe(0);
+    // Still empty as the list closes: the covers go back up from the new list.
+    expect(phone.coverAgain).toHaveBeenLastCalledWith(true, expect.anything(), 0);
+    // The phone re-reports the day: what the essentials used no longer counts.
+    phone.usedSoFar = jest.fn(() => 95);
+    jest.advanceTimersByTime(7000);
+    expect(store.get().doc.day.usedMinutes).toBe(95);
+    expect(phone.coverAgain).toHaveBeenLastCalledWith(false, expect.anything(), 0);
+    // Once is enough: the later looks leave the phone alone.
+    const calls = (phone.coverAgain as jest.Mock).mock.calls.length;
+    jest.advanceTimersByTime(90_000);
+    expect((phone.coverAgain as jest.Mock).mock.calls.length).toBe(calls);
+  });
+
+  it('the covers stay up after a first choice that leaves the battery empty, and after any later change', async () => {
+    const phone = fakePhone();
+    phone.essentialsChosen = jest.fn(() => false);
+    phone.picksAfter = jest.fn(() => true);
+    phone.usedSoFar = jest.fn(() => 180);
+    const { store } = load(phone, saved(180));
+    await store.start();
+    phone.essentialsAfter = jest.fn(() => {
+      phone.essentialsChosen = jest.fn(() => true);
+      return 0;
+    });
+    store.essentialsClosed();
+    jest.advanceTimersByTime(90_000);
+    expect(phone.coverAgain).toHaveBeenLastCalledWith(true, expect.anything(), 0);
+    // A later change on an empty battery waits for the recharge (essentials.ts): nothing comes off for it.
+    phone.usedSoFar = jest.fn(() => 95);
+    (phone.coverAgain as jest.Mock).mockClear();
+    store.essentialsClosed();
+    phone.usedSoFar = jest.fn(() => 180);
+    jest.advanceTimersByTime(90_000);
+    expect(phone.coverAgain).not.toHaveBeenCalledWith(false, expect.anything(), expect.any(Number));
+  });
+
+  it('setup again (test builds) forgets the essentials and shows setup, with counting left on', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(60));
+    await store.start();
+    expect(store.get().doc.setupDone).toBe(true);
+    store.setupAgain();
+    expect(phone.forgetEssentials).toHaveBeenCalledTimes(1);
+    expect(phone.picksAfter).toHaveBeenCalled();
+    expect(phone.turnOff).not.toHaveBeenCalled();
+    expect(store.get().doc.setupDone).toBe(false);
+    expect(store.get().doc.watching).toBe(true);
   });
 });
 
@@ -488,16 +549,16 @@ describe('turning counting on', () => {
     expect(phone.applyPlan).not.toHaveBeenCalled();
   });
 
-  it('says "nothingPicked" when access is on but the essentials were never chosen, and registers nothing', async () => {
-    // App Review, 1.1.0 on an iPad: setup's essentials skipped, then "Turn on Screen Time" said "would not start counting".
+  it('starts counting with the essentials never chosen: everything counts', async () => {
+    // App Review, 1.1.0 on an iPad: setup's essentials skipped, then "Turn on Screen Time" did nothing, as nothing could be counted.
     const phone = fakePhone();
     phone.isOn = jest.fn(() => false);
-    phone.somethingCounts = jest.fn(() => false);
+    phone.essentialsChosen = jest.fn(() => false);
     const { store } = load(phone, saved(0, { watching: false }));
     await store.start();
-    expect(await store.turnOnScreenTime()).toBe('nothingPicked');
-    expect(store.get().doc.watching).toBe(false);
-    expect(phone.applyPlan).not.toHaveBeenCalled();
+    expect(await store.turnOnScreenTime()).toBe('on');
+    expect(store.get().doc.watching).toBe(true);
+    expect(phone.applyPlan).toHaveBeenCalledTimes(1);
   });
 
   it('says "failed" when the phone will not register the day', async () => {
@@ -916,8 +977,6 @@ describe('essentials that wait for the recharge', () => {
     await store.start();
     store.essentialsClosed();
     expect(phone.essentialsAfter).toHaveBeenLastCalledWith(false);
-    store.appsShownClosed();
-    expect(phone.appsAfter).toHaveBeenLastCalledWith(false);
 
     const first = fakePhone();
     const raw = saved(60);
@@ -932,8 +991,6 @@ describe('essentials that wait for the recharge', () => {
     expect(empty.store.usePass()).toBe(true);
     empty.store.essentialsClosed();
     expect(pass.essentialsAfter).toHaveBeenLastCalledWith(true);
-    empty.store.appsShownClosed();
-    expect(pass.appsAfter).toHaveBeenLastCalledWith(true);
   });
 
   it('using a pass starts the ones that wait: a pass skips the wait', async () => {

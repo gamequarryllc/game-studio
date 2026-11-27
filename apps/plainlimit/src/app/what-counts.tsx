@@ -2,9 +2,9 @@ import { Text } from 'react-native';
 
 import { clockLabelOf, dayWord } from '@/domain/day';
 import { batteryEnd } from '@/domain/recharge';
-import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, COUNTED_ID, isOn, permission, pickCount } from '@/platform/screenTime';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, isOn, permission } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
-import { COUNTS_LEAD, OLD_LIST_NOTE } from '@/ui/countWords';
+import { COUNTS_LEAD, EVERYTHING_COUNTS } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { Lead, Page, Title } from '@/ui/kit';
 import { c } from '@/ui/theme';
@@ -16,9 +16,9 @@ import { c } from '@/ui/theme';
 // name, "what counts".)
 //
 // Like the goal, the essentials can't change while the battery is empty:
-// ticking an app would be a way round its lock. Choosing them for
-// the first time is always open, since until then an older list may not be
-// locking at all.
+// ticking an app would be a way round its lock. Choosing them for the first
+// time is always open, and starts at once: until then every app counts,
+// since setup no longer has to ask (state/setupKind.ts).
 //
 // And like a higher goal, a new essential waits for the next recharge
 // (domain/essentials.ts): an app made an essential stops counting what it
@@ -30,8 +30,7 @@ export default function WhatCounts() {
   // Asks the phone and the clock as it draws (is it locked, what waits, which day): never kept from an earlier drawing.
   'use no memo';
   const doc = useDoc();
-  // Essentials chosen here after setup skipped them: counting starts now, as setup's last screen says it will.
-  // (Up to build 152 it waited for "Turn on Screen Time" in Settings, which nothing pointed to.)
+  // Counting needs no essentials, but if it is off with access given (an older build's skipped setup), choosing them here starts it.
   const e = useEssentials(() => {
     if (SCREEN_TIME_AVAILABLE && doc.setupDone && permission() === 'approved' && !isOn()) void store.turnOnScreenTime();
   });
@@ -39,7 +38,6 @@ export default function WhatCounts() {
   const nextBattery = batteryEnd(doc.day, doc.settings);
   const when = { day: dayWord(nextBattery, new Date()), recharge: clockLabelOf(nextBattery) };
   const locked = settingsLocked() && e.ready;
-  const oldList = !e.ready && pickCount(COUNTED_ID) > 0;
   return (
     <Page header top={8}>
       <Title>Essentials</Title>
@@ -47,7 +45,7 @@ export default function WhatCounts() {
       {e.ready ? null : <Lead>{COUNTS_LEAD}</Lead>}
       {SCREEN_TIME_AVAILABLE || MOCK_PHONE ? (
         <>
-          {oldList ? <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>{OLD_LIST_NOTE}</Text> : null}
+          {e.ready ? null : <Text style={{ fontSize: 15, lineHeight: 21, color: c.ink }}>{EVERYTHING_COUNTS}</Text>}
           <EssentialsSteps e={e} locked={locked} when={when} />
         </>
       ) : (

@@ -3,7 +3,10 @@ import { checkpointsFor, GUARD_KEY, GUARD_MS, guardFor, PACE_SLACK_MINUTES } fro
 import {
   ACTIVITY,
   COUNTED_ID,
+  KEPT_ACTIVITY,
+  OVER_ACTIVITY,
   SHORTEST_WATCH_MINUTES,
+  TICKS_ACTIVITY,
   TOPUP_ACTIVITY,
   WIDGET_PLAN_KEY,
   clockOf,
@@ -15,6 +18,7 @@ import {
   spanOf,
   topUpWindow, earliestTrue, lockNotBefore } from '../monitorPlan';
 import { DEFAULT_SETTINGS } from '../settings';
+import { KEPT_MINUTES, SETTLE_MS } from '../tally';
 import { glowForCells } from '../tone';
 import type { Settings } from '../types';
 
@@ -225,5 +229,83 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain('plan["round"]');
     expect(swift).toContain('plan["roundBefore"]');
     expect(swift).toContain('"\\(name)~\\(inRound)"');
+  });
+
+  test('the same rule for everything less the essentials (tally.ts), in the widget and in the monitor extension', () => {
+    const ms = (n: number) => `${n.toLocaleString('en-US').replace(/,/g, '_')}.0`;
+    // The widget: the essentials' reports are the plan's marks with `kept`, weighed as the app weighs them.
+    expect(swift).toContain(`let settleMs = ${ms(SETTLE_MS)}`);
+    expect(swift).toContain('mark["kept"]');
+    expect(swift).toContain('registeredAt + settleMs');
+    expect(swift).toContain('used = max(used, mark.minutes - ceiling)');
+    expect(swift).toContain('cells = max(0, cellCount - Int((used * Double(cellCount) / goal).rounded(.down)))');
+    // The monitor extension, in the library patch: what screenTime.ts writes with each action, and the one record beside them.
+    const patch = require('fs').readFileSync(require('path').join(__dirname, '../../../patches/react-native-device-activity+0.6.1.patch'), 'utf8');
+    for (const part of ['action["tally"]', 'tally["room"]', 'tally["mark"]', 'tally["unless"]', 'tally["minutes"]']) expect(patch).toContain(part);
+    for (const field of ['round', 'rechargeMinute', 'countFrom', 'registeredAt', 'kept', 'everything']) expect(patch).toContain(`record["${field}"]`);
+    for (const part of ['entry["key"]', 'entry["minutes"]', `let plainlimitSettleMs = ${ms(SETTLE_MS)}`, `let plainlimitPaceSlackMinutes = ${PACE_SLACK_MINUTES.toFixed(1)}`, `let plainlimitGuardMs = ${ms(GUARD_MS)}`, `"${GUARD_KEY}"`]) expect(patch).toContain(part);
+    // The names the two sides share, as the app's own files have them.
+    const read = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../..', file), 'utf8');
+    expect(read('platform/saved.ts')).toContain("tally: 'plainlimit_tally'");
+    expect(patch).toContain('"plainlimit_tally"');
+    expect(read('platform/screenTime.ts')).toContain("const DONE_PREFIX = 'plainlimit_done_';");
+    expect(patch).toContain('"plainlimit_done_\\(name)~\\(inRound)"');
+    expect(patch).toContain('"plainlimit_done_\\(mark)~\\(inRound)"');
+    // Which reports redraw the widget: not the essentials' own, nor the minute ones.
+    expect(patch).toContain(`if activity == "${TICKS_ACTIVITY}" || activity == "${KEPT_ACTIVITY}" || activity.hasPrefix("plask") { return false }`);
+    expect(patch).toContain(`if activity == "${OVER_ACTIVITY}" {`);
+  });
+});
+
+describe('the plan with essentials: everything, less their minutes (tally.ts)', () => {
+  const goal = 120;
+
+  test('without essentials there are no rungs and no action waits on anything', () => {
+    const plan = monitorPlan(settings({ goalMinutes: goal }));
+    expect(plan.kept).toEqual([]);
+    expect(plan.over).toEqual([]);
+    for (const event of plan.events) for (const action of event.actions) expect(action.tally).toBeUndefined();
+    expect(plan.events.find((e) => e.name === 'empty')?.actions).toEqual([{ kind: 'cover', shield: 'empty' }]);
+  });
+
+  test('with essentials, their own rungs are registered and carry no actions', () => {
+    const plan = monitorPlan(settings({ goalMinutes: goal }), 0, null, true);
+    expect(plan.kept.map((k) => k.minutes)).toEqual([...KEPT_MINUTES]);
+    expect(plan.kept.every((k) => k.actions.length === 0)).toBe(true);
+    expect(plan.kept[0]).toMatchObject({ name: 'k1', after: { hour: 0, minute: 1, second: 0 } });
+    // The same day, the same checkpoints: only what they do changes.
+    const plain = monitorPlan(settings({ goalMinutes: goal }));
+    expect(plan.events.map((e) => [e.name, e.minutes])).toEqual(plain.events.map((e) => [e.name, e.minutes]));
+    expect(plan.ticks).toEqual(plain.ticks);
+  });
+
+  test('the lock waits on the essentials: at the goal with no room, and at each rung past it with that much', () => {
+    const plan = monitorPlan(settings({ goalMinutes: goal }), 0, null, true);
+    const lockOf = (event: { actions: { kind: string; tally?: { room: number; mark: string; unless: string[] } }[] }) => event.actions.find((a) => a.tally?.mark === 'lock');
+    expect(lockOf(plan.events.find((e) => e.name === 'empty') as never)?.tally).toEqual({ room: 0, mark: 'lock', unless: ['lock'] });
+    expect(plan.over.map((x) => x.minutes)).toEqual(KEPT_MINUTES.map((m) => goal + m));
+    for (const rung of plan.over) {
+      const lock = rung.actions[0];
+      // First in the list, so the warnings after it see that it has acted.
+      expect(lock).toMatchObject({ kind: 'cover', shield: 'empty', tally: { room: rung.minutes - goal, mark: 'lock', unless: ['lock'] } });
+    }
+    // Twelve hours of essentials on top of the goal still has a rung to lock on.
+    expect(plan.over[plan.over.length - 1].after).toEqual({ hour: 14, minute: 0, second: 0 });
+    // Nothing before the goal can lock.
+    for (const event of plan.events.filter((e) => e.minutes < goal)) expect(lockOf(event as never)).toBeUndefined();
+  });
+
+  test('the warning screen and "Nearly out" wait the same way, once each, and never after the lock', () => {
+    const plan = monitorPlan(settings({ goalMinutes: goal }), 0, null, true);
+    const lastCell = 100;
+    const near = goal - 7;
+    for (const event of [...plan.events, ...plan.over]) {
+      const warn = event.actions.find((a) => a.tally?.mark === 'warn');
+      const nearly = event.actions.find((a) => a.tally?.mark === 'near');
+      if (event.minutes >= lastCell) expect(warn).toMatchObject({ kind: 'cover', shield: 'warning', tally: { room: event.minutes - lastCell, unless: ['lock', 'warn'] } });
+      else expect(warn).toBeUndefined();
+      if (event.minutes >= near) expect(nearly).toMatchObject({ kind: 'notify', title: 'Nearly out', tally: { room: event.minutes - near, unless: ['lock', 'near'] } });
+      else expect(nearly).toBeUndefined();
+    }
   });
 });

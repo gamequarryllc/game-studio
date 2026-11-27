@@ -243,16 +243,19 @@ export function believable(checkpoint: Checkpoint, dayStart: Date, guard: Guard 
 }
 
 /**
- * The most that can have been used right now, while counting works: less than
- * the next checkpoint that has not been reported, since it would have been.
- * Twenty minutes are added for the phone being slow to report (build 72 was
- * seen a quarter of an hour behind). Nothing is known once the goal is passed,
- * as there are no checkpoints beyond it.
+ * The most the everything timer can have counted right now, while counting
+ * works: less than its next checkpoint that has not been reported, since it
+ * would have been. Twenty minutes are added for the phone being slow to
+ * report (build 72 was seen a quarter of an hour behind). `beyond` are its
+ * rungs past the goal (tally.ts), which exist only with essentials; without
+ * them nothing is known once the goal is passed, as there are no checkpoints
+ * beyond it.
  */
-export function mostByNow(goalMinutes: number, usedFloorNow: number, slackMinutes = 20): number | null {
+export function mostByNow(goalMinutes: number, countedNow: number, slackMinutes = 20, beyond: readonly number[] = []): number | null {
   const next = [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)]
     .map((c) => c.minutes)
-    .filter((m) => m > usedFloorNow)
+    .concat(beyond)
+    .filter((m) => m > countedNow)
     .sort((a, b) => a - b)[0];
   return next === undefined ? null : next + slackMinutes;
 }

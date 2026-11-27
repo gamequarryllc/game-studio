@@ -15,6 +15,7 @@ import { weekView } from '@/domain/week';
 import { DEV_TOOLS, SCREEN_TIME_AVAILABLE, isOn, locksHeldUntil } from '@/platform/screenTime';
 import { store, useDoc } from '@/state/store';
 import { CountingProblem } from '@/ui/CountingProblem';
+import { EssentialsOffer } from '@/ui/EssentialsOffer';
 import { NoticesOff } from '@/ui/NoticesOff';
 import { GlowBattery, GlowField } from '@/ui/GlowBattery';
 import { Icon } from '@/ui/icons';
@@ -91,6 +92,8 @@ export default function Today() {
 
         <View style={styles.rest}>
           <CountingProblem health={problem} />
+          {/* Until the essentials are chosen: every app counts, and this offers to keep some free (EssentialsOffer.tsx). */}
+          {problem === 'fine' ? <EssentialsOffer /> : null}
           {/* Only while counting: with it off, nothing would send one. */}
           {counting ? <NoticesOff asks={settings.emptyLevel === 'work' || askFirstFor(settings, store.hasPro()).on} /> : null}
           {held > 0 ? (
@@ -126,7 +129,7 @@ export default function Today() {
           {/* Two numbers side by side (the owner's "Scoreboard", 2026-11-25): used of the goal, and the streak, which
               was only on History. The phone draws its own figure, to the minute, over the app's stepped one. */}
           <View style={styles.board}>
-            <View accessible accessibilityLabel={`${durationLabel(day.usedMinutes)} used of ${durationLabel(settings.goalMinutes)}, since ${recharge}, not counting essentials`} style={styles.side}>
+            <View accessible accessibilityLabel={`${durationLabel(day.usedMinutes)} used of ${durationLabel(settings.goalMinutes)}, since ${recharge}`} style={styles.side}>
               <View>
                 {/* Holds the figure's room; the phone's own figure is drawn over it. */}
                 <View style={counting ? { opacity: 0 } : null}>{figure}</View>

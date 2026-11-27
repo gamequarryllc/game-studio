@@ -37,6 +37,8 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
   return (
     <View style={{ gap: 10 }}>
       <Label>What used it</Label>
+      {/* The phone's list can be asked for every app or for a list of apps, never "every app but these", so the essentials are in it. */}
+      {NativeReport && !window.exact ? <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>Every app is listed, your essentials too. Essentials don&apos;t use the battery.</Text> : null}
       {/* Nothing in the list can be tapped; touches pass to the screen behind so it still scrolls under a finger. */}
       {/* Sized for five rows, "and N more apps" and up to four lines of note (330 cut the note's third line); it is last on Today, so spare room is only extra scroll at the end. */}
       <View pointerEvents="none" style={{ height: 420, alignSelf: 'stretch' }}>
@@ -57,7 +59,7 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
  * A figure drawn by the phone's Screen Time over `fallback` (shown until it has
  * drawn, and wherever it can't). Plainlimit never learns the number it shows.
  */
-function PhoneFigure({ context, fromMs, toMs, selection, fallback, style }: { context: 'Total'; fromMs: number; toMs: number; selection: string; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
+function PhoneFigure({ context, fromMs, toMs, selection, fallback, style }: { context: 'Total'; fromMs: number; toMs: number; selection: string | null; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
   if (!NativeReport) return <View style={style}>{fallback}</View>;
   return (
     <View pointerEvents="none" style={[{ height: 52, alignSelf: 'stretch' }, style]}>
@@ -70,15 +72,17 @@ function PhoneFigure({ context, fromMs, toMs, selection, fallback, style }: { co
 
 /**
  * The day's figure, to the minute, as Apple's Screen Time counts it: every
- * minute the counted apps have been used since the recharge. Plainlimit itself
- * only hears of use in steps, so `fallback` (its own figure, in the same type)
- * shows until the phone has drawn its number over it.
+ * minute every app has been used since the recharge. Plainlimit itself only
+ * hears of use in steps, so `fallback` (its own figure, in the same type)
+ * shows until the phone has drawn its number over it. With essentials the
+ * phone's figure would take them in (it can be asked for every app or for a
+ * list, never "every app but these"), so Plainlimit's own figure stands.
  */
 export function TodayTotal({ settings, now, fallback, style }: { settings: Settings; now: Date; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
   const window = SCREEN_TIME_AVAILABLE && NativeReport ? reportWindow(settings, now) : null;
   // Counting from a moment after the recharge (setup's "count from now"): the
   // phone's report goes by whole hours and would take in use from before it.
-  if (!window || !window.fromRecharge || !window.selection) return <View style={style}>{fallback}</View>;
+  if (!window || !window.fromRecharge || !window.exact) return <View style={style}>{fallback}</View>;
   return <PhoneFigure context="Total" fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} fallback={fallback} style={style} />;
 }
 
@@ -113,7 +117,7 @@ export function WholeTotal({ settings, now, fallback }: { settings: Settings; no
  * take a minute (the owner, builds 138 and 144), and the app can neither hurry
  * it nor tell when it is done; started here, most of that minute is over by
  * the time "How much a day?" asks for its chart. It reads the same days as the
- * chart will, and no selection, since the chart's own needs the essentials.
+ * chart will, every app.
  * Setup takes it away once the chart itself is on its way, so the phone is
  * never asked for both at once.
  *
@@ -151,7 +155,7 @@ export function SetupFigures({ settings, now, todayLabel }: { settings: Settings
   // The scale is picked once, as the screen opens, and never changes while it is open (see `weekScale`), so the stepper only moves the line.
   const [hours] = useState(() => weekScale(settings.goalMinutes));
   const window = SCREEN_TIME_AVAILABLE && NativeReport ? setupWindow(settings, now) : null;
-  if (!NativeReport || !window || !window.selection) return null;
+  if (!NativeReport || !window) return null;
   return (
     <View pointerEvents="none" style={{ height: SETUP.height, alignSelf: 'stretch' }}>
       {/* Under the phone's picture, and covered by it once drawn: dots where the figures go, stand-in bars where the chart goes. */}

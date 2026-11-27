@@ -38,10 +38,14 @@ describe('the target plugin', () => {
     }
   });
 
-  it('still teaches the monitor extension to redraw the widget, but not for the minute checkpoints or Second thought', () => {
+  it("still teaches the monitor extension to redraw the widget, but not for the minute checkpoints, Second thought or the essentials' timer", () => {
     const swift = fs.readFileSync(path.join(root, 'targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift'), 'utf8');
-    expect(count(swift, 'if activity.rawValue != "plmin" && !activity.rawValue.hasPrefix("plask") {')).toBe(3);
+    expect(count(swift, 'if plainlimitRedraws(activity: activity.rawValue) {')).toBe(3);
     expect(count(swift, 'WidgetCenter.shared.reloadAllTimelines()')).toBe(3);
+    // The rule itself is in the library patch, which every extension is built with.
+    const shared = fs.readFileSync(path.join(root, 'targets/ActivityMonitorExtension/Shared.swift'), 'utf8');
+    expect(shared).toContain('func plainlimitRedraws(activity: String) -> Bool');
+    expect(shared).toContain('if activity == "plmin" || activity == "plkept" || activity.hasPrefix("plask") { return false }');
   });
 
   it('leaves prepared targets alone the second time', () => {

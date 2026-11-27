@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
@@ -14,12 +13,6 @@ import { c } from './theme';
 // view marks those days instead.
 
 const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string; title?: string }> = {
-  nothingPicked: { line: 'Your essentials aren’t set yet, so nothing is counted or locked.', button: 'Set essentials' },
-  tooManyApps: {
-    title: 'Not locking',
-    line: 'Your list is from an older version, and iOS can’t lock all of it. Set your essentials again: it takes a minute.',
-    button: 'Set essentials',
-  },
   accessOff: {
     line: 'Screen Time access for Plainlimit was turned off in the Settings app, so nothing is being counted or locked.',
     button: 'Turn it back on',
@@ -29,7 +22,6 @@ const COPY: Record<Exclude<Health, 'fine'>, { line: string; button: string; titl
 };
 
 export function CountingProblem({ health }: { health: Health }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   if (health === 'fine') return null;
@@ -37,10 +29,6 @@ export function CountingProblem({ health }: { health: Health }) {
 
   const fix = async () => {
     if (busy) return;
-    if (health === 'nothingPicked' || health === 'tooManyApps') {
-      router.push('/what-counts');
-      return;
-    }
     setBusy(true);
     setProblem(null);
     let result: 'on' | 'denied' | 'failed' = 'failed';

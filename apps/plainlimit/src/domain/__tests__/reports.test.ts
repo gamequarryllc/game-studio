@@ -1,6 +1,7 @@
 import { asGuard, believable, checkpointsFor, GUARD_MS, guardFor, guardFrom, judgedFrom, keepsPace, minuteTicksFor, mostByNow, paceRules, roundName, type Guard } from '../checkpoints';
 import { earliestTrue, lockNotBefore } from '../monitorPlan';
-import { countDay, doubtful, marksOf, miscounted, roundSettled, roundStanding, withFloor, type Report, type Rounds } from '../reports';
+import { countDay, doubtful, everythingCounted, keptCounted, keptMarksOf, marksOf, miscounted, roundSettled, roundStanding, withFloor, type Report, type Rounds } from '../reports';
+import { SETTLE_MS, overRungs } from '../tally';
 
 /** A clock for one day in November 2026, in milliseconds. */
 const november = (date: number) => (h: number, m = 0, s = 0) => new Date(2026, 10, date, h, m, s).getTime();
@@ -285,5 +286,69 @@ describe('replaying real days', () => {
     const dayStart = clock(6);
     const reports = [report('cell-1', 'r', clock(9)), report('cell-2', 'r', clock(23)), report('cell-3', 'r', november(13)(6, 30))];
     expect(countDay({ reports, goalMinutes: 180, dayStart, periodEnd: november(13)(6), rounds: oneRound('r'), guard: null, now: november(13)(7) })).toBe(60);
+  });
+});
+
+describe('a day with essentials: everything, less their own timer (tally.ts)', () => {
+  const day = november(27);
+  const start = day(6);
+  const goal = 120;
+  const input = (reports: Report[], now: number, more: Partial<Parameters<typeof countDay>[0]> = {}) => ({ reports, goalMinutes: goal, dayStart: start, rounds: oneRound('r'), guard: null, now, ...more });
+
+  it('takes the essentials off each report of everything, to their next rung', () => {
+    // An hour of everything by 9:00, with the essentials last heard of at ten minutes (so under fifteen).
+    const reports = [report('k10', 'r', day(8, 30)), report('cell-3', 'r', day(9))];
+    expect(countDay(input(reports, day(9, 1)))).toBe(45);
+    expect(everythingCounted(input(reports, day(9, 1)))).toBe(60);
+    expect(keptCounted(input(reports, day(9, 1)))).toBe(10);
+    // With no report from the essentials, the day is the everything timer's own figure.
+    expect(countDay(input([report('cell-3', 'r', day(9))], day(9, 1)))).toBe(60);
+  });
+
+  it('reads the rungs past the goal, and stops at the goal', () => {
+    // Two hours and a half of everything, an hour of it in the essentials: ninety minutes used, at least.
+    const x30 = overRungs(goal).find((x) => x.id === 'x30');
+    expect(x30?.minutes).toBe(150);
+    const reports = [report('k55', 'r', day(10)), report('empty', 'r', day(10, 30)), report('x30', 'r', day(11))];
+    expect(everythingCounted(input(reports, day(11, 1)))).toBe(150);
+    // 120 less 60 at the goal, then 150 less 60: 90.
+    expect(countDay(input(reports, day(11, 1)))).toBe(90);
+    // An hour more of anything else: the next rungs take it to the goal, and no further.
+    const later = [...reports, report('x60', 'r', day(12)), report('x90', 'r', day(13))];
+    expect(countDay(input(later, day(13, 1)))).toBe(120);
+  });
+
+  it('throws out a report of the essentials that cannot be true, as it does any other', () => {
+    // An hour of essentials two minutes into the day: the phone firing for nothing. It holds nothing back.
+    const reports = [report('k60', 'r', day(6, 2)), report('cell-3', 'r', day(9))];
+    expect(keptMarksOf(reports, 'r', start)).toHaveLength(1);
+    expect(keptCounted(input(reports, day(9, 1)))).toBe(0);
+    expect(countDay(input(reports, day(9, 1)))).toBe(60);
+    // ...and one that runs ahead of its own earlier rungs (keepsPace): 5 at 8:00, then 120 at 8:10.
+    const burst = [report('k5', 'r', day(8)), report('k120', 'r', day(8, 10)), report('cell-3', 'r', day(9))];
+    expect(keptCounted(input(burst, day(9, 1)))).toBe(5);
+    expect(countDay(input(burst, day(9, 1)))).toBe(50);
+  });
+
+  it('reads the two timers from the same round, and the old round until the new one has been re-reported', () => {
+    // The essentials changed at 9:00 (round b, from a). Round a: an hour of everything, ten minutes of essentials.
+    const changedAt = day(9);
+    const inA = [report('k10', 'a', day(8, 30)), report('cell-3', 'a', day(8, 50))];
+    const rounds: Rounds = { round: 'b', roundBefore: 'a', goalBefore: goal, picksChangedAt: changedAt };
+    expect(countDay(input(inA, changedAt + 1000, { rounds }))).toBe(45);
+    // Re-reported for the new list, where the essentials had used forty: 60 less 45.
+    const inB = [report('cell-3', 'b', changedAt + 3000), report('k40', 'b', changedAt + 4000)];
+    expect(countDay(input([...inA, ...inB], changedAt + 10_000, { rounds, registeredAt: changedAt }))).toBe(15);
+    // The same reports without the settling after the registration would have counted the hour in full.
+    expect(countDay(input([...inA, ...inB], changedAt + 10_000, { rounds, registeredAt: changedAt - 2 * SETTLE_MS }))).toBe(60);
+  });
+
+  it('knows how far the everything timer can have got from its rungs past the goal too', () => {
+    // Under the goal: the next checkpoint, as before.
+    expect(mostByNow(goal, 100, 20, overRungs(goal).map((x) => x.minutes))).toBe(mostByNow(goal, 100, 20));
+    // At the goal there was nothing beyond; with essentials the next rung is a minute on.
+    expect(mostByNow(goal, goal, 20)).toBeNull();
+    expect(mostByNow(goal, goal, 20, overRungs(goal).map((x) => x.minutes))).toBe(goal + 1 + 20);
+    expect(mostByNow(goal, goal + 30, 20, overRungs(goal).map((x) => x.minutes))).toBe(goal + 35 + 20);
   });
 });

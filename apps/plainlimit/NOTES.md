@@ -597,3 +597,40 @@ To check on a phone (test builds: Settings, Developer, "Start the day over" stan
 2. Take an essential out: it leaves "Always open" at once. Put it back the same day: it is back at once.
 3. Start the day over (or open the app after 6 AM): the waiting app is in "Always open", the "Joining" card is gone, and the app no longer uses the battery.
 4. With an empty battery, use an emergency pass with an app waiting: it joins at once and stays open after the pass.
+
+## Setup without Apple's two lists: everything counts, less the essentials (the owner, 2026-11-26; branch `claude/project-thread-o2tfoj`, a test build, not merged)
+
+The owner asked for first setup to be easier, "some crafty way to select all by them pressing a button rather than the apple popup", then picked "nothing to pick" from three mock-ups and asked for a test build of it, with "one list" beside it to compare. Research and mock-ups: project files, `plainlimit/setup-simpler-mockups/findings.md`.
+
+What made setup need two lists. Up to 1.1 the phone was handed every app by name, less the essentials, and counted those. Getting every app by name takes Apple's list with All Apps ticked (the first list), and "Refresh list" for apps installed later. No button can tick that list for the person: Apple draws it and the app cannot touch it.
+
+The way round. Apple's timers count **everything** when they are given no apps at all. So the day's checkpoints are registered with nothing: no first list, no "Refresh list", and a new app counts from its first minute. Apple has no "everything except these" for counting (only for the lock, `.all(except:)`, which is unchanged). So the essentials get a timer of their own, and the battery is the one less the other (`src/domain/tally.ts`):
+
+- **Two timers.** The everything timer keeps the day's own checkpoints (the cells, the warnings, empty, the minute ones). With essentials chosen, their own timer (`plkept`) reports a ladder of 48 rungs (every minute to five, every five to two hours, wider after), and the everything timer gets 48 more rungs past the goal (`plover`: the goal plus each rung), since the battery is empty at the goal plus whatever the essentials used. With no essentials neither is registered and the count is the everything timer's, as it always was.
+- **The benefit of the doubt.** The phone says when a rung is reached, never the minutes between. Whenever it matters the essentials are taken to have used up to their next rung, so **the battery never locks before the goal is used, and can lock up to one rung late** on a day the essentials were used (five minutes in their first two hours, more after). Past their last rung (12 hours of essentials) nothing more is known and nothing locks.
+- **Three places, one rule.** The app (`usedKnown`), the monitor extension (`plainlimitTally` in the library patch: each action carries `tally: {room, mark, unless}` and is skipped unless the essentials' reports leave room for it) and the widget. `src/domain/__tests__/tally.test.ts` replays days minute by minute against it, and the Swift is pinned by string in `monitorPlan.test.ts`. What the extension needs to know is saved as `plainlimit_tally`; what has been done today (lock, warn, near) as `plainlimit_done_<mark>~<round>`, so the empty screen and the warnings come once whichever rung brings them.
+- **Settling.** For a minute after a registration the phone re-reports the day so far, both timers at once in no order, so it locks nothing then (`SETTLE_MS`); the app covers when the minute is over if the battery is empty, and redraws the widget. A lock that falls due inside that minute with the app closed comes at the next rung.
+- **Phones on the old engine** are moved once (`moveToEverything`, `plainlimit_engine` = 2): their essentials are kept, the day is registered again, and the old lists (`plall`, `counted`) are left where they are, so an older build still finds them.
+
+Setup, in two drafts (`src/state/setupKind.ts`; test builds switch in Settings, Developer, "Try setup 3 / setup 1", or with the quiet link on setup's first screen; a release build is setup 3 only):
+
+- **Setup 3, nothing to pick** (the default): welcome, Screen Time, notifications, goal, ready. No Apple list. Every app counts until essentials are chosen, and Today carries a card for it ("Keep your essentials free") until they are.
+- **Setup 1, one list**: the same with one step more, Apple's list once, for the essentials only ("Choose essentials" or "Skip: count everything").
+- **The first choice of essentials is at once**, whatever the battery, since setup no longer asks; on an empty battery the covers come off once the day has been counted without them (`uncoverAfterFirstEssentials`). Every later new essential waits for the recharge as before. That first choice is a one-time way out of an empty battery.
+
+What it does to the rest:
+
+- **Second thought** has its own list, covers and timers and is not changed. Time in one of its apps uses the battery as before, unless the app is an essential. It shares the phone's patience for timers with the essentials: about 96 more thresholds on a day with essentials, which no phone has yet been asked for alongside it.
+- **Passes and earned time** work through the same "not before" and top-up as before. A pass raises the goal, which starts a new round and so clears the day's done marks.
+- **The "Warn" level** (red screen, then tap through) still shows its red screen once a day, whichever rung brings it.
+- **"What used it" and setup's seven-day chart include the essentials.** Apple's report can be filtered to a list or left on everything, never "everything but these", and the report extension cannot read the essentials (no App Group; adding one means new provisioning for that App ID). A line under the list says so.
+- **Today's "used" figure** is the phone's exact total with no essentials, and the app's stepped figure with them.
+- **Setup mid-day counts everything since the recharge**, essentials too until they are chosen, so "Already past your goal" on the last screen is likelier than it was.
+
+Not known until a phone has run it (the readout has "Everything timer: at least N min" and "Essentials timer: at least N min"):
+
+1. What a timer with no apps counts: app use only, or all screen-on time, Plainlimit itself, Phone, Settings. The battery could drain faster than on 1.1.
+2. Whether the two timers keep step: an essential's minute must reach both, or the battery drifts.
+3. Whether iOS keeps delivering with the extra thresholds, and with Second thought's on top.
+
+If this ships: the App Review notes and the listing describe choosing apps in two steps and want rewording, and the screenshots of setup change.

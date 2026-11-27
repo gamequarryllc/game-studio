@@ -7,6 +7,7 @@ import { checkpointsFor, guardFrom, minuteTicksFor, type Guard } from './checkpo
 import { wrapMinute } from './day';
 import { topUpPlan } from './puzzle';
 import { emptyCopy, warningCopy, type ShieldCopy } from './shield';
+import { KEPT_ACTIVITY, OVER_ACTIVITY, keptRungs, overRungs, type Tally } from './tally';
 import { toneForCells } from './tone';
 import type { Settings } from './types';
 
@@ -18,8 +19,10 @@ export const TICKS_ACTIVITY = 'plmin';
 export const TOPUP_ACTIVITY = 'pltop';
 /** The shortest stretch of time the phone will agree to watch. */
 export const SHORTEST_WATCH_MINUTES = 15;
-/** Apple's picker stores the person's picks under this name; the app never sees the apps themselves. */
+/** The list of apps a version before the everything timer counted (tally.ts). Kept on the phone, no longer read. */
 export const COUNTED_ID = 'counted';
+/** What a checkpoint is registered with to count everything: no apps at all (Apple's DeviceActivityEvent then takes in all activity). */
+export const EVERYTHING = '';
 /** Where the app leaves the goal and recharge time for the home screen widget. */
 export const WIDGET_PLAN_KEY = 'plainlimit_plan';
 
@@ -36,9 +39,10 @@ export interface Span {
 
 export type ShieldId = 'warning' | 'empty';
 
+/** `tally`: only once the essentials' minutes are taken off (tally.ts). Without it the action is the checkpoint's own. */
 export type PlanAction =
-  | { kind: 'cover'; shield: ShieldId }
-  | { kind: 'notify'; title: string; body: string; route?: string };
+  | { kind: 'cover'; shield: ShieldId; tally?: Tally }
+  | { kind: 'notify'; title: string; body: string; route?: string; tally?: Tally };
 
 /** What a button on a covering screen does. */
 export type ButtonEffect = 'close' | 'uncover' | 'puzzle';
@@ -83,6 +87,10 @@ export interface MonitorPlan {
   events: PlanEvent[];
   /** The minute checkpoints, for TICKS_ACTIVITY over the same stretch of day. They carry no actions. */
   ticks: PlanEvent[];
+  /** The essentials' own rungs, for KEPT_ACTIVITY (tally.ts). None when there are no essentials. They carry no actions. */
+  kept: PlanEvent[];
+  /** The everything timer's rungs past the goal, for OVER_ACTIVITY: they lock once the essentials' minutes are taken off. None when there are no essentials. */
+  over: PlanEvent[];
   shields: PlanShield[];
   /** For the widget. */
   widget: { goalMinutes: number; rechargeMinute: number; countFrom: number };
@@ -217,17 +225,38 @@ export function includesEarlierUse(periodStart: Date, countingSince: number | nu
   return countingSince === null || countingSince <= periodStart.getTime();
 }
 
-export function monitorPlan(settings: Settings, topUpsSoFar = 0, countingSince: number | null = null): MonitorPlan {
-  const checkpoints = checkpointsFor(settings.goalMinutes);
+const NEARLY_OUT = { title: 'Nearly out', body: 'Your battery is about to run out for today.' } as const;
+
+/**
+ * `essentials`: some apps are essentials, so what uses the battery is
+ * everything less their minutes (tally.ts). Each action then waits until the
+ * essentials can have used no more than the room its checkpoint leaves, and
+ * the everything timer gets rungs past the goal to lock on. Without
+ * essentials the day is the checkpoints alone, as it always was.
+ */
+export function monitorPlan(settings: Settings, topUpsSoFar = 0, countingSince: number | null = null, essentials = false): MonitorPlan {
+  const goal = settings.goalMinutes;
+  const checkpoints = checkpointsFor(goal);
   const lastCellAt = Math.max(...checkpoints.filter((c) => c.id.startsWith('cell-')).map((c) => c.minutes));
+  const nearAt = checkpoints.find((c) => c.id === 'final-warning')?.minutes ?? goal;
+  // On a short day the last warning falls on the last cell, which already brings a screen; one is enough.
+  const nearToo = nearAt > lastCellAt;
+  /** What a report of `minutes` of everything may do, once the essentials leave room for it: lock at the goal, and before that the two warnings. */
+  const tallied = (minutes: number): PlanAction[] => {
+    const actions: PlanAction[] = [];
+    if (minutes >= goal) actions.push({ kind: 'cover', shield: 'empty', tally: { room: minutes - goal, mark: 'lock', unless: ['lock'] } });
+    if (minutes >= lastCellAt) actions.push({ kind: 'cover', shield: 'warning', tally: { room: minutes - lastCellAt, mark: 'warn', unless: ['lock', 'warn'] } });
+    if (nearToo && minutes >= nearAt) actions.push({ kind: 'notify', ...NEARLY_OUT, tally: { room: minutes - nearAt, mark: 'near', unless: ['lock', 'near'] } });
+    return actions;
+  };
   const events: PlanEvent[] = checkpoints.map((checkpoint) => {
     const actions: PlanAction[] = [];
-    if (checkpoint.effect === 'warning' && checkpoint.id.startsWith('cell-')) actions.push({ kind: 'cover', shield: 'warning' });
-    // On a short day the last warning falls on the last cell, which already brings a screen; one is enough.
-    if (checkpoint.id === 'final-warning' && checkpoint.minutes > lastCellAt) {
-      actions.push({ kind: 'notify', title: 'Nearly out', body: 'Your battery is about to run out for today.' });
+    if (essentials) actions.push(...tallied(checkpoint.minutes));
+    else {
+      if (checkpoint.effect === 'warning' && checkpoint.id.startsWith('cell-')) actions.push({ kind: 'cover', shield: 'warning' });
+      if (checkpoint.id === 'final-warning' && nearToo) actions.push({ kind: 'notify', ...NEARLY_OUT });
+      if (checkpoint.effect === 'empty') actions.push({ kind: 'cover', shield: 'empty' });
     }
-    if (checkpoint.effect === 'empty') actions.push({ kind: 'cover', shield: 'empty' });
     return { name: checkpoint.id, after: spanOf(checkpoint.minutes), minutes: checkpoint.minutes, actions };
   });
   return {
@@ -236,8 +265,12 @@ export function monitorPlan(settings: Settings, topUpsSoFar = 0, countingSince: 
     // The day ends a minute before the next one starts, which is also when the screens come off.
     end: clockOf(settings.rechargeMinute - 1),
     events,
-    ticks: minuteTicksFor(settings.goalMinutes).map((t) => ({ name: t.id, after: spanOf(t.minutes), minutes: t.minutes, actions: [] })),
+    ticks: minuteTicksFor(goal).map((t) => ({ name: t.id, after: spanOf(t.minutes), minutes: t.minutes, actions: [] })),
+    kept: essentials ? keptRungs().map((k) => ({ name: k.id, after: spanOf(k.minutes), minutes: k.minutes, actions: [] })) : [],
+    over: essentials ? overRungs(goal).map((x) => ({ name: x.id, after: spanOf(x.minutes), minutes: x.minutes, actions: tallied(x.minutes) })) : [],
     shields: [shieldFor('warning', settings, topUpsSoFar), shieldFor('empty', settings, topUpsSoFar)],
-    widget: { goalMinutes: settings.goalMinutes, rechargeMinute: settings.rechargeMinute, countFrom: countingSince ?? 0 },
+    widget: { goalMinutes: goal, rechargeMinute: settings.rechargeMinute, countFrom: countingSince ?? 0 },
   };
 }
+
+export { KEPT_ACTIVITY, OVER_ACTIVITY };

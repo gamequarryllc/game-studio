@@ -15,6 +15,7 @@ import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/t
 import { allowAskFirst, applyAskFirst, openAsk, type AskOpen } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
+import { setupKind } from '@/state/setupKind';
 
 // The one copy of what the app knows, and the only place it changes.
 
@@ -143,6 +144,37 @@ function uncoverWithCharge(doc: Doc, now: Date) {
   if (cellsLeft(day.usedMinutes, settings.goalMinutes) === 0 || screenTime.busyRegistering() || screenTime.locksHeldUntil() > 0) return;
   uncoveredAfter = day.unlockedUntil;
   screenTime.coverAgain(false, settings, day.topUps);
+}
+
+/**
+ * The essentials were chosen for the first time, on an empty battery. Their
+ * minutes stop counting at once, so the battery may have charge again, while
+ * the covers went up for a count that took them in. Once the phone has
+ * re-reported the day without them, the covers come off if it has; the
+ * battery's own checkpoints cover the apps again when it is empty. (A later
+ * change of essentials waits for the recharge, or comes with a pass, which
+ * `uncoverWithCharge` sees to.)
+ */
+const FIRST_ESSENTIALS_LOOKS_MS = [6_000, 12_000, 25_000, 45_000, 70_000];
+function uncoverAfterFirstEssentials() {
+  let done = false;
+  for (const wait of FIRST_ESSENTIALS_LOOKS_MS) {
+    setTimeout(() => {
+      if (done || snapshot.state !== 'ready') return;
+      try {
+        const now = new Date();
+        store.tick(now);
+        const { day, settings } = snapshot.doc;
+        if (!screenTime.isOn() || screenTime.busyRegistering() || !screenTime.countSettled(settings)) return;
+        if (cellsLeft(day.usedMinutes, settings.goalMinutes) === 0 || isUnlocked(day, now)) return;
+        done = true;
+        screenTime.coverAgain(false, settings, day.topUps);
+        redrawAndLookAgain();
+      } catch {
+        // The next look tries again.
+      }
+    }, wait);
+  }
 }
 
 /**
@@ -281,13 +313,7 @@ function checkHealth(doc: Doc): Doc {
   // While counting works, the floor it has reached is something known for the guard.
   if (state === 'fine') {
     screenTime.rightAgain();
-    screenTime.noteKnown(doc.settings, doc.day.usedMinutes);
-    return doc;
-  }
-  // Nothing ticked, or more single apps than iOS will lock: counting still
-  // works, so the day is not marked; Today says what to do.
-  if (state === 'nothingPicked' || state === 'tooManyApps') {
-    screenTime.rightAgain();
+    screenTime.noteKnown(doc.settings);
     return doc;
   }
   // During setup, and while Plainlimit itself is registering the day (which can
@@ -311,7 +337,7 @@ function checkHealth(doc: Doc): Doc {
     recountedFor = doc.day.periodStart;
     screenTime.markRecounted(new Date(doc.day.periodStart));
     // What is known now guards the registration that follows (see `Guard`).
-    screenTime.noteKnown(doc.settings, doc.day.usedMinutes);
+    screenTime.noteKnown(doc.settings);
     void screenTime.countAgain(doc.settings, doc.day.topUps, new Date(doc.day.periodStart)).then(() => redrawAndLookAgain());
     return doc;
   }
@@ -482,6 +508,8 @@ export const store = {
   async start() {
     if (snapshot.state === 'ready') return;
     const raw = await readSaved();
+    // Which draft of setup this phone is trying (test builds; setupKind.ts).
+    await setupKind.start();
     let doc: Doc;
     try {
       doc = withPasses(loadedDoc(raw), new Date());
@@ -501,8 +529,8 @@ export const store = {
     catchUpPhone(doc, new Date());
     startEssentialsDay();
     screenTime.onCheckpoint(() => store.tick(new Date()));
-    // Picks from before build 71 may list more single apps than iOS will lock.
-    if (screenTime.fixOldPicks() === 'fixed') store.picksChanged();
+    // A day registered by a version that counted a list of apps moves over to counting everything (tally.ts).
+    if (screenTime.moveToEverything(doc.settings.goalMinutes)) planSoon(0);
     void askAgain();
     syncAskFirst();
     // Coming back to the app is a free moment to bring the battery and the widget up to date.
@@ -545,18 +573,15 @@ export const store = {
   },
   /**
    * Asks for Screen Time access and, once given, registers the day with the
-   * phone. From then on the battery follows real screen time. "nothingPicked":
-   * access is on but nothing would count, since the essentials were never
-   * chosen (setup's "Skip for now"); the caller opens Apple's lists and tries
-   * again once they're chosen. "denied": `screenTime.refusal()` says why.
+   * phone. From then on the battery follows real screen time, with or without
+   * essentials: with none chosen, everything counts. (Up to build 164 nothing
+   * could be counted until Apple's lists had been through, and App Review, on
+   * an iPad, skipped them and found a button that did nothing, 2026-11-26.)
+   * "denied": `screenTime.refusal()` says why.
    */
-  async turnOnScreenTime(): Promise<'on' | 'denied' | 'nothingPicked' | 'failed'> {
+  async turnOnScreenTime(): Promise<'on' | 'denied' | 'failed'> {
     const answer = await screenTime.askPermission();
     if (answer !== 'approved') return 'denied';
-    // Up to build 152 this went on to register a day with nothing in it, which
-    // the phone refuses, and the card said "would not start counting": App
-    // Review, on an iPad, saw a button that did nothing (2026-11-26).
-    if (!screenTime.somethingCounts()) return 'nothingPicked';
     // Counting always takes in the whole day since the recharge, so turning it
     // on at any time picks up what was already used, and off-and-on is no refill.
     const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);
@@ -645,6 +670,18 @@ export const store = {
     await screenTime.applyPlan(snapshot.doc.settings, 0, true);
     set({ ...snapshot.doc, day: withRealUse(snapshot.doc, snapshot.doc.day) });
   },
+  /**
+   * Developer, test builds: the first setup again, as on a phone where the
+   * essentials were never chosen, for trying the drafts of setup
+   * (setupKind.ts). Counting stays on, so today is still counted: with the
+   * essentials forgotten, everything they used today counts until they are
+   * chosen again.
+   */
+  setupAgain() {
+    screenTime.forgetEssentials();
+    store.picksChanged();
+    set({ ...snapshot.doc, setupDone: false });
+  },
   turnOffScreenTime() {
     screenTime.turnOff();
     // The rest of today is not counted, and the week view says so.
@@ -668,30 +705,23 @@ export const store = {
     set({ ...snapshot.doc }, false);
   },
   /**
-   * Apple's picker closed on the phone's whole list of apps. Apps left off
-   * it go on counting until the recharge, except on a free day (essentials.ts).
-   */
-  appsShownClosed() {
-    // A recharge that passed while Apple's list was open comes first.
-    const now = new Date();
-    store.tick(now);
-    startEssentialsDay();
-    screenTime.appsAfter(essentialsFree(snapshot.doc, now));
-    store.picksChanged();
-    redrawAndLookAgain();
-  },
-  /**
    * Apple's picker closed on the essentials. An app taken out, or one this
    * battery started with put back: today, at once. A new essential: from the
-   * next recharge, or today on a free day (essentials.ts). Returns how many
-   * were ticked if that was too many to keep (0 when kept).
+   * next recharge, or today on a free day (essentials.ts). The first choice
+   * of all is today's at once: until then everything counted, since setup
+   * no longer asks (setupKind.ts). Returns how many were ticked if that was
+   * too many to keep (0 when kept).
    */
   essentialsClosed(): number {
     const now = new Date();
     store.tick(now);
     startEssentialsDay();
+    // The first choice of all starts at once, whatever the battery (screenTime.ts, essentialsAfter).
+    const first = !screenTime.essentialsChosen();
+    const wasEmpty = cellsLeft(snapshot.doc.day.usedMinutes, snapshot.doc.settings.goalMinutes) === 0;
     const refused = screenTime.essentialsAfter(essentialsFree(snapshot.doc, now));
     store.picksChanged();
+    if (first && wasEmpty && refused === 0 && screenTime.essentialsChosen()) uncoverAfterFirstEssentials();
     // A warning about the older list is settled by this; Today has to hear of it (build 90 kept "Not locking" up).
     redrawAndLookAgain();
     return refused;

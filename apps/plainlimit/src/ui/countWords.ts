@@ -12,23 +12,23 @@ export const COUNTS_LEAD = 'Never counted. Never locked.';
 export const COUNTS_SHORT = 'These never count and never lock.';
 
 /**
- * Before the essentials are chosen. Apple's list opens twice (the phone's apps,
- * then the essentials), and each time its top line says what to tap. The
- * screen shows this as two short steps with pictures; these words are what is read out.
+ * Before the essentials are chosen. Apple's list opens once, and its top line
+ * says what to tap. The screen shows this as a short step with pictures;
+ * these words are what is read out. (Up to 1.1's first builds the list opened
+ * twice: once with everything ticked, so the app had the phone's apps to
+ * count by name. The count is now everything, less the essentials.)
  */
-export const CHOOSE_HOW = 'Apple’s list opens twice. First, as one-time setup, tick All Apps & Categories, then the check mark at the top right. Then tick only your essential apps: they are never counted and never locked.';
-/** The first list was closed with nothing ticked. */
-export const MISSED_APPS = 'Nothing was ticked. Tap Choose essentials again, tick All Apps & Categories at the top, then ✓ at the top right.';
+export const CHOOSE_HOW = 'Apple’s list opens. Tick only your essential apps, then the check mark at the top right. They are never counted and never locked. Everything else uses your battery.';
+/** Before the essentials are chosen, on Today and on their own screen: what holds until then. */
+export const EVERYTHING_COUNTS = 'Until you choose, every app uses your battery.';
 /** The head of the essentials card, read out. */
 export function essentialsLabel(kept: number): string {
   if (kept === 0) return 'Always open: no essentials yet.';
   return `Always open: ${kept === 1 ? '1 essential app' : `${kept} essential apps`}, never counted.`;
 }
 
-/** The head of the card for every other app, read out. */
-export function othersLabel(others: number): string {
-  return `Everything else: ${others === 1 ? '1 app uses' : `${others} apps use`} your battery.`;
-}
+/** The head of the card for every other app, read out. The app is never told which apps those are, nor how many. */
+export const OTHERS_LABEL = 'Everything else uses your battery.';
 
 /**
  * A new essential waits for the next recharge (domain/essentials.ts). Its
@@ -66,18 +66,14 @@ export function tooManyKept(ticked: number, limit: number): string {
 /** In place of the buttons while the battery is empty. */
 export const ESSENTIALS_LOCKED = 'Locked while the battery is empty';
 
-/** For a list made by an older version, still in use until the essentials are chosen. */
-export const OLD_LIST_NOTE = 'Your list from before still applies until you choose your essentials.';
-
 /**
  * The short value beside "Essentials" in Settings and setup. `kept` is how
- * many essentials are ticked, or null while a list from an older version is
- * still in use (then it names how many picks count, as 1.0.1 did; a bare "Set"
- * looked like a button asking to be set up).
+ * many essentials are ticked, or null when they have not been chosen yet
+ * (then everything counts); `known` is false where there is no phone to ask
+ * (the preview).
  */
-export function essentialsValue(picked: number, kept: number | null = null): string {
-  if (picked < 0) return 'Your picks';
-  if (kept !== null) return kept === 0 ? 'None' : kept === 1 ? '1 app' : `${kept} apps`;
-  if (picked === 0) return 'Not chosen';
-  return `${picked} count`;
+export function essentialsValue(kept: number | null, known = true): string {
+  if (!known) return 'Your picks';
+  if (kept === null) return 'Not chosen';
+  return kept === 0 ? 'None' : kept === 1 ? '1 app' : `${kept} apps`;
 }

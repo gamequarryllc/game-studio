@@ -141,7 +141,6 @@ async function main() {
   });
 
   for (const [problem, words] of [
-    ['nothingPicked', 'Your essentials aren’t set yet'],
     ['accessOff', 'Screen Time access for Plainlimit was turned off'],
     ['notRegistered', 'The phone stopped counting'],
     ['miscounted', 'The phone miscounted today'],
@@ -161,20 +160,71 @@ async function main() {
     });
   }
 
-  await scenario('a list from an older version that iOS can not lock: Today says so, and Essentials can be chosen even while empty', async () => {
-    const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,tooManyApps');
-    await see(page, 'Not locking');
-    await see(page, 'Your list is from an older version, and iOS can’t lock all of it');
-    await shot(page, 'q04b-too-many-today');
-    await page.getByRole('button', { name: 'Set essentials', exact: true }).click();
-    await see(page, 'Your list from before still applies until you choose your essentials.');
-    await see(page, 'Tick All, then ✓');
+  await scenario('essentials never chosen: everything counts, Today offers them, and nothing reads as a problem', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting,noEssentials');
+    // Counting works without them, so there is no warning; an offer instead.
+    if ((await page.getByText('Not counting').count()) > 0) throw new Error('Today called essentials not being chosen a counting problem');
+    await see(page, 'Keep your essentials free');
+    await see(page, 'Pick the apps that never count and never lock. Until you choose, every app uses your battery.');
+    if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is not open');
+    await shot(page, 'q04b-no-essentials-today');
+    await tab(page, 'Settings');
+    await page.getByRole('button', { name: 'Essentials, Not chosen', exact: true }).click();
+    // (Today's card, still drawn behind this screen, ends with the same words.)
+    await page.getByText('Until you choose, every app uses your battery.', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
+    // Apple's list opens once, for the essentials alone: nothing asks for "All Apps" any more.
     await see(page, 'Tick what stays open');
     await see(page, 'Codes');
-    // One button, and it is open.
+    await see(page, 'Everything else uses your battery');
+    if ((await page.getByText(/All Apps|Tick All/).count()) > 0) throw new Error('the old first list is still drawn');
     if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is not open');
-    if ((await page.getByRole('button', { name: 'Show my apps', exact: true }).count()) > 0) throw new Error('the old first step is still drawn');
-    await shot(page, 'q04c-too-many-what-counts');
+    await shot(page, 'q04c-no-essentials-screen');
+    await context.close();
+  });
+
+  await scenario('with an empty battery and no essentials chosen, the offer is still open: the first choice is at once', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,noEssentials');
+    await see(page, 'Empty');
+    await see(page, 'Keep your essentials free');
+    if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is closed on an empty battery');
+    await shot(page, 'q04d-no-essentials-empty');
+    await context.close();
+  });
+
+  await scenario('essentials chosen: Today makes no offer', async () => {
+    const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
+    await see(page, 'Plenty left');
+    if ((await page.getByText('Keep your essentials free').count()) > 0) throw new Error('Today offered essentials that are already chosen');
+    await context.close();
+  });
+
+  await scenario('setup 3, nothing to pick: straight from the first screen to notifications', async () => {
+    const { page, context } = await open(null, '?mock=counting,noEssentials&setup=3');
+    await see(page, 'Your screen time is a battery');
+    await page.getByRole('button', { name: 'Test build. Setup 3: nothing to pick. Tap to switch.', exact: true }).waitFor();
+    await shot(page, 'q04e-setup3-welcome');
+    await page.getByRole('button', { name: 'Set it up', exact: true }).click();
+    await see(page, 'Notifications need to be on');
+    await page.getByLabel('Step 2 of 4', { exact: true }).waitFor();
+    if ((await page.getByText('Your essentials', { exact: true }).count()) > 0) throw new Error('setup 3 asked for essentials');
+    await context.close();
+  });
+
+  await scenario('setup 1, one list: an essentials step with one button, and skipping it is allowed', async () => {
+    const { page, context } = await open(null, '?mock=counting,noEssentials&setup=1');
+    await see(page, 'Your screen time is a battery');
+    await page.getByRole('button', { name: 'Test build. Setup 1: one list. Tap to switch.', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Set it up', exact: true }).click();
+    await see(page, 'Your essentials');
+    await see(page, 'These never count and never lock.');
+    await page.getByLabel('Step 2 of 5', { exact: true }).waitFor();
+    await see(page, 'Tick what stays open');
+    await see(page, 'Everything else uses your battery');
+    if ((await page.getByText(/All Apps|Tick All|Step 1 of 2/).count()) > 0) throw new Error('setup 1 still shows the first of two lists');
+    await page.getByRole('button', { name: 'Choose essentials', exact: true }).waitFor();
+    await shot(page, 'q04f-setup1-essentials');
+    await page.getByRole('button', { name: 'Skip: count everything', exact: true }).click();
+    await see(page, 'Notifications need to be on');
     await context.close();
   });
 
@@ -306,9 +356,7 @@ async function main() {
     await page.getByRole('button', { name: /^Essentials/ }).click();
     await see(page, 'Locked while the battery is empty');
     await page.getByLabel('Always open: 14 essential apps, never counted.', { exact: true }).waitFor();
-    for (const name of ['Change essentials', 'Refresh the app list']) {
-      if ((await page.getByRole('button', { name, exact: true }).count()) > 0) throw new Error(`Essentials offered "${name}" while empty`);
-    }
+    if ((await page.getByRole('button', { name: 'Change essentials', exact: true }).count()) > 0) throw new Error('Essentials offered "Change essentials" while empty');
     await shot(page, 'q10-empty-what-counts');
     await context.close();
   });
@@ -319,12 +367,12 @@ async function main() {
     await page.getByRole('button', { name: 'Essentials, 14 apps', exact: true }).click();
     await page.getByLabel('Always open: 14 essential apps, never counted.', { exact: true }).waitFor();
     await page.getByLabel('Your essential apps', { exact: true }).waitFor();
-    await page.getByLabel('Everything else: 106 apps use your battery.', { exact: true }).waitFor();
-    await page.getByLabel('The apps that use your battery', { exact: true }).waitFor();
+    await page.getByLabel('Everything else uses your battery.', { exact: true }).waitFor();
     await see(page, 'Never counted');
     await see(page, 'Uses your battery');
     await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Refresh the app list', exact: true }).waitFor();
+    // Every other app counts without being shown to Plainlimit: there is no list of them to refresh.
+    if ((await page.getByRole('button', { name: 'Refresh the app list', exact: true }).count()) > 0) throw new Error('Essentials still offers to refresh a list of apps');
     // Nothing waits for the recharge, so no card says so.
     if ((await page.getByText(/^Joining/).count()) > 0) throw new Error('Essentials showed apps joining with none waiting');
     await shot(page, 'q10b-what-counts-open');
@@ -342,7 +390,7 @@ async function main() {
     await page.getByText(/^Counted until (6:00 AM|then)$/).first().waitFor();
     // They wait: today's essentials are the same 14, and the rest still use the battery.
     await page.getByLabel('Always open: 14 essential apps, never counted.', { exact: true }).waitFor();
-    await page.getByLabel('Everything else: 106 apps use your battery.', { exact: true }).waitFor();
+    await page.getByLabel('Everything else uses your battery.', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
     await shot(page, 'q10c-what-counts-waiting', true);
     await context.close();

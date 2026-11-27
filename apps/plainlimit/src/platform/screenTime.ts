@@ -4,12 +4,16 @@ import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
 import { GUARD_MS, guardFor, paceRules, roundName, splitName, mostByNow, type Noted } from '@/domain/checkpoints';
-import { countDay, doubtful, miscounted, roundSettled, roundStanding, withFloor, type Report, type Rounds } from '@/domain/reports';
+import { countDay, doubtful, everythingCounted, keptCounted, miscounted, roundSettled, roundStanding, withFloor, type DayInput, type Report, type Rounds } from '@/domain/reports';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
-import { essentialsAtRecharge, withApps, withEssentials, type AppsChange, type EssentialsChange, type Lists } from '@/domain/essentials';
+import { essentialsAtRecharge, withEssentials, type EssentialsChange, type Lists } from '@/domain/essentials';
+import { SETTLE_MS, overRungs, type Tally } from '@/domain/tally';
 import {
   ACTIVITY,
   COUNTED_ID,
+  EVERYTHING,
+  KEPT_ACTIVITY,
+  OVER_ACTIVITY,
   TICKS_ACTIVITY,
   TOPUP_ACTIVITY,
   countStart,
@@ -58,8 +62,9 @@ export type Permission = 'unknown' | 'denied' | 'approved';
  * Preview only: "?mock=" in the address stands in for an iPhone's Screen Time,
  * so the states only a phone reaches can be seen and checked in a browser.
  * Words, comma-separated: "counting" (counting is on), one counting problem
- * ("nothingPicked", "tooManyApps", "accessOff", "notRegistered", "miscounted"),
+ * ("accessOff", "notRegistered", "miscounted"),
  * "held" (setup's "start tomorrow": nothing locks before the recharge),
+ * "noEssentials" (the essentials were never chosen: everything counts),
  * "noAskPicks" (nothing picked yet for Second thought),
  * "essentialsWaiting" (two new essentials wait for the next recharge),
  * "noticesOff" (notifications turned off; read in notices.ts) and
@@ -208,14 +213,9 @@ export function isOn(): boolean {
   }
 }
 
-/** Whether anything is left to count once the essentials are taken out: without it, counting can't start. */
-export function somethingCounts(): boolean {
-  return pickCount(COUNTED_ID) > 0;
-}
-
 /** How many apps, categories and sites are in one of the person's picks. The app never learns which. */
 export function pickCount(id: string): number {
-  if (MOCK_PHONE) return MOCK.has('nothingPicked') || (id === ASK_ID && MOCK.has('noAskPicks')) ? 0 : id === COUNTED_ID ? 14 : 3;
+  if (MOCK_PHONE) return id === ASK_ID && MOCK.has('noAskPicks') ? 0 : 3;
   if (!SCREEN_TIME_AVAILABLE) return 0;
   try {
     const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });
@@ -226,37 +226,45 @@ export function pickCount(id: string): number {
 }
 
 /**
- * The essentials model (1.1). The person ticks only their essentials, and the
- * phone locks everything else by category ("all, except these"), which has no
- * 50-app limit on what is locked. Two lists are kept besides the counted one:
- * - ALL_ID: Apple's list with everything ticked once, so Plainlimit holds the
- *   phone's apps. Apple can count "these apps" but not "all but these".
- * - ESSENTIALS_ID: the apps that never count and never lock (50 at most: the
- *   limit now falls on the short list).
- * The counted list (COUNTED_ID) is worked out from them: every app shown, less
- * the essentials. Until both exist, a list made by an older version (ticked
- * apps count and lock) goes on working as it did.
+ * The essentials (1.1), and counting everything (tally.ts). The person ticks
+ * only their essentials, in Apple's list, once. The phone locks everything
+ * else by category ("all, except these"), and counts everything with a timer
+ * that names no apps, less the essentials' own timer. One list is kept:
+ * - ESSENTIALS_ID: the apps that never count and never lock (50 at most:
+ *   the most iOS will leave out of an "everything" lock).
+ * With no essentials chosen, everything counts and everything locks.
+ *
+ * Up to 1.1's first builds Apple could only be told "count these apps", so
+ * setup opened Apple's list twice: once with everything ticked (kept as
+ * 'plall'), once for the essentials, and what counted was worked out as the
+ * one less the other ('counted'). Those two lists are left on the phone as
+ * they were and no longer read.
  */
-export const ALL_ID = 'plall';
 export const ESSENTIALS_ID = 'plkeep';
 /** The most apps iOS will leave out of an "everything" lock. */
 export const ESSENTIALS_LIMIT = 50;
 /**
- * A change to either list can wait for the next recharge (essentials.ts), so
- * Apple's picker never works on the lists in force. It is handed a copy of
- * the list as chosen (ALL_PICK_ID, ESSENTIALS_PICK_ID), and when it closes
- * the rule decides what starts now and what waits:
+ * A change to the essentials can wait for the next recharge (essentials.ts),
+ * so Apple's picker never works on the list in force. It is handed a copy of
+ * the list as chosen (ESSENTIALS_PICK_ID), and when it closes the rule
+ * decides what starts now and what waits:
  * - ESSENTIALS_NEXT_ID: the essentials as chosen, when they hold a new one;
  * - ESSENTIALS_START_ID: the essentials this battery started with, which
- *   today's can go back up to;
- * - ALL_NEXT_ID: the phone's apps as last ticked, when that left some out.
+ *   today's can go back up to.
  * A picker closed by the app being shut changes nothing.
  */
-export const ALL_PICK_ID = 'plallpick';
-export const ALL_NEXT_ID = 'plallnext';
 export const ESSENTIALS_PICK_ID = 'plkeeppick';
 export const ESSENTIALS_NEXT_ID = 'plkeepnext';
 export const ESSENTIALS_START_ID = 'plkeepstart';
+/** The lists of the versions that counted apps by name (see above), for the readout only. */
+const OLD_ALL_ID = 'plall';
+
+/**
+ * Which way of counting the day is registered with: 2 is everything, less
+ * the essentials. A day registered by an earlier version (no mark) counts a
+ * list of apps; `moveToEverything` moves it over on the first start.
+ */
+const ENGINE = 2;
 
 function metaOf(id: string): DeviceActivity.ActivitySelectionMetadata | null {
   try {
@@ -321,18 +329,9 @@ function ruled<T>(rule: () => T, plain: T): T {
   }
 }
 
-const MOCK_OLD_LIST = () => MOCK.has('nothingPicked') || MOCK.has('tooManyApps') || MOCK.has('oldList');
-
-/** How many apps the phone has shown Plainlimit (0: not shown yet). */
-export function appsShown(): number {
-  if (MOCK_PHONE) return MOCK_OLD_LIST() ? 0 : 120;
-  if (!SCREEN_TIME_AVAILABLE) return 0;
-  return metaOf(ALL_ID)?.applicationCount ?? 0;
-}
-
 /** How many essentials are ticked. */
 export function essentialsCount(): number {
-  if (MOCK_PHONE) return MOCK_OLD_LIST() ? 0 : 14;
+  if (MOCK_PHONE) return MOCK.has('noEssentials') ? 0 : 14;
   if (!SCREEN_TIME_AVAILABLE) return 0;
   const meta = metaOf(ESSENTIALS_ID);
   return meta ? meta.applicationCount + sitesIn(meta) : 0;
@@ -348,32 +347,21 @@ export function essentialsPicks(): string | null {
   return tokenOf(ESSENTIALS_ID) || null;
 }
 
-/** Every app the phone has shown Plainlimit, as Apple's picker handed them over: with the essentials left out, the apps that count. */
-export function allPicks(): string | null {
-  if (!SCREEN_TIME_AVAILABLE) return null;
-  return tokenOf(ALL_ID) || null;
-}
-
-/** How many apps use the battery: every app shown, less the essential apps. */
-export function countedAppsCount(): number {
-  if (MOCK_PHONE) return MOCK_OLD_LIST() ? 0 : 106;
-  if (!SCREEN_TIME_AVAILABLE) return 0;
-  return Math.max(0, appsShown() - (metaOf(ESSENTIALS_ID)?.applicationCount ?? 0));
-}
-
-/** Whether the essentials model is in use: the apps were shown and the essentials chosen (none is a choice too). */
-export function essentialsMode(): boolean {
-  if (MOCK_PHONE) return !MOCK_OLD_LIST();
+/**
+ * Whether the essentials have been chosen (none is a choice too). Until
+ * then everything counts and everything locks, and Today offers to choose them.
+ */
+export function essentialsChosen(): boolean {
+  if (MOCK_PHONE) return !MOCK.has('noEssentials');
   if (!SCREEN_TIME_AVAILABLE) return false;
-  return readNumber('essentialsSet') > 0 && appsShown() > 0;
+  return readNumber('essentialsSet') > 0;
 }
 
 /**
  * The same picks with no whole categories and no websites: only the apps one
- * by one. Null if the phone's format isn't as expected. (Websites: Apple's
- * list with everything ticked also holds the sites the phone knows, 23 on the
- * owner's. Left in, time on them counted in whatever browser showed them, an
- * essential one too: build 95 counted Brave though it was ticked as one.)
+ * by one. Null if the phone's format isn't as expected. (A category would
+ * take in apps installed into it later, which the lock does not keep open;
+ * a website's time would be taken off whichever browser showed it.)
  */
 function appsOnly(token: string): string | null {
   try {
@@ -387,47 +375,39 @@ function appsOnly(token: string): string | null {
 }
 
 /**
- * Works out what counts: every app shown, less the essentials, as single apps.
- * Whole categories are left out on purpose: a category would count the
- * essentials inside it too (the fault of the first "always allowed" list, up
- * to build 47). If they can't be left out, the list is kept with them and the
- * readout says so.
+ * What the essentials' own timer counts (tally.ts): the essential apps, one
+ * by one. Null when there are none, and then that timer is not registered.
+ * If whole categories and websites can't be left out, the list is used with
+ * them.
  */
-function deriveCounted(): boolean {
+function keptToken(): string | null {
+  if (essentialsCount() === 0) return null;
+  const token = tokenOf(ESSENTIALS_ID);
+  if (token === '') return null;
   try {
-    if ((metaOf(ALL_ID)?.applicationCount ?? 0) === 0) return false;
-    const rest = DeviceActivity.difference({ activitySelectionId: ALL_ID }, { activitySelectionId: ESSENTIALS_ID }, {});
-    const token = rest?.familyActivitySelection;
-    if (!rest || typeof token !== 'string' || token === '') {
-      note('the counted list', 'the phone gave no list');
-      return false;
-    }
-    let counted = token;
+    const meta = metaOf(ESSENTIALS_ID);
+    if (!meta || meta.applicationCount === 0) return token;
     const apps = appsOnly(token);
     const check = apps ? DeviceActivity.activitySelectionMetadata({ activitySelectionToken: apps }) : null;
-    if (apps && check && check.categoryCount === 0 && sitesIn(check) === 0 && check.applicationCount === rest.applicationCount) counted = apps;
-    else note('the counted list', 'whole categories and websites could not be left out, so an essential may still count');
-    DeviceActivity.setFamilyActivitySelectionId({ id: COUNTED_ID, familyActivitySelection: counted });
-    // A screen kept for this list by the older model would be shown in place of the current one.
-    DeviceActivity.userDefaultsRemove(`shieldConfigurationForSelection_${COUNTED_ID}`);
-    DeviceActivity.userDefaultsRemove(`shieldActionsForSelection_${COUNTED_ID}`);
-    return true;
-  } catch (error) {
-    note('the counted list', error);
-    return false;
+    return apps && check && check.categoryCount === 0 && sitesIn(check) === 0 && check.applicationCount === meta.applicationCount ? apps : token;
+  } catch {
+    return token;
   }
 }
 
-/**
- * Tells the phone which apps stay open whatever is locked: the essentials, or
- * none under the older single list (where what is not ticked never locks).
- */
-function keepEssentialsOpen(mode: boolean) {
+/** Whether some apps are essentials, so the day is counted as everything less their minutes. */
+function hasEssentials(): boolean {
+  return essentialsCount() > 0;
+}
+
+/** What decides what counts, as one word for comparing before and after a change: the essentials, or "none". */
+function countedNow(): string {
+  return tokenOf(ESSENTIALS_ID) || 'none';
+}
+
+/** Tells the phone which apps stay open whatever is locked: the essentials. */
+function keepEssentialsOpen() {
   try {
-    if (!mode) {
-      DeviceActivity.clearWhitelist();
-      return;
-    }
     DeviceActivity.clearWhitelist();
     if (essentialsCount() === 0) {
       DeviceActivity.clearWhitelistAndUpdateBlock('plainlimit');
@@ -440,44 +420,6 @@ function keepEssentialsOpen(mode: boolean) {
     }
   } catch (error) {
     note('the essentials', error);
-  }
-}
-
-/** Call as Apple's picker opens on the phone's whole list of apps: it is handed a copy of the list as last ticked. */
-export function appsBefore(): void {
-  if (!SCREEN_TIME_AVAILABLE) return;
-  try {
-    putLists({ [ALL_PICK_ID]: tokenOf(ALL_NEXT_ID) || tokenOf(ALL_ID) });
-  } catch (error) {
-    note('the app list', error);
-  }
-}
-
-/**
- * Call as that picker closes. An emptied list is not kept. Apps new to the
- * list count from now; apps left off it go on counting until the next
- * recharge, unless the day is `free` (essentials.ts).
- */
-export function appsAfter(free: boolean): void {
-  if (!SCREEN_TIME_AVAILABLE) return;
-  // What counts is as it was until here: Apple's picker only had a copy.
-  picksBefore();
-  try {
-    const picked = tokenOf(ALL_PICK_ID);
-    const ticked = picked === '' ? 0 : (DeviceActivity.activitySelectionMetadata({ activitySelectionToken: picked })?.applicationCount ?? 0);
-    if (ticked === 0) {
-      putLists({ [ALL_PICK_ID]: '' });
-      return;
-    }
-    const before = tokenOf(ALL_ID);
-    // Until the essentials are chosen the list is not in use: nothing to wait for.
-    const inUse = readNumber('essentialsSet') > 0;
-    const plain: AppsChange<string> = { today: picked, next: null };
-    const change = ruled(() => withApps(picked, before, free || !inUse, phoneLists), plain);
-    putLists({ [ALL_PICK_ID]: '', [ALL_ID]: change.today, [ALL_NEXT_ID]: change.next ?? '' });
-    if (inUse) deriveCounted();
-  } catch (error) {
-    note('the app list', error);
   }
 }
 
@@ -515,18 +457,13 @@ export function essentialsAfter(free: boolean): number {
       putLists({ [ESSENTIALS_PICK_ID]: '' });
       return ticked;
     }
-    if (appsShown() === 0) {
-      putLists({ [ESSENTIALS_PICK_ID]: '', [ESSENTIALS_ID]: picked });
-      return 0;
-    }
     const first = readNumber('essentialsSet') === 0;
     const plain: EssentialsChange<string> = { today: picked, start: picked, next: null };
     const change = first ? plain : ruled(() => withEssentials(picked, essentialsStart(), free, phoneLists), plain);
     putLists({ [ESSENTIALS_PICK_ID]: '', [ESSENTIALS_ID]: change.today, [ESSENTIALS_START_ID]: change.start, [ESSENTIALS_NEXT_ID]: change.next ?? '' });
     save('essentialsStartSet', Date.now());
     save('essentialsSet', Date.now());
-    deriveCounted();
-    keepEssentialsOpen(true);
+    keepEssentialsOpen();
     return 0;
   } catch (error) {
     note('the essentials', error);
@@ -535,36 +472,46 @@ export function essentialsAfter(free: boolean): number {
 }
 
 /**
- * Starts the lists that wait for a recharge (the essentials as chosen, the
- * phone's apps as last ticked), and notes the essentials then in force as
- * the ones this battery started with. Called by the store on its first look
- * at a new battery (`newDay`), and when an emergency pass is used: a pass
- * skips the wait, and with nothing waiting it changes nothing. True if a
- * waiting list started: the caller then treats it as a change of picks
- * (`picksBefore` has been called). Throws if the phone refuses, so the caller
- * can try again on its next look.
+ * Starts the essentials that wait for a recharge, and notes the essentials
+ * then in force as the ones this battery started with. Called by the store on
+ * its first look at a new battery (`newDay`), and when an emergency pass is
+ * used: a pass skips the wait, and with nothing waiting it changes nothing.
+ * True if a waiting list started: the caller then treats it as a change of
+ * picks (`picksBefore` has been called). Throws if the phone refuses, so the
+ * caller can try again on its next look.
  */
 export function startWaitingPicks(newDay: boolean): boolean {
   if (!SCREEN_TIME_AVAILABLE) return false;
   try {
     const next = tokenOf(ESSENTIALS_NEXT_ID);
-    const apps = tokenOf(ALL_NEXT_ID);
-    const started = next !== '' || apps !== '';
+    const started = next !== '';
     if (!started && !newDay) return false;
     if (started) picksBefore();
     const day = essentialsAtRecharge(tokenOf(ESSENTIALS_ID), next === '' ? null : next);
-    const lists: Record<string, string> = { [ESSENTIALS_ID]: day.today, [ESSENTIALS_START_ID]: day.start, [ESSENTIALS_NEXT_ID]: '', [ALL_NEXT_ID]: '' };
-    if (apps !== '') lists[ALL_ID] = apps;
-    putLists(lists);
+    putLists({ [ESSENTIALS_ID]: day.today, [ESSENTIALS_START_ID]: day.start, [ESSENTIALS_NEXT_ID]: '' });
     save('essentialsStartSet', Date.now());
-    if (started && readNumber('essentialsSet') > 0) {
-      deriveCounted();
-      keepEssentialsOpen(essentialsMode());
-    }
+    if (started) keepEssentialsOpen();
     return started;
   } catch (error) {
     note('the waiting essentials', error);
     throw error;
+  }
+}
+
+/**
+ * Test builds only: forgets the essentials altogether, as on a phone where
+ * they were never chosen, so setup and Today's offer can be tried again.
+ */
+export function forgetEssentials(): void {
+  if (!SCREEN_TIME_AVAILABLE) return;
+  try {
+    picksBefore();
+    putLists({ [ESSENTIALS_ID]: '', [ESSENTIALS_PICK_ID]: '', [ESSENTIALS_NEXT_ID]: '', [ESSENTIALS_START_ID]: '' });
+    forget('essentialsSet');
+    forget('essentialsStartSet');
+    keepEssentialsOpen();
+  } catch (error) {
+    note('forgetting the essentials', error);
   }
 }
 
@@ -577,7 +524,7 @@ let joiningNow: { picks: string; count: number } | null = null;
  * waits. (Worked out by the phone once for each pair of lists.)
  */
 export function essentialsJoining(): { picks: string | null; count: number } | null {
-  if (MOCK_PHONE) return MOCK.has('essentialsWaiting') && !MOCK_OLD_LIST() ? { picks: null, count: 2 } : null;
+  if (MOCK_PHONE) return MOCK.has('essentialsWaiting') && !MOCK.has('noEssentials') ? { picks: null, count: 2 } : null;
   if (!SCREEN_TIME_AVAILABLE) return null;
   try {
     const next = tokenOf(ESSENTIALS_NEXT_ID);
@@ -603,75 +550,23 @@ function sitesIn(meta: DeviceActivity.ActivitySelectionMetadata): number {
 }
 
 /**
- * The most apps iOS will lock one by one. With 51 or more in the list it locks
- * none of them (Apple's forums; seen Nov 16 at 12:05 AM on build 68: the battery
- * was empty and most counted apps still opened). Whole categories are locked
- * as categories and have no such limit, so they don't count towards it.
+ * A day registered by a version that counted a list of apps is moved over to
+ * counting everything, on the first start of this one: a new round of
+ * checkpoint names, since the reports so far were for that list, and nothing
+ * kept of what was known about it. True if the day has to be registered
+ * again (the caller does that); the mark is saved once it has been.
  */
-export const APP_LOCK_LIMIT = 50;
-// Spreading single apps over several named settings stores does not get round
-// it: build 89 put 50 in the usual store and 36 in a second, and the single
-// apps still opened while the 5 ticked categories locked (the owner's phone,
-// Nov 18). Unticking one app inside a ticked category makes Apple's picker
-// list the rest of that category one by one, so the limit is easy to pass.
-
-/**
- * Whether the counted picks hold more single apps than iOS will lock. Only a
- * list from the older model can: with essentials, the lock is by category.
- */
-export function tooManyApps(): boolean {
-  if (MOCK_PHONE) return MOCK.has('tooManyApps');
+export function moveToEverything(goalMinutes: number): boolean {
   if (!SCREEN_TIME_AVAILABLE) return false;
-  if (essentialsMode()) return false;
   try {
-    return (DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID })?.applicationCount ?? 0) > APP_LOCK_LIMIT;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Picks made before build 71 were kept "with every app of each ticked
- * category" (Apple's includeEntireCategory), which put every app of a ticked
- * category in the list of single apps, usually far over iOS's lock limit. When
- * switching that off alone brings the list under the limit with the same
- * categories, the picks are rewritten that way; otherwise they have to be made
- * again ("pickAgain"). Nothing changes when the picks are fine.
- */
-export function fixOldPicks(): 'fine' | 'fixed' | 'pickAgain' {
-  if (!SCREEN_TIME_AVAILABLE) return 'fine';
-  if (essentialsMode()) {
-    // A counted list worked out by builds 90 to 95 still holds websites: work it out again without them.
-    try {
-      const counted = metaOf(COUNTED_ID);
-      if (!counted || sitesIn(counted) === 0) return 'fine';
-      picksBefore();
-      return deriveCounted() ? 'fixed' : 'fine';
-    } catch (error) {
-      note('fixOldPicks', error);
-      return 'fine';
-    }
-  }
-  try {
-    const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: COUNTED_ID });
-    if (!meta || meta.applicationCount <= APP_LOCK_LIMIT) return 'fine';
-    const token = DeviceActivity.getFamilyActivitySelectionId(COUNTED_ID);
-    if (meta.includeEntireCategory && typeof token === 'string' && token.length > 0) {
-      const picks = JSON.parse(atob(token)) as Record<string, unknown>;
-      if (picks.includeEntireCategory === true) {
-        const rewritten = btoa(JSON.stringify({ ...picks, includeEntireCategory: false }));
-        const after = DeviceActivity.activitySelectionMetadata({ activitySelectionToken: rewritten });
-        if (after && after.applicationCount <= APP_LOCK_LIMIT && after.categoryCount === meta.categoryCount && after.applicationCount + after.categoryCount + sitesIn(after) > 0) {
-          picksBefore();
-          DeviceActivity.setFamilyActivitySelectionId({ id: COUNTED_ID, familyActivitySelection: rewritten });
-          return 'fixed';
-        }
-      }
-    }
-    return 'pickAgain';
+    if (readNumber('engine') === ENGINE || !isOn()) return false;
+    startRound(new Date(), roundGoal(goalMinutes));
+    forget('noted');
+    forget('roundFloor');
+    return true;
   } catch (error) {
-    note('fixOldPicks', error);
-    return 'pickAgain';
+    note('moving to the everything timer', error);
+    return false;
   }
 }
 
@@ -695,23 +590,33 @@ export function coverAgain(cover: boolean, settings: Settings, topUpsSoFar: numb
 }
 
 /**
- * Notes, while counting works, the most that can have been used by now (see
- * `mostByNow`). Nothing is noted once the goal is passed.
+ * Notes, while counting works, the most the everything timer can have
+ * counted by now (see `mostByNow`): what the guard after the next
+ * registration is worked out from. Nothing is noted once its last checkpoint
+ * is passed.
  */
-export function noteKnown(settings: Settings, usedFloorNow: number, now = new Date()) {
+export function noteKnown(settings: Settings, now = new Date()) {
   if (!SCREEN_TIME_AVAILABLE) return;
   // Right after counting is set up the phone is still sending reports for time
   // already used, so "not reported yet" does not yet mean "not reached yet".
   // And the figure noted before the registration is the one guarding it.
   if (now.getTime() - registeredAt() < GUARD_MS) return;
-  const most = mostByNow(roundGoal(settings.goalMinutes), usedFloorNow);
-  if (most === null) return;
   try {
+    const goal = roundGoal(settings.goalMinutes);
+    const counted = everythingCounted(dayInput(settings.goalMinutes, periodStartOf(now, settings.rechargeMinute)));
+    const most = mostByNow(goal, counted, 20, hasEssentials() ? overRungs(goal).map((x) => x.minutes) : []);
+    if (most === null) return;
     save('noted', { at: now.getTime(), most } satisfies Noted);
   } catch {
     // Without it the guard falls back to the time since the recharge.
   }
 }
+
+/** The activities whose checkpoints are the day's count: the everything timer's three, and the essentials' own. */
+const COUNTING = [ACTIVITY, TICKS_ACTIVITY, KEPT_ACTIVITY, OVER_ACTIVITY];
+
+/** Where the phone notes that a waiting action has acted today (the library patch, `plainlimitTally`), under the round's name. */
+const DONE_PREFIX = 'plainlimit_done_';
 
 /**
  * Starts a new round of checkpoint names (roundName). Done whenever reports
@@ -726,13 +631,19 @@ function startRound(now: Date, goalBefore: number) {
   const ending = round();
   let stands = ending;
   try {
-    const reports = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)].filter((e) => e.callbackName === 'eventDidReachThreshold' && !!e.eventName);
+    const reports = COUNTING.flatMap((activity) => DeviceActivity.getEvents(activity)).filter((e) => e.callbackName === 'eventDidReachThreshold' && !!e.eventName);
     stands = roundStanding(new Set(reports.map((e) => splitName(e.eventName as string).round)), ending, readString('roundBefore'));
     for (const e of reports) {
       if (splitName(e.eventName as string).round !== stands) DeviceActivity.userDefaultsRemove(`events_${e.activityName}_eventDidReachThreshold_${e.eventName}`);
     }
   } catch {
     // Tidying only.
+  }
+  try {
+    // What the ending round's actions noted as done says nothing about the new one's.
+    DeviceActivity.userDefaultsClearWithPrefix(DONE_PREFIX);
+  } catch {
+    // Tidying only: they carry the old round's name.
   }
   save('roundBefore', stands);
   // The goal the standing round was registered with: unchanged when it is the older one.
@@ -745,7 +656,7 @@ function startRound(now: Date, goalBefore: number) {
 export function picksBefore(): void {
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
-    save('picksBefore', countedToken() ?? '');
+    save('picksBefore', countedNow());
   } catch {
     // Without it, closing the picker changes nothing about today's count.
   }
@@ -757,12 +668,11 @@ export function picksAfter(goalMinutes: number, now = new Date()): boolean {
   try {
     const before = readString('picksBefore');
     forget('picksBefore');
-    if (before === '' || before === (countedToken() ?? '')) return false;
+    if (before === '' || before === countedNow()) return false;
     // A new round of names, so reports for the old list can't pass for the new one.
     startRound(now, roundGoal(goalMinutes));
-    // The last known figure was for the old list. A newly ticked app can
-    // honestly add more than it allowed, so it is dropped; a new one is noted
-    // once counting has settled again.
+    // The last known figure was for the old list; it is dropped, and a new
+    // one is noted once counting has settled again.
     forget('noted');
     return true;
   } catch {
@@ -807,18 +717,13 @@ function note(where: string, error: unknown) {
   }
 }
 
-/**
- * With essentials: everything is covered except them (the phone holds the
- * list of what stays open, see `keepEssentialsOpen`). Under the older single
- * list: only the ticked apps are covered.
- */
-function coverAction(shield: string, mode = essentialsMode()): Action {
-  if (mode) return { type: 'enableBlockAllMode', shieldId: shield };
-  return { type: 'blockSelection', familyActivitySelectionId: COUNTED_ID, shieldId: shield };
+/** Everything is covered except the essentials (the phone holds the list of what stays open, see `keepEssentialsOpen`). */
+function coverAction(shield: string): Action {
+  return { type: 'enableBlockAllMode', shieldId: shield };
 }
 
-function toAction(action: PlanAction, mode: boolean): Action {
-  if (action.kind === 'cover') return coverAction(action.shield, mode);
+function toAction(action: PlanAction): Action {
+  if (action.kind === 'cover') return coverAction(action.shield);
   return { type: 'sendNotification', payload: { title: action.title, body: action.body, sound: 'default', userInfo: action.route ? { route: action.route } : {} } };
 }
 
@@ -866,23 +771,28 @@ function writeShield(shield: PlanShield, topUpsSoFar: number) {
  * checkpoint can be true (see `lockNotBefore`), nor while setup
  * holds the locks. This only writes settings; it registers nothing, so it is
  * safe to repeat.
+ *
+ * With essentials, each action also waits on the essentials' own timer
+ * (`Tally`, tally.ts), and the everything timer's rungs past the goal carry
+ * the same actions. What the monitor extension needs to work that out is
+ * left once, in `tally`, instead of with every action.
  */
-function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: Settings, now: Date) {
+function writeCheckpointActions(plan: Plan, settings: Settings, now: Date) {
   const dayStart = dayStartOf(periodStartOf(now, settings.rechargeMinute));
   const guard = savedGuard();
   // Nothing acts while setup holds the locks, nor while earned time or an emergency pass runs (`grantExtraTime`).
   const held = Math.max(holdUntil(), earnedUntil());
   const named = round();
-  const mode = essentialsMode();
   const registered = registeredAt();
-  // Every checkpoint the phone reports, under the key the monitor extension keeps its time in.
+  // Every checkpoint of the everything timer, under the key the monitor extension keeps its time in.
   const all = [
     ...plan.events.map((e) => ({ name: eventKey(plan.activity, roundName(e.name, named)), minutes: e.minutes })),
     ...plan.ticks.map((t) => ({ name: eventKey(TICKS_ACTIVITY, roundName(t.name, named)), minutes: t.minutes })),
+    ...plan.over.map((x) => ({ name: eventKey(OVER_ACTIVITY, roundName(x.name, named)), minutes: x.minutes })),
   ];
   for (const event of plan.events) {
     const notBefore = new Date(Math.max(lockNotBefore(dayStart, guard, event.minutes).getTime(), held));
-    const actions: PacedAction[] = event.actions.map((a) => ({ ...toAction(a, mode), neverTriggerBefore: notBefore }));
+    const actions: PacedAction[] = event.actions.map((a) => ({ ...toAction(a), neverTriggerBefore: notBefore, ...(a.tally ? { tally: a.tally } : {}) }));
     if (actions.length > 0) {
       // Not faster than the clock (keepsPace): checked by the monitor extension
       // against the times of the reports before this one (patches/react-native-device-activity).
@@ -898,11 +808,60 @@ function writeCheckpointActions(plan: ReturnType<typeof monitorPlan>, settings: 
     }
     DeviceActivity.configureActions({ activityName: plan.activity, callbackName: 'eventDidReachThreshold', eventName: roundName(event.name, named), actions: actions as Action[] });
   }
+  // The rungs past the goal. Their pace is checked from the one list in `tally` (`minutes` asks for it): a list with
+  // each of their actions would be most of a megabyte in the settings the monitor extension has to load.
+  for (const event of plan.over) {
+    const notBefore = new Date(Math.max(lockNotBefore(dayStart, guard, event.minutes).getTime(), held));
+    const actions: PacedAction[] = event.actions.map((a) => ({ ...toAction(a), neverTriggerBefore: notBefore, ...(a.tally ? { tally: { ...a.tally, minutes: event.minutes } } : {}) }));
+    DeviceActivity.configureActions({ activityName: OVER_ACTIVITY, callbackName: 'eventDidReachThreshold', eventName: roundName(event.name, named), actions: actions as Action[] });
+  }
+  if (plan.kept.length === 0) {
+    forget('tally');
+    return;
+  }
+  save('tally', {
+    round: named,
+    rechargeMinute: settings.rechargeMinute,
+    countFrom: countingSince() ?? 0,
+    registeredAt: registered,
+    kept: plan.kept.map((k) => ({ key: eventKey(KEPT_ACTIVITY, roundName(k.name, named)), minutes: k.minutes })),
+    everything: all.map((c) => ({ key: c.name, minutes: c.minutes })),
+  } satisfies TallyRecord);
+}
+
+/** The day's plan as this file hands it on. */
+type Plan = ReturnType<typeof monitorPlan>;
+
+/** The day's plan with the settings as they are, counted from when today's count began, with or without essentials as the phone has them now. */
+function planFor(settings: Settings, topUpsSoFar: number): Plan {
+  return monitorPlan(settings, topUpsSoFar, countingSince(), hasEssentials());
+}
+
+/**
+ * What the monitor extension reads to weigh an action against the essentials'
+ * timer (the library patch, `plainlimitTally`; tally.ts has the rule): the
+ * round, when the day's count begins, when the day was last registered (it
+ * acts on nothing in the settling after that), and where each timer's
+ * reports are kept, with their minutes.
+ */
+interface TallyRecord {
+  round: string;
+  rechargeMinute: number;
+  countFrom: number;
+  registeredAt: number;
+  kept: { key: string; minutes: number }[];
+  everything: { key: string; minutes: number }[];
 }
 
 /** Every checkpoint of a plan with its minutes, for the widget's pacing (targets/widget, keepsPace). */
-function marksFor(plan: ReturnType<typeof monitorPlan>): { activity: string; name: string; minutes: number }[] {
-  return [...plan.events.map((e) => ({ activity: plan.activity, name: e.name, minutes: e.minutes })), ...plan.ticks.map((t) => ({ activity: TICKS_ACTIVITY, name: t.name, minutes: t.minutes }))];
+function marksFor(plan: Plan): { activity: string; name: string; minutes: number; kept?: true }[] {
+  return [
+    ...plan.events.map((e) => ({ activity: plan.activity, name: e.name, minutes: e.minutes })),
+    ...plan.ticks.map((t) => ({ activity: TICKS_ACTIVITY, name: t.name, minutes: t.minutes })),
+    ...plan.over.map((x) => ({ activity: OVER_ACTIVITY, name: x.name, minutes: x.minutes })),
+    // The essentials' own timer: the widget takes its minutes off, as the app does (tally.ts).
+    ...plan.kept.map((k) => ({ activity: KEPT_ACTIVITY, name: k.name, minutes: k.minutes, kept: true as const })),
+  ];
 }
 
 /**
@@ -910,7 +869,7 @@ function marksFor(plan: ReturnType<typeof monitorPlan>): { activity: string; nam
  * widget paces from the first launch of a build that has it, not from the next
  * registration. Only when the saved plan is for the same goal.
  */
-function sharePaceWithWidget(plan: ReturnType<typeof monitorPlan>) {
+function sharePaceWithWidget(plan: Plan) {
   const saved = DeviceActivity.userDefaultsGet<Record<string, unknown>>(SAVED.widgetPlan);
   if (!saved || typeof saved !== 'object' || Array.isArray(saved.marks) || saved.goalMinutes !== plan.widget.goalMinutes) return;
   save('widgetPlan', { ...saved, registeredAt: registeredAt(), marks: marksFor(plan) });
@@ -935,7 +894,7 @@ interface PaceSpec {
   mode?: 'onlyIfTooSoon';
 }
 
-type PacedAction = Action & { pace?: PaceSpec };
+type PacedAction = Action & { pace?: PaceSpec; tally?: Tally & { minutes?: number } };
 
 /**
  * Writes the covering screens' look and words, and what happens at each
@@ -946,7 +905,7 @@ type PacedAction = Action & { pace?: PaceSpec };
 export function refreshScreens(settings: Settings, topUpsSoFar: number) {
   if (!SCREEN_TIME_AVAILABLE || !isOn()) return;
   try {
-    const plan = monitorPlan(settings, topUpsSoFar, countingSince());
+    const plan = planFor(settings, topUpsSoFar);
     for (const shield of plan.shields) writeShield(shield, topUpsSoFar);
     // Today's "not before" times, so the guard against early checkpoints holds on each day the app is opened.
     writeCheckpointActions(plan, settings, new Date());
@@ -954,15 +913,6 @@ export function refreshScreens(settings: Settings, topUpsSoFar: number) {
   } catch (error) {
     note('the screens', error);
   }
-}
-
-/**
- * The token for what counts: the apps and categories ticked in Apple's list.
- * None at all means nothing is counted, never "everything".
- */
-function countedToken(): string | null {
-  if (pickCount(COUNTED_ID) === 0) return null;
-  return DeviceActivity.getFamilyActivitySelectionId(COUNTED_ID) ?? null;
 }
 
 /**
@@ -1046,24 +996,47 @@ function roundGoal(todayGoal: number): number {
 export async function applyPlan(settings: Settings, topUpsSoFar: number, fresh = false, hold = false): Promise<boolean> {
   registering += 1;
   try {
-    return await registerPlan(settings, topUpsSoFar, fresh, hold);
+    const ok = await registerPlan(settings, topUpsSoFar, fresh, hold);
+    if (ok && hasEssentials()) coverOnceSettled(settings, topUpsSoFar);
+    return ok;
   } finally {
     registering -= 1;
     registerFinishedAt = Date.now();
   }
 }
 
+/**
+ * With essentials, the phone locks nothing on the reports it makes in the
+ * settling after a registration: they come for both timers at once, in no
+ * order, so a rung past the goal can arrive before the essentials' minutes
+ * that explain it (tally.ts, SETTLE_MS). Once it is over the app reads the
+ * day as it stands and, if the battery is empty, puts the covers up itself,
+ * and has the widget drawn again.
+ * If the app has been left by then, the next rung past the goal locks
+ * instead: at most a few minutes of use later.
+ */
+let settling: ReturnType<typeof setTimeout> | null = null;
+function coverOnceSettled(settings: Settings, topUpsSoFar: number) {
+  if (settling) clearTimeout(settling);
+  settling = setTimeout(() => {
+    settling = null;
+    try {
+      const now = new Date();
+      if (!isOn() || Math.max(holdUntil(), earnedUntil()) > now.getTime()) return;
+      const used = usedSoFar(settings.goalMinutes, periodStartOf(now, settings.rechargeMinute));
+      if (used !== null && used >= roundGoal(settings.goalMinutes)) coverEmptyNow(settings, topUpsSoFar);
+    } catch (error) {
+      note('covering after the day was registered', error);
+    }
+    // The widget was not redrawn for the essentials' reports nor the rungs past the goal while they settled (the library patch, plainlimitRedraws).
+    reloadWidget();
+  }, SETTLE_MS + 2000);
+}
+
 async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: boolean, hold: boolean): Promise<boolean> {
   if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return false;
   try {
     const now = new Date();
-    const token = countedToken();
-    if (token === null) {
-      // Nothing is ticked, so nothing can count or lock.
-      DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY]);
-      note('the day', 'nothing is ticked in What counts');
-      return false;
-    }
     // Held for two hours at most, in case setup is left half done.
     if (hold) save('holdUntil', now.getTime() + 2 * 3600 * 1000);
     else if (fresh) forget('holdUntil');
@@ -1084,6 +1057,13 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
       startRound(now, lastGoal > 0 ? lastGoal : settings.goalMinutes);
       if (floor !== null && floor > 0) save('roundFloor', { round: round(), dayStart: day, minutes: floor });
       else forget('roundFloor');
+    } else if (!fresh && !picksMoved && isOn() && hasEssentials()) {
+      // Nothing moved, and the phone is about to re-report the day with fresh times. With essentials the figure
+      // rests on which report came before which (tally.ts), so re-reported all at once it can come out a rung or
+      // two lower. The day's use is no less than it is known to be now (Floor).
+      const day = dayStartOf(periodStartOf(now, settings.rechargeMinute)).getTime();
+      const known = usedSoFar(settings.goalMinutes, periodStartOf(now, settings.rechargeMinute));
+      if (known !== null && known > 0) save('roundFloor', { round: round(), dayStart: day, minutes: known });
     }
     save('registeredGoal', settings.goalMinutes);
     save('registeredRecharge', settings.rechargeMinute);
@@ -1092,10 +1072,10 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
       stopEarnedTimer();
       forget('earnedUntil');
       forget('roundFloor');
-      DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY]);
-      DeviceActivity.userDefaultsClearWithPrefix(`events_${ACTIVITY}`);
-      DeviceActivity.userDefaultsClearWithPrefix(`events_${TICKS_ACTIVITY}`);
+      DeviceActivity.stopMonitoring(COUNTING);
+      for (const activity of COUNTING) DeviceActivity.userDefaultsClearWithPrefix(`events_${activity}`);
       DeviceActivity.userDefaultsClearWithPrefix(`events_${TOPUP_ACTIVITY}`);
+      DeviceActivity.userDefaultsClearWithPrefix(DONE_PREFIX);
       DeviceActivity.disableBlockAllMode('plainlimit');
       DeviceActivity.resetBlocks('plainlimit');
       // Taking every cover off takes the Ask first list's too; it goes back on unless it is open.
@@ -1107,13 +1087,17 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     const guard = guardFor(noted(), now.getTime(), countStart(periodStartOf(now, settings.rechargeMinute), since));
     if (guard) save('guard', guard);
     else forget('guard');
-    const plan = monitorPlan(settings, topUpsSoFar, since);
+    // With essentials, the day is everything less their minutes, on a timer of their own (tally.ts).
+    const kept = keptToken();
+    const plan = monitorPlan(settings, topUpsSoFar, since, kept !== null);
     const earlier = includesEarlierUse(periodStartOf(now, settings.rechargeMinute), since);
     for (const shield of plan.shields) writeShield(shield, topUpsSoFar);
 
-    // The essentials stay open whatever is locked. (Under the older single list nothing needs to: what is not ticked never locks.)
-    keepEssentialsOpen(essentialsMode());
+    // The essentials stay open whatever is locked.
+    keepEssentialsOpen();
 
+    // The rungs past the goal are written for this round alone: an earlier round's are no use, and there are many.
+    DeviceActivity.userDefaultsClearWithPrefix(`actions_for_${OVER_ACTIVITY}_`);
     writeCheckpointActions(plan, settings, now);
     // The screens come off when the day ends, a minute before the next one starts.
     // ...and the Ask first list's cover goes back on (askFirst.ts).
@@ -1123,12 +1107,17 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     // The widget paces reports as the app does (keepsPace): it needs every checkpoint's minutes and when this registration was.
     save('widgetPlan', { ...plan.widget, round: named, roundBefore: readString('roundBefore'), picksChangedAt: picksChangedAt(), registeredAt: now.getTime(), marks: marksFor(plan) });
 
+    // The essentials' timer first, so its reports of the day so far are not behind the everything timer's.
+    await registerKept(plan, kept, earlier, named);
+    // No apps named: the phone counts everything (monitorPlan.ts, EVERYTHING).
     await DeviceActivity.startMonitoring(
       plan.activity,
       { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
-      plan.events.map((event) => ({ eventName: roundName(event.name, named), familyActivitySelection: token, threshold: event.after, includesPastActivity: earlier })),
+      plan.events.map((event) => ({ eventName: roundName(event.name, named), familyActivitySelection: EVERYTHING, threshold: event.after, includesPastActivity: earlier })),
     );
-    await registerTicks(plan, token, earlier, named);
+    save('engine', ENGINE);
+    await registerTicks(plan, earlier, named);
+    await registerOver(plan, earlier, named);
     reloadWidget();
     return true;
   } catch (error) {
@@ -1142,7 +1131,7 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
  * day. A failure here is noted and otherwise ignored: the day still counts
  * and locks, only in cell-sized steps.
  */
-async function registerTicks(plan: ReturnType<typeof monitorPlan>, token: string, earlier: boolean, named: string) {
+async function registerTicks(plan: Plan, earlier: boolean, named: string) {
   try {
     if (plan.ticks.length === 0) {
       DeviceActivity.stopMonitoring([TICKS_ACTIVITY]);
@@ -1151,32 +1140,72 @@ async function registerTicks(plan: ReturnType<typeof monitorPlan>, token: string
     await DeviceActivity.startMonitoring(
       TICKS_ACTIVITY,
       { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
-      plan.ticks.map((tick) => ({ eventName: roundName(tick.name, named), familyActivitySelection: token, threshold: tick.after, includesPastActivity: earlier })),
+      plan.ticks.map((tick) => ({ eventName: roundName(tick.name, named), familyActivitySelection: EVERYTHING, threshold: tick.after, includesPastActivity: earlier })),
     );
   } catch (error) {
     note('the minute checkpoints', error);
   }
 }
 
+/**
+ * The essentials' own timer (tally.ts), over the same stretch of day. With no
+ * essentials it is stopped. A failure is noted and shows as "not registered"
+ * in the health check: without it the essentials' minutes would use the battery.
+ */
+async function registerKept(plan: Plan, kept: string | null, earlier: boolean, named: string) {
+  try {
+    if (kept === null || plan.kept.length === 0) {
+      DeviceActivity.stopMonitoring([KEPT_ACTIVITY]);
+      return;
+    }
+    await DeviceActivity.startMonitoring(
+      KEPT_ACTIVITY,
+      { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
+      plan.kept.map((rung) => ({ eventName: roundName(rung.name, named), familyActivitySelection: kept, threshold: rung.after, includesPastActivity: earlier })),
+    );
+  } catch (error) {
+    note('the essentials\u2019 timer', error);
+  }
+}
+
+/** The everything timer's rungs past the goal (tally.ts), which lock once the essentials' minutes are taken off. None without essentials. */
+async function registerOver(plan: Plan, earlier: boolean, named: string) {
+  try {
+    if (plan.over.length === 0) {
+      DeviceActivity.stopMonitoring([OVER_ACTIVITY]);
+      return;
+    }
+    await DeviceActivity.startMonitoring(
+      OVER_ACTIVITY,
+      { intervalStart: plan.start, intervalEnd: plan.end, repeats: true },
+      plan.over.map((rung) => ({ eventName: roundName(rung.name, named), familyActivitySelection: EVERYTHING, threshold: rung.after, includesPastActivity: earlier })),
+    );
+  } catch (error) {
+    note('the checkpoints past the goal', error);
+  }
+}
+
 /** How the day's counting stands. Only ever not 'fine' when counting is meant to be on. */
-export type Health = 'fine' | 'nothingPicked' | 'tooManyApps' | 'accessOff' | 'notRegistered' | 'miscounted';
+export type Health = 'fine' | 'accessOff' | 'notRegistered' | 'miscounted';
 
 /**
  * Whether the day is really being counted. `watching` is whether the person
  * has counting turned on; turning it off on purpose is not a fault.
- * - nothingPicked: nothing is ticked in What counts, so nothing can count.
  * - accessOff: Screen Time access has been taken away in the Settings app.
- * - notRegistered: the phone has forgotten the day's monitoring.
+ * - notRegistered: the phone has forgotten the day's monitoring, or, with
+ *   essentials, their own timer (without it their minutes would use the battery).
  * - miscounted: the phone reported a checkpoint too soon to be true (see `miscounted`).
+ * (Up to 1.1's first builds there was "nothing picked" too: with nothing
+ * ticked nothing counted. Now everything counts unless it is an essential.)
  */
 export function health(settings: Settings, periodStart: Date, watching: boolean): Health {
-  if (MOCK_PHONE) return (['nothingPicked', 'tooManyApps', 'accessOff', 'notRegistered', 'miscounted'] as const).find((h) => MOCK.has(h)) ?? 'fine';
+  if (MOCK_PHONE) return (['accessOff', 'notRegistered', 'miscounted'] as const).find((h) => MOCK.has(h)) ?? 'fine';
   if (!SCREEN_TIME_AVAILABLE || !watching) return 'fine';
   if (permission() !== 'approved') return 'accessOff';
   try {
-    if (pickCount(COUNTED_ID) === 0) return 'nothingPicked';
-    if (!DeviceActivity.getActivities().includes(ACTIVITY)) return 'notRegistered';
-    if (tooManyApps()) return 'tooManyApps';
+    const registered = DeviceActivity.getActivities();
+    if (!registered.includes(ACTIVITY)) return 'notRegistered';
+    if (readNumber('engine') === ENGINE && hasEssentials() && !registered.includes(KEPT_ACTIVITY)) return 'notRegistered';
     return miscounted(phoneReports(), roundGoal(settings.goalMinutes), round(), dayStartOf(periodStart), savedGuard(), registeredAt()) ? 'miscounted' : 'fine';
   } catch {
     return 'fine';
@@ -1184,7 +1213,7 @@ export function health(settings: Settings, periodStart: Date, watching: boolean)
 }
 
 /** Every checkpoint report the phone has kept for these activities. */
-function phoneReports(activities: string[] = [ACTIVITY, TICKS_ACTIVITY]): Report[] {
+function phoneReports(activities: string[] = COUNTING): Report[] {
   return activities
     .flatMap((activity) => DeviceActivity.getEvents(activity))
     .filter((e) => e.callbackName === 'eventDidReachThreshold' && e.eventName)
@@ -1235,10 +1264,11 @@ export function turnOff() {
   try {
     stopEarnedTimer();
     forget('earnedUntil');
-    DeviceActivity.stopMonitoring([ACTIVITY, TICKS_ACTIVITY]);
+    DeviceActivity.stopMonitoring(COUNTING);
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
     stopAskFirst();
+    forget('tally');
     forget('widgetPlan');
     forget('countingSince');
     reloadWidget();
@@ -1247,26 +1277,31 @@ export function turnOff() {
   }
 }
 
+/** What the day's reports are read with (reports.ts): the phone's reports and what is saved about the day's registrations. */
+function dayInput(goalMinutes: number, periodStart: Date, periodEnd?: Date): DayInput {
+  return {
+    reports: phoneReports(),
+    goalMinutes: roundGoal(goalMinutes),
+    dayStart: dayStartOf(periodStart).getTime(),
+    periodEnd: periodEnd?.getTime(),
+    rounds: rounds(),
+    guard: savedGuard(),
+    now: Date.now(),
+    registeredAt: registeredAt(),
+  };
+}
+
 /**
  * The minutes known to be used since the last recharge, from the checkpoints
- * the phone has reported. Checkpoints that arrive impossibly early are ignored.
+ * the phone has reported: everything, less the essentials (tally.ts).
+ * Checkpoints that arrive impossibly early are ignored.
  */
 export function usedSoFar(goalMinutes: number, periodStart: Date, periodEnd?: Date): number | null {
   if (!SCREEN_TIME_AVAILABLE) return null;
   try {
-    const dayStart = dayStartOf(periodStart).getTime();
-    const counted = countDay({
-      reports: phoneReports(),
-      goalMinutes: roundGoal(goalMinutes),
-      dayStart,
-      periodEnd: periodEnd?.getTime(),
-      rounds: rounds(),
-      guard: savedGuard(),
-      now: Date.now(),
-      registeredAt: registeredAt(),
-    });
+    const input = dayInput(goalMinutes, periodStart, periodEnd);
     // After a change of goal alone, never less than was known before it (Floor).
-    return withFloor(counted, savedFloor(), round(), dayStart);
+    return withFloor(countDay(input), savedFloor(), round(), input.dayStart);
   } catch {
     return null;
   }
@@ -1299,12 +1334,20 @@ export function diagnostics(settings: Settings): string[] {
     if (earnedUntil() > Date.now()) lines.push(`Open time until: ${timeOf(earnedUntil())} (checkpoints wait for it)`);
     lines.push(`Registered at: ${timeOf(registeredAt())}${guard ? `; reports until ${timeOf(guard.closes)} judged from ${timeOf(guard.from)}` : ''}`);
     lines.push(`Health: ${health(settings, periodStartOf(new Date(), settings.rechargeMinute), true)}`);
+    // The two timers behind the day's figure (tally.ts): everything, and the essentials' own. Each is the highest
+    // checkpoint the phone has reported, so the real figure lies between it and the next one.
+    const today = dayInput(settings.goalMinutes, periodStartOf(new Date(), settings.rechargeMinute));
+    const everything = everythingCounted(today);
+    lines.push(`Counting: everything${hasEssentials() ? ', less your essentials' : ' (no essentials)'}`);
+    lines.push(`Everything timer: at least ${everything} min`);
+    if (hasEssentials()) lines.push(`Essentials timer: at least ${keptCounted(today)} min`);
+    lines.push(`Used (what the battery shows): ${countDay(today)} min of ${today.goalMinutes}`);
     lines.push(`Registered: ${DeviceActivity.getActivities().join(', ') || 'nothing'}`);
     const from = dayStartOf(periodStartOf(new Date(), settings.rechargeMinute));
     const ignored = new Set(doubtful(phoneReports(), roundGoal(settings.goalMinutes), round(), from, guard, registeredAt()).map((r) => r.name));
     // The minute checkpoints too, in the order they came: a burst of them is what a false reading looks like (keepsPace).
     const reported = DeviceActivity.getEvents()
-      .filter((e) => e.activityName === ACTIVITY || e.activityName === TICKS_ACTIVITY || e.activityName === TOPUP_ACTIVITY)
+      .filter((e) => COUNTING.includes(e.activityName) || e.activityName === TOPUP_ACTIVITY)
       .sort((a, b) => a.lastCalledAt.getTime() - b.lastCalledAt.getTime())
       .map((e) => {
         const early = e.activityName === ACTIVITY && e.eventName !== undefined && e.eventName !== null && ignored.has(e.eventName);
@@ -1314,7 +1357,7 @@ export function diagnostics(settings: Settings): string[] {
     lines.push(`Monitor asked for a widget redraw: ${timeOf(readNumber('reloadAsked'))}`);
     const cells = DeviceActivity.userDefaultsGet<number>(SAVED.widgetCells);
     lines.push(`Widget last drew: ${timeOf(readNumber('widgetDrew'))}${typeof cells === 'number' ? ` (${cells < 0 ? 'not set up' : `${cells} cells`})` : ''}`);
-    lines.push(`Picked: ${pickCount(COUNTED_ID)} counted${picksChangedAt() > 0 ? `, last changed ${timeOf(picksChangedAt())} (round ${round() || 'first'})` : ''}`);
+    lines.push(`Round: ${round() || 'first'}${picksChangedAt() > 0 ? `, started ${timeOf(picksChangedAt())}` : ''}`);
     // The library notes who last changed what is covered, and when.
     const last = DeviceActivity.userDefaultsGet<Record<string, unknown>>('lastBlockUpdate');
     if (last && typeof last === 'object') {
@@ -1327,14 +1370,13 @@ export function diagnostics(settings: Settings): string[] {
     // What is ticked and what is covered, split by kind: whole categories and
     // single apps are locked by different means (build 86: categories locked, single apps did not).
     const kinds = (m: DeviceActivity.ActivitySelectionMetadata | undefined | null) => (m ? `${m.applicationCount} single apps, ${m.categoryCount} categories, ${sitesIn(m)} sites${m.includeEntireCategory ? ', with every app of each category' : ''}` : 'nothing');
-    lines.push(`Lock: ${essentialsMode() ? 'everything except your essentials' : 'the older ticked list'}`);
-    lines.push(`Apps shown: ${kinds(metaOf(ALL_ID))}`);
-    lines.push(`Essentials: ${kinds(metaOf(ESSENTIALS_ID))}`);
+    lines.push('Lock: everything except your essentials');
+    lines.push(`Essentials: ${essentialsChosen() ? kinds(metaOf(ESSENTIALS_ID)) : 'not chosen yet'}`);
     // The waiting rule (essentials.ts): what starts at the next recharge, and what today's essentials can go back up to.
     lines.push(`Essentials waiting for the recharge: ${tokenOf(ESSENTIALS_NEXT_ID) ? kinds(metaOf(ESSENTIALS_NEXT_ID)) : 'none'}`);
     lines.push(`Battery started with: ${readNumber('essentialsStartSet') > 0 ? `${kinds(metaOf(ESSENTIALS_START_ID))} (noted ${timeOf(readNumber('essentialsStartSet'))})` : 'not noted yet'}`);
-    if (tokenOf(ALL_NEXT_ID)) lines.push(`Apps shown from the recharge: ${kinds(metaOf(ALL_NEXT_ID))}`);
-    lines.push(`Counted: ${kinds(metaOf(COUNTED_ID))}`);
+    // Left on the phone by the versions that counted apps by name; no longer read.
+    if (tokenOf(OLD_ALL_ID) || tokenOf(COUNTED_ID)) lines.push(`Older lists, not in use: ${kinds(metaOf(OLD_ALL_ID))} shown; ${kinds(metaOf(COUNTED_ID))} counted`);
     lines.push(`Asked to cover: ${kinds(DeviceActivity.activitySelectionMetadata({ currentBlocklist: true }))}`);
     lines.push(`Kept open whatever is covered: ${kinds(DeviceActivity.activitySelectionMetadata({ currentWhitelist: true }))}`);
     lines.push(`Phone says covers are up: ${DeviceActivity.isShieldActive() ? 'yes' : 'no'}`);
@@ -1347,14 +1389,16 @@ export function diagnostics(settings: Settings): string[] {
 
 /**
  * What Apple's usage report on Today should cover: from when today's count
- * began to the next recharge, for the apps that count. The report is drawn by
- * the phone; none of what it shows comes back to the app.
+ * began to the next recharge, every app (no selection). The report is drawn
+ * by the phone; none of what it shows comes back to the app. `exact`: the
+ * phone's own total for those hours is the day's figure, which holds only
+ * with no essentials. The report is handed either every app or a list, never
+ * "every app but these", and it runs sealed off from the essentials.
  */
-export function reportWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null; fromRecharge: boolean } {
+export function reportWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null; fromRecharge: boolean; exact: boolean } {
   const periodStart = periodStartOf(now, settings.rechargeMinute);
   const from = dayStartOf(periodStart);
-  const token = SCREEN_TIME_AVAILABLE ? countedToken() : null;
-  return { fromMs: from.getTime(), toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: token, fromRecharge: from.getTime() === periodStart.getTime() };
+  return { fromMs: from.getTime(), toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: null, fromRecharge: from.getTime() === periodStart.getTime(), exact: SCREEN_TIME_AVAILABLE && !hasEssentials() };
 }
 
 /**
@@ -1362,11 +1406,11 @@ export function reportWindow(settings: Settings, now: Date): { fromMs: number; t
  * phone's one picture in setup (today's figure, the 7-day average and the
  * chart; targets/report/PlainlimitReport.swift, SetupReport). The report takes
  * the first seven days from the start as the week and the rest as today.
+ * Every app (no selection), essentials too if some are already chosen.
  */
 export function setupWindow(settings: Settings, now: Date): { fromMs: number; toMs: number; selection: string | null } {
   const periodStart = periodStartOf(now, settings.rechargeMinute);
-  const token = SCREEN_TIME_AVAILABLE ? countedToken() : null;
-  return { fromMs: periodStart.getTime() - 7 * 24 * 3600 * 1000, toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: token };
+  return { fromMs: periodStart.getTime() - 7 * 24 * 3600 * 1000, toMs: nextRecharge(now, settings.rechargeMinute).getTime(), selection: null };
 }
 
 /**
@@ -1415,7 +1459,7 @@ export function holdLocks(untilMs: number, settings: Settings, topUpsSoFar: numb
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
     save('holdUntil', untilMs);
-    writeCheckpointActions(monitorPlan(settings, topUpsSoFar, countingSince()), settings, new Date());
+    writeCheckpointActions(planFor(settings, topUpsSoFar), settings, new Date());
     DeviceActivity.disableBlockAllMode('plainlimit');
     DeviceActivity.resetBlocks('plainlimit');
     // Taking every cover off takes the Ask first list's too; it goes back on unless it is open.
@@ -1429,7 +1473,7 @@ export function holdLocks(untilMs: number, settings: Settings, topUpsSoFar: numb
 export function lastReportSince(ms: number): number | null {
   if (!SCREEN_TIME_AVAILABLE) return null;
   try {
-    const times = [...DeviceActivity.getEvents(ACTIVITY), ...DeviceActivity.getEvents(TICKS_ACTIVITY)]
+    const times = COUNTING.flatMap((activity) => DeviceActivity.getEvents(activity))
       .filter((e) => e.callbackName === 'eventDidReachThreshold')
       .map((e) => e.lastCalledAt.getTime())
       .filter((at) => at >= ms);
@@ -1479,13 +1523,13 @@ export async function grantExtraTime(until: Date, settings: Settings, topUpsAfte
     // Taking every cover off takes the Ask first list's too; it goes back on unless it is open.
     coverAskAgain(settings.askFirst);
 
-    const plan = monitorPlan(settings, topUpsAfter, countingSince());
+    const plan = planFor(settings, topUpsAfter);
     const empty = plan.shields.find((s) => s.id === 'empty');
     if (empty) writeShield(empty, topUpsAfter);
 
     save('earnedUntil', until.getTime());
     // The checkpoints as the phone has them registered, with that in their "never before" times.
-    writeCheckpointActions(monitorPlan({ ...settings, goalMinutes: roundGoal(settings.goalMinutes) }, topUpsAfter, countingSince()), settings, now);
+    writeCheckpointActions(planFor({ ...settings, goalMinutes: roundGoal(settings.goalMinutes) }, topUpsAfter), settings, now);
 
     stopEarnedTimer();
     const dayEnds = nextRecharge(now, settings.rechargeMinute).getTime() - 60_000;
@@ -1528,25 +1572,26 @@ export function endExtraTime() {
 }
 
 /**
- * Covers the counted apps with the empty screen, now. The app calls this when
- * it is open and sees that earned time has run out, in case the phone's own
- * timer for it did not fire.
+ * Covers everything but the essentials with the empty screen, now. The app
+ * calls this when it is open and sees that the covers should be up and the
+ * phone has not put them there: earned time has run out and its timer did
+ * not fire, or the day was registered with the battery already empty.
+ * `noted`: the phone is told the battery's lock has acted, so its later
+ * checkpoints past the goal don't put the covers back after a "warn" screen
+ * was tapped away (tally.ts, the "lock" mark).
  */
-export function coverEmptyNow(settings: Settings, topUpsSoFar: number) {
+export function coverEmptyNow(settings: Settings, topUpsSoFar: number, noted = true) {
   if (!SCREEN_TIME_AVAILABLE || permission() !== 'approved') return;
   try {
-    const plan = monitorPlan(settings, topUpsSoFar, countingSince());
+    const plan = planFor(settings, topUpsSoFar);
     const empty = plan.shields.find((s) => s.id === 'empty');
     if (!empty) return;
     const { look, buttons } = shieldParts(empty, topUpsSoFar);
     DeviceActivity.updateShieldWithId(look, buttons, empty.id);
     DeviceActivity.updateShield(look, buttons, 'plainlimit');
-    if (essentialsMode()) {
-      keepEssentialsOpen(true);
-      DeviceActivity.enableBlockAllMode('plainlimit');
-    } else {
-      DeviceActivity.blockSelection({ activitySelectionId: COUNTED_ID }, 'plainlimit');
-    }
+    keepEssentialsOpen();
+    DeviceActivity.enableBlockAllMode('plainlimit');
+    if (noted) DeviceActivity.userDefaultsSet(`${DONE_PREFIX}lock~${round()}`, Date.now());
   } catch {
     // Nothing more to do.
   }
@@ -1562,7 +1607,7 @@ export function releaseLocks(settings: Settings, topUpsSoFar: number, usedFloorN
   if (!SCREEN_TIME_AVAILABLE) return;
   try {
     forget('holdUntil');
-    writeCheckpointActions(monitorPlan(settings, topUpsSoFar, countingSince()), settings, new Date());
+    writeCheckpointActions(planFor(settings, topUpsSoFar), settings, new Date());
     if (usedFloorNow >= settings.goalMinutes) coverEmptyNow(settings, topUpsSoFar);
   } catch (error) {
     note('starting', error);
@@ -1577,7 +1622,7 @@ export { COUNTED_ID };
  * day's use. `testUncover` takes them down again.
  */
 export function testCover(settings: Settings, topUpsSoFar: number): void {
-  coverEmptyNow(settings, topUpsSoFar);
+  coverEmptyNow(settings, topUpsSoFar, false);
 }
 
 export function testUncover(settings: Settings): void {

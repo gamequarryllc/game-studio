@@ -1,9 +1,10 @@
 // The waiting rule for the essentials (domain/essentials.ts) against a fake of
 // the Screen Time library: which of the phone's lists is written when Apple's
-// picker closes, what counts and what stays open afterwards, and what the
-// recharge starts. On the fake a list is its apps' names; on a phone it is
-// Apple's sealed picks, which only the phone can compare. (Whether the phone
-// then counts and locks by those lists can only be seen on a phone.)
+// picker closes, what stays open afterwards, and what the recharge starts.
+// There is one list, the essentials: everything else counts without being
+// named (domain/tally.ts). On the fake a list is its apps' names; on a phone
+// it is Apple's sealed picks, which only the phone can compare. (Whether the
+// phone then counts and locks by those lists can only be seen on a phone.)
 
 import { COUNTED_ID } from '@/domain/monitorPlan';
 
@@ -83,43 +84,73 @@ function load() {
     else all[id] = enc({ ...NONE, applicationTokens: apps, ...more });
     defaults.set(LISTS, all);
   };
-  /** Apple's first list, opened and closed with these ticks. */
-  const showApps = (apps: string[], free = false) => {
-    st.appsBefore();
-    tick(st.ALL_PICK_ID, apps);
-    st.appsAfter(free);
-  };
-  /** Apple's second list, opened and closed with these ticks. Returns how many were refused. */
+  /** Apple's list, opened and closed with these ticks. Returns how many were refused. */
   const choose = (apps: string[], free = false) => {
     st.essentialsBefore();
     tick(st.ESSENTIALS_PICK_ID, apps);
     return st.essentialsAfter(free);
   };
-  return { st, defaults, open, broken, list, tick, showApps, choose, problem: () => defaults.get('plainlimit_problem') };
+  return { st, defaults, open, broken, list, tick, choose, problem: () => defaults.get('plainlimit_problem') };
 }
 
+/** The lists a version that counted apps by name left on the phone: every app shown, and what counted. */
+const OLD_ALL = 'plall';
 const PHONE = ['Hinge', 'Maps', 'Messages', 'Phone', 'Reels', 'Spotify'];
 
-/** Through setup with Maps, Messages and Phone as essentials, and a new battery looked at since. */
+/** With Maps, Messages and Phone chosen as essentials, and a new battery looked at since. */
 function settled() {
   const phone = load();
-  phone.showApps(PHONE, true);
   expect(phone.choose(['Maps', 'Messages', 'Phone'], true)).toBe(0);
   phone.st.startWaitingPicks(true);
   return phone;
 }
 
 describe('choosing the essentials for the first time', () => {
-  it('starts at once, whatever the day', () => {
-    const { st, list, open, showApps, choose, problem } = load();
-    showApps(PHONE);
+  it('starts at once, whatever the day, and needs no list of the phone\'s apps', () => {
+    const { st, list, open, choose, problem } = load();
+    // Until they are chosen, everything counts and nothing stays open.
+    expect(st.essentialsChosen()).toBe(false);
+    expect(st.essentialsCount()).toBe(0);
     expect(choose(['Maps', 'Phone'])).toBe(0);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Phone']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Messages', 'Reels', 'Spotify']);
     expect(open.apps).toEqual(['Maps', 'Phone']);
-    expect(st.essentialsMode()).toBe(true);
+    expect(st.essentialsChosen()).toBe(true);
+    expect(st.essentialsCount()).toBe(2);
+    // Nothing else is written: no list of every app, none of what counts.
+    expect(list(OLD_ALL)).toBeNull();
+    expect(list(COUNTED_ID)).toBeNull();
     expect(problem()).toBeUndefined();
+  });
+
+  it('none at all is a choice too: everything counts, and Today stops offering', () => {
+    const { st, list, open, choose } = load();
+    expect(choose([])).toBe(0);
+    expect(st.essentialsChosen()).toBe(true);
+    expect(st.essentialsCount()).toBe(0);
+    expect(list(st.ESSENTIALS_ID)).toBeNull();
+    expect(open.apps).toEqual([]);
+  });
+
+  it('the choice after it follows the waiting rule', () => {
+    const { st, list, choose } = load();
+    choose(['Maps', 'Phone']);
+    choose(['Maps', 'Phone', 'Reels']);
+    expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Phone']);
+    expect(list(st.ESSENTIALS_NEXT_ID)).toEqual(['Maps', 'Phone', 'Reels']);
+  });
+
+  it('a test build can forget them, and the next choice is a first one again', () => {
+    const { st, list, open, choose } = settled();
+    choose(['Hinge', 'Maps', 'Messages', 'Phone']);
+    st.forgetEssentials();
+    expect(st.essentialsChosen()).toBe(false);
+    expect(st.essentialsCount()).toBe(0);
+    for (const id of [st.ESSENTIALS_ID, st.ESSENTIALS_NEXT_ID, st.ESSENTIALS_START_ID, st.ESSENTIALS_PICK_ID]) expect(list(id)).toBeNull();
+    expect(open.apps).toEqual([]);
+    expect(choose(['Reels'])).toBe(0);
+    expect(list(st.ESSENTIALS_ID)).toEqual(['Reels']);
+    expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
   });
 });
 
@@ -129,8 +160,7 @@ describe('a new essential on an ordinary day', () => {
     expect(choose(['Hinge', 'Maps', 'Messages', 'Phone'])).toBe(0);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Messages', 'Phone']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toEqual(['Hinge', 'Maps', 'Messages', 'Phone']);
-    // Hinge's minutes go on counting, and the phone is not told to keep it open.
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Reels', 'Spotify']);
+    // Hinge is not an essential yet, so it goes on counting, and the phone is not told to keep it open.
     expect(open.apps).toEqual(['Maps', 'Messages', 'Phone']);
     expect(st.essentialsCount()).toBe(3);
     const joining = st.essentialsJoining();
@@ -165,7 +195,6 @@ describe('a new essential on an ordinary day', () => {
     expect(st.startWaitingPicks(true)).toBe(true);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Hinge', 'Maps', 'Messages', 'Phone']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
-    expect(list(COUNTED_ID)).toEqual(['Reels', 'Spotify']);
     expect(open.apps).toEqual(['Hinge', 'Maps', 'Messages', 'Phone']);
     expect(st.essentialsJoining()).toBeNull();
     // Nothing waits any more: the next look changes nothing.
@@ -185,10 +214,8 @@ describe('a new essential on an ordinary day', () => {
     choose(['Maps', 'Messages', 'Phone']);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Messages', 'Phone']);
     choose(['Maps', 'Messages', 'Phone', 'Spotify']);
-    expect(list(COUNTED_ID)).toContain('Spotify');
     expect(st.startWaitingPicks(false)).toBe(true);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Messages', 'Phone', 'Spotify']);
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Reels']);
   });
 });
 
@@ -197,12 +224,10 @@ describe('taking an essential out', () => {
     const { st, list, open, choose } = settled();
     choose(['Messages', 'Phone']);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Messages', 'Phone']);
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Maps', 'Reels', 'Spotify']);
     expect(open.apps).toEqual(['Messages', 'Phone']);
     choose(['Maps', 'Messages', 'Phone']);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Messages', 'Phone']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Reels', 'Spotify']);
   });
 
   it('after the recharge it is a new essential like any other', () => {
@@ -218,7 +243,6 @@ describe('taking an essential out', () => {
     const { st, list, choose } = settled();
     choose(['Messages', 'Phone', 'Reels']);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Messages', 'Phone']);
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Maps', 'Reels', 'Spotify']);
     expect(st.essentialsJoining()?.count).toBe(1);
   });
 
@@ -226,7 +250,6 @@ describe('taking an essential out', () => {
     const { st, list, open, choose } = settled();
     choose([]);
     expect(list(st.ESSENTIALS_ID)).toBeNull();
-    expect(list(COUNTED_ID)).toEqual(PHONE);
     expect(open.apps).toEqual([]);
     expect(st.essentialsCount()).toBe(0);
     // And back, the same day.
@@ -241,7 +264,6 @@ describe('free days', () => {
     choose(['Maps', 'Messages', 'Phone', 'Spotify'], true);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Messages', 'Phone', 'Spotify']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Reels']);
     expect(open.apps).toEqual(['Maps', 'Messages', 'Phone', 'Spotify']);
     // And stays today's after the pass: out and back in is at once.
     choose(['Maps', 'Messages', 'Phone']);
@@ -277,7 +299,6 @@ describe('what is never kept', () => {
     tick(st.ESSENTIALS_PICK_ID, ['Maps', 'Messages', 'Phone', 'Reels']);
     // The app never hears the list close. The lists in force are untouched...
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Messages', 'Phone']);
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Reels', 'Spotify']);
     // ...and the next recharge does not start it either.
     expect(st.startWaitingPicks(true)).toBe(false);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Messages', 'Phone']);
@@ -288,13 +309,14 @@ describe('what is never kept', () => {
 });
 
 describe('lists made by a build before the rule', () => {
-  it('today\'s essentials are the battery\'s own until the first look notes them', () => {
+  it('today\'s essentials are the battery\'s own until the first look notes them, and the older lists are left as they were', () => {
     const { st, list, defaults, tick, choose } = load();
     // As build 157 left the phone: the lists, and when the essentials were chosen.
-    tick(st.ALL_ID, PHONE);
+    tick(OLD_ALL, PHONE);
     tick(st.ESSENTIALS_ID, ['Maps', 'Phone']);
     tick(COUNTED_ID, ['Hinge', 'Messages', 'Reels', 'Spotify']);
     defaults.set('plainlimit_essentials_set', 1);
+    expect(st.essentialsChosen()).toBe(true);
     choose(['Maps', 'Phone', 'Reels']);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Phone']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toEqual(['Maps', 'Phone', 'Reels']);
@@ -303,53 +325,9 @@ describe('lists made by a build before the rule', () => {
     choose(['Maps', 'Phone']);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Phone']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
-  });
-});
-
-describe('the phone\'s whole list of apps', () => {
-  it('an app left off it goes on counting until the recharge', () => {
-    const { st, list, showApps, problem } = settled();
-    showApps(PHONE.filter((a) => a !== 'Reels'));
-    expect(list(st.ALL_ID)).toEqual(PHONE);
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Reels', 'Spotify']);
-    expect(list(st.ALL_NEXT_ID)).toEqual(['Hinge', 'Maps', 'Messages', 'Phone', 'Spotify']);
-    expect(st.startWaitingPicks(true)).toBe(true);
-    expect(list(st.ALL_ID)).toEqual(['Hinge', 'Maps', 'Messages', 'Phone', 'Spotify']);
-    expect(list(st.ALL_NEXT_ID)).toBeNull();
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Spotify']);
-    expect(problem()).toBeUndefined();
-  });
-
-  it('a newly installed app counts from now', () => {
-    const { st, list, showApps } = settled();
-    showApps([...PHONE, 'Threads']);
-    expect(list(st.ALL_ID)).toEqual([...PHONE, 'Threads']);
-    expect(list(st.ALL_NEXT_ID)).toBeNull();
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Reels', 'Spotify', 'Threads']);
-  });
-
-  it('ticked in full again, an app left off earlier that day stays', () => {
-    const { st, list, showApps } = settled();
-    showApps(PHONE.filter((a) => a !== 'Reels'));
-    showApps(PHONE);
-    expect(list(st.ALL_NEXT_ID)).toBeNull();
-    expect(list(st.ALL_ID)).toEqual(PHONE);
-  });
-
-  it('on a free day it is as ticked', () => {
-    const { st, list, showApps } = settled();
-    showApps(PHONE.filter((a) => a !== 'Reels'), true);
-    expect(list(st.ALL_ID)).toEqual(['Hinge', 'Maps', 'Messages', 'Phone', 'Spotify']);
-    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Spotify']);
-  });
-
-  it('emptied, it is not kept', () => {
-    const { st, list, showApps } = settled();
-    showApps([]);
-    expect(list(st.ALL_ID)).toEqual(PHONE);
-    expect(list(st.ALL_NEXT_ID)).toBeNull();
-    expect(list(st.ALL_PICK_ID)).toBeNull();
-    expect(st.appsShown()).toBe(PHONE.length);
+    // No longer read, and never rewritten: going back to a build that counts them finds them as it left them.
+    expect(list(OLD_ALL)).toEqual(PHONE);
+    expect(list(COUNTED_ID)).toEqual(['Hinge', 'Messages', 'Reels', 'Spotify']);
   });
 });
 
@@ -360,7 +338,6 @@ describe('a phone that cannot compare two lists', () => {
     expect(choose(['Hinge', 'Maps', 'Messages', 'Phone'])).toBe(0);
     expect(list(st.ESSENTIALS_ID)).toEqual(['Hinge', 'Maps', 'Messages', 'Phone']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
-    expect(list(COUNTED_ID)).toEqual(['Reels', 'Spotify']);
     expect(String(problem())).toContain('the waiting rule');
   });
 });

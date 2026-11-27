@@ -5,7 +5,8 @@
  * cannot disagree about a report.
  */
 
-import { believable, checkpointsFor, minuteTicksFor, picksSettled, roundName, splitName, usedFloor, type Checkpoint, type Guard, type Mark, type Pace } from './checkpoints';
+import { believable, checkpointsFor, minuteTicksFor, picksSettled, roundName, splitName, type Checkpoint, type Guard, type Mark, type Pace } from './checkpoints';
+import { keptRungs, overRungs, usedKnown } from './tally';
 
 /** A report as the phone keeps it: the checkpoint's registered name (with its round) and when it came. */
 export interface Report {
@@ -71,14 +72,15 @@ function latestOf(reports: readonly Report[], name: string): Report | null {
   return reports.filter((r) => r.name === name).reduce<Report | null>((best, r) => (best && best.at >= r.at ? best : r), null);
 }
 
-/**
- * Today's reports in one round, each with the minutes it stands for: what
- * every report is paced against (`keepsPace`). The cells and the minute
- * checkpoints alike, from the day's start to its end.
- */
-export function marksOf(reports: readonly Report[], goalMinutes: number, round: string, dayStart: number, periodEnd = Number.POSITIVE_INFINITY): Mark[] {
+/** Every checkpoint of the everything timer: the cells, the minute ones, and its rungs past the goal (registered only with essentials; tally.ts). */
+function everythingCheckpoints(goalMinutes: number): Checkpoint[] {
+  return [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes), ...overRungs(goalMinutes)];
+}
+
+/** Today's reports of `checkpoints` in one round, each with the minutes it stands for. */
+function marksIn(checkpoints: readonly Checkpoint[], reports: readonly Report[], round: string, dayStart: number, periodEnd: number): Mark[] {
   const out: Mark[] = [];
-  for (const checkpoint of [...checkpointsFor(goalMinutes), ...minuteTicksFor(goalMinutes)]) {
+  for (const checkpoint of checkpoints) {
     const latest = latestOf(reports, roundName(checkpoint.id, round));
     if (latest && latest.at >= dayStart && latest.at < periodEnd) out.push({ minutes: checkpoint.minutes, at: latest.at });
   }
@@ -86,13 +88,22 @@ export function marksOf(reports: readonly Report[], goalMinutes: number, round: 
 }
 
 /**
- * The minutes known to be used, from the checkpoints the phone has reported
- * in the day's count: the latest report for each, if it can be true. Only one
- * round's reports count. Just after the ticked apps change, the old round's
- * figure stands until the phone has re-reported the day for the new list. A
- * finished day (`periodEnd`) is closed from the round it ended in.
+ * Today's reports of the everything timer in one round, each with the minutes
+ * it stands for: what every report is paced against (`keepsPace`). The cells,
+ * the minute checkpoints and the rungs past the goal alike, from the day's
+ * start to its end.
  */
-export function countDay(input: {
+export function marksOf(reports: readonly Report[], goalMinutes: number, round: string, dayStart: number, periodEnd = Number.POSITIVE_INFINITY): Mark[] {
+  return marksIn(everythingCheckpoints(goalMinutes), reports, round, dayStart, periodEnd);
+}
+
+/** The same for the essentials' own timer (tally.ts): its reports are paced against each other. */
+export function keptMarksOf(reports: readonly Report[], round: string, dayStart: number, periodEnd = Number.POSITIVE_INFINITY): Mark[] {
+  return marksIn(keptRungs(), reports, round, dayStart, periodEnd);
+}
+
+/** What `readDay` is given: the phone's reports and what is saved about the day's registrations. */
+export interface DayInput {
   reports: readonly Report[];
   goalMinutes: number;
   dayStart: number;
@@ -102,22 +113,66 @@ export function countDay(input: {
   now: number;
   /** When the day was last registered (0 if not known): reports just after it are no use for pacing. */
   registeredAt?: number;
-}): number {
+}
+
+/** The day as the phone has reported it: the reports of each timer that can be true, and the goal they were registered with. */
+export interface DayRead {
+  goalMinutes: number;
+  everything: Mark[];
+  kept: Mark[];
+  registeredAt: number;
+}
+
+/**
+ * The reports that count towards today: the latest for each checkpoint, if it
+ * can be true. Only one round's reports count. Just after the essentials
+ * change, the old round's reports stand until the phone has re-reported the
+ * day for the new list. A finished day (`periodEnd`) is closed from the round
+ * it ended in.
+ */
+export function readDay(input: DayInput): DayRead {
   const { reports, rounds, guard } = input;
   const from = new Date(input.dayStart);
   const to = input.periodEnd ?? Number.POSITIVE_INFINITY;
+  const registeredAt = input.registeredAt ?? 0;
   let goal = input.goalMinutes;
   let round = rounds.round;
   if (input.periodEnd === undefined && !roundSettled(reports, rounds, input.dayStart, input.now)) {
     round = rounds.roundBefore;
     goal = rounds.goalBefore || input.goalMinutes;
   }
-  const pace: Pace = { earlier: marksOf(reports, goal, round, input.dayStart, to), registeredAt: input.registeredAt ?? 0 };
-  const arrived = [...checkpointsFor(goal), ...minuteTicksFor(goal)].filter((checkpoint) => {
-    const latest = latestOf(reports, roundName(checkpoint.id, round));
-    return latest !== null && latest.at < to && believable(checkpoint, from, guard, new Date(latest.at), pace);
-  });
-  return usedFloor(arrived);
+  const arrived = (checkpoints: readonly Checkpoint[], pace: Pace): Mark[] =>
+    checkpoints.flatMap((checkpoint) => {
+      const latest = latestOf(reports, roundName(checkpoint.id, round));
+      return latest !== null && latest.at < to && believable(checkpoint, from, guard, new Date(latest.at), pace) ? [{ minutes: checkpoint.minutes, at: latest.at }] : [];
+    });
+  return {
+    goalMinutes: goal,
+    everything: arrived(everythingCheckpoints(goal), { earlier: marksOf(reports, goal, round, input.dayStart, to), registeredAt }),
+    kept: arrived(keptRungs(), { earlier: keptMarksOf(reports, round, input.dayStart, to), registeredAt }),
+    registeredAt,
+  };
+}
+
+/**
+ * The minutes known to be used: everything, less the essentials (tally.ts).
+ * With no essentials that is the everything timer's highest checkpoint, as
+ * the count always was. It stops at the goal, as it always did: past it the
+ * battery is empty, and only essentials (and whatever iOS never locks) go on.
+ */
+export function countDay(input: DayInput): number {
+  const day = readDay(input);
+  return Math.min(day.goalMinutes, usedKnown(day.everything, day.kept, day.registeredAt));
+}
+
+/** The most the everything timer has reported today: what the guard after a registration is worked out from (`mostByNow`). */
+export function everythingCounted(input: DayInput): number {
+  return readDay(input).everything.reduce((most, mark) => Math.max(most, mark.minutes), 0);
+}
+
+/** The most the essentials' timer has reported today, for the readout. */
+export function keptCounted(input: DayInput): number {
+  return readDay(input).kept.reduce((most, mark) => Math.max(most, mark.minutes), 0);
 }
 
 /**

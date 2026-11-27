@@ -31,8 +31,12 @@ export const SAVED = {
   /** When the ticked apps last changed, and the list as it was when Apple's picker opened. */
   picksChangedAt: 'plainlimit_picks_changed_at',
   picksBefore: 'plainlimit_picks_before',
-  /** When the essentials were last chosen (0: never, so the older single list still applies). */
+  /** When the essentials were last chosen (0: never; then everything counts, and Today offers to choose them). */
   essentialsSet: 'plainlimit_essentials_set',
+  /** Which way of counting the day is registered with (screenTime.ts, ENGINE). Missing: a list of apps, as before the everything timer. */
+  engine: 'plainlimit_engine',
+  /** What the monitor extension reads to take the essentials' minutes off before it acts (screenTime.ts, TallyRecord). Missing with no essentials. */
+  tally: 'plainlimit_tally',
   /** When the essentials a battery started with were last noted (0: never, by a build before the waiting rule; essentials.ts). */
   essentialsStartSet: 'plainlimit_essentials_start_set',
   /** The current round of checkpoint names, the one before it, and the goal that one was made for (see `roundName`). */

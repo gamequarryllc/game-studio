@@ -7,7 +7,8 @@ import { refusalNeedsAlert, refusalWords, type Refusal } from '@/domain/access';
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { askToNotify, openPhoneSettings } from '@/platform/notices';
-import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount, refusal, wholeWindow } from '@/platform/screenTime';
+import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, refusal, wholeWindow } from '@/platform/screenTime';
+import { setupKind, setupName, useSetupKind, type SetupKind } from '@/state/setupKind';
 import { store } from '@/state/store';
 import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
@@ -21,12 +22,20 @@ import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
 import { useDay } from '@/ui/useDay';
 import { useNotices } from '@/ui/useNotices';
 
-// The first launch, in six screens: what it is, Screen Time access, what
-// counts, notifications, the goal, and a last check. Access comes first, so
-// the goal screen can show the phone's own figures (today so far, and the
-// last week's average) while the goal is picked; the old order asked for a
-// goal before anything was known, and a quick tap-through could lock every
-// app at once.
+// The first launch: what it is, Screen Time access, notifications, the goal,
+// and a last check. Access comes first, so the goal screen can show the
+// phone's own figures (today so far, and the last week's average) while the
+// goal is picked; the old order asked for a goal before anything was known,
+// and a quick tap-through could lock every app at once.
+//
+// Nothing has to be picked for counting to work: the phone counts everything
+// (domain/tally.ts), so someone who taps straight through ends with a working
+// app. Two drafts are being tried (state/setupKind.ts, the owner, 2026-11-27):
+// - "nothing to pick": no essentials step at all; Today offers them afterwards;
+// - "one list": an essentials step where Apple's list opens once, which can
+//   be skipped.
+// (Up to build 165 setup opened Apple's list twice, the first time to tick
+// "All Apps & Categories"; skipping it left nothing counted.)
 //
 // The phone's first drawing after an install can take a minute, and the app
 // can't tell when it is done. So setup starts early: Screen Time is woken as
@@ -44,7 +53,11 @@ import { useNotices } from '@/ui/useNotices';
 
 type Step = 'welcome' | 'access' | 'counts' | 'notify' | 'goal' | 'ready';
 
-const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'access', 'counts', 'notify', 'goal', 'ready'] : ['welcome', 'counts', 'notify', 'goal', 'ready'];
+/** The screens of a draft, in order. Where there is no Screen Time (the preview) there is no access to ask for. */
+function stepsOf(kind: SetupKind): Step[] {
+  const all: Step[] = kind === 'oneList' ? ['welcome', 'access', 'counts', 'notify', 'goal', 'ready'] : ['welcome', 'access', 'notify', 'goal', 'ready'];
+  return SCREEN_TIME_AVAILABLE ? all : all.filter((s) => s !== 'access');
+}
 
 /**
  * How the last screen waits for the phone's report of the day so far: until
@@ -81,16 +94,18 @@ export default function Setup() {
   // Whether the goal screen's figures have been asked for, so they stay for the rest of setup.
   const [figuresShown, setFiguresShown] = useState(false);
 
-  const step = STEPS[at];
+  const kind = useSetupKind();
+  const STEPS = stepsOf(kind);
+  const step = STEPS[Math.min(at, STEPS.length - 1)];
   const goTo = (s: Step) => setAt(Math.max(0, STEPS.indexOf(s)));
   const next = () => setAt((i) => Math.min(STEPS.length - 1, i + 1));
   const approved = access === 'approved';
   const canPick = SCREEN_TIME_AVAILABLE && approved;
-  const picked = pickCount(COUNTED_ID);
-  // Once the essentials are saved, setup moves on by itself.
+  // Once the essentials are saved, setup moves on by itself (the draft with one list).
   const essentials = useEssentials(next);
-  const figures = canPick && picked > 0;
-  // Only a phone with access and something ticked can count; anywhere else the last screen is a summary.
+  // Everything counts from the start, so the phone's figures need nothing picked.
+  const figures = canPick;
+  // Only a phone with access can count; anywhere else the last screen is a summary.
   const checking = step === 'ready' && figures;
 
   // Registers the day (locks held) on reaching the last screen, once.
@@ -177,6 +192,8 @@ export default function Setup() {
       </>
     );
     primary = { label: 'Set it up', onPress: next };
+    // Test builds: which draft of setup this is, and a tap to try the other.
+    if (DEV_TOOLS) quiet = { label: `Test build. ${setupName(kind)}. Tap to switch.`, onPress: () => setupKind.set(kind === 'nothing' ? 'oneList' : 'nothing') };
   }
 
   if (step === 'access') {
@@ -198,23 +215,24 @@ export default function Setup() {
   }
 
   if (step === 'counts') {
+    // One list, and only for the essentials. Skipping is safe: everything counts until they are chosen.
+    const showPick = canPick || MOCK_PHONE;
     body = (
       <>
         <Heading>Your essentials</Heading>
         <Lead>{COUNTS_SHORT}</Lead>
-        {canPick ? (
+        {showPick ? (
           <EssentialsSteps e={essentials} mainInFoot />
         ) : SCREEN_TIME_AVAILABLE ? (
-          <Text style={styles.note}>You can set them once Screen Time is allowed, in Settings, under Essentials.</Text>
+          <Text style={styles.note}>You can choose them once Screen Time is allowed, in Settings, under Essentials. Until then every app counts.</Text>
         ) : (
           <Text style={styles.note}>On an iPhone you tick them in Apple&apos;s own list of your apps. This preview runs on pretend use.</Text>
         )}
       </>
     );
-    if (canPick && !essentials.ready) {
-      // Between Apple's two lists the button waits, so a second tap can't open a list over the one on its way.
-      primary = essentials.busy ? { label: 'One moment…', onPress: () => {} } : { label: 'Choose essentials', onPress: essentials.start };
-      secondary = { label: 'Skip for now', onPress: next };
+    if (showPick && !essentials.ready) {
+      primary = { label: 'Choose essentials', onPress: canPick ? essentials.start : next };
+      secondary = { label: 'Skip: count everything', onPress: next };
     }
   }
 
@@ -250,10 +268,10 @@ export default function Setup() {
   // phone has a head start. Once asked for they stay for the rest of setup,
   // parked on the other screens, so Back and Next don't ask the phone to draw
   // them again: on build 127 the second drawing never came (the owner). They
-  // are drawn again only when the essentials change, which changes what they
-  // count. Parked, they are drawn in full under the screen in front (`cover`),
-  // not made clear: a clear view might never be drawn, and the head start
-  // would be lost without a sign.
+  // take in every app, essentials too: the phone can be asked for every app or
+  // for a list, never "every app but these". Parked, they are drawn in full
+  // under the screen in front (`cover`), not made clear: a clear view might
+  // never be drawn, and the head start would be lost without a sign.
   const recharge = clockLabel(settings.rechargeMinute);
   if ((step === 'notify' || step === 'goal') && figures && !figuresShown) setFiguresShown(true);
   const figureBox =
@@ -266,7 +284,7 @@ export default function Setup() {
         style={[styles.figureBox, { gap: 12 }, step === 'goal' ? null : styles.parked]}>
         {/* One picture from the phone for both figures and the chart, so they arrive together (UsageReport.tsx). */}
         <SetupFigures settings={settings} now={now} todayLabel={`Since ${recharge}`} />
-        <Text style={styles.note}>{`Days start at ${recharge}. Essentials not counted.`}</Text>
+        <Text style={styles.note}>{`Days start at ${recharge}. ${essentials.kept > 0 ? 'These figures include your essentials.' : 'Every app counts.'}`}</Text>
       </View>
     ) : null;
 
@@ -302,6 +320,8 @@ export default function Setup() {
     const over = phase === 'ready' && day.usedMinutes >= settings.goalMinutes;
     // Plainlimit's own figure, until the phone has reported anything for today.
     const reading = phase === 'reading' && day.usedMinutes === 0;
+    // What Plainlimit's figure takes in, beside the iPhone's own "Every app, since midnight".
+    const countsWhat = essentials.kept > 0 ? 'Without essentials' : 'Every app';
     body = (
       <>
         <Heading>{phase === 'failed' ? 'Not counting yet' : over ? 'Already past your goal' : 'Ready'}</Heading>
@@ -323,7 +343,7 @@ export default function Setup() {
           </View>
           <View
             accessible
-            accessibilityLabel={`Plainlimit counts ${reading ? 'still reading' : durationLabel(day.usedMinutes)}, without essentials, since ${recharge}`}
+            accessibilityLabel={`Plainlimit counts ${reading ? 'still reading' : durationLabel(day.usedMinutes)}, ${countsWhat.toLowerCase()}, since ${recharge}`}
             style={[styles.part, { borderColor: accent, backgroundColor: accent.length === 7 ? `${accent}1F` : 'transparent' }]}>
             <View style={styles.wholeRow}>
               <Icon name="battery" size={18} color={accent} />
@@ -336,7 +356,7 @@ export default function Setup() {
                 </Text>
               )}
             </View>
-            <Text style={[styles.wholeNote, styles.partNote]}>{`Without essentials, since ${recharge}`}</Text>
+            <Text style={[styles.wholeNote, styles.partNote]}>{`${countsWhat}, since ${recharge}`}</Text>
           </View>
         </View>
         {phase === 'reading' ? <ReadingBar colour={accent} /> : null}
@@ -345,7 +365,7 @@ export default function Setup() {
         ) : phase === 'failed' ? (
           <Lead>iOS would not start counting. You can turn it on later at the top of Settings.</Lead>
         ) : over ? (
-          <Lead>{`You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock your counted apps until ${recharge}.`}</Lead>
+          <Lead>{`You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock ${essentials.kept > 0 ? 'everything but your essentials' : 'your apps'} until ${recharge}.`}</Lead>
         ) : null}
       </>
     );
@@ -368,14 +388,10 @@ export default function Setup() {
         <Card>
           <Row label="Daily goal" value={durationLabel(settings.goalMinutes)} />
           <Row label="Recharges at" value={clockLabel(settings.rechargeMinute)} />
-          <Row label="Essentials" value={essentialsValue(SCREEN_TIME_AVAILABLE ? picked : -1, essentials.ready ? essentials.kept : null)} last />
+          <Row label="Essentials" value={essentialsValue(essentials.ready ? essentials.kept : null, SCREEN_TIME_AVAILABLE)} last />
         </Card>
         <Lead>
-          {!SCREEN_TIME_AVAILABLE
-            ? 'In this preview the battery runs on pretend use, from Settings.'
-            : !approved
-              ? 'Allow Screen Time in Settings when you are ready, and counting starts then.'
-              : 'Set your essentials in Settings, under Essentials, and counting starts then.'}
+          {!SCREEN_TIME_AVAILABLE ? 'In this preview the battery runs on pretend use, from Settings.' : 'Allow Screen Time in Settings when you are ready, and counting starts then.'}
         </Lead>
       </>
     );

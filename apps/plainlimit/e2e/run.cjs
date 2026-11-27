@@ -67,18 +67,19 @@ async function main() {
     await page.goto(url);
     await see('Your screen time is a battery');
     await shot('00-setup-welcome');
+    // A test build says which draft of setup this is (state/setupKind.ts): by default, nothing to pick.
+    await press('Test build. Setup 3: nothing to pick. Tap to switch.');
+    await press('Test build. Setup 1: one list. Tap to switch.');
     await press('Set it up');
-    await see('Your essentials');
-    await see('These never count and never lock.');
-    await shot('00-setup-counts');
-    await press('Next');
+    // Nothing to pick: no essentials step, and nothing about ticking apps. Everything counts from the start.
+    assert.strictEqual(await page.getByText('Your essentials', { exact: true }).count(), 0, 'setup 3 has no essentials step');
     // Notifications, with their reason, where the question used to come cold after the last screen. A phone draws the next screen's chart behind this one.
     await see('Notifications need to be on');
     await see('A warning when you’re nearly out');
     await see('The pop-up to earn more time');
     await see('Nothing else, ever');
     await see('Without them, asking for more time on a locked app does nothing.');
-    await page.getByLabel('Step 3 of 5', { exact: true }).waitFor();
+    await page.getByLabel('Step 2 of 4', { exact: true }).waitFor();
     await shot('00-setup-notify');
     await press('Not now');
     await see('How much a day?');
@@ -87,9 +88,6 @@ async function main() {
     await shot('00-setup-goal');
     await press('Back');
     await see('Notifications need to be on');
-    await press('Back');
-    await see('Your essentials');
-    await press('Next');
     // Allowing moves on by itself; coming back, the screen says they are on.
     await press('Allow notifications');
     await see('How much a day?');

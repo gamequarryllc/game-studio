@@ -13,13 +13,14 @@ import { batteryEnd, chosenRecharge } from '@/domain/recharge';
 import type { EmptyLevel } from '@/domain/types';
 import { EXPECTED_PRICE } from '@/pro/config';
 import { pro, usePro } from '@/pro/pro';
-import { COUNTED_ID, DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsCount, essentialsJoining, essentialsMode, isOn, pickCount } from '@/platform/screenTime';
+import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, essentialsChosen, essentialsCount, essentialsJoining, isOn, pickCount } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
 import { tap } from '@/platform/haptics';
 import { Icon, type IconName } from '@/ui/icons';
 import { BigButton, Card, Chevron, IconTile, Label, LinkRow, Page, ProBadge, StepButton, Title, tiles, type RowIcon } from '@/ui/kit';
 import { essentialsValue, joinsShort } from '@/ui/countWords';
 import { TIPS } from '@/ui/tips';
+import { setupKind, setupName, useSetupKind, type SetupKind } from '@/state/setupKind';
 import { ScreenTimeCard, TestBuildTools } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
@@ -57,6 +58,13 @@ export default function Settings() {
   const narrow = Math.min(useWindowDimensions().width, 480) < 360;
   // An empty battery locks these (the Screen Time card says why); they look it, instead of ignoring taps.
   const locked = settingsLocked();
+  // Test builds: which draft of setup this phone is on, and running setup again as one of them.
+  const draft = useSetupKind();
+  const trySetup = (kind: SetupKind) => {
+    setupKind.set(kind);
+    store.setupAgain();
+    router.replace('/setup');
+  };
   const proState = usePro();
   const isPro = proState.isPro;
   const proValue = isPro ? 'Unlocked' : (proState.price ?? (proState.storeOpen ? 'See what it adds' : EXPECTED_PRICE));
@@ -271,6 +279,19 @@ export default function Settings() {
         </View>
       ) : null}
 
+      {DEV_TOOLS ? (
+        <View style={{ marginTop: 14, gap: 10 }}>
+          <Label>Developer: Setup</Label>
+          {/* Two drafts of the first setup, for the owner to try side by side (state/setupKind.ts). */}
+          <Text style={styles.note}>
+            Two drafts of the first setup. Each starts setup again with your essentials forgotten, so every app counts until you choose them again. This phone is on {setupName(draft).toLowerCase()}. None of this is in the
+            App Store version.
+          </Text>
+          <BigButton quiet label="Try setup 3: nothing to pick" onPress={() => trySetup('nothing')} />
+          <BigButton quiet label="Try setup 1: one list" onPress={() => trySetup('oneList')} />
+        </View>
+      ) : null}
+
       {pretend ? (
         <View style={{ marginTop: 14, gap: 10 }}>
           <Label>Developer</Label>
@@ -336,8 +357,7 @@ function emptyLine(level: EmptyLevel, minutes: number): string {
 
 /** The Essentials row's value: how many are picked, as the phone has it now. */
 function essentialsNow(): string {
-  const picked = SCREEN_TIME_AVAILABLE || MOCK_PHONE ? pickCount(COUNTED_ID) : -1;
-  return essentialsValue(picked, essentialsMode() ? essentialsCount() : null);
+  return essentialsValue(essentialsChosen() ? essentialsCount() : null, SCREEN_TIME_AVAILABLE || MOCK_PHONE);
 }
 
 /** How many apps Second thought has picked, as the phone has it now. */
@@ -362,7 +382,7 @@ const ESSENTIAL_TILES: RowIcon[] = [
 
 /** How many example tiles the Essentials row shows: one for each essential, three at most (all three where the number isn't known). */
 function essentialTilesNow(): number {
-  if (!(SCREEN_TIME_AVAILABLE || MOCK_PHONE) || !essentialsMode()) return ESSENTIAL_TILES.length;
+  if (!(SCREEN_TIME_AVAILABLE || MOCK_PHONE) || !essentialsChosen()) return ESSENTIAL_TILES.length;
   return Math.min(ESSENTIAL_TILES.length, essentialsCount());
 }
 

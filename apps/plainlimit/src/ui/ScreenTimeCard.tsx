@@ -6,47 +6,34 @@ import { refusalNeedsAlert, refusalWords } from '@/domain/access';
 import { clockLabel } from '@/domain/day';
 import { settingsLockedNotice } from '@/domain/record';
 import { askToNotify } from '@/platform/notices';
-import { DEV_TOOLS, ESSENTIALS_LIMIT, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission, refusal, somethingCounts, testCover, testUncover } from '@/platform/screenTime';
+import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, diagnostics, historyLog, isOn, permission, refusal, testCover, testUncover } from '@/platform/screenTime';
 import { settingsLocked, store, useDoc } from '@/state/store';
-import { tooManyKept } from '@/ui/countWords';
-import { useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, IconTile, Label, tiles } from '@/ui/kit';
 import { c } from '@/ui/theme';
 
 const WOULD_NOT_START = { title: 'Counting didn’t start', line: 'iOS would not start counting. Check that Screen Time is on in the Settings app, then try again.' };
-/** Every app was ticked as an essential, so nothing is left to count. */
-const ALL_ESSENTIAL = { title: 'Nothing left to count', line: 'Every app was ticked as an essential. Tap Turn on Screen Time again, and leave the apps you want limited unticked.' };
-/** Apple's first list (the device's apps) was closed with nothing ticked. */
-const MISSED = { title: 'Nothing was ticked', line: 'Tap Turn on Screen Time again. In Apple’s list, tap All Apps & Categories at the top, then Done.' };
 
 type Problem = { title: string; line: string };
 
 /**
- * Turning counting on, all from the one button: asks iOS for access, then,
- * if the essentials were never chosen (setup's "Skip for now"), opens Apple's
- * lists for them and starts counting once they're saved; then asks for
+ * Turning counting on, all from the one button: asks iOS for access, starts
+ * counting (everything counts, with or without essentials), then asks for
  * notices. Whatever stops it is said on the card, and when iOS refused
  * without showing anything (no passcode, say) in a pop-up too, so a tap never
  * looks like it did nothing. (App Review, 1.1.0 on an iPad, 2026-11-26: "the
- * 'Turn on screen time' button was not functional".)
+ * 'Turn on screen time' button was not functional". Then nothing could count
+ * before Apple's lists had been through; now nothing has to be picked.)
  */
 function useTurnOn() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [busy, setBusy] = useState(false);
-  // Once the essentials are saved, carry on: this time there is something to count.
-  const essentials = useEssentials(() => void turnOn(true));
-  /** `picked`: straight after Apple's lists closed, so they aren't opened again if still nothing counts. */
-  async function turnOn(picked = false) {
+  async function turnOn() {
     if (busy) return;
     setBusy(true);
     setProblem(null);
     try {
       const result = await store.turnOnScreenTime();
       if (result === 'on') await askToNotify();
-      if (result === 'nothingPicked') {
-        if (picked) setProblem(ALL_ESSENTIAL);
-        else essentials.start();
-      }
       if (result === 'denied') {
         const why = refusal() ?? 'declined';
         const words = refusalWords(why);
@@ -64,8 +51,7 @@ function useTurnOn() {
       setBusy(false);
     }
   }
-  const shown = problem ?? (essentials.missed ? MISSED : essentials.refused > 0 ? { title: 'Too many essentials', line: tooManyKept(essentials.refused, ESSENTIALS_LIMIT) } : null);
-  return { turnOn, busy: busy || essentials.busy, problem: shown, pickers: essentials.pickers };
+  return { turnOn, busy, problem };
 }
 
 /**
@@ -81,7 +67,7 @@ export function ScreenTimeCard() {
   // Asks the phone whether counting is on as it draws: not to be kept by the React Compiler.
   'use no memo';
   const { settings } = useDoc();
-  const { turnOn, busy, problem, pickers } = useTurnOn();
+  const { turnOn, busy, problem } = useTurnOn();
   // Left out of the App Store screenshots, as the phone in them is counting.
   if ((!SCREEN_TIME_AVAILABLE && !MOCK_PHONE) || STORE_SHOTS) return null;
 
@@ -102,9 +88,7 @@ export function ScreenTimeCard() {
       <Text style={body}>
         {access === 'denied'
           ? 'Screen Time access is off for Plainlimit. Turn it on to have the battery follow your real day.'
-          : access === 'approved' && !somethingCounts()
-            ? 'One step left: pick your essentials in Apple’s list. Then the battery follows your real screen time.'
-            : 'Let the battery follow your real screen time. iOS does the counting; Plainlimit only hears how much time has gone, never which apps you opened.'}
+          : 'Let the battery follow your real screen time. iOS does the counting; Plainlimit only hears how much time has gone, never which apps you opened.'}
       </Text>
       {problem ? (
         <View accessibilityRole="alert" style={problemBox}>
@@ -113,7 +97,6 @@ export function ScreenTimeCard() {
         </View>
       ) : null}
       <BigButton label={busy ? 'Asking…' : 'Turn on Screen Time'} onPress={() => void turnOn()} />
-      {pickers}
     </Card>
   );
 }
