@@ -125,6 +125,8 @@ export interface DayInput {
   now: number;
   /** When the day was last registered (0 if not known): reports just after it are no use for pacing. */
   registeredAt?: number;
+  /** When today's re-reporting began (checkpoints.ts, `reReportsStart`; 0 if not known: then the last registration). */
+  reReportsFrom?: number;
 }
 
 /** The day as the phone has reported it: the reports of each timer that can be true, and the goal they were registered with. */
@@ -147,6 +149,7 @@ export function readDay(input: DayInput): DayRead {
   const from = new Date(input.dayStart);
   const to = input.periodEnd ?? Number.POSITIVE_INFINITY;
   const registeredAt = input.registeredAt ?? 0;
+  const reReportsFrom = input.reReportsFrom ?? 0;
   let goal = input.goalMinutes;
   let round = rounds.round;
   if (input.periodEnd === undefined && !roundSettled(reports, rounds, input.dayStart, input.now)) {
@@ -160,8 +163,8 @@ export function readDay(input: DayInput): DayRead {
     });
   return {
     goalMinutes: goal,
-    everything: arrived(everythingCheckpoints(goal), { earlier: marksOf(reports, goal, round, input.dayStart, to), registeredAt }),
-    kept: arrived(keptRungs(), { earlier: keptMarksOf(reports, round, input.dayStart, to), registeredAt }),
+    everything: arrived(everythingCheckpoints(goal), { earlier: marksOf(reports, goal, round, input.dayStart, to), registeredAt, reReportsFrom }),
+    kept: arrived(keptRungs(), { earlier: keptMarksOf(reports, round, input.dayStart, to), registeredAt, reReportsFrom }),
     registeredAt,
   };
 }
@@ -195,9 +198,9 @@ export function keptCounted(input: DayInput): number {
  * report them again today, so that part of the day cannot lock until counting
  * is set up again (Count again, which the app also does by itself once a day).
  */
-export function doubtful(reports: readonly Report[], goalMinutes: number, round: string, dayStart: Date, guard: Guard | null, registeredAt = 0): Report[] {
+export function doubtful(reports: readonly Report[], goalMinutes: number, round: string, dayStart: Date, guard: Guard | null, registeredAt = 0, reReportsFrom = 0): Report[] {
   const own = new Map<string, Checkpoint>(checkpointsFor(goalMinutes).map((c) => [c.id, c]));
-  const pace: Pace = { earlier: marksOf(reports, goalMinutes, round, dayStart.getTime()), registeredAt };
+  const pace: Pace = { earlier: marksOf(reports, goalMinutes, round, dayStart.getTime()), registeredAt, reReportsFrom };
   return reports.filter((r) => {
     const { id, round: madeIn } = splitName(r.name);
     const checkpoint = own.get(id);
@@ -206,6 +209,6 @@ export function doubtful(reports: readonly Report[], goalMinutes: number, round:
 }
 
 /** Whether the phone has miscounted the day: one of its own checkpoints came too soon to be true (see `doubtful`). */
-export function miscounted(reports: readonly Report[], goalMinutes: number, round: string, dayStart: Date, guard: Guard | null, registeredAt = 0): boolean {
-  return doubtful(reports, goalMinutes, round, dayStart, guard, registeredAt).length > 0;
+export function miscounted(reports: readonly Report[], goalMinutes: number, round: string, dayStart: Date, guard: Guard | null, registeredAt = 0, reReportsFrom = 0): boolean {
+  return doubtful(reports, goalMinutes, round, dayStart, guard, registeredAt, reReportsFrom).length > 0;
 }

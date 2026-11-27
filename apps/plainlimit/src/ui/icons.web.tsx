@@ -33,6 +33,10 @@ const DRAWN: Record<IconName, (c: string) => string> = {
   edit: (c) => `<path d="M5 19l1-4.2L15.6 5.2a1.9 1.9 0 0 1 2.7 0l.5.5a1.9 1.9 0 0 1 0 2.7L9.2 18zM13.5 7.3l3.2 3.2" ${stroke(c, 2.1)}/>`,
   check: (c) => `<path d="M5 12.5l4.5 4.5L19 7.5" ${stroke(c, 2.8)}/>`,
   streak: (c) => `<path fill="${c}" d="M12.6 1.8c.7 3.4-1.1 5.6-2.9 7.6C8 11.3 6.2 13.2 6.2 16c0 3.4 2.6 6.2 5.8 6.2s5.8-2.8 5.8-6.2c0-2.6-1.2-4.6-2.6-6.2-.3 1.6-1.1 2.8-2.3 3.4.5-4.3-.6-8.2-2.3-11.4z"/>`,
+  video: (c) => `<path fill="${c}" d="M8.5 5.2v13.6a.8.8 0 0 0 1.2.7l11-6.800a.8.8 0 0 0 0-1.400l-11-6.800a.8.8 0 0 0-1.200.700z"/>`,
+  game: (c) => `<rect fill="${c}" x="2" y="6.500" width="20" height="11.500" rx="5.750"/><path d="M7.500 9.800v5M5 12.300h5" stroke="#000" stroke-opacity=".55" stroke-width="1.800" stroke-linecap="round"/><circle cx="15.300" cy="13.800" r="1.200" fill="#000" fill-opacity=".55"/><circle cx="18" cy="10.900" r="1.200" fill="#000" fill-opacity=".55"/>`,
+  social: (c) => `<circle cx="9" cy="8.500" r="3.300" fill="${c}"/><path fill="${c}" d="M2.500 19c0-3.600 2.900-6 6.500-6s6.500 2.400 6.500 6z"/><circle cx="17" cy="9.500" r="2.600" fill="${c}" opacity=".7"/><path fill="${c}" opacity=".7" d="M16.500 13.300c3 0 5.200 2 5.200 5.200h-4.700c0-2-.600-3.700-1.900-5z"/>`,
+  arrow: (c) => `<path d="M5 12h13M13 6.500l5.500 5.500-5.500 5.500" ${stroke(c)}/>`,
 };
 
 export function Icon({ name, size, color }: { name: IconName; size: number; color: string }) {

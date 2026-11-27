@@ -65,32 +65,42 @@ async function main() {
 
   await step('a first launch goes through setup', async () => {
     await page.goto(url);
+    // The story first, one thing a screen: what it is, what is free, when it comes back.
     await see('Your screen time is a battery');
+    await page.getByText(/Using your apps drains it\./).first().waitFor({ state: 'visible', timeout: 8000 });
+    for (const moment of ['Full', 'Running low', 'Apps lock']) await see(moment);
     await shot('00-setup-welcome');
-    // A test build says which draft of setup this is (state/setupKind.ts): by default, nothing to pick.
-    await press('Test build. Setup 3: nothing to pick. Tap to switch.');
-    await press('Test build. Setup 1: one list. Tap to switch.');
-    await press('Set it up');
+    await press('Next');
+    await see('Essentials are free');
+    for (const words of ['Never drain it', 'Phone', 'Messages', 'Maps', 'Everything else', 'Drains it', 'Use your phone. Don’t abuse it.', 'You pick your essentials right after setup.']) await see(words);
+    await shot('00-setup-free');
+    await press('Next');
+    await see('Full again every morning');
+    await see('Your battery recharges at 6:00 AM.');
+    await see('A late night never eats into tomorrow.');
+    await shot('00-setup-morning');
+    await press('Next');
     // Nothing to pick: no essentials step, and nothing about ticking apps. Everything counts from the start.
-    assert.strictEqual(await page.getByText('Your essentials', { exact: true }).count(), 0, 'setup 3 has no essentials step');
+    assert.strictEqual(await page.getByText('Your essentials', { exact: true }).count(), 0, 'setup has no essentials step');
     // Notifications, with their reason, where the question used to come cold after the last screen. A phone draws the next screen's chart behind this one.
     await see('Notifications need to be on');
     await see('A warning when you’re nearly out');
     await see('The pop-up to earn more time');
     await see('Nothing else, ever');
     await see('Without them, asking for more time on a locked app does nothing.');
-    await page.getByLabel('Step 2 of 4', { exact: true }).waitFor();
+    await page.getByLabel('Step 4 of 6', { exact: true }).waitFor();
     await shot('00-setup-notify');
     await press('Not now');
-    await see('How much a day?');
+    // The goal: what the number is, and what happens at it, as three small pictures.
+    await see('Daily screen time');
     await see('Six cells of 30 minutes each');
-    await see('It recharges at 6:00 AM every day.');
+    for (const words of ['3:00 of use', 'Apps lock', 'Back at 6:00 AM']) await see(words);
     await shot('00-setup-goal');
     await press('Back');
     await see('Notifications need to be on');
     // Allowing moves on by itself; coming back, the screen says they are on.
     await press('Allow notifications');
-    await see('How much a day?');
+    await see('Daily screen time');
     await press('Back');
     await see('They’re on.');
     await press('Next');

@@ -214,6 +214,9 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain(`let paceSlackMinutes = ${PACE_SLACK_MINUTES.toFixed(1)}`);
     expect(swift).toContain(`let guardMs = ${GUARD_MS.toLocaleString('en-US').replace(/,/g, '_')}.0`);
     expect(swift).toContain('plan["marks"]');
+    // ...leaving out the reports of a day's re-reporting from its first registration on (checkpoints.ts, reReportsStart).
+    expect(swift).toContain('plan["reReportsFrom"]');
+    expect(swift).toContain('mark.at >= reReportsFrom && mark.at <= registeredAt + guardMs');
     expect(swift).toContain('keepsPace(at, minutes)');
     // The monitor extension's side of it, in the library patch, reads what screenTime.ts writes with each action.
     const patch = require('fs').readFileSync(require('path').join(__dirname, '../../../patches/react-native-device-activity+0.6.1.patch'), 'utf8');
@@ -242,7 +245,7 @@ describe('the home screen widget agrees with the app', () => {
     // The monitor extension, in the library patch: what screenTime.ts writes with each action, and the one record beside them.
     const patch = require('fs').readFileSync(require('path').join(__dirname, '../../../patches/react-native-device-activity+0.6.1.patch'), 'utf8');
     for (const part of ['action["tally"]', 'tally["room"]', 'tally["mark"]', 'tally["unless"]', 'tally["minutes"]']) expect(patch).toContain(part);
-    for (const field of ['round', 'rechargeMinute', 'countFrom', 'registeredAt', 'kept', 'everything']) expect(patch).toContain(`record["${field}"]`);
+    for (const field of ['round', 'rechargeMinute', 'countFrom', 'registeredAt', 'reReportsFrom', 'kept', 'everything']) expect(patch).toContain(`record["${field}"]`);
     for (const part of ['entry["key"]', 'entry["minutes"]', `let plainlimitSettleMs = ${ms(SETTLE_MS)}`, `let plainlimitPaceSlackMinutes = ${PACE_SLACK_MINUTES.toFixed(1)}`, `let plainlimitGuardMs = ${ms(GUARD_MS)}`, `"${GUARD_KEY}"`]) expect(patch).toContain(part);
     // The names the two sides share, as the app's own files have them.
     const read = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../..', file), 'utf8');
@@ -275,7 +278,61 @@ describe('the home screen widget agrees with the app', () => {
     expect(screen).toContain("context={window.exact ? 'TopApps' : 'BatteryApps'}");
     // A change of essentials draws the list again.
     expect(at('modules/plainlimit-widgets/ios/PlainlimitWidgetsModule.swift')).toContain('Prop("minus")');
-    expect(screen).toContain('minus={window.exact ? null : essentialsPicks()}');
+    expect(screen).toContain("context={window.exact ? 'TopApps' : 'BatteryApps'} minus={window.exact ? null : essentialsPicks()}");
+  });
+
+  it("Today's figure leaves the essentials out too, and draws nothing sooner than take them in", () => {
+    const at = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../../..', file), 'utf8');
+    const report = at('targets/report/PlainlimitReport.swift');
+    // The figure the app asks for with essentials chosen, and the one without.
+    expect(report).toContain('static let batteryTotal = Self("BatteryTotal")');
+    expect(report).toContain('TotalReport(context: .batteryTotal, lessEssentials: true)');
+    expect(report).toContain('TotalReport(context: .total, lessEssentials: false)');
+    const screen = at('src/ui/UsageReport.tsx');
+    expect(screen).toContain("context={window.exact ? 'Total' : 'BatteryTotal'} minus={window.exact ? null : essentialsPicks()}");
+    // Essentials chosen but not readable: no figure, so the app's own, under the picture, stands.
+    expect(report).toContain('if lessEssentials && kept.empty { return nil }');
+    expect(report).toMatch(/if let seconds \{[\s\S]*?\} else \{\s*Color\.clear\s*\}/);
+    // The same apps are skipped in the list, the figure and setup's picture.
+    expect(report.match(/if kept\.keeps\(category\.category\.token\) \{ continue \}/g)).toHaveLength(3);
+    expect(report.match(/if kept\.keeps\(app\.application\.token\) \{ continue \}/g)).toHaveLength(3);
+    // Setup's picture is drawn again when the essentials change.
+    expect(screen).toContain('context={`Setup${hours}`} minus={essentialsPicks()}');
+  });
+
+  it('setup has one shape, with nothing to pick (the owner kept it over a draft with an essentials step)', () => {
+    const at = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../../..', file), 'utf8');
+    const setup = at('src/app/setup.tsx');
+    // The story's three screens first (what it is, what is free, when it comes back), then what setup asks.
+    expect(setup).toContain("const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'free', 'morning', 'access', 'notify', 'goal', 'ready'] : ['welcome', 'free', 'morning', 'notify', 'goal', 'ready'];");
+    expect(setup).not.toContain('Choose essentials');
+    // The file that held which draft a test build was on is gone.
+    expect(() => at('src/state/setupKind.ts')).toThrow();
+  });
+
+  it('setup says what its numbers are (the owner\'s friend, build 167: "how much what? what is this for?")', () => {
+    const at = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../../..', file), 'utf8');
+    const setup = at('src/app/setup.tsx');
+    const story = at('src/ui/Story.tsx');
+    // The story: one thing a screen, in the order the owner agreed, with the owner's own line for the essentials.
+    for (const title of ['Your screen time is a battery', 'Essentials are free', 'Full again every morning']) expect(setup).toContain(title);
+    expect(story).toContain('Use your phone. Don\u2019t abuse it.');
+    // The goal screen: a title that says what the number is, and what happens at it, as three small pictures.
+    expect(setup).toContain('<Heading>Daily screen time</Heading>');
+    expect(setup).not.toContain('<Heading>How much a day?</Heading>');
+    expect(setup).not.toContain("'Moves the line'");
+    for (const words of ['`${goal} of use`', '"Apps lock"', '`Back at ${recharge}`']) expect(story).toContain(words);
+    // The last screen: each figure named for what it is, and how much of the goal is used.
+    for (const words of ['Your whole day', 'Uses your battery', 'left today']) expect(setup).toContain(words);
+    expect(setup).not.toContain('>Plainlimit counts<');
+    // On the chart, nothing is written where a bar's time can stand: the key to the shading is over it, and the
+    // goal to try is a tag with a short pointer (the report extension), not a line across the bars.
+    const report = at('src/ui/UsageReport.tsx');
+    expect(report).not.toContain('zoneText');
+    expect(report).toContain('Would lock');
+    const swift = at('targets/report/PlainlimitReport.swift');
+    expect(swift).toContain('line.move(to: CGPoint(x: end - 2, y: at))');
+    expect(swift).not.toContain('line.move(to: CGPoint(x: weekAxis, y: at))\n            line.addLine(to: CGPoint(x: end, y: at))\n          }\n          .stroke(green, lineWidth: 2)');
   });
 });
 

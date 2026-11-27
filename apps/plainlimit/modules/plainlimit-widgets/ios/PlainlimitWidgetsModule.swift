@@ -57,11 +57,12 @@ class UsageReportView: ExpoView {
   /// each new drawing is a chance for the phone never to finish it (build 127,
   /// setup's chart after Back, the essentials and Next).
   var selection: String? { didSet { if !UsageReportView.samePicks(selection, oldValue) { refresh() } } }
-  /// Which report: "TopApps" (the list) or "Total" (the day's figure).
+  /// Which report: "TopApps" (the list), "Total" (the day's figure), and the rest of targets/report's list.
   var context: String = "TopApps" { didSet { if context != oldValue { refresh() } } }
-  /// The essentials, which the "BatteryApps" list leaves out. The report reads
-  /// them for itself (it cannot be handed "every app but these"); they are
-  /// here only so that a change of essentials draws the list again.
+  /// The essentials, which the "BatteryApps" list, the "BatteryTotal" figure
+  /// and setup's picture leave out. The report reads them for itself (it
+  /// cannot be handed "every app but these"); they are here only so that a
+  /// change of essentials draws the picture again.
   var minus: String? { didSet { if !UsageReportView.samePicks(minus, oldValue) { refresh() } } }
 
   private var host: UIHostingController<AnyView>?

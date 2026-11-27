@@ -15,7 +15,6 @@ import type { DayState, DaySummary, Doc, EmptyLevel, Settings } from '@/domain/t
 import { allowAskFirst, applyAskFirst, openAsk, type AskOpen } from '@/platform/askFirst';
 import * as screenTime from '@/platform/screenTime';
 import { readSaved, writeSaved } from '@/platform/storage';
-import { setupKind } from '@/state/setupKind';
 
 // The one copy of what the app knows, and the only place it changes.
 
@@ -508,8 +507,6 @@ export const store = {
   async start() {
     if (snapshot.state === 'ready') return;
     const raw = await readSaved();
-    // Which draft of setup this phone is trying (test builds; setupKind.ts).
-    await setupKind.start();
     let doc: Doc;
     try {
       doc = withPasses(loadedDoc(raw), new Date());
@@ -672,8 +669,7 @@ export const store = {
   },
   /**
    * Developer, test builds: the first setup again, as on a phone where the
-   * essentials were never chosen, for trying the drafts of setup
-   * (setupKind.ts). Counting stays on, so today is still counted: with the
+   * essentials were never chosen. Counting stays on, so today is still counted: with the
    * essentials forgotten, everything they used today counts until they are
    * chosen again.
    */
@@ -709,7 +705,7 @@ export const store = {
    * battery started with put back: today, at once. A new essential: from the
    * next recharge, or today on a free day (essentials.ts). The first choice
    * of all is today's at once: until then everything counted, since setup
-   * no longer asks (setupKind.ts). Returns how many were ticked if that was
+   * no longer asks (app/setup.tsx). Returns how many were ticked if that was
    * too many to keep (0 when kept).
    */
   essentialsClosed(): number {
@@ -760,13 +756,24 @@ export const store = {
     if (change.now) withSettings(() => change.settings, STEP_SETTLE_MS);
     else set({ ...doc, settings: change.settings });
   },
+  /**
+   * What an empty battery does: warn, ask for a sum, or lock. Only the
+   * covering screen's words and second button change, so the screens are
+   * written again and the day is not registered again: the phone counts the
+   * same checkpoints. (Build 167: every tap here registered the day, the phone
+   * reported the whole day again each time, and the second time round a
+   * re-report was taken for a wrong reading and said so in a notification.)
+   */
   setEmptyLevel(emptyLevel: EmptyLevel) {
-    withSettings((s) => ({ ...s, emptyLevel }));
+    if (settingsLocked()) return;
+    set(advanced(snapshot.doc, new Date(), { ...snapshot.doc.settings, emptyLevel }));
+    screenTime.refreshScreens(snapshot.doc.settings, snapshot.doc.day.topUps);
   },
-  /** How hard the sums are. Normal is free; easy and hard are Pro. */
+  /** How hard the sums are. Normal is free; easy and hard are Pro. Nothing on the phone depends on it: the app sets the sums. */
   setSumLevel(sumLevel: SumLevel) {
     if (sumLevel !== 'normal' && !proOn) return;
-    withSettings((s) => ({ ...s, sumLevel }));
+    if (settingsLocked()) return;
+    set(advanced(snapshot.doc, new Date(), { ...snapshot.doc.settings, sumLevel }));
   },
   /**
    * The lock screen message (free for now; Pro once it has been tested, the

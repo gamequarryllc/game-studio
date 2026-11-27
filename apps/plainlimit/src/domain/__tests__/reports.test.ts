@@ -1,4 +1,4 @@
-import { asGuard, believable, checkpointsFor, GUARD_MS, guardFor, guardFrom, judgedFrom, keepsPace, minuteTicksFor, mostByNow, paceRules, roundName, type Guard } from '../checkpoints';
+import { asGuard, believable, checkpointsFor, GUARD_MS, guardFor, guardFrom, judgedFrom, keepsPace, minuteTicksFor, mostByNow, paceRules, PACE_SLACK_MINUTES, reReportsStart, roundName, type Guard } from '../checkpoints';
 import { earliestTrue, lockNotBefore } from '../monitorPlan';
 import { countDay, doubtful, everythingCounted, keptCounted, keptMarksOf, marksOf, miscounted, roundSettled, roundStanding, withFloor, type Report, type Rounds } from '../reports';
 import { SETTLE_MS, overRungs } from '../tally';
@@ -207,6 +207,56 @@ describe('replaying real days', () => {
     const realEmpty = clock(15, 12);
     expect(phoneSaysTooSoon(paceRules(120, all), { [roundName('cell-3', 'r')]: clock(14, 11, 12), [roundName('cell-4', 'r')]: clock(14, 34, 22) }, realEmpty)).toBe(false);
     expect(marksOf(reports, 120, 'r', dayStart)).toHaveLength(7);
+  });
+
+  it('27 November, build 167: registering the day again seconds later does not take the re-reported day for a wrong reading', () => {
+    // Goal 3:00, 2:20 used. The owner tapped through Warn, Work for it and
+    // Locked: each tap registered the day, and each time the phone reported
+    // the day so far again within seconds, in no order.
+    const clock = november(27);
+    const dayStart = clock(6);
+    const first = clock(23, 50);
+    const second = first + 5000;
+    const cells = checkpointsFor(180).filter((c) => c.minutes <= 140).sort((a, b) => a.minutes - b.minutes);
+    const low = cells[0];
+    const high = cells[cells.length - 1];
+    // After the first registration every checkpoint was re-reported. After the second, the highest came first:
+    // the lowest still stands with its time from the registration before.
+    const reports = cells.map((c) => report(c.id, 'r', c === high ? second + 2000 : first + 2000));
+    const all = [...checkpointsFor(180), ...minuteTicksFor(180)].map((c) => ({ name: roundName(c.id, 'r'), minutes: c.minutes }));
+    const stored = Object.fromEntries(reports.filter((r) => r.name !== roundName(high.id, 'r')).map((r) => [r.name, r.at]));
+    expect(high.minutes - low.minutes).toBeGreaterThan(PACE_SLACK_MINUTES);
+
+    // Build 167 left out only the reports since the latest registration: the highest looked seconds after the lowest.
+    expect(phoneSaysTooSoon(paceRules(high.minutes, all), stored, second + 2000, second, second + GUARD_MS)).toBe(true);
+    expect(keepsPace(high.minutes, second + 2000, [{ minutes: low.minutes, at: first + 2000 }], second)).toBe(false);
+    expect(miscounted(reports, 180, 'r', new Date(dayStart), null, second)).toBe(true);
+
+    // Now they are left out from the day's first registration on, by the phone and by the app alike.
+    const from = reReportsStart(second, dayStart, reReportsStart(first, dayStart, 0, clock(6) - 3600_000), first);
+    expect(from).toBe(first);
+    expect(phoneSaysTooSoon(paceRules(high.minutes, all), stored, second + 2000, from, second + GUARD_MS)).toBe(false);
+    expect(keepsPace(high.minutes, second + 2000, [{ minutes: low.minutes, at: first + 2000 }], second, PACE_SLACK_MINUTES, from)).toBe(true);
+    expect(miscounted(reports, 180, 'r', new Date(dayStart), null, second, from)).toBe(false);
+    expect(countDay({ reports, goalMinutes: 180, dayStart, rounds: oneRound('r'), guard: null, now: second + 3000, registeredAt: second, reReportsFrom: from })).toBe(high.minutes);
+    // A report made once the ten minutes after the last registration are over paces again.
+    expect(keepsPace(180, second + GUARD_MS + 120_000, [{ minutes: high.minutes, at: second + GUARD_MS + 60_000 }], second, PACE_SLACK_MINUTES, from)).toBe(false);
+  });
+
+  it('the stretch of re-reports starts at the day\'s first registration, and over when counting does', () => {
+    const clock = november(27);
+    const dayStart = clock(6);
+    // The first registration of the day: an earlier day's does not reach into this one.
+    expect(reReportsStart(clock(9), dayStart, clock(5), clock(5, 30))).toBe(clock(9));
+    expect(reReportsStart(clock(9), dayStart, 0, 0)).toBe(clock(9));
+    // Later ones keep the first, however far apart.
+    expect(reReportsStart(clock(15), dayStart, clock(9), clock(12))).toBe(clock(9));
+    // A day registered by a build that did not keep it: from its last registration.
+    expect(reReportsStart(clock(15), dayStart, 0, clock(12))).toBe(clock(12));
+    // Counting starts over: every report is forgotten, and so is the stretch.
+    expect(reReportsStart(clock(15), dayStart, clock(9), clock(12), true)).toBe(clock(15));
+    // A time ahead of the clock (the clock was set back) is not kept.
+    expect(reReportsStart(clock(15), dayStart, clock(16), clock(16))).toBe(clock(15));
   });
 
   it('after counting again, the re-reported day does not make the real end look too soon', () => {

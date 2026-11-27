@@ -18,7 +18,7 @@ import { c } from '@/ui/theme';
 // Like the goal, the essentials can't change while the battery is empty:
 // ticking an app would be a way round its lock. Choosing them for the first
 // time is always open, and starts at once: until then every app counts,
-// since setup no longer has to ask (state/setupKind.ts).
+// since setup no longer asks (app/setup.tsx).
 //
 // And like a higher goal, a new essential waits for the next recharge
 // (domain/essentials.ts): an app made an essential stops counting what it

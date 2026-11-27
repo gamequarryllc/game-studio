@@ -20,7 +20,6 @@ import { Icon, type IconName } from '@/ui/icons';
 import { BigButton, Card, Chevron, IconTile, Label, LinkRow, Page, ProBadge, StepButton, Title, tiles, type RowIcon } from '@/ui/kit';
 import { essentialsValue, joinsShort } from '@/ui/countWords';
 import { TIPS } from '@/ui/tips';
-import { setupKind, setupName, useSetupKind, type SetupKind } from '@/state/setupKind';
 import { ScreenTimeCard, TestBuildTools } from '@/ui/ScreenTimeCard';
 import { c, display } from '@/ui/theme';
 import { useDay } from '@/ui/useDay';
@@ -58,10 +57,8 @@ export default function Settings() {
   const narrow = Math.min(useWindowDimensions().width, 480) < 360;
   // An empty battery locks these (the Screen Time card says why); they look it, instead of ignoring taps.
   const locked = settingsLocked();
-  // Test builds: which draft of setup this phone is on, and running setup again as one of them.
-  const draft = useSetupKind();
-  const trySetup = (kind: SetupKind) => {
-    setupKind.set(kind);
+  // Test builds: the first setup again, as on a phone that has never chosen its essentials.
+  const setupAgain = () => {
     store.setupAgain();
     router.replace('/setup');
   };
@@ -282,13 +279,11 @@ export default function Settings() {
       {DEV_TOOLS ? (
         <View style={{ marginTop: 14, gap: 10 }}>
           <Label>Developer: Setup</Label>
-          {/* Two drafts of the first setup, for the owner to try side by side (state/setupKind.ts). */}
+          {/* The first setup again, to see it as a new person does. (Builds 166 and 167 had two drafts here; the owner kept the one with nothing to pick.) */}
           <Text style={styles.note}>
-            Two drafts of the first setup. Each starts setup again with your essentials forgotten, so every app counts until you choose them again. This phone is on {setupName(draft).toLowerCase()}. None of this is in the
-            App Store version.
+            Starts the first setup again with your essentials forgotten, so every app counts until you choose them again. None of this is in the App Store version.
           </Text>
-          <BigButton quiet label="Try setup 3: nothing to pick" onPress={() => trySetup('nothing')} />
-          <BigButton quiet label="Try setup 1: one list" onPress={() => trySetup('oneList')} />
+          <BigButton quiet label="Run setup again" onPress={setupAgain} />
         </View>
       ) : null}
 

@@ -21,6 +21,8 @@ export const SAVED = {
   guard: GUARD_KEY,
   /** When the day was last registered with the phone, and with which goal. */
   registeredAt: 'plainlimit_registered_at',
+  /** When the phone's re-reporting of today began: the day's first registration (checkpoints.ts, `reReportsStart`). Missing for a day registered before it was kept. */
+  reReportsFrom: 'plainlimit_rereports_from',
   registeredGoal: 'plainlimit_registered_goal',
   /** The recharge time the day was last registered with. Missing for a registration made before it was kept. */
   registeredRecharge: 'plainlimit_registered_recharge',
@@ -130,6 +132,12 @@ export function savedFloor(): Floor | null {
 }
 
 export const registeredAt = () => readNumber('registeredAt');
+/** Where the phone's re-reports are left out of pacing from: today's first registration, or the last one for a day registered before that was kept. */
+export function reReportsFrom(): number {
+  const from = readNumber('reReportsFrom');
+  const registered = registeredAt();
+  return from > 0 && from <= registered ? from : registered;
+}
 export const holdUntil = () => readNumber('holdUntil');
 export const earnedUntil = () => readNumber('earnedUntil');
 export const picksChangedAt = () => readNumber('picksChangedAt');

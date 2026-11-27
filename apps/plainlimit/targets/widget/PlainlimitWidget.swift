@@ -179,9 +179,12 @@ func readState(now: Date) -> BatteryState {
   // Every checkpoint the phone reports (the cells and the minute ones), for
   // pacing: a report for M minutes cannot come sooner than M - L minutes after
   // an earlier one for L, less twenty for a slow phone (checkpoints.ts,
-  // keepsPace). Reports in the minutes after a registration are left out:
-  // the phone re-reports the day then, with fresh times.
+  // keepsPace). Reports made while the phone was re-reporting the day, with
+  // fresh times, are left out: from today's first registration (checkpoints.ts,
+  // reReportsStart; the last one, for a plan saved before that was kept) to
+  // ten minutes after its last.
   let registeredAt = (plan["registeredAt"] as? NSNumber)?.doubleValue ?? 0
+  let reReportsFrom = min(registeredAt, (plan["reReportsFrom"] as? NSNumber)?.doubleValue ?? registeredAt)
   // Today's reports of one timer, each with the minutes it stands for: the
   // everything timer's (the cells, the minute ones and its rungs past the
   // goal), or the essentials' own (`kept`, tally.ts).
@@ -201,7 +204,7 @@ func readState(now: Date) -> BatteryState {
   }
   func paced(_ at: Double, _ minutes: Double, _ earlier: [(at: Double, minutes: Double)]) -> Bool {
     for mark in earlier {
-      let reReported = registeredAt > 0 && mark.at >= registeredAt && mark.at <= registeredAt + guardMs
+      let reReported = registeredAt > 0 && mark.at >= reReportsFrom && mark.at <= registeredAt + guardMs
       if reReported || mark.at >= at || mark.minutes >= minutes { continue }
       if at < mark.at + (minutes - mark.minutes - paceSlackMinutes) * 60_000 { return false }
     }

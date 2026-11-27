@@ -191,14 +191,34 @@ export interface Mark {
 }
 
 /**
+ * Where the stretch of re-reports that a registration at `now` adds to began:
+ * the first registration since today's count began. Every registration makes
+ * the phone report the day so far again, and it does not always get round to
+ * every checkpoint, so a report left from an earlier registration's
+ * re-reporting can still be standing when the next one comes, with a time as
+ * fresh and as meaningless as that one's own. (Build 167: tapping through
+ * Warn, Work for it and Locked registered the day three times in a few
+ * seconds; the second and third had reports from the one before, seconds old
+ * and outside their own ten minutes, and took a re-report for a wrong reading
+ * every time.) `fresh`: counting starts over and every report is forgotten.
+ */
+export function reReportsStart(now: number, dayStart: number, before: number, lastRegisteredAt: number, fresh = false): number {
+  if (fresh) return now;
+  const today = (at: number) => at > 0 && at >= dayStart && at <= now;
+  return Math.min(now, today(before) ? before : now, today(lastRegisteredAt) ? lastRegisteredAt : now);
+}
+
+/**
  * Whether an earlier report says anything about the pace of one for `minutes`
  * arriving at `arrivedAt`: it came first, it is for fewer minutes, and it did
- * not come in the minutes after the day was last registered, when the phone
- * re-reports the day so far with fresh times (a report made then was reached
+ * not come while the phone was re-reporting the day so far with fresh times:
+ * from the day's first registration (`reReportsStart`, or the last one if that
+ * is not known) to ten minutes after its last (a report made then was reached
  * earlier, so its time proves nothing).
  */
-function pacedBy(earlier: Mark, minutes: number, arrivedAt: number, registeredAt: number): boolean {
-  const reReported = registeredAt > 0 && earlier.at >= registeredAt && earlier.at <= registeredAt + GUARD_MS;
+function pacedBy(earlier: Mark, minutes: number, arrivedAt: number, registeredAt: number, from = 0): boolean {
+  const opens = from > 0 ? Math.min(from, registeredAt) : registeredAt;
+  const reReported = registeredAt > 0 && earlier.at >= opens && earlier.at <= registeredAt + GUARD_MS;
   return earlier.at < arrivedAt && earlier.minutes < minutes && !reReported;
 }
 
@@ -215,8 +235,8 @@ function pacedBy(earlier: Mark, minutes: number, arrivedAt: number, registeredAt
  * later one look too soon (it only pulls the bar earlier), so every earlier
  * report can be used; only a late one could, which is what the allowance is for.
  */
-export function keepsPace(minutes: number, arrivedAt: number, earlier: readonly Mark[], registeredAt: number, slackMinutes = PACE_SLACK_MINUTES): boolean {
-  return earlier.every((mark) => !pacedBy(mark, minutes, arrivedAt, registeredAt) || arrivedAt >= mark.at + (minutes - mark.minutes - slackMinutes) * 60000);
+export function keepsPace(minutes: number, arrivedAt: number, earlier: readonly Mark[], registeredAt: number, slackMinutes = PACE_SLACK_MINUTES, reReportsFrom = 0): boolean {
+  return earlier.every((mark) => !pacedBy(mark, minutes, arrivedAt, registeredAt, reReportsFrom) || arrivedAt >= mark.at + (minutes - mark.minutes - slackMinutes) * 60000);
 }
 
 /**
@@ -230,16 +250,17 @@ export function paceRules<T extends { name: string; minutes: number }>(minutes: 
   return all.filter((c) => minutes - c.minutes - slackMinutes > 0).map((c) => ({ name: c.name, ms: Math.round((minutes - c.minutes - slackMinutes) * 60000) }));
 }
 
-/** What a report is paced against: the day's earlier reports, and when the day was last registered. */
+/** What a report is paced against: the day's earlier reports, when the day was last registered, and when today's re-reporting began (`reReportsStart`). */
 export interface Pace {
   earlier: readonly Mark[];
   registeredAt: number;
+  reReportsFrom?: number;
 }
 
 /** A report from today's count that can be true. */
 export function believable(checkpoint: Checkpoint, dayStart: Date, guard: Guard | null, arrivedAt: Date, pace: Pace | null = null): boolean {
   if (arrivedAt.getTime() < dayStart.getTime() || !isPlausible(checkpoint, judgedFrom(dayStart, guard, arrivedAt), arrivedAt)) return false;
-  return pace === null || keepsPace(checkpoint.minutes, arrivedAt.getTime(), pace.earlier, pace.registeredAt);
+  return pace === null || keepsPace(checkpoint.minutes, arrivedAt.getTime(), pace.earlier, pace.registeredAt, PACE_SLACK_MINUTES, pace.reReportsFrom ?? 0);
 }
 
 /**

@@ -15,9 +15,9 @@ interface NativeProps {
   fromMs: number;
   toMs: number;
   selection: string | null;
-  /** Which of the extension's reports: the list (with essentials chosen, the one that leaves them out), or the day's total. */
-  context?: 'TopApps' | 'BatteryApps' | 'Total' | `Setup${WeekHours}` | 'FirstApps' | 'Whole';
-  /** The essentials the "BatteryApps" list leaves out. The report reads them itself; handed over so a change of them draws the list again. */
+  /** Which of the extension's reports: the list or the day's total (with essentials chosen, the ones that leave them out), setup's picture, and so on. */
+  context?: 'TopApps' | 'BatteryApps' | 'Total' | 'BatteryTotal' | `Setup${WeekHours}` | 'FirstApps' | 'Whole';
+  /** The essentials that "BatteryApps", "BatteryTotal" and setup's picture leave out. The report reads them itself; handed over so a change of them draws the picture again. */
   minus?: string | null;
   style?: StyleProp<ViewStyle>;
 }
@@ -66,12 +66,12 @@ export function UsageReport({ settings, now }: { settings: Settings; now: Date }
  * A figure drawn by the phone's Screen Time over `fallback` (shown until it has
  * drawn, and wherever it can't). Plainlimit never learns the number it shows.
  */
-function PhoneFigure({ context, fromMs, toMs, selection, fallback, style }: { context: 'Total'; fromMs: number; toMs: number; selection: string | null; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
+function PhoneFigure({ context, minus, fromMs, toMs, selection, fallback, style }: { context: 'Total' | 'BatteryTotal'; minus: string | null; fromMs: number; toMs: number; selection: string | null; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
   if (!NativeReport) return <View style={style}>{fallback}</View>;
   return (
     <View pointerEvents="none" style={[{ height: 52, alignSelf: 'stretch' }, style]}>
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>{fallback}</View>
-      <NativeReport context={context} fromMs={fromMs} toMs={toMs} selection={selection} style={{ flex: 1 }} />
+      <NativeReport context={context} minus={minus} fromMs={fromMs} toMs={toMs} selection={selection} style={{ flex: 1 }} />
       <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
     </View>
   );
@@ -81,16 +81,23 @@ function PhoneFigure({ context, fromMs, toMs, selection, fallback, style }: { co
  * The day's figure, to the minute, as Apple's Screen Time counts it: every
  * minute every app has been used since the recharge. Plainlimit itself only
  * hears of use in steps, so `fallback` (its own figure, in the same type)
- * shows until the phone has drawn its number over it. With essentials the
- * phone's figure would take them in (it can be asked for every app or for a
- * list, never "every app but these"), so Plainlimit's own figure stands.
+ * shows until the phone has drawn its number over it.
+ * With essentials the figure asked for is the one that leaves their minutes
+ * out ("BatteryTotal"), so it is what "What used it" adds up to. The report
+ * reads the essentials itself, as the list does (build 167 on the owner's
+ * phone: it can). If it cannot, it draws nothing, and Plainlimit's own figure
+ * under it stands: a figure with the essentials in it would look as if they
+ * had used the battery. (Up to build 167 Plainlimit's own figure always stood
+ * here with essentials: it gives them the benefit of the doubt up to their
+ * next rung, tally.ts, so it could read some minutes under the list.)
  */
 export function TodayTotal({ settings, now, fallback, style }: { settings: Settings; now: Date; fallback: ReactNode; style?: StyleProp<ViewStyle> }) {
+  'use no memo';
   const window = SCREEN_TIME_AVAILABLE && NativeReport ? reportWindow(settings, now) : null;
   // Counting from a moment after the recharge (setup's "count from now"): the
   // phone's report goes by whole hours and would take in use from before it.
-  if (!window || !window.fromRecharge || !window.exact) return <View style={style}>{fallback}</View>;
-  return <PhoneFigure context="Total" fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} fallback={fallback} style={style} />;
+  if (!window || !window.fromRecharge) return <View style={style}>{fallback}</View>;
+  return <PhoneFigure context={window.exact ? 'Total' : 'BatteryTotal'} minus={window.exact ? null : essentialsPicks()} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} fallback={fallback} style={style} />;
 }
 
 /** The box for the iPhone's whole day, as in targets/report (WholeView): a small figure kept to the right. */
@@ -157,8 +164,14 @@ export function WakeScreenTime({ settings, now }: { settings: Settings; now: Dat
  * own, the week twice over. On a fresh install the average came first and the
  * other two took about a minute (the owner). One picture is one reading, and
  * it all arrives together.
+ *
+ * Essentials already chosen are left out of the picture (the report reads
+ * them itself, as for "What used it"): the goal is for what will use the
+ * battery. Setup no longer asks for them, so this is a phone that chose them
+ * under an older setup and never finished it.
  */
 export function SetupFigures({ settings, now, todayLabel }: { settings: Settings; now: Date; todayLabel: string }) {
+  'use no memo';
   // The scale is picked once, as the screen opens, and never changes while it is open (see `weekScale`), so the stepper only moves the line.
   const [hours] = useState(() => weekScale(settings.goalMinutes));
   const window = SCREEN_TIME_AVAILABLE && NativeReport ? setupWindow(settings, now) : null;
@@ -177,7 +190,7 @@ export function SetupFigures({ settings, now, todayLabel }: { settings: Settings
       <View style={setup.chart}>
         <WeekLoading />
       </View>
-      <NativeReport context={`Setup${hours}`} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
+      <NativeReport context={`Setup${hours}`} minus={essentialsPicks()} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} />
       {/* Over the picture, in the room it leaves: the labels, and the goal's line on the chart. */}
       <View style={[setup.row, { top: 0 }]}>
         <Text numberOfLines={1} style={[setup.label, setup.half]}>
@@ -187,9 +200,18 @@ export function SetupFigures({ settings, now, todayLabel }: { settings: Settings
           Daily average
         </Text>
       </View>
-      <Text numberOfLines={1} style={[setup.label, { position: 'absolute', left: 0, right: 0, top: SETUP.weekLabelTop }]}>
-        Last 7 days
-      </Text>
+      <View style={[setup.weekRow, { top: SETUP.weekLabelTop }]}>
+        <Text numberOfLines={1} style={[setup.label, { flex: 1 }]}>
+          Your last 7 days
+        </Text>
+        {/* The key to the chart's shading: the days over the goal's line are the ones that would have locked. */}
+        <View accessible accessibilityLabel="Shaded: days that would have locked" style={setup.key}>
+          <View style={setup.swatch} />
+          <Text numberOfLines={1} style={setup.keyText}>
+            Would lock
+          </Text>
+        </View>
+      </View>
       <View style={setup.chart}>
         <GoalLine goalMinutes={settings.goalMinutes} hours={hours} />
       </View>
@@ -213,6 +235,11 @@ const setup = StyleSheet.create({
   half: { flex: 1 },
   label: { fontSize: 13, lineHeight: SETUP.labelHeight, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: c.ink3 },
   chart: { position: 'absolute', left: 0, right: 0, top: SETUP.chartTop, height: WEEK.height },
+  // The chart's own line of labels: what it shows on the left, the key to its shading on the right.
+  weekRow: { position: 'absolute', left: 0, right: 0, height: SETUP.labelHeight, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  key: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  swatch: { width: 12, height: 12, borderRadius: 3, backgroundColor: 'rgba(255,123,107,0.45)' },
+  keyText: { fontSize: 12, lineHeight: SETUP.labelHeight, fontWeight: '700', color: '#FF7B6B' },
 });
 
 /** Rough heights for the stand-in bars, as parts of the chart. */
@@ -341,7 +368,8 @@ function GoalLine({ goalMinutes, hours }: { goalMinutes: number; hours: number }
   }, [target, y, reduced]);
   return (
     <>
-      <Animated.View style={[line.zone, { height: y }]}>{target > 30 ? <Text style={line.zoneText}>Would lock</Text> : null}</Animated.View>
+      {/* What the shading means is said over the chart, beside "Your last 7 days" (SetupFigures). Written in here it lay over a tall bar's time (the owner, build 167: "Would lock" across "7:18"). */}
+      <Animated.View style={[line.zone, { height: y }]} />
       <Animated.View style={[line.dashes, { top: Animated.subtract(y, 1) }]}>
         {DASHES.map((i) => (
           <View key={i} style={line.dash} />
@@ -362,7 +390,6 @@ function GoalLine({ goalMinutes, hours }: { goalMinutes: number; hours: number }
 
 const line = StyleSheet.create({
   zone: { position: 'absolute', top: 0, left: WEEK.axis, right: WEEK.right, backgroundColor: 'rgba(255,123,107,0.14)', borderTopLeftRadius: 6, borderTopRightRadius: 6 },
-  zoneText: { position: 'absolute', left: 6, top: 3, fontSize: 11, fontWeight: '700', color: '#FF7B6B' },
   // Stops at the phone's column on the right, where its "Try" tag sits, so it runs into the tag rather than over it.
   dashes: { position: 'absolute', left: WEEK.axis, right: WEEK.right, height: 2, flexDirection: 'row', gap: 5, overflow: 'hidden' },
   dash: { width: 6, height: 2, borderRadius: 1, backgroundColor: c.ink },

@@ -82,7 +82,7 @@ function load(phone: Fake, raw: unknown, ask: Fake = fakeAsk()) {
   jest.isolateModules(() => {
     jest.doMock('@/platform/screenTime', () => phone);
     jest.doMock('@/platform/askFirst', () => ask);
-    jest.doMock('@/platform/storage', () => ({ readSaved: jest.fn(async () => raw), writeSaved: jest.fn(async () => {}), readNote: jest.fn(async () => null), writeNote: jest.fn(async () => {}) }));
+    jest.doMock('@/platform/storage', () => ({ readSaved: jest.fn(async () => raw), writeSaved: jest.fn(async () => {}) }));
     // A fresh copy per test needs require inside isolateModules.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     mod = require('../store');
@@ -811,6 +811,24 @@ describe('Pro', () => {
     expect(phone.refreshScreens).toHaveBeenCalledWith(expect.objectContaining({ lockMessage: 'Text someone you miss.' }), 0);
     store.setLockMessage('');
     expect(store.get().doc.settings.lockMessage).toBeUndefined();
+  });
+
+  it('what an empty battery does changes the screens without registering the day again', async () => {
+    const phone = fakePhone();
+    const { store } = load(phone, saved(30));
+    await store.start();
+    jest.advanceTimersByTime(60_000);
+    const registered = (phone.applyPlan as jest.Mock).mock.calls.length;
+    (phone.refreshScreens as jest.Mock).mockClear();
+    // Build 167: each of these registered the day, and the phone's re-report of it was taken for a wrong reading.
+    for (const level of ['warn', 'locked', 'work', 'warn'] as const) {
+      store.setEmptyLevel(level);
+      jest.advanceTimersByTime(5000);
+      expect(store.get().doc.settings.emptyLevel).toBe(level);
+      expect(phone.refreshScreens).toHaveBeenLastCalledWith(expect.objectContaining({ emptyLevel: level }), 0);
+    }
+    expect(phone.refreshScreens).toHaveBeenCalledTimes(4);
+    expect((phone.applyPlan as jest.Mock).mock.calls.length).toBe(registered);
   });
 
   it('with it, the lock message can be words of one\'s own', async () => {

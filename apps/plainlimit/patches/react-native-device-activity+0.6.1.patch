@@ -45,7 +45,7 @@ index 8aee1f2..b15ef2e 100644
          // Deprecated iOS 15 API - uses completion handler
          try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
 diff --git a/node_modules/react-native-device-activity/ios/Shared.swift b/node_modules/react-native-device-activity/ios/Shared.swift
-index 4839430..0625ac8 100644
+index 4839430..ad26139 100644
 --- a/node_modules/react-native-device-activity/ios/Shared.swift
 +++ b/node_modules/react-native-device-activity/ios/Shared.swift
 @@ -110,6 +110,33 @@ func executeGenericAction(
@@ -82,14 +82,15 @@ index 4839430..0625ac8 100644
    if let sleepBefore = action["sleepBefore"] as? Int {
      sleep(ms: sleepBefore)
    }
-@@ -296,6 +323,160 @@ func executeGenericAction(
+@@ -296,6 +323,165 @@ func executeGenericAction(
    }
  }
  
 +/// Plainlimit: whether a checkpoint came sooner than its pace rule allows:
 +/// less than `ms` after the stored time of any listed earlier report. Reports
-+/// stored between `skipFrom` and `skipTo` (just after the day was registered,
-+/// when the phone re-reports the day with fresh times) are left out.
++/// stored between `skipFrom` and `skipTo` (from today's first registration to
++/// ten minutes after its last: the phone re-reports the day with fresh times
++/// after each) are left out.
 +func plainlimitTooSoon(pace: [String: Any]) -> Bool {
 +  let now = Date().timeIntervalSince1970 * 1000
 +  let skipFrom = (pace["skipFrom"] as? NSNumber)?.doubleValue ?? 0
@@ -190,9 +191,13 @@ index 4839430..0625ac8 100644
 +    return out
 +  }
 +  // Nobody uses minutes faster than they pass (checkpoints.ts, keepsPace).
++  // Reports made while the phone was re-reporting the day prove nothing: from
++  // today's first registration (reReportsStart; the last one if that is not
++  // kept) to ten minutes after its last.
++  let reReportsFrom = min(registeredAt, (record["reReportsFrom"] as? NSNumber)?.doubleValue ?? registeredAt)
 +  func keepsPace(_ at: Double, _ minutes: Double, _ earlier: [(at: Double, minutes: Double)]) -> Bool {
 +    for mark in earlier {
-+      let reReported = registeredAt > 0 && mark.at >= registeredAt && mark.at <= registeredAt + plainlimitGuardMs
++      let reReported = registeredAt > 0 && mark.at >= reReportsFrom && mark.at <= registeredAt + plainlimitGuardMs
 +      if reReported || mark.at >= at || mark.minutes >= minutes { continue }
 +      if at < mark.at + (minutes - mark.minutes - plainlimitPaceSlackMinutes) * 60_000 { return false }
 +    }
@@ -243,7 +248,7 @@ index 4839430..0625ac8 100644
  func sendNotification(contents: [String: Any], placeholders: [String: String?]) {
    let content = UNMutableNotificationContent()
  
-@@ -1452,9 +1633,10 @@ func updateBlockInternal(
+@@ -1452,9 +1638,10 @@ func updateBlockInternal(
      store.shield.applicationCategories = .all(
        except: currentWhitelist.applicationTokens
      )

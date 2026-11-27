@@ -198,33 +198,23 @@ async function main() {
     await context.close();
   });
 
-  await scenario('setup 3, nothing to pick: straight from the first screen to notifications', async () => {
-    const { page, context } = await open(null, '?mock=counting,noEssentials&setup=3');
+  await scenario('setup has nothing to pick: straight from the story to notifications', async () => {
+    const { page, context } = await open(null, '?mock=counting,noEssentials');
     await see(page, 'Your screen time is a battery');
-    await page.getByRole('button', { name: 'Test build. Setup 3: nothing to pick. Tap to switch.', exact: true }).waitFor();
-    await shot(page, 'q04e-setup3-welcome');
-    await page.getByRole('button', { name: 'Set it up', exact: true }).click();
+    // The test builds' two drafts are gone (the owner kept this one): no switch on the first screen.
+    if ((await page.getByText(/Test build\. Setup/).count()) > 0) throw new Error('setup still offers a second draft');
+    await shot(page, 'q04e-setup-welcome');
+    // The story's three screens (what it is, what is free, when it comes back), each a tap.
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await see(page, 'Essentials are free');
+    await shot(page, 'q04f-setup-free');
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await see(page, 'Full again every morning');
+    await shot(page, 'q04g-setup-morning');
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await see(page, 'Notifications need to be on');
-    await page.getByLabel('Step 2 of 4', { exact: true }).waitFor();
-    if ((await page.getByText('Your essentials', { exact: true }).count()) > 0) throw new Error('setup 3 asked for essentials');
-    await context.close();
-  });
-
-  await scenario('setup 1, one list: an essentials step with one button, and skipping it is allowed', async () => {
-    const { page, context } = await open(null, '?mock=counting,noEssentials&setup=1');
-    await see(page, 'Your screen time is a battery');
-    await page.getByRole('button', { name: 'Test build. Setup 1: one list. Tap to switch.', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Set it up', exact: true }).click();
-    await see(page, 'Your essentials');
-    await see(page, 'These never count and never lock.');
-    await page.getByLabel('Step 2 of 5', { exact: true }).waitFor();
-    await see(page, 'Tick what stays open');
-    await see(page, 'Everything else uses your battery');
-    if ((await page.getByText(/All Apps|Tick All|Step 1 of 2/).count()) > 0) throw new Error('setup 1 still shows the first of two lists');
-    await page.getByRole('button', { name: 'Choose essentials', exact: true }).waitFor();
-    await shot(page, 'q04f-setup1-essentials');
-    await page.getByRole('button', { name: 'Skip: count everything', exact: true }).click();
-    await see(page, 'Notifications need to be on');
+    await page.getByLabel('Step 4 of 6', { exact: true }).waitFor();
+    if ((await page.getByText('Your essentials', { exact: true }).count()) > 0) throw new Error('setup asked for essentials');
     await context.close();
   });
 

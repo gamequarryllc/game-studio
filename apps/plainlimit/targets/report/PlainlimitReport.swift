@@ -14,11 +14,17 @@ import SwiftUI
 //            since the recharge, to the minute, added up app by app. The app
 //            itself only learns use in steps, so this is the exact number the
 //            person sees.
+//   BatteryTotal
+//            the same figure when essentials are chosen: their minutes are
+//            left out of it, as they are left out of the list, so the figure
+//            is what the list adds up to (see `Essentials`).
 //   Setup4, Setup6, Setup8, Setup12
 //            for setup's "How much a day?", in one picture: today's figure,
 //            the daily average over the seven days before today, and those
 //            seven days as bars on an hour scale of 4, 6, 8 or 12 hours, each
 //            with its time, and a goal to try about 15% under the average.
+//            Essentials already chosen are left out of all of it: the goal is
+//            for what will use the battery.
 //            The app picks the scale, lays its labels in the gaps and draws
 //            the goal's line over the chart itself. These were three pictures
 //            (Total, Average, Week), each read from the phone on its own: on
@@ -75,12 +81,25 @@ struct Essentials {
     out.categories = picked.categoryTokens
     return out
   }
+
+  /// Whether every app of this category is an essential.
+  func keeps(_ category: ActivityCategoryToken?) -> Bool {
+    guard let category else { return false }
+    return categories.contains(category)
+  }
+
+  /// Whether this app is an essential, picked by itself.
+  func keeps(_ app: ApplicationToken?) -> Bool {
+    guard let app else { return false }
+    return apps.contains(app)
+  }
 }
 
 extension DeviceActivityReport.Context {
   static let topApps = Self("TopApps")
   static let batteryApps = Self("BatteryApps")
   static let total = Self("Total")
+  static let batteryTotal = Self("BatteryTotal")
   static let setup4 = Self("Setup4")
   static let setup6 = Self("Setup6")
   static let setup8 = Self("Setup8")
@@ -141,9 +160,9 @@ struct TopAppsReport: DeviceActivityReportScene {
     for await device in data {
       for await segment in device.activitySegments {
         for await category in segment.categories {
-          if let whole = category.category.token, kept.categories.contains(whole) { continue }
+          if kept.keeps(category.category.token) { continue }
           for await app in category.applications {
-            if let one = app.application.token, kept.apps.contains(one) { continue }
+            if kept.keeps(app.application.token) { continue }
             let key =
               app.application.bundleIdentifier ?? app.application.localizedDisplayName ?? "unknown"
             seconds[key, default: 0] += app.totalActivityDuration
@@ -232,11 +251,19 @@ struct TopAppsView: View {
 }
 
 struct TotalReport: DeviceActivityReportScene {
-  let context: DeviceActivityReport.Context = .total
-  let content: (TimeInterval) -> TotalView
+  let context: DeviceActivityReport.Context
+  /// The app's word that essentials are chosen (it asks for "BatteryTotal"
+  /// then, "Total" otherwise): their minutes are left out of the figure.
+  let lessEssentials: Bool
+  let content: (TimeInterval?) -> TotalView
 
+  /// Nil when essentials are chosen and could not be read here: the figure
+  /// would take them in and look as if they had used the battery, so none is
+  /// drawn, and the app's own figure under this picture stands.
   func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
-    -> TimeInterval {
+    -> TimeInterval? {
+    let kept = lessEssentials ? Essentials.now() : Essentials()
+    if lessEssentials && kept.empty { return nil }
     // Added up app by app, the same way as the list. A segment's own total is
     // all screen-on time, including time in no app at all (build 48 showed it:
     // 3:10 against 1:50 of app use), and it ignores which apps are ticked.
@@ -245,7 +272,9 @@ struct TotalReport: DeviceActivityReportScene {
     for await device in data {
       for await segment in device.activitySegments {
         for await category in segment.categories {
+          if kept.keeps(category.category.token) { continue }
           for await app in category.applications {
+            if kept.keeps(app.application.token) { continue }
             seconds += app.totalActivityDuration
           }
         }
@@ -327,6 +356,11 @@ struct SetupReport: DeviceActivityReportScene {
     // recharge: its first seven days are the bars, and what comes after is today.
     var window: DateInterval?
     var hourly: [(start: Date, seconds: TimeInterval)] = []
+    // Essentials already chosen (setup's one list, or setup run again) are
+    // left out of today, the average and the bars: they will use no battery,
+    // so a goal picked from these figures is for what will. None chosen, or
+    // not readable here: every app, as before.
+    let kept = Essentials.now()
     for await device in data {
       if case .hourly(during: let interval) = device.segmentInterval { window = interval }
       for await segment in device.activitySegments {
@@ -334,7 +368,9 @@ struct SetupReport: DeviceActivityReportScene {
         // ignores which apps are ticked (see TotalReport).
         var seconds: TimeInterval = 0
         for await category in segment.categories {
+          if kept.keeps(category.category.token) { continue }
           for await app in category.applications {
+            if kept.keeps(app.application.token) { continue }
             seconds += app.totalActivityDuration
           }
         }
@@ -426,18 +462,21 @@ struct WeekBarsView: View {
             .foregroundStyle(quiet)
             .position(x: x, y: weekTop + plot + 13)
         }
-        // The goal to try: a green line ending in a tag with its time, in
-        // the column on the right. The app's own dashed goal line, with its
-        // time at the left end, stops at that column, so as the stepper
-        // reaches the goal to try the two lines meet and the dashes run into
-        // the tag. Past the top of the scale the tag waits at the top.
+        // The goal to try: a tag with its time in the column on the right,
+        // with a short pointer to where it stands on the scale. The app's own
+        // dashed goal line, with its time at the left end, stops at that
+        // column, so as the stepper reaches the goal to try the dashes run
+        // into the pointer and the tag. Past the top of the scale the tag
+        // waits at the top. (Up to build 167 the pointer was a green line
+        // right across the chart, and it ran through any bar's time that
+        // stood at its height: the owner's "4:06", under "Try 4:30".)
         if let tried = suggestedGoal(use.days) {
           let at = height(of: tried, plot: plot)
           Path { line in
-            line.move(to: CGPoint(x: weekAxis, y: at))
-            line.addLine(to: CGPoint(x: end, y: at))
+            line.move(to: CGPoint(x: end - 2, y: at))
+            line.addLine(to: CGPoint(x: end + 3, y: at))
           }
-          .stroke(green, lineWidth: 2)
+          .stroke(green, style: StrokeStyle(lineWidth: 2, lineCap: .round))
           VStack(spacing: 0) {
             Text("Try")
             Text(tried > top ? "\(clockWords(tried))\u{2191}" : clockWords(tried))
@@ -609,7 +648,9 @@ struct FirstAppsView: View {
 }
 
 struct TotalView: View {
-  let seconds: TimeInterval
+  /// Nil: no figure can be drawn (see TotalReport), and the picture stays
+  /// clear so the app's own figure under it shows.
+  let seconds: TimeInterval?
 
   // The figure keeps to the top 52 points, the height of the app's box for it,
   // whatever size iOS first gives this view. Centred in the whole view, it was
@@ -617,13 +658,19 @@ struct TotalView: View {
   // before the box had its size (the owner's phone, build 75: "2:06" with its
   // top half cut off, right a moment later).
   var body: some View {
-    FigureText(seconds: seconds)
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      .background(ground)
-      // This process lays the view out in its own window and can give it a top
-      // inset, which drew the figure about 30 points low and cut it in half
-      // (build 86, "2:45", now and then). No inset here, so it keeps to the top.
-      .ignoresSafeArea()
+    Group {
+      if let seconds {
+        FigureText(seconds: seconds)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          .background(ground)
+      } else {
+        Color.clear
+      }
+    }
+    // This process lays the view out in its own window and can give it a top
+    // inset, which drew the figure about 30 points low and cut it in half
+    // (build 86, "2:45", now and then). No inset here, so it keeps to the top.
+    .ignoresSafeArea()
   }
 }
 
@@ -660,7 +707,10 @@ struct PlainlimitReport: DeviceActivityReportExtension {
     TopAppsReport(context: .batteryApps, lessEssentials: true) { summary in
       TopAppsView(summary: summary)
     }
-    TotalReport { seconds in
+    TotalReport(context: .total, lessEssentials: false) { seconds in
+      TotalView(seconds: seconds)
+    }
+    TotalReport(context: .batteryTotal, lessEssentials: true) { seconds in
       TotalView(seconds: seconds)
     }
     SetupReport(context: .setup4, hours: 4) { use in

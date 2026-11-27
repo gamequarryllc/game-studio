@@ -7,33 +7,39 @@ import { refusalNeedsAlert, refusalWords, type Refusal } from '@/domain/access';
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { askToNotify, openPhoneSettings } from '@/platform/notices';
-import { DEV_TOOLS, MOCK_PHONE, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, refusal, wholeWindow } from '@/platform/screenTime';
-import { setupKind, setupName, useSetupKind, type SetupKind } from '@/state/setupKind';
+import { SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, refusal, wholeWindow } from '@/platform/screenTime';
 import { store } from '@/state/store';
-import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
-import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
+import { essentialsValue } from '@/ui/countWords';
+import { useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { Icon } from '@/ui/icons';
 import { NotifyPicture, NotifyStory } from '@/ui/NotifyStep';
+import { GoalStory, StoryBattery, StoryEssentials, StoryMorning, inTheMorning } from '@/ui/Story';
 import { SetupFigures, WHOLE, WakeScreenTime, WholeTotal } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
-import { BatteryStory, DrainingBattery } from '@/ui/Welcome';
 import { useDay } from '@/ui/useDay';
 import { useNotices } from '@/ui/useNotices';
 
-// The first launch: what it is, Screen Time access, notifications, the goal,
-// and a last check. Access comes first, so the goal screen can show the
-// phone's own figures (today so far, and the last week's average) while the
-// goal is picked; the old order asked for a goal before anything was known,
-// and a quick tap-through could lock every app at once.
+// The first launch: the story in three screens (what it is, what is free,
+// when it comes back; ui/Story.tsx), then Screen Time access, notifications,
+// the goal, and a last check. Access comes before the goal, so the goal
+// screen can show the phone's own figures (today so far, and the last week's
+// average) while the goal is picked; the old order asked for a goal before
+// anything was known, and a quick tap-through could lock every app at once.
 //
-// Nothing has to be picked for counting to work: the phone counts everything
-// (domain/tally.ts), so someone who taps straight through ends with a working
-// app. Two drafts are being tried (state/setupKind.ts, the owner, 2026-11-27):
-// - "nothing to pick": no essentials step at all; Today offers them afterwards;
-// - "one list": an essentials step where Apple's list opens once, which can
-//   be skipped.
+// The story comes first and asks nothing: the owner's friend and cousin, shown
+// build 167, could not say what the app was for or what its numbers were, so
+// each of the three things it rests on has a screen and a picture of its own
+// (the owner agreed the three and their order, 2026-11-27). It was one screen
+// with four lines.
+//
+// Nothing is picked here: the phone counts everything (domain/tally.ts), so
+// someone who taps straight through ends with a working app, and Today offers
+// the essentials afterwards (ui/EssentialsOffer.tsx). The owner tried this
+// beside a draft with one essentials step (builds 166 and 167) and kept this
+// one: "they get through setup faster and then they get the last step as they
+// get on the main page" (2026-11-26).
 // (Up to build 165 setup opened Apple's list twice, the first time to tick
 // "All Apps & Categories"; skipping it left nothing counted.)
 //
@@ -51,13 +57,10 @@ import { useNotices } from '@/ui/useNotices';
 // already past the goal, starting is not the main button: tomorrow is.
 // Everything here can be changed later in Settings.
 
-type Step = 'welcome' | 'access' | 'counts' | 'notify' | 'goal' | 'ready';
+type Step = 'welcome' | 'free' | 'morning' | 'access' | 'notify' | 'goal' | 'ready';
 
-/** The screens of a draft, in order. Where there is no Screen Time (the preview) there is no access to ask for. */
-function stepsOf(kind: SetupKind): Step[] {
-  const all: Step[] = kind === 'oneList' ? ['welcome', 'access', 'counts', 'notify', 'goal', 'ready'] : ['welcome', 'access', 'notify', 'goal', 'ready'];
-  return SCREEN_TIME_AVAILABLE ? all : all.filter((s) => s !== 'access');
-}
+/** The screens, in order: the story's three, then what setup asks. Where there is no Screen Time (the preview) there is no access to ask for. */
+const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'free', 'morning', 'access', 'notify', 'goal', 'ready'] : ['welcome', 'free', 'morning', 'notify', 'goal', 'ready'];
 
 /**
  * How the last screen waits for the phone's report of the day so far: until
@@ -94,15 +97,13 @@ export default function Setup() {
   // Whether the goal screen's figures have been asked for, so they stay for the rest of setup.
   const [figuresShown, setFiguresShown] = useState(false);
 
-  const kind = useSetupKind();
-  const STEPS = stepsOf(kind);
   const step = STEPS[Math.min(at, STEPS.length - 1)];
   const goTo = (s: Step) => setAt(Math.max(0, STEPS.indexOf(s)));
   const next = () => setAt((i) => Math.min(STEPS.length - 1, i + 1));
   const approved = access === 'approved';
   const canPick = SCREEN_TIME_AVAILABLE && approved;
-  // Once the essentials are saved, setup moves on by itself (the draft with one list).
-  const essentials = useEssentials(next);
+  // Setup doesn't ask for the essentials; this is for a phone that already has some (chosen under an older setup that was never finished).
+  const essentials = useEssentials();
   // Everything counts from the start, so the phone's figures need nothing picked.
   const figures = canPick;
   // Only a phone with access can count; anywhere else the last screen is a summary.
@@ -183,17 +184,36 @@ export default function Setup() {
   let secondary: Button | null = null;
   let quiet: Button | null = null;
 
+  // The story: one thing a screen, a picture and a line (ui/Story.tsx).
   if (step === 'welcome') {
     body = (
       <>
-        <DrainingBattery />
         <Heading>Your screen time is a battery</Heading>
-        <BatteryStory recharge={clockLabel(settings.rechargeMinute)} />
+        <StoryBattery />
+        <Text style={styles.say}>{'Using your apps drains it.\nWhen it\u2019s empty, they lock.'}</Text>
       </>
     );
-    primary = { label: 'Set it up', onPress: next };
-    // Test builds: which draft of setup this is, and a tap to try the other.
-    if (DEV_TOOLS) quiet = { label: `Test build. ${setupName(kind)}. Tap to switch.`, onPress: () => setupKind.set(kind === 'nothing' ? 'oneList' : 'nothing') };
+  }
+
+  if (step === 'free') {
+    body = (
+      <>
+        <Heading>Essentials are free</Heading>
+        <StoryEssentials chosenLater={!(essentials.kept > 0)} />
+      </>
+    );
+  }
+
+  if (step === 'morning') {
+    const morning = inTheMorning(settings.rechargeMinute);
+    body = (
+      <>
+        <Heading>{morning ? 'Full again every morning' : 'Full again every day'}</Heading>
+        <StoryMorning recharge={clockLabel(settings.rechargeMinute)} morning={morning} />
+        <Text style={styles.say}>{`Your battery recharges at ${clockLabel(settings.rechargeMinute)}.`}</Text>
+        {morning ? <Text style={[styles.lead, { color: c.ink3, marginTop: -8 }]}>A late night never eats into tomorrow.</Text> : null}
+      </>
+    );
   }
 
   if (step === 'access') {
@@ -212,28 +232,6 @@ export default function Setup() {
     );
     primary = approved ? { label: 'Next', onPress: next } : { label: busy ? 'One moment…' : asked ? 'Try again' : 'Allow', onPress: () => void allow() };
     if (asked && !approved) secondary = { label: 'Skip for now', onPress: next };
-  }
-
-  if (step === 'counts') {
-    // One list, and only for the essentials. Skipping is safe: everything counts until they are chosen.
-    const showPick = canPick || MOCK_PHONE;
-    body = (
-      <>
-        <Heading>Your essentials</Heading>
-        <Lead>{COUNTS_SHORT}</Lead>
-        {showPick ? (
-          <EssentialsSteps e={essentials} mainInFoot />
-        ) : SCREEN_TIME_AVAILABLE ? (
-          <Text style={styles.note}>You can choose them once Screen Time is allowed, in Settings, under Essentials. Until then every app counts.</Text>
-        ) : (
-          <Text style={styles.note}>On an iPhone you tick them in Apple&apos;s own list of your apps. This preview runs on pretend use.</Text>
-        )}
-      </>
-    );
-    if (showPick && !essentials.ready) {
-      primary = { label: 'Choose essentials', onPress: canPick ? essentials.start : next };
-      secondary = { label: 'Skip: count everything', onPress: next };
-    }
   }
 
   if (step === 'notify') {
@@ -268,8 +266,8 @@ export default function Setup() {
   // phone has a head start. Once asked for they stay for the rest of setup,
   // parked on the other screens, so Back and Next don't ask the phone to draw
   // them again: on build 127 the second drawing never came (the owner). They
-  // take in every app, essentials too: the phone can be asked for every app or
-  // for a list, never "every app but these". Parked, they are drawn in full
+  // take in every app but essentials already chosen, which the phone's picture
+  // leaves out by itself (UsageReport.tsx, SetupFigures). Parked, they are drawn in full
   // under the screen in front (`cover`), not made clear: a clear view might
   // never be drawn, and the head start would be lost without a sign.
   const recharge = clockLabel(settings.rechargeMinute);
@@ -283,8 +281,8 @@ export default function Setup() {
         importantForAccessibility={step === 'goal' ? 'auto' : 'no-hide-descendants'}
         style={[styles.figureBox, { gap: 12 }, step === 'goal' ? null : styles.parked]}>
         {/* One picture from the phone for both figures and the chart, so they arrive together (UsageReport.tsx). */}
-        <SetupFigures settings={settings} now={now} todayLabel={`Since ${recharge}`} />
-        <Text style={styles.note}>{`Days start at ${recharge}. ${essentials.kept > 0 ? 'These figures include your essentials.' : 'Every app counts.'}`}</Text>
+        <SetupFigures settings={settings} now={now} todayLabel="Today so far" />
+        <Text style={styles.note}>{`Days start at ${recharge}. ${essentials.kept > 0 ? 'Your essentials are left out.' : 'Every app counts.'}`}</Text>
       </View>
     ) : null;
 
@@ -295,22 +293,27 @@ export default function Setup() {
     // as bars with their times against the goal's line, which the stepper
     // moves (the owner picked the bars from five drafts, build 115, and asked
     // for the times and figures back, build 120). Without them, the words.
+    //
+    // What the number is, is said by the title and by three small pictures
+    // under it: that much use, then the apps lock, then they are back at the
+    // recharge time (GoalStory). It was "How much a day?" over "Moves the
+    // line", and the owner's friend asked "how much what?" (build 167).
     head = (
       <>
-        <Heading>How much a day?</Heading>
+        <Heading>Daily screen time</Heading>
         {figures ? null : <Lead>Pick a little under a normal day. You can change it later.</Lead>}
         <Card style={{ paddingVertical: 18, gap: 10 }}>
           <View style={styles.stepper}>
             <StepButton sign="−" label="Less time" size={52} onPress={() => store.stepGoal(-1)} />
-            <Text accessibilityLabel={`Daily goal, ${durationLabel(settings.goalMinutes)}`} style={[styles.big, { color: accent }]}>
+            <Text accessibilityLabel={`Daily screen time, ${durationLabel(settings.goalMinutes)}`} style={[styles.big, { color: accent }]}>
               {durationLabel(settings.goalMinutes)}
             </Text>
             <StepButton sign="+" label="More time" size={52} onPress={() => store.stepGoal(1)} />
           </View>
-          <Text style={[styles.note, figures ? { textAlign: 'center' } : null]}>{figures ? 'Moves the line' : `Six cells of ${cellWords(settings.goalMinutes)} each`}</Text>
+          {figures ? null : <Text style={styles.note}>{`Six cells of ${cellWords(settings.goalMinutes)} each`}</Text>}
         </Card>
         {/* The recharge time is not asked here: everyone starts at 6 AM, and changing it is Pro, in Settings (the owner, build 99). */}
-        {figures ? null : <Lead>{`It recharges at ${recharge} every day.`}</Lead>}
+        <GoalStory goal={durationLabel(settings.goalMinutes)} recharge={recharge} />
       </>
     );
   }
@@ -320,34 +323,43 @@ export default function Setup() {
     const over = phase === 'ready' && day.usedMinutes >= settings.goalMinutes;
     // Plainlimit's own figure, until the phone has reported anything for today.
     const reading = phase === 'reading' && day.usedMinutes === 0;
-    // What Plainlimit's figure takes in, beside the iPhone's own "Every app, since midnight".
-    const countsWhat = essentials.kept > 0 ? 'Without essentials' : 'Every app';
+    // What uses the battery, beside the iPhone's own whole day.
+    const since = essentials.kept > 0 ? `Since ${recharge}, without essentials` : `Since ${recharge}`;
+    const left = Math.max(0, settings.goalMinutes - day.usedMinutes);
     body = (
       <>
         <Heading>{phase === 'failed' ? 'Not counting yet' : over ? 'Already past your goal' : 'Ready'}</Heading>
         {/*
           Why Plainlimit's figure is not the total in the iPhone's own Screen Time, as a picture: the iPhone's whole day
-          is the outer box, and what Plainlimit counts is a part inside it. (The owner compared the two on build 111,
+          is the outer box, and what uses the battery is a part inside it. (The owner compared the two on build 111,
           5:31 here against 7 h 24 min there, and wondered if the app was wrong; up to build 141 a paragraph said why,
           beside the phone's figure for the counted apps alone, which nearly matched Plainlimit's and looked pointless.)
           On the plain ground, not a card: the phone draws its figure on the ground's own colour.
+
+          The boxes were named "iPhone Screen Time" and "Plainlimit counts" up to build 167, and the owner's friend did
+          not know what either figure was. Now each says what it is in the person's own terms (the whole day; what uses
+          the battery), and the inner one shows how much of the goal that is, as a bar with what is left under it (the
+          owner picked this from three drafts, 2026-11-27).
         */}
         <View style={styles.whole}>
           <View style={styles.wholeRow}>
             <Icon name="iphone" size={18} color={c.ink2} />
             <View style={styles.wholeWords}>
-              <Text style={styles.wholeName}>iPhone Screen Time</Text>
-              <Text style={styles.wholeNote}>{wholeWindow(settings, now).sinceYesterday ? 'Every app, since yesterday' : 'Every app, since midnight'}</Text>
+              <Text style={styles.wholeName}>Your whole day</Text>
+              <Text style={styles.wholeNote}>{wholeWindow(settings, now).sinceYesterday ? 'iPhone, since yesterday' : 'iPhone, since midnight'}</Text>
             </View>
             <WholeTotal settings={settings} now={now} fallback={<WaitingDots size={6} height={WHOLE.height} />} />
           </View>
           <View
             accessible
-            accessibilityLabel={`Plainlimit counts ${reading ? 'still reading' : durationLabel(day.usedMinutes)}, ${countsWhat.toLowerCase()}, since ${recharge}`}
+            accessibilityLabel={reading ? `Uses your battery: still reading. ${since}` : `Uses your battery: ${durationLabel(day.usedMinutes)} of ${durationLabel(settings.goalMinutes)}. ${since}. ${durationLabel(left)} left today`}
             style={[styles.part, { borderColor: accent, backgroundColor: accent.length === 7 ? `${accent}1F` : 'transparent' }]}>
             <View style={styles.wholeRow}>
               <Icon name="battery" size={18} color={accent} />
-              <Text style={[styles.wholeName, styles.wholeWords, { color: c.ink }]}>Plainlimit counts</Text>
+              <View style={styles.wholeWords}>
+                <Text style={[styles.wholeName, { color: c.ink }]}>Uses your battery</Text>
+                <Text style={[styles.wholeNote, { color: c.ink2 }]}>{since}</Text>
+              </View>
               {reading ? (
                 <WaitingDots size={8} height={44} />
               ) : (
@@ -356,7 +368,14 @@ export default function Setup() {
                 </Text>
               )}
             </View>
-            <Text style={[styles.wholeNote, styles.partNote]}>{`${countsWhat}, since ${recharge}`}</Text>
+            {/* How much of the goal that is. Empty while the day is still being read. */}
+            <View style={styles.meter}>
+              <View style={[styles.meterFill, { backgroundColor: accent, width: `${reading ? 0 : Math.min(100, Math.round((day.usedMinutes / Math.max(1, settings.goalMinutes)) * 100))}%` }]} />
+            </View>
+            <View style={styles.meterWords}>
+              <Text style={styles.meterText}>{reading ? 'Reading\u2026' : `${durationLabel(left)} left today`}</Text>
+              <Text style={styles.meterText}>{`of ${durationLabel(settings.goalMinutes)}`}</Text>
+            </View>
           </View>
         </View>
         {phase === 'reading' ? <ReadingBar colour={accent} /> : null}
@@ -436,7 +455,6 @@ export default function Setup() {
       </View>
       {/* Until the goal screen's own figures are asked for; never both at once. */}
       {canPick && !figuresShown ? <WakeScreenTime settings={settings} now={now} /> : null}
-      {essentials.pickers}
     </View>
   );
 }
@@ -492,6 +510,8 @@ const styles = StyleSheet.create({
   body_: { paddingHorizontal: 24, paddingTop: 18, paddingBottom: 24, gap: 14 },
   heading: { fontFamily: display.bold, fontSize: 36, lineHeight: 40, letterSpacing: -1, color: c.ink },
   lead: { fontSize: 16, lineHeight: 23, color: c.ink2 },
+  // The one line under a story screen's picture.
+  say: { fontSize: 19, lineHeight: 27, color: c.ink },
   body: { fontSize: 15, lineHeight: 21, color: c.ink2 },
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
   ok: { fontSize: 16, fontWeight: '600', color: c.ink },
@@ -516,8 +536,11 @@ const styles = StyleSheet.create({
   wholeNote: { fontSize: 13.5, lineHeight: 18, color: c.ink3, marginTop: 2 },
   part: { borderWidth: 2, borderRadius: 15, paddingVertical: 12, paddingHorizontal: 13 },
   partValue: { fontFamily: display.bold, fontSize: 40, lineHeight: 44, letterSpacing: -1.2 },
-  // Under the name, clear of the picture beside it.
-  partNote: { marginLeft: 26, color: c.ink2 },
+  // How much of the goal is used, as a bar, with what is left under it.
+  meter: { height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.14)', overflow: 'hidden', marginTop: 12 },
+  meterFill: { height: 10, borderRadius: 5 },
+  meterWords: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 8 },
+  meterText: { fontSize: 13, lineHeight: 17, fontWeight: '600', color: c.ink2 },
   foot: { paddingHorizontal: 20, paddingTop: 10, gap: 10, borderTopWidth: 1, borderTopColor: c.rule, backgroundColor: c.ground },
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   rowRule: { borderBottomWidth: 1, borderBottomColor: c.rule },

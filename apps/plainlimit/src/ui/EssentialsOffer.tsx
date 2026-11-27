@@ -7,8 +7,8 @@ import { useEssentials } from './EssentialsSteps';
 import { BigButton, IconTile, type RowIcon } from './kit';
 import { c, display } from './theme';
 
-// On Today until the essentials are chosen. Setup no longer has to ask
-// (state/setupKind.ts): everything counts from the first minute, so the
+// On Today until the essentials are chosen. Setup no longer asks
+// (app/setup.tsx): everything counts from the first minute, so the
 // essentials are an offer made here, where the battery is. One button opens
 // Apple's list, and what is ticked stops counting at once: the first choice
 // never waits for the recharge, even on an empty battery. Closing the list

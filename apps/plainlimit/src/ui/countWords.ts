@@ -1,4 +1,4 @@
-// How Essentials is explained, on its own screen and in setup. The person
+// How Essentials is explained, on its own screen. The person
 // ticks only their essentials: those never use up the battery and never lock.
 // Everything else does both. (Up to build 89 it was the other way round, one
 // list where everything was ticked and the essentials unticked; that put the
@@ -7,9 +7,6 @@
 
 /** Under the Essentials title. The icons and the count below it say the rest (the owner found a paragraph here wordy, 2026-11-25). */
 export const COUNTS_LEAD = 'Never counted. Never locked.';
-
-/** The same in few words, for setup, under the heading Your essentials, where the pictures say the rest. */
-export const COUNTS_SHORT = 'These never count and never lock.';
 
 /**
  * Before the essentials are chosen. Apple's list opens once, and its top line
