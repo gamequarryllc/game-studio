@@ -334,6 +334,12 @@ describe('the home screen widget agrees with the app', () => {
     expect(swift).toContain('line.move(to: CGPoint(x: end - 2, y: at))');
     expect(swift).not.toContain('line.move(to: CGPoint(x: weekAxis, y: at))\n            line.addLine(to: CGPoint(x: end, y: at))\n          }\n          .stroke(green, lineWidth: 2)');
   });
+
+  it('setup cannot be run again from Settings (the owner, after build 168: it left the app half set up; a fresh install is the test)', () => {
+    const at = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../../..', file), 'utf8');
+    expect(at('src/app/(tabs)/settings.tsx')).not.toContain('Run setup again');
+    expect(at('src/state/store.ts')).not.toContain('setupAgain');
+  });
 });
 
 describe('the plan with essentials: everything, less their minutes (tally.ts)', () => {

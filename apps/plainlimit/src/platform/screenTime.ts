@@ -498,23 +498,6 @@ export function startWaitingPicks(newDay: boolean): boolean {
   }
 }
 
-/**
- * Test builds only: forgets the essentials altogether, as on a phone where
- * they were never chosen, so setup and Today's offer can be tried again.
- */
-export function forgetEssentials(): void {
-  if (!SCREEN_TIME_AVAILABLE) return;
-  try {
-    picksBefore();
-    putLists({ [ESSENTIALS_ID]: '', [ESSENTIALS_PICK_ID]: '', [ESSENTIALS_NEXT_ID]: '', [ESSENTIALS_START_ID]: '' });
-    forget('essentialsSet');
-    forget('essentialsStartSet');
-    keepEssentialsOpen();
-  } catch (error) {
-    note('forgetting the essentials', error);
-  }
-}
-
 let joiningFor = '';
 let joiningNow: { picks: string; count: number } | null = null;
 

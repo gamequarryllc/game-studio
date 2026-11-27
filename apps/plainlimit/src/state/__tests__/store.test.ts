@@ -25,7 +25,6 @@ function fakePhone(): Fake {
     coverAgain: jest.fn(),
     moveToEverything: jest.fn(() => false),
     essentialsChosen: jest.fn(() => true),
-    forgetEssentials: jest.fn(),
     countSettled: jest.fn(() => true),
     coverEmptyNow: jest.fn(),
     grantExtraTime: jest.fn(async () => {}),
@@ -521,19 +520,6 @@ describe('a change of what counts', () => {
     phone.usedSoFar = jest.fn(() => 180);
     jest.advanceTimersByTime(90_000);
     expect(phone.coverAgain).not.toHaveBeenCalledWith(false, expect.anything(), expect.any(Number));
-  });
-
-  it('setup again (test builds) forgets the essentials and shows setup, with counting left on', async () => {
-    const phone = fakePhone();
-    const { store } = load(phone, saved(60));
-    await store.start();
-    expect(store.get().doc.setupDone).toBe(true);
-    store.setupAgain();
-    expect(phone.forgetEssentials).toHaveBeenCalledTimes(1);
-    expect(phone.picksAfter).toHaveBeenCalled();
-    expect(phone.turnOff).not.toHaveBeenCalled();
-    expect(store.get().doc.setupDone).toBe(false);
-    expect(store.get().doc.watching).toBe(true);
   });
 });
 

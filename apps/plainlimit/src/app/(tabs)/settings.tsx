@@ -57,11 +57,6 @@ export default function Settings() {
   const narrow = Math.min(useWindowDimensions().width, 480) < 360;
   // An empty battery locks these (the Screen Time card says why); they look it, instead of ignoring taps.
   const locked = settingsLocked();
-  // Test builds: the first setup again, as on a phone that has never chosen its essentials.
-  const setupAgain = () => {
-    store.setupAgain();
-    router.replace('/setup');
-  };
   const proState = usePro();
   const isPro = proState.isPro;
   const proValue = isPro ? 'Unlocked' : (proState.price ?? (proState.storeOpen ? 'See what it adds' : EXPECTED_PRICE));
@@ -273,17 +268,6 @@ export default function Settings() {
               <BigButton quiet label={proState.pretend ? 'Stop pretending Pro' : 'Pretend Pro is bought'} onPress={() => pro.setPretend(!proState.pretend)} />
             </>
           )}
-        </View>
-      ) : null}
-
-      {DEV_TOOLS ? (
-        <View style={{ marginTop: 14, gap: 10 }}>
-          <Label>Developer: Setup</Label>
-          {/* The first setup again, to see it as a new person does. (Builds 166 and 167 had two drafts here; the owner kept the one with nothing to pick.) */}
-          <Text style={styles.note}>
-            Starts the first setup again with your essentials forgotten, so every app counts until you choose them again. None of this is in the App Store version.
-          </Text>
-          <BigButton quiet label="Run setup again" onPress={setupAgain} />
         </View>
       ) : null}
 

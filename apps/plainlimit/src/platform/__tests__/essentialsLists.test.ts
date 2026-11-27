@@ -139,19 +139,6 @@ describe('choosing the essentials for the first time', () => {
     expect(list(st.ESSENTIALS_ID)).toEqual(['Maps', 'Phone']);
     expect(list(st.ESSENTIALS_NEXT_ID)).toEqual(['Maps', 'Phone', 'Reels']);
   });
-
-  it('a test build can forget them, and the next choice is a first one again', () => {
-    const { st, list, open, choose } = settled();
-    choose(['Hinge', 'Maps', 'Messages', 'Phone']);
-    st.forgetEssentials();
-    expect(st.essentialsChosen()).toBe(false);
-    expect(st.essentialsCount()).toBe(0);
-    for (const id of [st.ESSENTIALS_ID, st.ESSENTIALS_NEXT_ID, st.ESSENTIALS_START_ID, st.ESSENTIALS_PICK_ID]) expect(list(id)).toBeNull();
-    expect(open.apps).toEqual([]);
-    expect(choose(['Reels'])).toBe(0);
-    expect(list(st.ESSENTIALS_ID)).toEqual(['Reels']);
-    expect(list(st.ESSENTIALS_NEXT_ID)).toBeNull();
-  });
 });
 
 describe('a new essential on an ordinary day', () => {

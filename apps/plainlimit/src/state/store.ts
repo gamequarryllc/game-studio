@@ -667,17 +667,6 @@ export const store = {
     await screenTime.applyPlan(snapshot.doc.settings, 0, true);
     set({ ...snapshot.doc, day: withRealUse(snapshot.doc, snapshot.doc.day) });
   },
-  /**
-   * Developer, test builds: the first setup again, as on a phone where the
-   * essentials were never chosen. Counting stays on, so today is still counted: with the
-   * essentials forgotten, everything they used today counts until they are
-   * chosen again.
-   */
-  setupAgain() {
-    screenTime.forgetEssentials();
-    store.picksChanged();
-    set({ ...snapshot.doc, setupDone: false });
-  },
   turnOffScreenTime() {
     screenTime.turnOff();
     // The rest of today is not counted, and the week view says so.
