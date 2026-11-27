@@ -23,6 +23,7 @@ import {
   type PlanAction,
   type PlanShield,
 } from '@/domain/monitorPlan';
+import { refusalOf, type Refusal } from '@/domain/access';
 import { ASK_ID } from '@/domain/askFirst';
 import type { WidgetRecord } from '@/domain/pro';
 import type { Settings } from '@/domain/types';
@@ -130,16 +131,68 @@ export function permission(): Permission {
   return 'unknown';
 }
 
-/** Shows Apple's "allow Screen Time access" sheet. */
+/**
+ * Why the last request for access was turned down (access.ts), or null when
+ * it wasn't. Read after `askPermission` answers anything but "approved".
+ */
+let lastRefusal: Refusal | null = null;
+export function refusal(): Refusal | null {
+  return lastRefusal;
+}
+
+/**
+ * How long a request may go without an answer before the screen gives the
+ * button back. Apple's sheet, with its passcode step, is answered well within
+ * it; a request that hangs would otherwise leave "Asking…" up for good.
+ */
+const ASK_WAIT_MS = 30_000;
+/** A request still out, so a second tap waits for the same one instead of asking iOS twice. */
+let asking: Promise<Permission> | null = null;
+
+/**
+ * Shows Apple's "allow Screen Time access" sheet. Answers "unknown" when iOS
+ * hasn't answered within the wait (the request goes on; its answer still
+ * counts when it comes). Anything but "approved" leaves the reason in `refusal()`.
+ */
 export async function askPermission(): Promise<Permission> {
+  // Preview only: "?mock=refuse-passcode" (or any Refusal) stands in for iOS turning the request down.
+  const mocked = [...MOCK].find((word) => word.startsWith('refuse-'));
+  if (mocked) {
+    lastRefusal = mocked.slice('refuse-'.length) as Refusal;
+    return 'denied';
+  }
+  if (MOCK_PHONE) return permission();
   if (!SCREEN_TIME_AVAILABLE) return 'unknown';
+  lastRefusal = null;
+  asking ??= requestAccess().finally(() => {
+    asking = null;
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ASK_WAIT_MS);
+  });
+  try {
+    const answer = await Promise.race([asking, late]);
+    if (answer !== null) return answer;
+    lastRefusal = 'noAnswer';
+    note('access', 'no answer from iOS');
+    return 'unknown';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestAccess(): Promise<Permission> {
   try {
     // Shows nothing when access is already on; otherwise Apple's sheet.
     await DeviceActivity.requestAuthorization('individual');
     sheetAnswer = 'approved';
-  } catch {
-    // Declined, or Screen Time is switched off on this phone.
+    lastRefusal = null;
+  } catch (error) {
+    // Declined, or iOS can't grant it on this device (no passcode, say): access.ts says which.
     sheetAnswer = 'denied';
+    lastRefusal = refusalOf(error);
+    note('access', error);
   }
   return sheetAnswer;
 }
@@ -153,6 +206,11 @@ export function isOn(): boolean {
   } catch {
     return false;
   }
+}
+
+/** Whether anything is left to count once the essentials are taken out: without it, counting can't start. */
+export function somethingCounts(): boolean {
+  return pickCount(COUNTED_ID) > 0;
 }
 
 /** How many apps, categories and sites are in one of the person's picks. The app never learns which. */

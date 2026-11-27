@@ -545,11 +545,18 @@ export const store = {
   },
   /**
    * Asks for Screen Time access and, once given, registers the day with the
-   * phone. From then on the battery follows real screen time.
+   * phone. From then on the battery follows real screen time. "nothingPicked":
+   * access is on but nothing would count, since the essentials were never
+   * chosen (setup's "Skip for now"); the caller opens Apple's lists and tries
+   * again once they're chosen. "denied": `screenTime.refusal()` says why.
    */
-  async turnOnScreenTime(): Promise<'on' | 'denied' | 'failed'> {
+  async turnOnScreenTime(): Promise<'on' | 'denied' | 'nothingPicked' | 'failed'> {
     const answer = await screenTime.askPermission();
     if (answer !== 'approved') return 'denied';
+    // Up to build 152 this went on to register a day with nothing in it, which
+    // the phone refuses, and the card said "would not start counting": App
+    // Review, on an iPad, saw a button that did nothing (2026-11-26).
+    if (!screenTime.somethingCounts()) return 'nothingPicked';
     // Counting always takes in the whole day since the recharge, so turning it
     // on at any time picks up what was already used, and off-and-on is no refill.
     const ok = await screenTime.applyPlan(snapshot.doc.settings, snapshot.doc.day.topUps);

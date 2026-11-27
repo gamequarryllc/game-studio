@@ -1,3 +1,49 @@
+diff --git a/node_modules/react-native-device-activity/ios/ReactNativeDeviceActivityModule.swift b/node_modules/react-native-device-activity/ios/ReactNativeDeviceActivityModule.swift
+index 8aee1f2..b15ef2e 100644
+--- a/node_modules/react-native-device-activity/ios/ReactNativeDeviceActivityModule.swift
++++ b/node_modules/react-native-device-activity/ios/ReactNativeDeviceActivityModule.swift
+@@ -133,6 +133,22 @@ struct DeviceActivityEventFromJS: ExpoModulesCore.Record {
+   var includesPastActivity: Bool?
+ }
+ 
++/// Plainlimit: the name of a refusal from Apple's Screen Time access request.
++@available(iOS 16.0, *)
++func familyControlsReason(_ error: FamilyControlsError) -> String {
++  switch error {
++  case .restricted: return "restricted"
++  case .unavailable: return "unavailable"
++  case .invalidAccountType: return "invalidAccountType"
++  case .invalidArgument: return "invalidArgument"
++  case .authorizationConflict: return "authorizationConflict"
++  case .authorizationCanceled: return "authorizationCanceled"
++  case .networkError: return "networkError"
++  case .authenticationMethodUnavailable: return "authenticationMethodUnavailable"
++  @unknown default: return "other"
++  }
++}
++
+ func convertToSwiftDateComponents(from dateComponentsFromJS: DateComponentsFromJS) -> DateComponents {
+   var swiftDateComponents = DateComponents()
+ 
+@@ -567,8 +583,16 @@ public class ReactNativeDeviceActivityModule: Module {
+       let ac = AuthorizationCenter.shared
+ 
+       if #available(iOS 16.0, *) {
+-        try await ac.requestAuthorization(
+-          for: forIndividualOrChild == "child" ? .child : .individual)
++        do {
++          try await ac.requestAuthorization(
++            for: forIndividualOrChild == "child" ? .child : .individual)
++        } catch let error as FamilyControlsError {
++          // Plainlimit: name the refusal ("familycontrols:<case>") so the app can say why, in words.
++          logger.log("❌ Screen Time access refused: \(familyControlsReason(error), privacy: .public)")
++          throw Exception(
++            name: "FamilyControlsError", description: "familycontrols:\(familyControlsReason(error))",
++            code: "ERR_FAMILY_CONTROLS")
++        }
+       } else {
+         // Deprecated iOS 15 API - uses completion handler
+         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
 diff --git a/node_modules/react-native-device-activity/ios/Shared.swift b/node_modules/react-native-device-activity/ios/Shared.swift
 index 4839430..a019c10 100644
 --- a/node_modules/react-native-device-activity/ios/Shared.swift

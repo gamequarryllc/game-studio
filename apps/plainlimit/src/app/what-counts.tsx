@@ -2,8 +2,8 @@ import { Text } from 'react-native';
 
 import { clockLabelOf, dayWord } from '@/domain/day';
 import { batteryEnd } from '@/domain/recharge';
-import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, COUNTED_ID, pickCount } from '@/platform/screenTime';
-import { settingsLocked, useDoc } from '@/state/store';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, COUNTED_ID, isOn, permission, pickCount } from '@/platform/screenTime';
+import { settingsLocked, store, useDoc } from '@/state/store';
 import { COUNTS_LEAD, OLD_LIST_NOTE } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { Lead, Page, Title } from '@/ui/kit';
@@ -30,7 +30,11 @@ export default function WhatCounts() {
   // Asks the phone and the clock as it draws (is it locked, what waits, which day): never kept from an earlier drawing.
   'use no memo';
   const doc = useDoc();
-  const e = useEssentials();
+  // Essentials chosen here after setup skipped them: counting starts now, as setup's last screen says it will.
+  // (Up to build 152 it waited for "Turn on Screen Time" in Settings, which nothing pointed to.)
+  const e = useEssentials(() => {
+    if (SCREEN_TIME_AVAILABLE && doc.setupDone && permission() === 'approved' && !isOn()) void store.turnOnScreenTime();
+  });
   // When the next battery starts: the recharge, or later with a new recharge time waiting (recharge.ts).
   const nextBattery = batteryEnd(doc.day, doc.settings);
   const when = { day: dayWord(nextBattery, new Date()), recharge: clockLabelOf(nextBattery) };

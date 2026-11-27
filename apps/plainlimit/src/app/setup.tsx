@@ -1,12 +1,13 @@
 import { useRouter } from 'expo-router';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { refusalNeedsAlert, refusalWords, type Refusal } from '@/domain/access';
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { askToNotify, openPhoneSettings } from '@/platform/notices';
-import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount, wholeWindow } from '@/platform/screenTime';
+import { COUNTED_ID, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, pickCount, refusal, wholeWindow } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { COUNTS_SHORT, essentialsValue } from '@/ui/countWords';
 import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
@@ -68,6 +69,8 @@ export default function Setup() {
   const [at, setAt] = useState(0);
   const [access, setAccess] = useState(() => (SCREEN_TIME_AVAILABLE ? permission() : 'unknown'));
   const [asked, setAsked] = useState(false);
+  // Why iOS turned access down, when it did.
+  const [refused, setRefused] = useState<Refusal | null>(null);
   const [busy, setBusy] = useState(false);
   // The last screen on a phone: reading the day so far, then ready.
   const [phase, setPhase] = useState<'reading' | 'ready' | 'failed'>('reading');
@@ -137,7 +140,15 @@ export default function Setup() {
     setBusy(false);
     setAccess(answer);
     setAsked(true);
-    if (answer === 'approved') next();
+    if (answer === 'approved') {
+      setRefused(null);
+      next();
+      return;
+    }
+    // Say why (access.ts): iOS can refuse without showing anything, and then a pop-up shows the tap did something.
+    const why = refusal() ?? 'declined';
+    setRefused(why);
+    if (refusalNeedsAlert(why)) Alert.alert(refusalWords(why).title, refusalWords(why).line);
   };
 
   const allowNotices = async () => {
@@ -175,7 +186,10 @@ export default function Setup() {
         <Lead>Plainlimit counts and locks apps through Apple&apos;s Screen Time. It never sees what you do in them.</Lead>
         {approved ? <Text style={styles.ok}>Allowed.</Text> : null}
         {asked && !approved ? (
-          <Text style={styles.note}>It wasn&apos;t allowed, so nothing can be counted yet. Try again, or skip and allow it later in Settings.</Text>
+          <View accessibilityRole="alert" style={styles.refused}>
+            <Text style={styles.refusedTitle}>{refusalWords(refused ?? 'declined').title}</Text>
+            <Text style={styles.note}>{`${refusalWords(refused ?? 'declined').line} Or skip, and turn it on later at the top of Settings.`}</Text>
+          </View>
         ) : null}
       </>
     );
@@ -329,7 +343,7 @@ export default function Setup() {
         {phase === 'reading' ? (
           <Lead>Reading today so far. Nothing locks yet.</Lead>
         ) : phase === 'failed' ? (
-          <Lead>The phone would not start counting. You can turn it on later in Settings.</Lead>
+          <Lead>iOS would not start counting. You can turn it on later at the top of Settings.</Lead>
         ) : over ? (
           <Lead>{`You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock your counted apps until ${recharge}.`}</Lead>
         ) : null}
@@ -466,6 +480,8 @@ const styles = StyleSheet.create({
   note: { fontSize: 14, lineHeight: 20, color: c.ink3 },
   ok: { fontSize: 16, fontWeight: '600', color: c.ink },
   warn: { fontSize: 15, lineHeight: 21, fontWeight: '600', color: '#FF7B6B' },
+  refused: { alignSelf: 'stretch', borderWidth: 1.5, borderColor: '#F79200', borderRadius: 14, padding: 12, gap: 4 },
+  refusedTitle: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: '#F7B24D' },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   big: { fontFamily: display.bold, fontSize: 60, lineHeight: 64, letterSpacing: -2.2, color: c.ink },
   figureBox: { borderWidth: 1, borderColor: c.rule, borderRadius: 18, padding: 16 },

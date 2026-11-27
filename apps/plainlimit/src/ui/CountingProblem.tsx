@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
-import type { Health } from '@/platform/screenTime';
+import { refusalNeedsAlert, refusalWords } from '@/domain/access';
+import { refusal, type Health } from '@/platform/screenTime';
 import { store } from '@/state/store';
 
 import { BigButton } from './kit';
@@ -50,8 +51,14 @@ export function CountingProblem({ health }: { health: Health }) {
     } finally {
       setBusy(false);
     }
-    if (result === 'denied') setProblem('Access was not given. In the Settings app, open Screen Time and allow Plainlimit, then come back.');
-    if (result === 'failed') setProblem(health === 'miscounted' ? 'Counting again did not work. Try again in a moment.' : 'The phone would not start counting. Try again in a moment.');
+    if (result === 'denied') {
+      // Why iOS refused (access.ts), with a pop-up when it refused without showing anything.
+      const why = refusal() ?? 'declined';
+      const words = refusalWords(why);
+      setProblem(`${words.title}. ${words.line}`);
+      if (refusalNeedsAlert(why)) Alert.alert(words.title, words.line);
+    }
+    if (result === 'failed') setProblem(health === 'miscounted' ? 'Counting again did not work. Try again in a moment.' : 'iOS would not start counting. Try again in a moment.');
   };
 
   return (
