@@ -343,8 +343,21 @@ describe('the home screen widget agrees with the app', () => {
     expect(setup).not.toContain("'Every app counts.'");
     // The last screen: each figure named for who counts it (the owner on build 168: what the iPhone tracks against
     // what we count), how much of the goal is used, and the essentials in the iPhone's box but outside ours.
-    for (const words of ['>iPhone tracks<', '>Plainlimit counts<', 'left today', '<FreeRow />', 'You can pick your essential apps next.']) expect(setup).toContain(words);
-    expect(setup.indexOf('<FreeRow />')).toBeGreaterThan(setup.indexOf('>Plainlimit counts<'));
+    for (const words of ['>iPhone tracks<', '>Plainlimit counts<', "'Used today'", '<FreeRow kept={essentials.ready ? essentials.kept : 0} picks={essentials.picks} />', 'You can pick your essential apps next.']) expect(setup).toContain(words);
+    expect(setup.indexOf('<FreeRow ')).toBeGreaterThan(setup.indexOf('>Plainlimit counts<'));
+    // What the owner's recording of build 170 showed. The figure is the phone's exact one, drawn over Plainlimit's
+    // own in the same type as on Today (0:15 stood here between 0:25 on the goal screen and 0:25 on Today), and
+    // nothing is written that would need the exact figure, which the app cannot read.
+    expect(setup).toContain('<TodayTotal settings={settings} now={now} fallback={own} style={styles.partPhone} />');
+    expect(setup).not.toContain('left today`');
+    const type = (file: string, name: string) => /fontSize: (\d+), lineHeight: (\d+), letterSpacing: (-?[\d.]+)/.exec(file.slice(file.indexOf(`  ${name}: {`)))?.slice(1, 4).join(' ');
+    expect(type(setup, 'partValue')).toBe(type(at('src/app/(tabs)/index.tsx'), 'used'));
+    // The row of essentials draws the person's own icons once some are chosen (it drew three made-up ones).
+    for (const words of ['<AppIcons selection={picks} count={kept} columns={6} limit={6} label="Your essential apps" />', 'if (kept > 0) {']) expect(story).toContain(words);
+    // And after Apple's list closes, the essentials screen says it is saving instead of offering the same buttons again.
+    for (const words of ['if (essentials.saving) {', "label: 'Saving\\u2026'"]) expect(setup).toContain(words);
+    expect(at('src/ui/EssentialsSteps.tsx')).toContain('onClosing={() => setSaving(true)}');
+    expect(at('src/ui/AppPicker.tsx')).toContain('leaving.current?.();');
     for (const words of ['Your essential apps', 'Never counted']) expect(story).toContain(words);
     // Nothing there may say the figure has the essentials taken out: none are chosen yet on a new phone.
     expect(setup).not.toContain('without essentials');

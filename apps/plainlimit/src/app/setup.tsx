@@ -16,7 +16,7 @@ import { c, display } from '@/ui/theme';
 import { Icon } from '@/ui/icons';
 import { NotifyPicture, NotifyStory } from '@/ui/NotifyStep';
 import { FreeRow, GoalStory, StoryBattery, StoryEssentials, StoryMorning, inTheMorning } from '@/ui/Story';
-import { SetupFigures, WHOLE, WakeScreenTime, WholeTotal } from '@/ui/UsageReport';
+import { SetupFigures, TodayTotal, WHOLE, WakeScreenTime, WholeTotal } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
 import { useDay } from '@/ui/useDay';
 import { useNotices } from '@/ui/useNotices';
@@ -255,7 +255,10 @@ export default function Setup() {
         )}
       </>
     );
-    if (showPick && !essentials.ready) {
+    if (essentials.saving) {
+      // Apple's list has closed and the picks are being saved (up to a second): say so, and offer nothing to tap twice.
+      primary = { label: 'Saving\u2026', onPress: () => {} };
+    } else if (showPick && !essentials.ready) {
       primary = { label: 'Choose essential apps', onPress: canPick ? essentials.start : next };
       secondary = { label: 'Skip for now', onPress: next };
     }
@@ -368,7 +371,12 @@ export default function Setup() {
     const reading = phase === 'reading' && day.usedMinutes === 0;
     // What Plainlimit counts, beside everything the iPhone tracks.
     const since = `Since ${recharge}`;
-    const left = Math.max(0, settings.goalMinutes - day.usedMinutes);
+    // Plainlimit's own figure, in the type the phone draws its exact one in (UsageReport.tsx, TodayTotal).
+    const own = (
+      <Text numberOfLines={1} style={styles.partValue}>
+        {durationLabel(day.usedMinutes)}
+      </Text>
+    );
     body = (
       <>
         <Heading>{phase === 'failed' ? 'Not counting yet' : over ? 'Already past your goal' : 'Ready'}</Heading>
@@ -389,6 +397,15 @@ export default function Setup() {
           counts ("iPhone tracks", "Plainlimit counts"), and the essentials lie in the iPhone's box but outside
           ours, marked "Never counted". They are not chosen yet at this point (Today offers them next), so the row is a
           promise in the story's own picture, not a figure with them taken out.
+
+          Build 170 chose the essentials before this screen, and the owner's recording of it showed three figures
+          for the same thing within ten seconds: 0:25 on the goal screen, 0:15 here, 0:25 on Today. 0:25 was the
+          phone's exact figure; 0:15 was Plainlimit's own, which hears of use in steps and gives the essentials the
+          benefit of the doubt up to their next rung (domain/tally.ts). So the figure here is drawn the way Today's
+          is, by the phone, over Plainlimit's own (which stands until it has drawn, and wherever it can't). The
+          phone's picture is not see-through, so the box has no tint of its own under it, and the figure is in the
+          ink Today's is in. "2:45 left today" went with it: the goal less a figure the app cannot read is not a
+          number it can write. And the row of essentials shows the person's own, now that there are some.
         */}
         <View style={styles.whole}>
           <View style={styles.wholeRow}>
@@ -401,8 +418,8 @@ export default function Setup() {
           </View>
           <View
             accessible
-            accessibilityLabel={reading ? `Plainlimit counts: still reading. ${since}` : `Plainlimit counts: ${durationLabel(day.usedMinutes)} of ${durationLabel(settings.goalMinutes)}. ${since}. ${durationLabel(left)} left today`}
-            style={[styles.part, { borderColor: accent, backgroundColor: accent.length === 7 ? `${accent}1F` : 'transparent' }]}>
+            accessibilityLabel={reading ? `Plainlimit counts: still reading. ${since}` : `Plainlimit counts: about ${durationLabel(day.usedMinutes)} used of ${durationLabel(settings.goalMinutes)}. ${since}`}
+            style={[styles.part, { borderColor: accent }]}>
             <View style={styles.wholeRow}>
               <Icon name="battery" size={18} color={accent} />
               <View style={styles.wholeWords}>
@@ -410,11 +427,15 @@ export default function Setup() {
                 <Text style={[styles.wholeNote, { color: c.ink2 }]}>{since}</Text>
               </View>
               {reading ? (
-                <WaitingDots size={8} height={44} />
+                <WaitingDots size={8} height={52} />
+              ) : phase === 'ready' ? (
+                <View>
+                  {/* Holds the figure's room; the phone's own figure is drawn over it, as on Today. */}
+                  <View style={{ opacity: 0 }}>{own}</View>
+                  <TodayTotal settings={settings} now={now} fallback={own} style={styles.partPhone} />
+                </View>
               ) : (
-                <Text numberOfLines={1} style={[styles.partValue, { color: accent }]}>
-                  {durationLabel(day.usedMinutes)}
-                </Text>
+                own
               )}
             </View>
             {/* How much of the goal that is. Empty while the day is still being read. */}
@@ -422,11 +443,11 @@ export default function Setup() {
               <View style={[styles.meterFill, { backgroundColor: accent, width: `${reading ? 0 : Math.min(100, Math.round((day.usedMinutes / Math.max(1, settings.goalMinutes)) * 100))}%` }]} />
             </View>
             <View style={styles.meterWords}>
-              <Text style={styles.meterText}>{reading ? 'Reading\u2026' : `${durationLabel(left)} left today`}</Text>
+              <Text style={styles.meterText}>{reading ? 'Reading\u2026' : 'Used today'}</Text>
               <Text style={styles.meterText}>{`of ${durationLabel(settings.goalMinutes)}`}</Text>
             </View>
           </View>
-          <FreeRow />
+          <FreeRow kept={essentials.ready ? essentials.kept : 0} picks={essentials.picks} />
         </View>
         {phase === 'reading' ? <ReadingBar colour={accent} /> : null}
         {phase === 'reading' ? (
@@ -589,7 +610,9 @@ const styles = StyleSheet.create({
   wholeName: { fontSize: 15, lineHeight: 19, fontWeight: '600', color: c.ink2 },
   wholeNote: { fontSize: 13.5, lineHeight: 18, color: c.ink3, marginTop: 2 },
   part: { borderWidth: 2, borderRadius: 15, paddingVertical: 12, paddingHorizontal: 13 },
-  partValue: { fontFamily: display.bold, fontSize: 40, lineHeight: 44, letterSpacing: -1.2 },
+  // The type of Today's figure, which the phone's exact one is drawn in (targets/report, FigureText): the two must match, one lies over the other.
+  partValue: { fontFamily: display.bold, fontSize: 48, lineHeight: 52, letterSpacing: -1.6, color: c.ink, fontVariant: ['tabular-nums'], paddingRight: 6 },
+  partPhone: { position: 'absolute', left: 0, top: 0, right: 0, height: 52, alignSelf: 'auto' },
   // How much of the goal is used, as a bar, with what is left under it.
   meter: { height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.14)', overflow: 'hidden', marginTop: 12 },
   meterFill: { height: 10, borderRadius: 5 },

@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { CELLS } from '@/domain/battery';
 import { glowForCells } from '@/domain/tone';
 
+import { AppIcons } from './AppIcons';
 import { GlowBattery } from './GlowBattery';
 import { Icon, type IconName } from './icons';
 import { useReducedMotion } from './motion';
@@ -161,12 +162,34 @@ export function StoryEssentials({ chosenLater }: { chosenLater: boolean }) {
 }
 
 /**
- * The essentials on setup's last screen: the story's three made-up apps,
- * small, and "Never counted" in their green. The row lies in the iPhone's
- * box and outside Plainlimit's: the iPhone tracks them, Plainlimit never
- * counts them. (It carried a FREE mark in build 169; see StoryEssentials.)
+ * The essentials on setup's last screen, small, and "Never counted" in their
+ * green. The row lies in the iPhone's box and outside Plainlimit's: the
+ * iPhone tracks them, Plainlimit never counts them. (It carried a FREE mark
+ * in build 169; see StoryEssentials.)
+ *
+ * `kept` and `picks`: the essentials chosen two screens back, drawn as their
+ * own icons in one row under the words, six at most, the last one "+N"
+ * (AppIcons). Build 170 drew the story's three made-up apps here whatever
+ * had been chosen, and the owner, who had just ticked four others, was shown
+ * Phone, Messages and Maps. The made-up three, beside the words, are for
+ * someone who skipped the essentials: a promise.
  */
-export function FreeRow() {
+export function FreeRow({ kept = 0, picks = null }: { kept?: number; picks?: string | null }) {
+  if (kept > 0) {
+    return (
+      <View accessible accessibilityLabel="Your essential apps are never counted." style={styles.freeOwn}>
+        <View style={styles.freeHead}>
+          <Text numberOfLines={1} style={styles.freeName}>
+            Your essential apps
+          </Text>
+          <Text numberOfLines={1} style={[styles.freeNote, { marginTop: 0 }]}>
+            Never counted
+          </Text>
+        </View>
+        <AppIcons selection={picks} count={kept} columns={6} limit={6} label="Your essential apps" />
+      </View>
+    );
+  }
   return (
     <View accessible accessibilityLabel="Your essential apps are never counted." style={styles.freeRow}>
       <View style={styles.freeTiles}>
@@ -266,6 +289,8 @@ const styles = StyleSheet.create({
   appName: { fontSize: 13, lineHeight: 16, fontWeight: '600', color: c.ink2 },
   freeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 2 },
   freeTiles: { flexDirection: 'row', gap: 6 },
+  freeOwn: { gap: 10, paddingHorizontal: 2 },
+  freeHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   smallApp: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   freeWords: { flex: 1 },
   freeName: { fontSize: 15, lineHeight: 19, fontWeight: '600', color: c.ink },

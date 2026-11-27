@@ -11,11 +11,13 @@ const SAVE_MS = 600;
  * phone under `id`; the app is told how many there are and never which.
  * Draws nothing in a browser or in Expo Go.
  */
-export function AppPicker({ id, open, header, onClose, wholeCategories = false }: { id: string; open: boolean; header: string; onClose: () => void; wholeCategories?: boolean }) {
+export function AppPicker({ id, open, header, onClose, onClosing, wholeCategories = false }: { id: string; open: boolean; header: string; onClose: () => void; onClosing?: () => void; wholeCategories?: boolean }) {
   const closing = useRef<ReturnType<typeof setTimeout> | null>(null);
   const done = useRef(onClose);
+  const leaving = useRef(onClosing);
   useEffect(() => {
     done.current = onClose;
+    leaving.current = onClosing;
     if (!open) closing.current = null;
   });
   if (!SCREEN_TIME_AVAILABLE || !open) return null;
@@ -33,9 +35,15 @@ export function AppPicker({ id, open, header, onClose, wholeCategories = false }
     closing.current = setTimeout(() => {}, 0);
     done.current();
   };
+  // `onClosing`: the sheet has gone and the picks are being saved. Until
+  // `onClose` the screen behind looks as it did before the list opened, for
+  // up to a second (the owner's recording of build 170: setup's essentials
+  // screen sat there offering "Choose essential apps" again), so it is told,
+  // and can say it is saving.
   const close = () => {
     if (closing.current) return;
     closing.current = setTimeout(finish, SAVE_MS);
+    leaving.current?.();
   };
   const saved = () => {
     if (closing.current) finish();

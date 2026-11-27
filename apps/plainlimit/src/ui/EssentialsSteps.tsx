@@ -48,6 +48,8 @@ export type Essentials = {
   ready: boolean;
   /** How many were ticked when the last try was turned down for being too many (0: none was). */
   refused: number;
+  /** Apple's list has closed and its picks are being saved: a moment in which nothing else on the screen has changed yet. */
+  saving: boolean;
   /** The one button: opens Apple's list on the essentials. */
   start: () => void;
   pickers: ReactNode;
@@ -62,6 +64,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
   'use no memo';
   const [open, setOpen] = useState(false);
   const [refused, setRefused] = useState(0);
+  const [saving, setSaving] = useState(false);
   // Bumped to draw again with the picks as the phone has them now.
   const [, setLook] = useState(0);
   const looks = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -76,8 +79,10 @@ export function useEssentials(onChosen?: () => void): Essentials {
       wholeCategories
       open={open}
       header={`Tick your essential apps (up to ${ESSENTIALS_LIMIT}), then ✓ at the top right. Everything else uses your battery.`}
+      onClosing={() => setSaving(true)}
       onClose={() => {
         setOpen(false);
+        setSaving(false);
         const tooMany = store.essentialsClosed();
         lookAgain();
         setRefused(tooMany);
@@ -91,6 +96,7 @@ export function useEssentials(onChosen?: () => void): Essentials {
     joining: essentialsJoining(),
     ready: essentialsChosen(),
     refused,
+    saving,
     start: () => {
       if (open) return;
       setRefused(0);
