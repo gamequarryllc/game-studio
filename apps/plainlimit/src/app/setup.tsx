@@ -272,6 +272,8 @@ export default function Setup() {
   // never be drawn, and the head start would be lost without a sign.
   const recharge = clockLabel(settings.rechargeMinute);
   if ((step === 'notify' || step === 'goal') && figures && !figuresShown) setFiguresShown(true);
+  const figuresName = essentials.kept > 0 ? 'Your phone time' : 'All your phone time';
+  const figuresNote = essentials.kept > 0 ? 'Without your essential apps' : 'Every app. Your essential apps won\u2019t count.';
   const figureBox =
     figures && figuresShown ? (
       <View
@@ -280,9 +282,23 @@ export default function Setup() {
         accessibilityElementsHidden={step !== 'goal'}
         importantForAccessibility={step === 'goal' ? 'auto' : 'no-hide-descendants'}
         style={[styles.figureBox, { gap: 12 }, step === 'goal' ? null : styles.parked]}>
+        {/*
+          What the figures are, said over them. They are everything the phone has been used for: no essentials are
+          chosen yet, and Plainlimit has counted nothing before today. The owner, on build 169 with a daily average
+          of 5:24 there, asked whether that was Plainlimit's average, and saw that a goal picked against all of the
+          phone's time is looser than it looks, since the essentials will not count. ("Every app counts." stood in
+          the small line under the chart, and did not say it.)
+        */}
+        <View accessible accessibilityLabel={`${figuresName}. ${figuresNote}`} style={styles.wholeRow}>
+          <Icon name="iphone" size={18} color={c.ink2} />
+          <View style={styles.wholeWords}>
+            <Text style={[styles.wholeName, { color: c.ink }]}>{figuresName}</Text>
+            <Text style={styles.wholeNote}>{figuresNote}</Text>
+          </View>
+        </View>
         {/* One picture from the phone for both figures and the chart, so they arrive together (UsageReport.tsx). */}
         <SetupFigures settings={settings} now={now} todayLabel="Today so far" />
-        <Text style={styles.note}>{`Days start at ${recharge}. ${essentials.kept > 0 ? 'Your essentials are left out.' : 'Every app counts.'}`}</Text>
+        <Text style={styles.note}>{`Days start at ${recharge}.`}</Text>
       </View>
     ) : null;
 

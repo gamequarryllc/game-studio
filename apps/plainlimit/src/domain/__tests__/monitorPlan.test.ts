@@ -333,6 +333,11 @@ describe('the home screen widget agrees with the app', () => {
     expect(setup).not.toContain('<Heading>How much a day?</Heading>');
     expect(setup).not.toContain("'Moves the line'");
     for (const words of ['`${goal} of use`', '"Apps lock"', '`Back at ${recharge}`']) expect(story).toContain(words);
+    // The phone's figures under it are named for what they are (the owner on build 169, of a 5:24 average: "is this
+    // my Plainlimit daily average?"): all of the phone's time, of which the essentials will not count.
+    for (const words of ["'All your phone time'", "'Every app. Your essential apps won\\u2019t count.'", "'Without your essential apps'"]) expect(setup).toContain(words);
+    expect(setup.indexOf('{figuresName}')).toBeLessThan(setup.indexOf('<SetupFigures '));
+    expect(setup).not.toContain("'Every app counts.'");
     // The last screen: each figure named for who counts it (the owner on build 168: what the iPhone tracks against
     // what we count), how much of the goal is used, and the essentials in the iPhone's box but outside ours.
     for (const words of ['>iPhone tracks<', '>Plainlimit counts<', 'left today', '<FreeRow />', 'You pick your essential apps next.']) expect(setup).toContain(words);
