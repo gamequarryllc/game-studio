@@ -657,7 +657,7 @@ The owner showed build 167's setup to a friend and a cousin. Of "How much a day?
 What setup is now (seven screens on a phone; the owner agreed the story's three and their order from pictures, and picked the goal and last screens from three drafts each; project files, `plainlimit/setup-story-mockups/` and `plainlimit/setup-clearer-mockups/`):
 
 1. **"Your screen time is a battery"**: the battery running down and locking, and the same three moments standing still (Full, Running low, Apps lock). "Using your apps drains it. When it's empty, they lock."
-2. **"Essentials are free"**: two boxes in the look of the essentials' own screen, made-up Phone, Messages and Maps ("Never drain it", FREE) over Videos, Games and Social ("Everything else", "Drains it"). "Use your phone. Don't abuse it." The essentials are still picked after setup, and it says so.
+2. **"Essentials are free"** ("Your essential apps don't count" after build 169, below): two boxes in the look of the essentials' own screen, made-up Phone, Messages and Maps ("Never drain it" and FREE, later "Apps you pick" and NOT COUNTED) over Videos, Games and Social ("Everything else"; "Drains it", later COUNTED). "Use your phone. Don't abuse it." The essentials are still picked after setup, and it says so.
 3. **"Full again every morning"**: a sunrise, the recharge time, a full battery. "A late night never eats into tomorrow." (Not "morning" for a recharge time after noon.)
 4. Allow Screen Time. 5. Notifications.
 6. **"Daily screen time"** (was "How much a day?" over "Moves the line"): the stepper, then three small pictures, "3:00 of use", "Apps lock", "Back at 6:00 AM" (`GoalStory`), then the phone's figures as "Today so far", "Daily average" and "Your last 7 days".
@@ -676,3 +676,13 @@ To check on a phone: the three story screens read at a glance and the first one'
 **Today's offer of the essentials stays until one is chosen.** Closing Apple's list with nothing ticked used to count as a choice of none, and the card went. The owner opened the list from the card, swiped it away, and could only find the essentials in Settings. Now the first list closed empty changes nothing (`essentialsAfter`): the essentials stay "not chosen", everything goes on counting, and the card stays. Once some have been chosen, taking them all out is still a choice, and Today does not offer again.
 
 **"Run setup again" is gone from the test builds** (see above): setup is tried on a fresh install.
+
+### After build 169 (the owner, 2026-11-27, who passed all four checks on it)
+
+**The second story screen says what an essential is, and no longer says "free".** It was titled "Essentials are free" over a green box named "Never drain it" and marked FREE. The owner, twice in a few minutes: at this point no one knows what an essential is; and "free" is confusing too, "how am I to know free doesn't count against my time". "Essentials" is the app's word, which a new person meets here for the first time, and "free" is the word the app uses for what is not Pro. So:
+
+- The title is "Your essential apps don't count" (the owner's words for both halves: essential as a plain adjective, whose apps they are, and that they are not counted).
+- The green box is named for who chooses, "Apps you pick", and marked NOT COUNTED; "Everything else" is marked COUNTED, the same mark as an outline in the draining battery's yellow. The last line is "You pick them right after setup."
+- The same word everywhere else the essentials were "free": the last screen's row is "Your essential apps / Never counted" with no FREE mark, over "You pick your essential apps next."; Today's card is headed "Pick your essential apps" ("They never count and never lock. Until you choose, every app uses your battery."); and Settings' Essentials row ends "never counted" where it ended "always free".
+
+"Count" is already the word of the goal screen ("Every app counts"), of the last screen ("Plainlimit counts") and of the essentials' own screen ("Never counted"), so one word now runs from setup to Settings. Drawn for the owner first: three ways of saying what an essential is (project files, `plainlimit/setup-essentials-word-mockups/`), then three without "free" (`plainlimit/setup-essentials-count-mockups/`: the battery's words, "count", and the rule as a sum, "1 hour of Maps uses 0:00"). "Don't count" is on the branch as the recommended one while the owner chooses. From here on the noun "essentials" (the button on Today's card, Settings) is a shortening of something already explained.

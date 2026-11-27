@@ -15,7 +15,9 @@ import { c, display } from './theme';
 // until at least one is ticked: closing the list with nothing ticked leaves
 // it here (up to build 168 it went then too, and the owner, who had opened
 // the list and swiped it away, found the essentials only in Settings). After
-// a choice the essentials are changed in Settings, under Essentials.
+// a choice the essentials are changed in Settings, under Essentials. The
+// card was headed "Keep your essentials free" up to build 169: "free" did
+// not tell the owner that the time is not counted (ui/Story.tsx).
 
 /** A few apps people keep open, as plain pictures: the same three as on Settings' Essentials row. */
 const EXAMPLES: RowIcon[] = [
@@ -41,10 +43,10 @@ export function EssentialsOffer() {
           ))}
         </View>
         <Text accessibilityRole="header" style={styles.title}>
-          Keep your essentials free
+          Pick your essential apps
         </Text>
       </View>
-      <Text style={styles.line}>{`Pick the apps that never count and never lock. ${EVERYTHING_COUNTS}`}</Text>
+      <Text style={styles.line}>{`They never count and never lock. ${EVERYTHING_COUNTS}`}</Text>
       {e.refused > 0 ? (
         <Text accessibilityRole="alert" style={styles.warn}>
           {tooManyKept(e.refused, ESSENTIALS_LIMIT)}

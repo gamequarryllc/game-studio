@@ -65,14 +65,15 @@ async function main() {
 
   await step('a first launch goes through setup', async () => {
     await page.goto(url);
-    // The story first, one thing a screen: what it is, what is free, when it comes back.
+    // The story first, one thing a screen: what it is, what is not counted, when it comes back.
     await see('Your screen time is a battery');
     await page.getByText(/Using your apps drains it\./).first().waitFor({ state: 'visible', timeout: 8000 });
     for (const moment of ['Full', 'Running low', 'Apps lock']) await see(moment);
     await shot('00-setup-welcome');
     await press('Next');
-    await see('Essentials are free');
-    for (const words of ['Never drain it', 'Phone', 'Messages', 'Maps', 'Everything else', 'Drains it', 'Use your phone. Don’t abuse it.', 'You pick your essentials right after setup.']) await see(words);
+    await see('Your essential apps don\'t count');
+    for (const words of ['Apps you pick', 'NOT COUNTED', 'Phone', 'Messages', 'Maps', 'Everything else', 'COUNTED', 'Use your phone. Don’t abuse it.', 'You pick them right after setup.']) await see(words);
+    if ((await page.getByText(/\bfree\b/i).count()) > 0) throw new Error('the second screen still says "free"');
     await shot('00-setup-free');
     await press('Next');
     await see('Full again every morning');

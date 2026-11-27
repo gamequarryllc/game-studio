@@ -164,8 +164,8 @@ async function main() {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting,noEssentials');
     // Counting works without them, so there is no warning; an offer instead.
     if ((await page.getByText('Not counting').count()) > 0) throw new Error('Today called essentials not being chosen a counting problem');
-    await see(page, 'Keep your essentials free');
-    await see(page, 'Pick the apps that never count and never lock. Until you choose, every app uses your battery.');
+    await see(page, 'Pick your essential apps');
+    await see(page, 'They never count and never lock. Until you choose, every app uses your battery.');
     if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is not open');
     await shot(page, 'q04b-no-essentials-today');
     await tab(page, 'Settings');
@@ -185,7 +185,7 @@ async function main() {
   await scenario('with an empty battery and no essentials chosen, the offer is still open: the first choice is at once', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 180 }), '?mock=counting,noEssentials');
     await see(page, 'Empty');
-    await see(page, 'Keep your essentials free');
+    await see(page, 'Pick your essential apps');
     if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is closed on an empty battery');
     await shot(page, 'q04d-no-essentials-empty');
     await context.close();
@@ -194,7 +194,7 @@ async function main() {
   await scenario('essentials chosen: Today makes no offer', async () => {
     const { page, context } = await open(doc({ goal: 180, used: 60 }), '?mock=counting');
     await see(page, 'Plenty left');
-    if ((await page.getByText('Keep your essentials free').count()) > 0) throw new Error('Today offered essentials that are already chosen');
+    if ((await page.getByText('Pick your essential apps').count()) > 0) throw new Error('Today offered essentials that are already chosen');
     await context.close();
   });
 
@@ -204,9 +204,9 @@ async function main() {
     // The test builds' two drafts are gone (the owner kept this one): no switch on the first screen.
     if ((await page.getByText(/Test build\. Setup/).count()) > 0) throw new Error('setup still offers a second draft');
     await shot(page, 'q04e-setup-welcome');
-    // The story's three screens (what it is, what is free, when it comes back), each a tap.
+    // The story's three screens (what it is, what is not counted, when it comes back), each a tap.
     await page.getByRole('button', { name: 'Next', exact: true }).click();
-    await see(page, 'Essentials are free');
+    await see(page, 'Your essential apps don\'t count');
     await shot(page, 'q04f-setup-free');
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await see(page, 'Full again every morning');
@@ -358,7 +358,8 @@ async function main() {
     await page.getByLabel('Always open: 14 essential apps, never counted.', { exact: true }).waitFor();
     await page.getByLabel('Your essential apps', { exact: true }).waitFor();
     await page.getByLabel('Everything else uses your battery.', { exact: true }).waitFor();
-    await see(page, 'Never counted');
+    // (Exactly: the Settings row behind this screen now ends "never counted" too.)
+    await page.getByText('Never counted', { exact: true }).first().waitFor({ state: 'visible', timeout: 8000 });
     await see(page, 'Uses your battery');
     await page.getByRole('button', { name: 'Change essentials', exact: true }).waitFor();
     // Every other app counts without being shown to Plainlimit: there is no list of them to refresh.

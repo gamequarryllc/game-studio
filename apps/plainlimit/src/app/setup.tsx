@@ -21,7 +21,7 @@ import { WaitingDots } from '@/ui/Waiting';
 import { useDay } from '@/ui/useDay';
 import { useNotices } from '@/ui/useNotices';
 
-// The first launch: the story in three screens (what it is, what is free,
+// The first launch: the story in three screens (what it is, what is not counted,
 // when it comes back; ui/Story.tsx), then Screen Time access, notifications,
 // the goal, and a last check. Access comes before the goal, so the goal
 // screen can show the phone's own figures (today so far, and the last week's
@@ -198,7 +198,7 @@ export default function Setup() {
   if (step === 'free') {
     body = (
       <>
-        <Heading>Essentials are free</Heading>
+        <Heading>Your essential apps don&apos;t count</Heading>
         <StoryEssentials chosenLater={!(essentials.kept > 0)} />
       </>
     );
@@ -344,7 +344,7 @@ export default function Setup() {
           On build 168 the owner wanted the screen to say outright what the two are: what the iPhone tracks against
           what we count, and that nobody is punished for using their essentials. So the boxes are named for who
           counts ("iPhone tracks", "Plainlimit counts"), and the essentials lie in the iPhone's box but outside
-          ours, marked FREE. They are not chosen yet at this point (Today offers them next), so the row is a
+          ours, marked "Never counted". They are not chosen yet at this point (Today offers them next), so the row is a
           promise in the story's own picture, not a figure with them taken out.
         */}
         <View style={styles.whole}>
@@ -393,7 +393,7 @@ export default function Setup() {
         ) : over ? (
           <Lead>{`You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock ${essentials.kept > 0 ? 'everything but your essentials' : 'your apps'} until ${recharge}.`}</Lead>
         ) : !essentials.ready ? (
-          <Text style={styles.next}>You pick your essentials next.</Text>
+          <Text style={styles.next}>You pick your essential apps next.</Text>
         ) : null}
       </>
     );

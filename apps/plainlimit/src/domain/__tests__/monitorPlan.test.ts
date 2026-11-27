@@ -303,7 +303,7 @@ describe('the home screen widget agrees with the app', () => {
   it('setup has one shape, with nothing to pick (the owner kept it over a draft with an essentials step)', () => {
     const at = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../../..', file), 'utf8');
     const setup = at('src/app/setup.tsx');
-    // The story's three screens first (what it is, what is free, when it comes back), then what setup asks.
+    // The story's three screens first (what it is, what is not counted, when it comes back), then what setup asks.
     expect(setup).toContain("const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'free', 'morning', 'access', 'notify', 'goal', 'ready'] : ['welcome', 'free', 'morning', 'notify', 'goal', 'ready'];");
     expect(setup).not.toContain('Choose essentials');
     // The file that held which draft a test build was on is gone.
@@ -315,7 +315,18 @@ describe('the home screen widget agrees with the app', () => {
     const setup = at('src/app/setup.tsx');
     const story = at('src/ui/Story.tsx');
     // The story: one thing a screen, in the order the owner agreed, with the owner's own line for the essentials.
-    for (const title of ['Your screen time is a battery', 'Essentials are free', 'Full again every morning']) expect(setup).toContain(title);
+    for (const title of ['Your screen time is a battery', 'Your essential apps don&apos;t count', 'Full again every morning']) expect(setup).toContain(title);
+    // "Essentials" alone is our word, which a new person has not met (the owner, build 169): the screen says whose apps they are and who picks them.
+    expect(setup).not.toContain('<Heading>Essentials are free</Heading>');
+    for (const words of ['>Apps you pick<', '>Everything else<', 'You pick them right after setup.']) expect(story).toContain(words);
+    // And "free" did not tell the owner that the time is not counted (the app says "free" for what is not Pro,
+    // too): the two boxes say NOT COUNTED and COUNTED, and no screen of setup or card on Today says "free".
+    for (const words of ['>NOT COUNTED<', '>COUNTED<']) expect(story).toContain(words);
+    expect(story).not.toContain('>FREE<');
+    expect(setup).not.toContain('are free</Heading>');
+    expect(at('src/ui/EssentialsOffer.tsx')).not.toMatch(/^\s*Keep your essentials free$/m);
+    expect(at('src/ui/EssentialsOffer.tsx')).toContain('Pick your essential apps');
+    expect(at('src/app/(tabs)/settings.tsx')).not.toContain("'always free'");
     expect(story).toContain('Use your phone. Don\u2019t abuse it.');
     // The goal screen: a title that says what the number is, and what happens at it, as three small pictures.
     expect(setup).toContain('<Heading>Daily screen time</Heading>');
@@ -323,10 +334,10 @@ describe('the home screen widget agrees with the app', () => {
     expect(setup).not.toContain("'Moves the line'");
     for (const words of ['`${goal} of use`', '"Apps lock"', '`Back at ${recharge}`']) expect(story).toContain(words);
     // The last screen: each figure named for who counts it (the owner on build 168: what the iPhone tracks against
-    // what we count), how much of the goal is used, and the essentials in the iPhone's box but outside ours, free.
-    for (const words of ['>iPhone tracks<', '>Plainlimit counts<', 'left today', '<FreeRow />', 'You pick your essentials next.']) expect(setup).toContain(words);
+    // what we count), how much of the goal is used, and the essentials in the iPhone's box but outside ours.
+    for (const words of ['>iPhone tracks<', '>Plainlimit counts<', 'left today', '<FreeRow />', 'You pick your essential apps next.']) expect(setup).toContain(words);
     expect(setup.indexOf('<FreeRow />')).toBeGreaterThan(setup.indexOf('>Plainlimit counts<'));
-    for (const words of ['Never counted', 'FREE']) expect(story).toContain(words);
+    for (const words of ['Your essential apps', 'Never counted']) expect(story).toContain(words);
     // Nothing there may say the figure has the essentials taken out: none are chosen yet on a new phone.
     expect(setup).not.toContain('without essentials');
     // On the chart, nothing is written where a bar's time can stand: the key to the shading is over it, and the

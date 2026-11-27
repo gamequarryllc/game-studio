@@ -186,7 +186,7 @@ export default function Settings() {
           <View style={{ flex: 1, gap: 1 }}>
             <Text style={styles.rowLabel}>Essentials</Text>
             <Text numberOfLines={1} style={styles.proLine}>
-              {countedValue}, {joining > 0 ? joinsShort(joining, startDay, recharge) : 'always free'}
+              {countedValue}, {joining > 0 ? joinsShort(joining, startDay, recharge) : 'never counted'}
             </Text>
           </View>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={{ flexDirection: 'row', gap: 5 }}>

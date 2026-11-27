@@ -114,15 +114,25 @@ function App({ icon, bg, name }: { icon: IconName; bg: string; name: string }) {
  * The apps a phone is for, which never drain the battery, and everything
  * else, which does. `chosenLater`: the essentials are picked after setup,
  * from Today (false on a phone that already has some).
+ *
+ * The word "essentials" is ours, and nobody has been told it yet: the screen
+ * was titled "Essentials are free" over a box named "Never drain it" and
+ * marked FREE up to build 169, and the owner saw two things in it. No one
+ * knows what an essential is at this point; and "free" does not say that
+ * the time is not counted (the app also says "free" for what is not Pro).
+ * So the title says "Your essential apps don't count" (the owner's words,
+ * both halves), the box is named for who chooses them, "Apps you pick",
+ * beside "Everything else", and the two are marked NOT COUNTED and COUNTED:
+ * the word Ready, the goal screen and the essentials' own screen use.
  */
 export function StoryEssentials({ chosenLater }: { chosenLater: boolean }) {
   return (
     <View style={{ gap: 12 }}>
-      <View accessible accessibilityRole="image" accessibilityLabel="Essentials like Phone, Messages and Maps never drain the battery." style={styles.free}>
+      <View accessible accessibilityRole="image" accessibilityLabel="The apps you pick as essential, like Phone, Messages and Maps, are not counted." style={styles.free}>
         <View style={styles.head}>
-          <Text style={styles.name}>Never drain it</Text>
+          <Text style={styles.name}>Apps you pick</Text>
           <View style={styles.pill}>
-            <Text style={styles.pillText}>FREE</Text>
+            <Text style={styles.pillText}>NOT COUNTED</Text>
           </View>
         </View>
         <View style={styles.apps}>
@@ -131,12 +141,11 @@ export function StoryEssentials({ chosenLater }: { chosenLater: boolean }) {
           <App icon="map" bg="#12A594" name="Maps" />
         </View>
       </View>
-      <View accessible accessibilityRole="image" accessibilityLabel="Everything else, like videos, games and social apps, drains it." style={styles.rest}>
+      <View accessible accessibilityRole="image" accessibilityLabel="Everything else, like videos, games and social apps, is counted." style={styles.rest}>
         <View style={styles.head}>
           <Text style={styles.name}>Everything else</Text>
-          <View style={styles.drains}>
-            <Icon name="battery" size={18} color={DRAINING} />
-            <Text style={styles.drainsText}>Drains it</Text>
+          <View style={styles.pillOut}>
+            <Text style={[styles.pillText, { color: DRAINING }]}>COUNTED</Text>
           </View>
         </View>
         <View style={styles.apps}>
@@ -146,19 +155,20 @@ export function StoryEssentials({ chosenLater }: { chosenLater: boolean }) {
         </View>
       </View>
       <Text style={styles.motto}>{'Use your phone. Don’t abuse it.'}</Text>
-      {chosenLater ? <Text style={styles.after}>You pick your essentials right after setup.</Text> : null}
+      {chosenLater ? <Text style={styles.after}>You pick them right after setup.</Text> : null}
     </View>
   );
 }
 
 /**
  * The essentials on setup's last screen: the story's three made-up apps,
- * small, marked FREE. The row lies in the iPhone's box and outside
- * Plainlimit's: the iPhone tracks them, Plainlimit never counts them.
+ * small, and "Never counted" in their green. The row lies in the iPhone's
+ * box and outside Plainlimit's: the iPhone tracks them, Plainlimit never
+ * counts them. (It carried a FREE mark in build 169; see StoryEssentials.)
  */
 export function FreeRow() {
   return (
-    <View accessible accessibilityLabel="Essentials are never counted." style={styles.freeRow}>
+    <View accessible accessibilityLabel="Your essential apps are never counted." style={styles.freeRow}>
       <View style={styles.freeTiles}>
         <SmallApp icon="phone" bg="#34C759" />
         <SmallApp icon="message" bg="#2F8BFF" />
@@ -166,14 +176,11 @@ export function FreeRow() {
       </View>
       <View style={styles.freeWords}>
         <Text numberOfLines={1} style={styles.freeName}>
-          Essentials
+          Your essential apps
         </Text>
         <Text numberOfLines={1} style={styles.freeNote}>
           Never counted
         </Text>
-      </View>
-      <View style={styles.pill}>
-        <Text style={styles.pillText}>FREE</Text>
       </View>
     </View>
   );
@@ -251,8 +258,8 @@ const styles = StyleSheet.create({
   name: { flexShrink: 1, fontFamily: display.bold, fontSize: 20, lineHeight: 25, letterSpacing: -0.3, color: c.ink },
   pill: { borderRadius: 11, backgroundColor: FREE, paddingHorizontal: 10, paddingVertical: 3 },
   pillText: { fontSize: 13, lineHeight: 17, fontWeight: '800', letterSpacing: 1, color: c.onTone },
-  drains: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  drainsText: { fontSize: 14, lineHeight: 18, fontWeight: '700', color: DRAINING },
+  // The same mark as an outline, in the draining battery's colour.
+  pillOut: { borderRadius: 11, borderWidth: 1.5, borderColor: DRAINING, paddingHorizontal: 9, paddingVertical: 1.5 },
   apps: { flexDirection: 'row' },
   app: { flex: 1, alignItems: 'center', gap: 7 },
   appIcon: { width: 58, height: 58, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
@@ -262,7 +269,7 @@ const styles = StyleSheet.create({
   smallApp: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   freeWords: { flex: 1 },
   freeName: { fontSize: 15, lineHeight: 19, fontWeight: '600', color: c.ink },
-  freeNote: { fontSize: 13.5, lineHeight: 18, color: c.ink3, marginTop: 2 },
+  freeNote: { fontSize: 13.5, lineHeight: 18, fontWeight: '700', color: FREE, marginTop: 2 },
   motto: { marginTop: 8, fontFamily: display.bold, fontSize: 22, lineHeight: 28, letterSpacing: -0.3, color: c.ink },
   after: { fontSize: 15, lineHeight: 21, color: c.ink3, marginTop: -6 },
   time: { fontFamily: display.bold, fontSize: 52, lineHeight: 56, letterSpacing: -1.6, color: c.ink },
