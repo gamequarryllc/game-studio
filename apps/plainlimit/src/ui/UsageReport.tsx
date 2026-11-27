@@ -167,8 +167,8 @@ export function WakeScreenTime({ settings, now }: { settings: Settings; now: Dat
  *
  * Essentials already chosen are left out of the picture (the report reads
  * them itself, as for "What used it"): the goal is for what will use the
- * battery. Setup no longer asks for them, so this is a phone that chose them
- * under an older setup and never finished it.
+ * battery. Setup offers them two screens before the goal for that reason
+ * (app/setup.tsx); skipped there, the picture is every app, and says so.
  */
 export function SetupFigures({ settings, now, todayLabel }: { settings: Settings; now: Date; todayLabel: string }) {
   'use no memo';

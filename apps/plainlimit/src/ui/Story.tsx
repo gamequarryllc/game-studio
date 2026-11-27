@@ -112,8 +112,8 @@ function App({ icon, bg, name }: { icon: IconName; bg: string; name: string }) {
 /**
  * Screen 2's picture: two boxes in the look of the essentials' own screen.
  * The apps a phone is for, which never drain the battery, and everything
- * else, which does. `chosenLater`: the essentials are picked after setup,
- * from Today (false on a phone that already has some).
+ * else, which does. `chosenLater`: the essentials are picked two screens
+ * on, once Screen Time is allowed (false on a phone that already has some).
  *
  * The word "essentials" is ours, and nobody has been told it yet: the screen
  * was titled "Essentials are free" over a box named "Never drain it" and
@@ -155,7 +155,7 @@ export function StoryEssentials({ chosenLater }: { chosenLater: boolean }) {
         </View>
       </View>
       <Text style={styles.motto}>{'Use your phone. Don’t abuse it.'}</Text>
-      {chosenLater ? <Text style={styles.after}>You pick them right after setup.</Text> : null}
+      {chosenLater ? <Text style={styles.after}>You pick them in a moment.</Text> : null}
     </View>
   );
 }

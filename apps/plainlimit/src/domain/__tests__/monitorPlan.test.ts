@@ -300,12 +300,15 @@ describe('the home screen widget agrees with the app', () => {
     expect(screen).toContain('context={`Setup${hours}`} minus={essentialsPicks()}');
   });
 
-  it('setup has one shape, with nothing to pick (the owner kept it over a draft with an essentials step)', () => {
+  it('setup offers the essentials before the goal, on one screen that can be skipped (the owner on build 169: the goal was picked against all of the phone\'s time)', () => {
     const at = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../../..', file), 'utf8');
     const setup = at('src/app/setup.tsx');
-    // The story's three screens first (what it is, what is not counted, when it comes back), then what setup asks.
-    expect(setup).toContain("const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'free', 'morning', 'access', 'notify', 'goal', 'ready'] : ['welcome', 'free', 'morning', 'notify', 'goal', 'ready'];");
-    expect(setup).not.toContain('Choose essentials');
+    // The story's three screens first (what it is, what is not counted, when it comes back), then what setup asks:
+    // the essentials after access (Apple's list needs it) and before the goal, whose figures leave them out.
+    expect(setup).toContain("const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'free', 'morning', 'access', 'essentials', 'notify', 'goal', 'ready'] : ['welcome', 'free', 'morning', 'essentials', 'notify', 'goal', 'ready'];");
+    // One list, opened from the screen's own button; chosen, setup moves on by itself; and it can be skipped.
+    for (const words of ['const essentials = useEssentials(next);', '<EssentialsSteps e={essentials} mainInFoot />', '<Lead>They never count and never lock.</Lead>', "label: 'Choose essential apps'", "label: 'Skip for now', onPress: next", '{essentials.pickers}']) expect(setup).toContain(words);
+    expect(setup.indexOf("if (step === 'essentials')")).toBeLessThan(setup.indexOf("if (step === 'goal')"));
     // The file that held which draft a test build was on is gone.
     expect(() => at('src/state/setupKind.ts')).toThrow();
   });
@@ -318,7 +321,7 @@ describe('the home screen widget agrees with the app', () => {
     for (const title of ['Your screen time is a battery', 'Your essential apps don&apos;t count', 'Full again every morning']) expect(setup).toContain(title);
     // "Essentials" alone is our word, which a new person has not met (the owner, build 169): the screen says whose apps they are and who picks them.
     expect(setup).not.toContain('<Heading>Essentials are free</Heading>');
-    for (const words of ['>Apps you pick<', '>Everything else<', 'You pick them right after setup.']) expect(story).toContain(words);
+    for (const words of ['>Apps you pick<', '>Everything else<', 'You pick them in a moment.']) expect(story).toContain(words);
     // And "free" did not tell the owner that the time is not counted (the app says "free" for what is not Pro,
     // too): the two boxes say NOT COUNTED and COUNTED, and no screen of setup or card on Today says "free".
     for (const words of ['>NOT COUNTED<', '>COUNTED<']) expect(story).toContain(words);
@@ -340,7 +343,7 @@ describe('the home screen widget agrees with the app', () => {
     expect(setup).not.toContain("'Every app counts.'");
     // The last screen: each figure named for who counts it (the owner on build 168: what the iPhone tracks against
     // what we count), how much of the goal is used, and the essentials in the iPhone's box but outside ours.
-    for (const words of ['>iPhone tracks<', '>Plainlimit counts<', 'left today', '<FreeRow />', 'You pick your essential apps next.']) expect(setup).toContain(words);
+    for (const words of ['>iPhone tracks<', '>Plainlimit counts<', 'left today', '<FreeRow />', 'You can pick your essential apps next.']) expect(setup).toContain(words);
     expect(setup.indexOf('<FreeRow />')).toBeGreaterThan(setup.indexOf('>Plainlimit counts<'));
     for (const words of ['Your essential apps', 'Never counted']) expect(story).toContain(words);
     // Nothing there may say the figure has the essentials taken out: none are chosen yet on a new phone.

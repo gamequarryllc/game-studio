@@ -198,7 +198,7 @@ async function main() {
     await context.close();
   });
 
-  await scenario('setup has nothing to pick: straight from the story to notifications', async () => {
+  await scenario('setup offers the essentials before the goal, and they can be skipped', async () => {
     const { page, context } = await open(null, '?mock=counting,noEssentials');
     await see(page, 'Your screen time is a battery');
     // The test builds' two drafts are gone (the owner kept this one): no switch on the first screen.
@@ -212,9 +212,16 @@ async function main() {
     await see(page, 'Full again every morning');
     await shot(page, 'q04g-setup-morning');
     await page.getByRole('button', { name: 'Next', exact: true }).click();
+    // One screen for the essentials, with its own button and a way past it.
+    await see(page, 'Pick your essential apps');
+    await see(page, 'They never count and never lock.');
+    await see(page, 'Tick what stays open');
+    await page.getByLabel('Step 4 of 7', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Choose essential apps', exact: true }).waitFor();
+    await shot(page, 'q04h-setup-essentials');
+    await page.getByRole('button', { name: 'Skip for now', exact: true }).click();
     await see(page, 'Notifications need to be on');
-    await page.getByLabel('Step 4 of 6', { exact: true }).waitFor();
-    if ((await page.getByText('Your essentials', { exact: true }).count()) > 0) throw new Error('setup asked for essentials');
+    await page.getByLabel('Step 5 of 7', { exact: true }).waitFor();
     await context.close();
   });
 

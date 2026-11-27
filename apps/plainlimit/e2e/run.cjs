@@ -72,7 +72,7 @@ async function main() {
     await shot('00-setup-welcome');
     await press('Next');
     await see('Your essential apps don\'t count');
-    for (const words of ['Apps you pick', 'NOT COUNTED', 'Phone', 'Messages', 'Maps', 'Everything else', 'COUNTED', 'Use your phone. Don’t abuse it.', 'You pick them right after setup.']) await see(words);
+    for (const words of ['Apps you pick', 'NOT COUNTED', 'Phone', 'Messages', 'Maps', 'Everything else', 'COUNTED', 'Use your phone. Don’t abuse it.', 'You pick them in a moment.']) await see(words);
     if ((await page.getByText(/\bfree\b/i).count()) > 0) throw new Error('the second screen still says "free"');
     await shot('00-setup-free');
     await press('Next');
@@ -81,15 +81,19 @@ async function main() {
     await see('A late night never eats into tomorrow.');
     await shot('00-setup-morning');
     await press('Next');
-    // Nothing to pick: no essentials step, and nothing about ticking apps. Everything counts from the start.
-    assert.strictEqual(await page.getByText('Your essentials', { exact: true }).count(), 0, 'setup has no essentials step');
+    // The essentials, before the goal. (Apple's list is a phone's; the preview says so and moves on.)
+    await see('Pick your essential apps');
+    await see('On an iPhone you tick them in Apple\'s own list of your apps. This preview runs on pretend use.');
+    await page.getByLabel('Step 4 of 7', { exact: true }).waitFor();
+    await shot('00-setup-essentials');
+    await press('Next');
     // Notifications, with their reason, where the question used to come cold after the last screen. A phone draws the next screen's chart behind this one.
     await see('Notifications need to be on');
     await see('A warning when you’re nearly out');
     await see('The pop-up to earn more time');
     await see('Nothing else, ever');
     await see('Without them, asking for more time on a locked app does nothing.');
-    await page.getByLabel('Step 4 of 6', { exact: true }).waitFor();
+    await page.getByLabel('Step 5 of 7', { exact: true }).waitFor();
     await shot('00-setup-notify');
     await press('Not now');
     // The goal: what the number is, and what happens at it, as three small pictures.

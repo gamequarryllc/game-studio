@@ -106,15 +106,17 @@ export type JoinsWhen = { day: string; recharge: string };
 
 /**
  * The card. `locked`: the battery is empty, so the essentials can't change (a
- * way round the lock). `when`: when new essentials that wait start.
+ * way round the lock). `mainInFoot`: the screen has its own big button
+ * (setup), so only "change" is drawn here, and quietly. `when`: when new
+ * essentials that wait start (setup has none: there every change is at once).
  */
-export function EssentialsSteps({ e, locked = false, when = null }: { e: Essentials; locked?: boolean; when?: JoinsWhen | null }) {
-  if (e.ready) return <Chosen e={e} locked={locked} when={when} />;
+export function EssentialsSteps({ e, locked = false, mainInFoot = false, when = null }: { e: Essentials; locked?: boolean; mainInFoot?: boolean; when?: JoinsWhen | null }) {
+  if (e.ready) return <Chosen e={e} locked={locked} quiet={mainInFoot} when={when} />;
   return (
     <Card style={{ paddingVertical: 18, gap: 10 }}>
       <Pictures />
       <Warnings e={e} />
-      <BigButton label="Choose essentials" onPress={e.start} />
+      {mainInFoot ? null : <BigButton label="Choose essentials" onPress={e.start} />}
     </Card>
   );
 }
@@ -145,7 +147,7 @@ const JOINING_ICONS = 12;
  * (domain/essentials.ts): a card in outline with their icons, "Joining
  * tomorrow", and that they are counted until then.
  */
-function Chosen({ e, locked, when }: { e: Essentials; locked: boolean; when: JoinsWhen | null }) {
+function Chosen({ e, locked, quiet = false, when }: { e: Essentials; locked: boolean; quiet?: boolean; when: JoinsWhen | null }) {
   const joining = when && e.joining && e.joining.count > 0 ? e.joining : null;
   return (
     <View style={{ gap: 12 }}>
@@ -198,7 +200,7 @@ function Chosen({ e, locked, when }: { e: Essentials; locked: boolean; when: Joi
         </View>
       ) : (
         <View style={{ marginTop: 6 }}>
-          <BigButton label="Change essentials" onPress={e.start} />
+          <BigButton quiet={quiet} label="Change essentials" onPress={e.start} />
         </View>
       )}
     </View>

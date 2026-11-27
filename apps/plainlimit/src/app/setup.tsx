@@ -7,10 +7,10 @@ import { refusalNeedsAlert, refusalWords, type Refusal } from '@/domain/access';
 import { cellWords } from '@/domain/battery';
 import { clockLabel, durationLabel } from '@/domain/day';
 import { askToNotify, openPhoneSettings } from '@/platform/notices';
-import { SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, refusal, wholeWindow } from '@/platform/screenTime';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, askPermission, countSettled, lastReportSince, permission, refusal, wholeWindow } from '@/platform/screenTime';
 import { store } from '@/state/store';
 import { essentialsValue } from '@/ui/countWords';
-import { useEssentials } from '@/ui/EssentialsSteps';
+import { EssentialsSteps, useEssentials } from '@/ui/EssentialsSteps';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { Icon } from '@/ui/icons';
@@ -22,11 +22,11 @@ import { useDay } from '@/ui/useDay';
 import { useNotices } from '@/ui/useNotices';
 
 // The first launch: the story in three screens (what it is, what is not counted,
-// when it comes back; ui/Story.tsx), then Screen Time access, notifications,
-// the goal, and a last check. Access comes before the goal, so the goal
-// screen can show the phone's own figures (today so far, and the last week's
-// average) while the goal is picked; the old order asked for a goal before
-// anything was known, and a quick tap-through could lock every app at once.
+// when it comes back; ui/Story.tsx), then Screen Time access, the essentials,
+// notifications, the goal, and a last check. Access comes before the goal, so
+// the goal screen can show the phone's own figures (today so far, and the last
+// week's average) while the goal is picked; the old order asked for a goal
+// before anything was known, and a quick tap-through could lock every app at once.
 //
 // The story comes first and asks nothing: the owner's friend and cousin, shown
 // build 167, could not say what the app was for or what its numbers were, so
@@ -34,12 +34,17 @@ import { useNotices } from '@/ui/useNotices';
 // (the owner agreed the three and their order, 2026-11-27). It was one screen
 // with four lines.
 //
-// Nothing is picked here: the phone counts everything (domain/tally.ts), so
-// someone who taps straight through ends with a working app, and Today offers
-// the essentials afterwards (ui/EssentialsOffer.tsx). The owner tried this
-// beside a draft with one essentials step (builds 166 and 167) and kept this
-// one: "they get through setup faster and then they get the last step as they
-// get on the main page" (2026-11-26).
+// The essentials are offered before the goal, on one screen that can be
+// skipped. The phone counts everything (domain/tally.ts), so someone who taps
+// straight through still ends with a working app, and Today offers the
+// essentials afterwards (ui/EssentialsOffer.tsx). Builds 168 and 169 had no
+// such screen: the owner had tried one beside none (builds 166 and 167) and
+// kept none, "they get through setup faster and then they get the last step
+// as they get on the main page" (2026-11-26). Then, on build 169, the owner
+// saw what that does to the goal: its chart and average were all of the
+// phone's time, essentials and all, so a goal picked against them is looser
+// than it looks. Chosen first, the essentials are left out of the goal
+// screen's figures, and the last screen shows what will really be counted.
 // (Up to build 165 setup opened Apple's list twice, the first time to tick
 // "All Apps & Categories"; skipping it left nothing counted.)
 //
@@ -57,10 +62,10 @@ import { useNotices } from '@/ui/useNotices';
 // already past the goal, starting is not the main button: tomorrow is.
 // Everything here can be changed later in Settings.
 
-type Step = 'welcome' | 'free' | 'morning' | 'access' | 'notify' | 'goal' | 'ready';
+type Step = 'welcome' | 'free' | 'morning' | 'access' | 'essentials' | 'notify' | 'goal' | 'ready';
 
 /** The screens, in order: the story's three, then what setup asks. Where there is no Screen Time (the preview) there is no access to ask for. */
-const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'free', 'morning', 'access', 'notify', 'goal', 'ready'] : ['welcome', 'free', 'morning', 'notify', 'goal', 'ready'];
+const STEPS: Step[] = SCREEN_TIME_AVAILABLE ? ['welcome', 'free', 'morning', 'access', 'essentials', 'notify', 'goal', 'ready'] : ['welcome', 'free', 'morning', 'essentials', 'notify', 'goal', 'ready'];
 
 /**
  * How the last screen waits for the phone's report of the day so far: until
@@ -102,8 +107,8 @@ export default function Setup() {
   const next = () => setAt((i) => Math.min(STEPS.length - 1, i + 1));
   const approved = access === 'approved';
   const canPick = SCREEN_TIME_AVAILABLE && approved;
-  // Setup doesn't ask for the essentials; this is for a phone that already has some (chosen under an older setup that was never finished).
-  const essentials = useEssentials();
+  // Once the essentials are saved, setup moves on by itself.
+  const essentials = useEssentials(next);
   // Everything counts from the start, so the phone's figures need nothing picked.
   const figures = canPick;
   // Only a phone with access can count; anywhere else the last screen is a summary.
@@ -234,6 +239,28 @@ export default function Setup() {
     if (asked && !approved) secondary = { label: 'Skip for now', onPress: next };
   }
 
+  if (step === 'essentials') {
+    // Apple's list opens once, for the essentials alone. Skipping is safe: everything counts until they are chosen, and Today offers them again.
+    const showPick = canPick || MOCK_PHONE;
+    body = (
+      <>
+        <Heading>{essentials.ready ? 'Your essential apps' : 'Pick your essential apps'}</Heading>
+        {essentials.ready ? null : <Lead>They never count and never lock.</Lead>}
+        {showPick ? (
+          <EssentialsSteps e={essentials} mainInFoot />
+        ) : SCREEN_TIME_AVAILABLE ? (
+          <Text style={styles.note}>You can pick them once Screen Time is allowed, on Today. Until then every app counts.</Text>
+        ) : (
+          <Text style={styles.note}>On an iPhone you tick them in Apple&apos;s own list of your apps. This preview runs on pretend use.</Text>
+        )}
+      </>
+    );
+    if (showPick && !essentials.ready) {
+      primary = { label: 'Choose essential apps', onPress: canPick ? essentials.start : next };
+      secondary = { label: 'Skip for now', onPress: next };
+    }
+  }
+
   if (step === 'notify') {
     // Needed, and said so: without notifications the empty screen's "I need more time" leads nowhere (the owner, 2026-11-22).
     body = (
@@ -266,8 +293,8 @@ export default function Setup() {
   // phone has a head start. Once asked for they stay for the rest of setup,
   // parked on the other screens, so Back and Next don't ask the phone to draw
   // them again: on build 127 the second drawing never came (the owner). They
-  // take in every app but essentials already chosen, which the phone's picture
-  // leaves out by itself (UsageReport.tsx, SetupFigures). Parked, they are drawn in full
+  // take in every app but the essentials chosen two screens back, which the
+  // phone's picture leaves out by itself (UsageReport.tsx, SetupFigures). Parked, they are drawn in full
   // under the screen in front (`cover`), not made clear: a clear view might
   // never be drawn, and the head start would be lost without a sign.
   const recharge = clockLabel(settings.rechargeMinute);
@@ -409,7 +436,7 @@ export default function Setup() {
         ) : over ? (
           <Lead>{`You\u2019ve used more than ${durationLabel(settings.goalMinutes)} since ${recharge}, so starting now would lock ${essentials.kept > 0 ? 'everything but your essentials' : 'your apps'} until ${recharge}.`}</Lead>
         ) : !essentials.ready ? (
-          <Text style={styles.next}>You pick your essential apps next.</Text>
+          <Text style={styles.next}>You can pick your essential apps next.</Text>
         ) : null}
       </>
     );
@@ -478,6 +505,7 @@ export default function Setup() {
           </Pressable>
         ) : null}
       </View>
+      {essentials.pickers}
       {/* Until the goal screen's own figures are asked for; never both at once. */}
       {canPick && !figuresShown ? <WakeScreenTime settings={settings} now={now} /> : null}
     </View>
