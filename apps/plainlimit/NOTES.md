@@ -241,7 +241,7 @@ Done in the owner's developer account on 2026-11-11, by the owner's conversation
 | `com.gamequarry.plainlimit.ShieldAction` | buttons on the screens over apps | App Groups, Family Controls (Development and Distribution) |
 | `com.gamequarry.plainlimit.ShieldConfiguration` | the look of the screens over apps | App Groups, Family Controls (Development and Distribution) |
 | `com.gamequarry.plainlimit.widget` | the home screen widget | App Groups |
-| `com.gamequarry.plainlimit.report` | the usage report on Today (added 2026-11-11) | Family Controls (Development and Distribution) |
+| `com.gamequarry.plainlimit.report` | the usage report on Today (added 2026-11-11) | Family Controls (Development and Distribution); App Groups asked for by the build from 167 (2026-11-26), to read the essentials |
 | `group.com.gamequarry.plainlimit` | the App Group all five share | (assigned to all five) |
 
 The app record "Plainlimit" (iOS, English (U.S.), SKU `plainlimit`) was created in App Store Connect the same day, which also holds the name.
@@ -623,7 +623,7 @@ What it does to the rest:
 - **Second thought** has its own list, covers and timers and is not changed. Time in one of its apps uses the battery as before, unless the app is an essential. It shares the phone's patience for timers with the essentials: about 96 more thresholds on a day with essentials, which no phone has yet been asked for alongside it.
 - **Passes and earned time** work through the same "not before" and top-up as before. A pass raises the goal, which starts a new round and so clears the day's done marks.
 - **The "Warn" level** (red screen, then tap through) still shows its red screen once a day, whichever rung brings it.
-- **"What used it" and setup's seven-day chart include the essentials.** Apple's report can be filtered to a list or left on everything, never "everything but these", and the report extension cannot read the essentials (no App Group; adding one means new provisioning for that App ID). A line under the list says so.
+- **"What used it" leaves the essentials out (from build 167); setup's seven-day chart still includes them.** Apple's report can be filtered to a list or left on everything, never "everything but these". Build 166 listed every app with a line saying so, and the owner, with Messages an essential and 8 minutes of it in the list, took it for counted ("the whole point is it doesn't count against your battery"). So the report extension now has the App Group and reads the essentials in force itself (`Essentials` in `targets/report/PlainlimitReport.swift`: the library's saved picks, id `plkeep`), and the list the app asks for with essentials chosen ("BatteryApps") skips them. If the phone will not let the extension read them, the list has every app and writes the old line itself. The App Group is new on the report's identifier (`com.gamequarry.plainlimit.report`): see "Registered with Apple".
 - **Today's "used" figure** is the phone's exact total with no essentials, and the app's stepped figure with them.
 - **Setup mid-day counts everything since the recharge**, essentials too until they are chosen, so "Already past your goal" on the last screen is likelier than it was.
 
@@ -634,3 +634,9 @@ Not known until a phone has run it (the readout has "Everything timer: at least 
 3. Whether iOS keeps delivering with the extra thresholds, and with Second thought's on top.
 
 If this ships: the App Review notes and the listing describe choosing apps in two steps and want rewording, and the screenshots of setup change.
+
+Build 166 on the owner's phone (2026-11-26, 10:34 PM, goal 3:00, Messages and FaceTime as essentials, picked from Today's card after setup 3). The owner: setup "was easier". The readout: "Everything timer: at least 90 min", "Essentials timer: at least 5 min", "Used: 80 min of 180"; both timers' reports for the new round came within five seconds of registering (the everything timer's at :13 and :14, the essentials' `k1` to `k5` at :15). So the everything timer delivers like the old one, the essentials' ladder delivers, and the battery is the one less the other. Not yet seen: a lock, a day's drift between the timers, the figure against the iPhone's own total.
+
+Two things tightened after it (build 167), both so an essential's minutes can never come back as use:
+- **A new round waits for the essentials' own reports** (`roundSettled`): with essentials, the old figure stands until one of their rungs is in for the new round, or a minute has passed with none. On the owner's phone the everything timer's reports came a second or two before the essentials'; read in that gap, the day looked like everything.
+- **No floor is taken while a registration is settling** (`figureSure` in tally.ts): a figure read in that gap and kept as the day's floor would have kept the essentials counted until the recharge.

@@ -281,6 +281,31 @@ describe('replaying real days', () => {
     expect(input(old, clock(15, 1))).toBe(0);
   });
 
+  it('the first essentials: the old figure stands until their own reports are in, so their minutes never look used', () => {
+    const clock = november(14);
+    const dayStart = clock(6);
+    // Everything counted until 3 PM (90 minutes, 8 of them in Messages). Then Messages becomes an essential.
+    const before: Rounds = { round: 'b', roundBefore: 'a', goalBefore: 180, picksChangedAt: clock(15), kept: true };
+    const old = [report('cell-1', 'a', clock(9)), report('cell-2', 'a', clock(12)), report('cell-3', 'a', clock(14))];
+    const count = (reports: Report[], now: number) => countDay({ reports, goalMinutes: 180, dayStart, rounds: before, guard: null, now, registeredAt: clock(15) });
+    // The phone re-reports the day: the everything timer's reports first.
+    const everything = [...old, report('cell-1', 'b', clock(15, 0, 2)), report('cell-2', 'b', clock(15, 0, 2)), report('cell-3', 'b', clock(15, 0, 3))];
+    // Quiet for five seconds, and still nothing from the essentials' timer: not settled, the old figure stands.
+    expect(roundSettled(everything, before, dayStart, clock(15, 0, 8))).toBe(false);
+    expect(count(everything, clock(15, 0, 8))).toBe(90);
+    // Their reports come: two quiet seconds later the figure is everything less the essentials (8 minutes: under the 10 rung).
+    const both = [...everything, report('k1', 'b', clock(15, 0, 9)), report('k5', 'b', clock(15, 0, 9))];
+    expect(roundSettled(both, before, dayStart, clock(15, 0, 10))).toBe(false);
+    expect(roundSettled(both, before, dayStart, clock(15, 0, 11))).toBe(true);
+    expect(count(both, clock(15, 0, 11))).toBe(80);
+    // Essentials that used nothing today report nothing: the new round takes over after a minute.
+    expect(roundSettled(everything, before, dayStart, clock(15, 0, 59))).toBe(false);
+    expect(roundSettled(everything, before, dayStart, clock(15, 1))).toBe(true);
+    expect(count(everything, clock(15, 1))).toBe(90);
+    // With no essentials nothing waits on them.
+    expect(roundSettled(everything, { ...before, kept: false }, dayStart, clock(15, 0, 8))).toBe(true);
+  });
+
   it('a finished day is closed from reports before its end', () => {
     const clock = november(12);
     const dayStart = clock(6);

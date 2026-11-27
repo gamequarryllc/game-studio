@@ -5,7 +5,7 @@
  * cannot disagree about a report.
  */
 
-import { believable, checkpointsFor, minuteTicksFor, picksSettled, roundName, splitName, type Checkpoint, type Guard, type Mark, type Pace } from './checkpoints';
+import { PICKS_WAIT_MS, believable, checkpointsFor, minuteTicksFor, picksSettled, roundName, splitName, type Checkpoint, type Guard, type Mark, type Pace } from './checkpoints';
 import { keptRungs, overRungs, usedKnown } from './tally';
 
 /** A report as the phone keeps it: the checkpoint's registered name (with its round) and when it came. */
@@ -23,17 +23,29 @@ export interface Rounds {
   goalBefore: number;
   /** When the ticked apps last changed, which starts a new round. */
   picksChangedAt: number;
+  /** Whether the day is registered with essentials, whose own timer reports beside the everything timer (tally.ts). */
+  kept?: boolean;
 }
 
 /**
  * Whether the phone has finished reporting the day for the current round
  * (`picksSettled`). Just after the ticked apps change it hasn't, and the
  * figure is still the previous round's.
+ * With essentials the day comes as two sets of reports, the everything
+ * timer's and the essentials' own, in no order. With only the first in, the
+ * essentials' minutes would look used. So the round is not settled until an
+ * essentials' report is in too, or a minute has passed with none (they used
+ * nothing today).
  */
 export function roundSettled(reports: readonly Report[], rounds: Rounds, dayStart: number, now: number): boolean {
   if (rounds.picksChangedAt < dayStart) return true;
-  const fresh = reports.filter((r) => splitName(r.name).round === rounds.round).map((r) => r.at);
-  return picksSettled(now, rounds.picksChangedAt, fresh.length > 0 ? Math.max(...fresh) : null);
+  const fresh = reports.filter((r) => splitName(r.name).round === rounds.round);
+  if (rounds.kept === true && now - rounds.picksChangedAt < PICKS_WAIT_MS) {
+    const rungs = new Set(keptRungs().map((rung) => rung.id));
+    if (!fresh.some((r) => rungs.has(splitName(r.name).id))) return false;
+  }
+  const times = fresh.map((r) => r.at);
+  return picksSettled(now, rounds.picksChangedAt, times.length > 0 ? Math.max(...times) : null);
 }
 
 /**

@@ -255,6 +255,28 @@ describe('the home screen widget agrees with the app', () => {
     expect(patch).toContain(`if activity == "${TICKS_ACTIVITY}" || activity == "${KEPT_ACTIVITY}" || activity.hasPrefix("plask") { return false }`);
     expect(patch).toContain(`if activity == "${OVER_ACTIVITY}" {`);
   });
+
+  it('"what used it" leaves the essentials out: the report reads them where the app saves them', () => {
+    const at = (file: string) => require('fs').readFileSync(require('path').join(__dirname, '../../..', file), 'utf8');
+    const report = at('targets/report/PlainlimitReport.swift');
+    // The essentials in force, under the library's own key, in the App Group the report is now let into.
+    expect(at('src/platform/screenTime.ts')).toContain("export const ESSENTIALS_ID = 'plkeep';");
+    expect(report).toContain('shared.dictionary(forKey: "familyActivitySelectionIds")');
+    expect(report).toContain('saved["plkeep"] as? String');
+    const group = '"appGroup": "group.com.gamequarry.plainlimit"';
+    expect(at('app.json')).toContain(group);
+    expect(report).toContain('private let appGroup = "group.com.gamequarry.plainlimit"');
+    expect(at('targets/report/expo-target.config.js')).toContain("'com.apple.security.application-groups': ['group.com.gamequarry.plainlimit']");
+    // The list the app asks for with essentials chosen, and the one without.
+    expect(report).toContain('static let batteryApps = Self("BatteryApps")');
+    expect(report).toContain('TopAppsReport(context: .batteryApps, lessEssentials: true)');
+    expect(report).toContain('TopAppsReport(context: .topApps, lessEssentials: false)');
+    const screen = at('src/ui/UsageReport.tsx');
+    expect(screen).toContain("context={window.exact ? 'TopApps' : 'BatteryApps'}");
+    // A change of essentials draws the list again.
+    expect(at('modules/plainlimit-widgets/ios/PlainlimitWidgetsModule.swift')).toContain('Prop("minus")');
+    expect(screen).toContain('minus={window.exact ? null : essentialsPicks()}');
+  });
 });
 
 describe('the plan with essentials: everything, less their minutes (tally.ts)', () => {

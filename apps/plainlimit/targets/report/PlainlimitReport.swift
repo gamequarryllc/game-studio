@@ -7,6 +7,9 @@ import SwiftUI
 // The pictures the app asks for, all as Apple's Screen Time counts:
 //   TopApps  the "what used it" list: the apps that used the most time since the
 //            battery last recharged.
+//   BatteryApps
+//            the same list when essentials are chosen: they use no battery,
+//            so they are left out of it (see `Essentials`).
 //   Total    the day's figure: every minute the counted apps have been used
 //            since the recharge, to the minute, added up app by app. The app
 //            itself only learns use in steps, so this is the exact number the
@@ -38,10 +41,45 @@ struct AppUse: Identifiable {
 struct UsageSummary {
   let apps: [AppUse]
   let more: Int
+  /// Essentials are chosen, and could not be left out of the list: it says so.
+  let essentialsToo: Bool
+}
+
+/// The App Group the app and its extensions share (app.json).
+private let appGroup = "group.com.gamequarry.plainlimit"
+
+/// The essentials in force today. They use no battery, so "what used it"
+/// leaves them out (the owner, build 166: Messages, an essential, stood in the
+/// list and looked counted). Apple's report can be asked for every app or for
+/// a list, never "every app but these", so this box reads the essentials
+/// itself, from where the app saves them for the phone: the shared store, the
+/// library's "familyActivitySelectionIds", id "plkeep". It may read there and
+/// nothing more; it still cannot save or send anything.
+/// Empty when none are chosen, and when the phone would not let this box read
+/// them: then nothing can be left out.
+struct Essentials {
+  var apps: Set<ApplicationToken> = []
+  var categories: Set<ActivityCategoryToken> = []
+
+  var empty: Bool { return apps.isEmpty && categories.isEmpty }
+
+  static func now() -> Essentials {
+    var out = Essentials()
+    guard let shared = UserDefaults(suiteName: appGroup),
+      let saved = shared.dictionary(forKey: "familyActivitySelectionIds"),
+      let text = saved["plkeep"] as? String,
+      let data = Data(base64Encoded: text),
+      let picked = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
+    else { return out }
+    out.apps = picked.applicationTokens
+    out.categories = picked.categoryTokens
+    return out
+  }
 }
 
 extension DeviceActivityReport.Context {
   static let topApps = Self("TopApps")
+  static let batteryApps = Self("BatteryApps")
   static let total = Self("Total")
   static let setup4 = Self("Setup4")
   static let setup6 = Self("Setup6")
@@ -87,7 +125,10 @@ func durationWords(_ seconds: TimeInterval) -> String {
 }
 
 struct TopAppsReport: DeviceActivityReportScene {
-  let context: DeviceActivityReport.Context = .topApps
+  let context: DeviceActivityReport.Context
+  /// The app's word that essentials are chosen (it asks for "BatteryApps"
+  /// then, "TopApps" otherwise): they are left out of the list.
+  let lessEssentials: Bool
   let content: (UsageSummary) -> TopAppsView
 
   func makeConfiguration(representing data: DeviceActivityResults<DeviceActivityData>) async
@@ -95,11 +136,14 @@ struct TopAppsReport: DeviceActivityReportScene {
     var seconds: [String: TimeInterval] = [:]
     var tokens: [String: ApplicationToken] = [:]
     var names: [String: String] = [:]
+    let kept = lessEssentials ? Essentials.now() : Essentials()
 
     for await device in data {
       for await segment in device.activitySegments {
         for await category in segment.categories {
+          if let whole = category.category.token, kept.categories.contains(whole) { continue }
           for await app in category.applications {
+            if let one = app.application.token, kept.apps.contains(one) { continue }
             let key =
               app.application.bundleIdentifier ?? app.application.localizedDisplayName ?? "unknown"
             seconds[key, default: 0] += app.totalActivityDuration
@@ -117,7 +161,7 @@ struct TopAppsReport: DeviceActivityReportScene {
       .map { AppUse(id: $0.key, token: tokens[$0.key], name: names[$0.key] ?? "An app", seconds: $0.value) }
       .sorted { $0.seconds > $1.seconds }
     let top = Array(all.prefix(5))
-    return UsageSummary(apps: top, more: max(0, all.count - top.count))
+    return UsageSummary(apps: top, more: max(0, all.count - top.count), essentialsToo: lessEssentials && kept.empty)
   }
 }
 
@@ -126,6 +170,14 @@ struct TopAppsView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
+      if summary.essentialsToo {
+        // Only when the essentials could not be read here, so every app is in the list.
+        Text("Every app is listed, your essentials too. Essentials don't use the battery.")
+          .font(.system(size: 14))
+          .foregroundStyle(quiet)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.bottom, 6)
+      }
       if summary.apps.isEmpty {
         Text("Nothing has used any time yet.")
           .font(.system(size: 16))
@@ -602,7 +654,10 @@ struct WholeView: View {
 @main
 struct PlainlimitReport: DeviceActivityReportExtension {
   var body: some DeviceActivityReportScene {
-    TopAppsReport { summary in
+    TopAppsReport(context: .topApps, lessEssentials: false) { summary in
+      TopAppsView(summary: summary)
+    }
+    TopAppsReport(context: .batteryApps, lessEssentials: true) { summary in
       TopAppsView(summary: summary)
     }
     TotalReport { seconds in

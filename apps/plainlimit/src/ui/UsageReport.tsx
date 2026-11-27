@@ -4,7 +4,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import type { Settings } from '@/domain/types';
-import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, pickupWindow, reportWindow, setupWindow, wholeWindow } from '@/platform/screenTime';
+import { MOCK_PHONE, SCREEN_TIME_AVAILABLE, STORE_SHOTS, essentialsPicks, pickupWindow, reportWindow, setupWindow, wholeWindow } from '@/platform/screenTime';
 import { Label } from '@/ui/kit';
 import { durationLabel } from '@/domain/day';
 import { useReducedMotion } from '@/ui/motion';
@@ -15,8 +15,10 @@ interface NativeProps {
   fromMs: number;
   toMs: number;
   selection: string | null;
-  /** Which of the extension's reports: the list, or the day's total. */
-  context?: 'TopApps' | 'Total' | `Setup${WeekHours}` | 'FirstApps' | 'Whole';
+  /** Which of the extension's reports: the list (with essentials chosen, the one that leaves them out), or the day's total. */
+  context?: 'TopApps' | 'BatteryApps' | 'Total' | `Setup${WeekHours}` | 'FirstApps' | 'Whole';
+  /** The essentials the "BatteryApps" list leaves out. The report reads them itself; handed over so a change of them draws the list again. */
+  minus?: string | null;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -24,30 +26,35 @@ interface NativeProps {
 const NativeReport = SCREEN_TIME_AVAILABLE ? requireNativeView<NativeProps>('PlainlimitWidgets') : null;
 
 /**
- * "What used it": the apps that have used the most time since the battery
+ * "What used it": the apps that have used the most battery since it
  * recharged. Apple's Screen Time draws the list inside this box; Plainlimit
- * only says which hours and which apps, and never sees what is drawn.
+ * only says which hours, and never sees what is drawn.
+ * Essentials use no battery, so with some chosen the list asked for is the
+ * one that leaves them out ("BatteryApps"). The phone's list can be asked for
+ * every app or for a list of apps, never "every app but these", so the report
+ * reads the essentials itself; if the phone will not let it, it lists every
+ * app and says so (build 166 listed them all: Messages, an essential, stood
+ * in the list and the owner took it for counted).
  * Draws nothing in a browser or in Expo Go, but for the preview's "?mock="
  * stand-in, which shows the box as it is before the phone has drawn.
  */
 export function UsageReport({ settings, now }: { settings: Settings; now: Date }) {
+  'use no memo';
   // The App Store screenshots leave out the box, which only a phone can fill.
   if (!NativeReport && (!MOCK_PHONE || STORE_SHOTS)) return null;
   const window = reportWindow(settings, now);
   return (
     <View style={{ gap: 10 }}>
       <Label>What used it</Label>
-      {/* The phone's list can be asked for every app or for a list of apps, never "every app but these", so the essentials are in it. */}
-      {NativeReport && !window.exact ? <Text style={{ fontSize: 14, lineHeight: 20, color: c.ink3 }}>Every app is listed, your essentials too. Essentials don&apos;t use the battery.</Text> : null}
       {/* Nothing in the list can be tapped; touches pass to the screen behind so it still scrolls under a finger. */}
-      {/* Sized for five rows, "and N more apps" and up to four lines of note (330 cut the note's third line); it is last on Today, so spare room is only extra scroll at the end. */}
-      <View pointerEvents="none" style={{ height: 420, alignSelf: 'stretch' }}>
+      {/* Sized for five rows, "and N more apps" and up to four lines of note (330 cut the note's third line), and with essentials for the two lines the list writes when it could not leave them out; it is last on Today, so spare room is only extra scroll at the end. */}
+      <View pointerEvents="none" style={{ height: NativeReport && !window.exact ? 470 : 420, alignSelf: 'stretch' }}>
         {/* Shows through only until the phone has drawn the list over it. */}
         <View style={{ position: 'absolute', top: 14, left: 0, right: 0 }}>
           <Text style={{ fontSize: 16, lineHeight: 22, color: c.ink3 }}>Waiting for the phone&apos;s Screen Time to draw the list…</Text>
           <WaitingDots size={8} height={28} />
         </View>
-        {NativeReport ? <NativeReport fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} /> : null}
+        {NativeReport ? <NativeReport context={window.exact ? 'TopApps' : 'BatteryApps'} minus={window.exact ? null : essentialsPicks()} fromMs={window.fromMs} toMs={window.toMs} selection={window.selection} style={{ flex: 1 }} /> : null}
         {/* The list is drawn by another process, which would otherwise be handed every touch on it; this almost clear sheet is the app's own and lies on top. */}
         <View collapsable={false} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.02)' }} />
       </View>

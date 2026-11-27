@@ -79,6 +79,18 @@ export function keptCeiling(known: number): number {
  */
 export const SETTLE_MS = 60_000;
 
+/**
+ * Whether the day's figure can be held to (a floor, reports.ts): with
+ * essentials, only once the reports of the last registration are all in. For
+ * a moment the everything timer's can be in without the essentials' own, and
+ * the essentials' minutes look used; a floor taken then would keep them
+ * counted for the rest of the day. `quietMs` is the wait after the last
+ * report (checkpoints.ts, PICKS_QUIET_MS).
+ */
+export function figureSure(withEssentials: boolean, now: number, registeredAt: number, quietMs: number): boolean {
+  return !withEssentials || now - registeredAt >= SETTLE_MS + quietMs;
+}
+
 /** The moment a report is weighed against the essentials' reports: its own, or the end of the settling after a registration. */
 export function weighedAt(at: number, registeredAt: number): number {
   return registeredAt > 0 && at >= registeredAt && at <= registeredAt + SETTLE_MS ? registeredAt + SETTLE_MS : at;

@@ -3,11 +3,11 @@ import { Platform } from 'react-native';
 import * as DeviceActivity from 'react-native-device-activity';
 import type { Action, ShieldAction, ShieldActions, ShieldConfiguration } from 'react-native-device-activity';
 
-import { GUARD_MS, guardFor, paceRules, roundName, splitName, mostByNow, type Noted } from '@/domain/checkpoints';
+import { GUARD_MS, PICKS_QUIET_MS, guardFor, paceRules, roundName, splitName, mostByNow, type Noted } from '@/domain/checkpoints';
 import { countDay, doubtful, everythingCounted, keptCounted, miscounted, roundSettled, roundStanding, withFloor, type DayInput, type Report, type Rounds } from '@/domain/reports';
 import { nextRecharge, periodStart as periodStartOf } from '@/domain/day';
 import { essentialsAtRecharge, withEssentials, type EssentialsChange, type Lists } from '@/domain/essentials';
-import { SETTLE_MS, overRungs, type Tally } from '@/domain/tally';
+import { SETTLE_MS, figureSure, overRungs, type Tally } from '@/domain/tally';
 import {
   ACTIVITY,
   COUNTED_ID,
@@ -1042,6 +1042,10 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
     else if (fresh) forget('holdUntil');
     // The picks changed since the day was last registered (a recharge can start a waiting goal and waiting essentials together).
     const picksMoved = picksChangedAt() > registeredAt();
+    // With essentials, the day's figure is only sure once the reports of the last registration are all in:
+    // the everything timer's can come before the essentials' own, and for that moment the essentials'
+    // minutes look used (tally.ts, SETTLE_MS). A floor taken then would keep them counted all day.
+    const sure = figureSure(hasEssentials(), now.getTime(), registeredAt(), PICKS_QUIET_MS);
     save('registeredAt', now.getTime());
     // A different goal gives the same checkpoint names other minutes, and a
     // different recharge time counts them from another moment.
@@ -1053,11 +1057,11 @@ async function registerPlan(settings: Settings, topUpsSoFar: number, fresh: bool
       // Only the goal moved: today's use stays what it is now while the phone re-reports the day for the new goal (Floor).
       // Not when the picks moved too: a new essential honestly takes off what it used.
       const day = dayStartOf(periodStartOf(now, settings.rechargeMinute)).getTime();
-      const floor = goalMoved && !rechargeMoved && !picksMoved ? usedSoFar(lastGoal, periodStartOf(now, settings.rechargeMinute)) : null;
+      const floor = goalMoved && !rechargeMoved && !picksMoved && sure ? usedSoFar(lastGoal, periodStartOf(now, settings.rechargeMinute)) : null;
       startRound(now, lastGoal > 0 ? lastGoal : settings.goalMinutes);
       if (floor !== null && floor > 0) save('roundFloor', { round: round(), dayStart: day, minutes: floor });
       else forget('roundFloor');
-    } else if (!fresh && !picksMoved && isOn() && hasEssentials()) {
+    } else if (!fresh && !picksMoved && isOn() && hasEssentials() && sure) {
       // Nothing moved, and the phone is about to re-report the day with fresh times. With essentials the figure
       // rests on which report came before which (tally.ts), so re-reported all at once it can come out a rung or
       // two lower. The day's use is no less than it is known to be now (Floor).
@@ -1222,7 +1226,7 @@ function phoneReports(activities: string[] = COUNTING): Report[] {
 
 /** The day's rounds of checkpoint names, as saved on the phone. */
 function rounds(): Rounds {
-  return { round: round(), roundBefore: readString('roundBefore'), goalBefore: readNumber('roundGoalBefore'), picksChangedAt: picksChangedAt() };
+  return { round: round(), roundBefore: readString('roundBefore'), goalBefore: readNumber('roundGoalBefore'), picksChangedAt: picksChangedAt(), kept: hasEssentials() };
 }
 
 /**

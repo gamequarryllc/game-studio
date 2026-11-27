@@ -2,7 +2,7 @@ import { checkpointsFor, minuteTicksFor, roundName, type Mark } from '../checkpo
 import { monitorPlan, type PlanAction, type PlanEvent } from '../monitorPlan';
 import { countDay, everythingCounted, keptCounted, type Report, type Rounds } from '../reports';
 import { DEFAULT_SETTINGS } from '../settings';
-import { KEPT_ACTIVITY, KEPT_MINUTES, OVER_ACTIVITY, SETTLE_MS, hasRoom, keptBy, keptCeiling, keptRungs, overRungs, usedKnown, weighedAt } from '../tally';
+import { KEPT_ACTIVITY, KEPT_MINUTES, OVER_ACTIVITY, SETTLE_MS, figureSure, hasRoom, keptBy, keptCeiling, keptRungs, overRungs, usedKnown, weighedAt } from '../tally';
 import type { Settings } from '../types';
 
 // Counting everything, less the essentials (tally.ts): the rule itself, and
@@ -70,6 +70,22 @@ describe('the most the essentials can have used', () => {
 describe('the minutes known to be used', () => {
   const at = (minute: number) => Date.UTC(2026, 10, 27, 12, 0) + minute * MIN;
   const mark = (minutes: number, minute: number): Mark => ({ minutes, at: at(minute) });
+
+  it('a figure read while the day is still being re-reported is not held to: two hours of an essential must not come back as use', () => {
+    // Two hours in Maps, an essential, and 40 minutes of everything else. The day is registered again at minute 300
+    // and the phone re-reports it: the everything timer's 160 arrives a moment before the essentials' 120.
+    const registered = at(300);
+    const everything = [mark(160, 300.05)];
+    // Read in that moment, the essentials' minutes look used. This is the figure that must not be kept as a floor.
+    expect(usedKnown(everything, [], registered)).toBe(160);
+    expect(figureSure(true, at(300.06), registered, 2000)).toBe(false);
+    expect(figureSure(true, registered + SETTLE_MS + 1999, registered, 2000)).toBe(false);
+    // Once the settling is over the essentials' reports are in, and the figure is the one to hold to.
+    expect(figureSure(true, registered + SETTLE_MS + 2000, registered, 2000)).toBe(true);
+    expect(usedKnown(everything, [mark(120, 300.07)], registered)).toBe(25);
+    // With no essentials there is one timer and nothing to wait for.
+    expect(figureSure(false, at(300.06), registered, 2000)).toBe(true);
+  });
 
   it('with no essentials is the everything timer\'s highest report, as the count always was', () => {
     expect(usedKnown([mark(20, 30), mark(60, 90), mark(40, 50)], [], 0)).toBe(60);

@@ -41,6 +41,9 @@ public class PlainlimitWidgetsModule: Module {
       Prop("context") { (view: UsageReportView, value: String?) in
         view.context = value ?? "TopApps"
       }
+      Prop("minus") { (view: UsageReportView, value: String?) in
+        view.minus = value
+      }
     }
   }
 }
@@ -56,6 +59,10 @@ class UsageReportView: ExpoView {
   var selection: String? { didSet { if !UsageReportView.samePicks(selection, oldValue) { refresh() } } }
   /// Which report: "TopApps" (the list) or "Total" (the day's figure).
   var context: String = "TopApps" { didSet { if context != oldValue { refresh() } } }
+  /// The essentials, which the "BatteryApps" list leaves out. The report reads
+  /// them for itself (it cannot be handed "every app but these"); they are
+  /// here only so that a change of essentials draws the list again.
+  var minus: String? { didSet { if !UsageReportView.samePicks(minus, oldValue) { refresh() } } }
 
   private var host: UIHostingController<AnyView>?
 
