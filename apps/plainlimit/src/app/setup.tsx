@@ -17,7 +17,7 @@ import { TopLight } from '@/ui/GlowBattery';
 import { BigButton, Card, StepButton } from '@/ui/kit';
 import { c, display } from '@/ui/theme';
 import { NotifyPicture, NotifyStory } from '@/ui/NotifyStep';
-import { EssentialsDock, GoalStory, HeroBattery, heroHeight, StoryBattery, StoryEssentials, StoryMorning, inTheMorning } from '@/ui/Story';
+import { EssentialsDock, HeroBattery, StoryBattery, StoryEssentials, StoryMorning, inTheMorning } from '@/ui/Story';
 import { SetupFigures, TodayTotal, WHOLE, WakeScreenTime, WholeTotal } from '@/ui/UsageReport';
 import { WaitingDots } from '@/ui/Waiting';
 import { useDay } from '@/ui/useDay';
@@ -102,16 +102,6 @@ const BAR = 50;
 
 /** From the top bar to a screen's first thing. */
 const UNDER_BAR = 8;
-
-/**
- * The goal screen on a phone, without its battery: the title (38), the stepper (66), the three small pictures (57),
- * the figures' name (24), the phone's picture (262), the line under it (20), and the gaps between and after them
- * (four of 10, two of 6, 10 at the end), with a few points to spare. What is left of the screen is the battery's.
- */
-const GOAL_REST = 537;
-
-/** The button at the foot, and the room over it. */
-const FOOT = 66;
 
 /** The light from the top of the page: the battery's green, a little towards the sea (#41C896). */
 const WALLPAPER = '65, 200, 150';
@@ -359,7 +349,7 @@ export default function Setup() {
         pointerEvents={step === 'goal' ? 'auto' : 'none'}
         accessibilityElementsHidden={step !== 'goal'}
         importantForAccessibility={step === 'goal' ? 'auto' : 'no-hide-descendants'}
-        style={[styles.figureBox, step === 'goal' ? styles.figureBoxClose : null, step === 'goal' ? null : [styles.parked, { top: bar + UNDER_BAR }]]}>
+        style={[styles.figureBox, step === 'goal' ? null : [styles.parked, { top: bar + UNDER_BAR }]]}>
         {/*
           What the figures are, said over them. They are everything the phone has been used for: no essentials are
           chosen yet, and Plainlimit has counted nothing before today. The owner, on build 169 with a daily average
@@ -377,43 +367,51 @@ export default function Setup() {
       </View>
     ) : null;
 
+  // The goal's stepper, at the foot of the goal screen, over "Next" (see below).
+  let stepper: ReactNode = null;
+
   if (step === 'goal') {
-    // The goal comes first, over the chart, so it can be picked at once while
-    // the phone is still drawing (the owner, build 144). With the phone's
-    // figures under it: today and the daily average, then the last seven days
-    // as bars with their times against the goal's line, which the stepper
-    // moves (the owner picked the bars from five drafts, build 115, and asked
-    // for the times and figures back, build 120). Without them, the words.
+    // One thing to do here: pick the number, against the phone's own last seven days where it has them (today so
+    // far and the daily average, then the days as bars with the goal's line across, which the stepper moves; the
+    // owner picked the bars from five drafts, build 115, and asked for the times and figures back, build 120).
     //
-    // What the number is, is said by the title and by three small pictures
-    // under it: that much use, then the apps lock, then they are back at the
-    // recharge time (GoalStory). It was "How much a day?" over "Moves the
-    // line", and the owner's friend asked "how much what?" (build 167).
-    // On a phone the figures and the chart are on this screen too, and all of it should be in view at once (the goal
-    // is picked against the chart). So there the number is a little smaller, the gaps are closer (`close`), and the
-    // battery takes the room that is left: full size on a tall phone, never under 0.55 of it (a short phone scrolls).
-    const fullBattery = heroHeight(window.width);
-    const room = window.height - (bar + UNDER_BAR) - (FOOT + footBottom) - GOAL_REST - (essentials.kept > 0 ? 0 : 18);
-    const goalScale = figures ? Math.max(0.55, Math.min(1, room / fullBattery)) : 1;
+    // What the number is, is said by the title and by one line under it, with the person's own number in it: that
+    // much use, then the apps lock until the recharge time. It was "How much a day?" over "Moves the line", and
+    // the owner's friend asked "how much what?" (build 167); then three small pictures said it (builds 168 to 173).
+    //
+    // Build 173 put a large battery and those pictures over the figures and the chart, with the stepper at the top.
+    // The owner: "this screen feels like a lot. It's a lot of stimulating on one screen", and the minus and plus
+    // "at the top ... makes me have to like pivot my thumb up on top of the phone, where it'd be easier if it was
+    // at the bottom of the screen". So the battery and the pictures are gone from the phone's screen (the three
+    // screens before it are theirs), and the stepper sits at the foot, in the thumb's reach, right under the chart
+    // whose line it moves. The goal can still be picked at once, while the phone is drawing (the owner, build 144).
+    const goal = durationLabel(settings.goalMinutes);
     head = (
       <>
         <Heading>Daily screen time</Heading>
-        {figures ? null : <Lead>Pick a little under a normal day. You can change it later.</Lead>}
-        <View style={styles.stepper}>
-          <StepButton filled sign="−" label="Less time" size={figures ? 50 : 54} onPress={() => store.stepGoal(-1)} />
-          <Text numberOfLines={1} adjustsFontSizeToFit accessibilityLabel={`Daily screen time, ${durationLabel(settings.goalMinutes)}`} style={[styles.big, figures ? styles.bigClose : null, { color: full }]}>
-            {durationLabel(settings.goalMinutes)}
-          </Text>
-          <StepButton filled sign="+" label="More time" size={figures ? 50 : 54} onPress={() => store.stepGoal(1)} />
-        </View>
-        {/* The goal as the battery it fills: Today's battery, full, with one cell's length in its first cell. */}
-        <View accessible accessibilityRole="image" accessibilityLabel={`A full battery: six cells of ${cellWords(settings.goalMinutes)} each`}>
-          <HeroBattery cells={CELLS} color={full} first={cellShort(settings.goalMinutes)} reach={64} strength={0.8} scale={goalScale} />
-        </View>
-        {figures ? null : <Text style={styles.note}>{`Six cells of ${cellWords(settings.goalMinutes)} each`}</Text>}
-        {/* The recharge time is not asked here: everyone starts at 6 AM, and changing it is Pro, in Settings (the owner, build 99). */}
-        <GoalStory goal={durationLabel(settings.goalMinutes)} recharge={recharge} />
+        {/* One line on every phone ("your apps" took it to two on most, with "AM." alone on the second); the time and its AM stay together if large type wraps it. */}
+        <Lead>{`${goal} of use, then apps lock until ${recharge.replace(' ', '\u00A0')}.`}</Lead>
+        {figures ? null : (
+          <>
+            {/* Without the phone's figures there is room for the goal as the battery it fills: Today's battery, full, with one cell's length in its first cell. */}
+            <View accessible accessibilityRole="image" accessibilityLabel={`A full battery: six cells of ${cellWords(settings.goalMinutes)} each`} style={{ marginTop: 6 }}>
+              <HeroBattery cells={CELLS} color={full} first={cellShort(settings.goalMinutes)} reach={64} strength={0.8} />
+            </View>
+            <Text style={styles.note}>{`Six cells of ${cellWords(settings.goalMinutes)} each`}</Text>
+            <Text style={styles.note}>Pick a little under a normal day. You can change it later.</Text>
+          </>
+        )}
       </>
+    );
+    // The recharge time is not asked here: everyone starts at 6 AM, and changing it is Pro, in Settings (the owner, build 99).
+    stepper = (
+      <View style={styles.stepper}>
+        <StepButton filled sign="−" label="Less time" size={56} onPress={() => store.stepGoal(-1)} />
+        <Text numberOfLines={1} adjustsFontSizeToFit accessibilityLabel={`Daily screen time, ${goal}`} style={[styles.big, { color: full }]}>
+          {goal}
+        </Text>
+        <StepButton filled sign="+" label="More time" size={56} onPress={() => store.stepGoal(1)} />
+      </View>
     );
   }
 
@@ -518,13 +516,11 @@ export default function Setup() {
             <Text style={[styles.countsNote, { textAlign: 'right', marginTop: 21 }]}>{everything}</Text>
           </View>
         </View>
-        <EssentialsDock kept={essentials.ready ? essentials.kept : 0} picks={essentials.picks} />
+        {/* Over the dock, which can be several rows tall: the wait must be in view. */}
         {phase === 'reading' ? <ReadingBar colour={accent} /> : null}
-        {phase === 'reading' ? (
-          <Lead>Reading today so far. Nothing locks yet.</Lead>
-        ) : phase === 'failed' || over ? null : !essentials.ready ? (
-          <Text style={styles.next}>You can pick your essential apps next.</Text>
-        ) : null}
+        {phase === 'reading' ? <Lead>Reading today so far. Nothing locks yet.</Lead> : null}
+        <EssentialsDock kept={essentials.ready ? essentials.kept : 0} picks={essentials.picks} />
+        {phase === 'ready' && !over && !essentials.ready ? <Text style={styles.next}>You can pick your essential apps next.</Text> : null}
       </>
     );
     if (phase === 'failed') {
@@ -560,7 +556,7 @@ export default function Setup() {
     <View style={{ flex: 1, backgroundColor: c.ground }}>
       <ScrollView
         ref={scroller}
-        contentContainerStyle={[styles.body_, { paddingTop: bar + UNDER_BAR }, step === 'goal' && figures ? styles.close : null]}
+        contentContainerStyle={[styles.body_, { paddingTop: bar + UNDER_BAR }]}
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}>
@@ -590,6 +586,7 @@ export default function Setup() {
         </View>
       </View>
       <View style={[styles.foot, { paddingBottom: footBottom }]}>
+        {stepper}
         <BigButton tone={full} label={primary.label} onPress={primary.onPress} />
         {secondary ? (
           <Pressable
@@ -673,8 +670,6 @@ const styles = StyleSheet.create({
   dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: 'rgba(255,255,255,0.28)' },
   dotDone: { backgroundColor: '#FFFFFF' },
   body_: { paddingHorizontal: 24, paddingBottom: 24, gap: 14 },
-  // The goal screen on a phone, where the phone's figures and chart share the screen.
-  close: { gap: 10, paddingBottom: 10 },
   heading: { fontFamily: display.bold, fontSize: 34, lineHeight: 38, letterSpacing: -0.6, color: c.ink },
   // Setup's last word, as large as Today's.
   giant: { fontFamily: display.bold, fontSize: 64, lineHeight: 68, letterSpacing: -2, marginTop: 2 },
@@ -688,11 +683,10 @@ const styles = StyleSheet.create({
   warn: { fontSize: 15, lineHeight: 21, fontWeight: '600', color: '#FF7B6B' },
   refused: { alignSelf: 'stretch', borderWidth: 1.5, borderColor: '#F79200', borderRadius: 14, padding: 12, gap: 4 },
   refusedTitle: { fontSize: 15, lineHeight: 20, fontWeight: '700', color: '#F7B24D' },
-  stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  big: { flexShrink: 1, fontFamily: display.bold, fontSize: 76, lineHeight: 80, letterSpacing: -2.8, color: c.ink, fontVariant: ['tabular-nums'], textAlign: 'center' },
-  bigClose: { fontSize: 62, lineHeight: 66, letterSpacing: -2.2 },
+  stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  // The goal, between its minus and plus at the foot of the goal screen.
+  big: { flexShrink: 1, fontFamily: display.bold, fontSize: 56, lineHeight: 60, letterSpacing: -2, color: c.ink, fontVariant: ['tabular-nums'], textAlign: 'center' },
   figureBox: { gap: 12 },
-  figureBoxClose: { gap: 6 },
   figuresHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', columnGap: 12 },
   figuresName: { fontFamily: display.bold, fontSize: 20, lineHeight: 24, letterSpacing: -0.2, color: c.ink },
   figuresNote: { fontSize: 13, lineHeight: 18, color: c.ink3 },
