@@ -233,13 +233,14 @@ export const SETUP = { labelHeight: 16, figureTop: 20, figureGap: 12, weekLabelT
 const setup = StyleSheet.create({
   row: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', gap: SETUP.figureGap },
   half: { flex: 1 },
-  label: { fontSize: 13, lineHeight: SETUP.labelHeight, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: c.ink3 },
+  // In plain words, not small capitals: setup's new look has no capital labels (the owner, 2026-11-27).
+  label: { fontSize: 13, lineHeight: SETUP.labelHeight, fontWeight: '500', color: c.ink3 },
   chart: { position: 'absolute', left: 0, right: 0, top: SETUP.chartTop, height: WEEK.height },
   // The chart's own line of labels: what it shows on the left, the key to its shading on the right.
   weekRow: { position: 'absolute', left: 0, right: 0, height: SETUP.labelHeight, flexDirection: 'row', alignItems: 'center', gap: 10 },
   key: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  swatch: { width: 12, height: 12, borderRadius: 3, backgroundColor: 'rgba(255,123,107,0.45)' },
-  keyText: { fontSize: 12, lineHeight: SETUP.labelHeight, fontWeight: '700', color: '#FF7B6B' },
+  swatch: { width: 10, height: 10, borderRadius: 5, backgroundColor: 'rgba(255,123,107,0.6)' },
+  keyText: { fontSize: 13, lineHeight: SETUP.labelHeight, fontWeight: '500', color: '#FF7B6B' },
 });
 
 /** Rough heights for the stand-in bars, as parts of the chart. */

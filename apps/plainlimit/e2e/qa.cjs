@@ -174,7 +174,7 @@ async function main() {
     await page.getByText('Until you choose, every app uses your battery.', { exact: true }).waitFor({ state: 'visible', timeout: 8000 });
     // Apple's list opens once, for the essentials alone: nothing asks for "All Apps" any more.
     await see(page, 'Tick what stays open');
-    await see(page, 'Codes');
+    await see(page, 'WhatsApp');
     await see(page, 'Everything else uses your battery');
     if ((await page.getByText(/All Apps|Tick All/).count()) > 0) throw new Error('the old first list is still drawn');
     if (await page.getByRole('button', { name: 'Choose essentials', exact: true }).isDisabled()) throw new Error('"Choose essentials" is not open');
@@ -206,7 +206,7 @@ async function main() {
     await shot(page, 'q04e-setup-welcome');
     // The story's three screens (what it is, what is not counted, when it comes back), each a tap.
     await page.getByRole('button', { name: 'Next', exact: true }).click();
-    await see(page, 'Your essential apps don\'t count');
+    await see(page, 'Your essential apps don’t count');
     await shot(page, 'q04f-setup-free');
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await see(page, 'Full again every morning');
@@ -477,7 +477,7 @@ async function main() {
     ]) {
       const { page, context } = await open(saved);
       // Either setup (nothing usable was saved) or Today: never a blank screen.
-      await page.getByText(/Your screen time is a battery|Plenty left|Today/).first().waitFor({ state: 'visible', timeout: 8000 });
+      await page.getByText(/Your screen time\s+is a battery|Plenty left|Today/).first().waitFor({ state: 'visible', timeout: 8000 });
       await shot(page, `q17-broken-${name}`);
       await context.close();
     }

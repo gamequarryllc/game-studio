@@ -82,3 +82,46 @@ export function GlowField({ color, width, centre, reach, strength = 1 }: { color
     </View>
   );
 }
+
+/**
+ * The same soft light, centred on a battery that is not at the top of a page
+ * (setup's screens): laid behind it in a box `width` by `height` (the
+ * battery's own), `span` across (the screen) and gone `reach` points above
+ * and below the battery's middle. It is not clipped, so it lies over the
+ * margins around it too. Nothing the phone draws may sit inside `reach`: its
+ * pictures have the plain ground behind them, and would show as boxes.
+ */
+export function GlowHalo({ color, width, height, span, reach, strength = 1 }: { color: string; width: number; height: number; span: number; reach: number; strength?: number }) {
+  const rings = 30;
+  return (
+    <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={{ position: 'absolute', top: 0, left: 0, width, height }}>
+      {Array.from({ length: rings }, (_, i) => {
+        const k = 1 - (i / rings) * 0.88; // 1 for the widest ring
+        const w = span * 1.5 * k;
+        const h = reach * 2 * k;
+        return <View key={i} style={{ position: 'absolute', left: (width - w) / 2, top: (height - h) / 2, width: w, height: h, borderRadius: h / 2, backgroundColor: color, opacity: 0.0085 * strength }} />;
+      })}
+    </View>
+  );
+}
+
+/**
+ * A soft light from the top of a page, gone `reach` points down: one smooth
+ * picture, laid over the page. `rgb` is the light's colour as "r, g, b".
+ *
+ * Not rings, as the lights above are: this one is fainter than a ring can be.
+ * Thirty rings at half a percent each round away to nothing, or to the wrong
+ * colour, on a screen of 256 levels; one gradient is worked out once.
+ */
+export function TopLight({ rgb, width, reach, strength = 0.17 }: { rgb: string; width: number; reach: number; strength?: number }) {
+  const at = (part: number) => `rgba(${rgb}, ${Math.round(strength * part * 1000) / 1000})`;
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      aria-hidden
+      style={{ position: 'absolute', top: 0, left: 0, width, height: reach, backgroundImage: `radial-gradient(ellipse 130% 100% at 50% 0%, ${at(1)} 0%, ${at(0.42)} 50%, ${at(0)} 100%)` }}
+    />
+  );
+}

@@ -318,19 +318,22 @@ describe('the home screen widget agrees with the app', () => {
     const setup = at('src/app/setup.tsx');
     const story = at('src/ui/Story.tsx');
     // The story: one thing a screen, in the order the owner agreed, with the owner's own line for the essentials.
-    for (const title of ['Your screen time is a battery', 'Your essential apps don&apos;t count', 'Full again every morning']) expect(setup).toContain(title);
+    // (Each title breaks where it reads best, so the first two are written with their line break.)
+    for (const title of ['Your screen time\\nis a battery', 'Your essential apps\\ndon\\u2019t count', 'Full again every morning']) expect(setup).toContain(title);
     // "Essentials" alone is our word, which a new person has not met (the owner, build 169): the screen says whose apps they are and who picks them.
     expect(setup).not.toContain('<Heading>Essentials are free</Heading>');
-    for (const words of ['>Apps you pick<', '>Everything else<', 'You pick them in a moment.']) expect(story).toContain(words);
+    for (const words of ['note="Apps you pick"', 'note="Everything else"', 'You pick them in a moment.']) expect(story).toContain(words);
     // And "free" did not tell the owner that the time is not counted (the app says "free" for what is not Pro,
-    // too): the two boxes say NOT COUNTED and COUNTED, and no screen of setup or card on Today says "free".
-    for (const words of ['>NOT COUNTED<', '>COUNTED<']) expect(story).toContain(words);
+    // too): the two kinds of app say "Not counted" and "Counted", and no screen of setup or card on Today says "free".
+    // (In small capitals on two boxes up to build 172; the owner's pick of a new look for setup has neither.)
+    for (const words of ['title="Not counted"', 'title="Counted"']) expect(story).toContain(words);
+    for (const words of ['>NOT COUNTED<', '>COUNTED<']) expect(story).not.toContain(words);
     expect(story).not.toContain('>FREE<');
     expect(setup).not.toContain('are free</Heading>');
     expect(at('src/ui/EssentialsOffer.tsx')).not.toMatch(/^\s*Keep your essentials free$/m);
     expect(at('src/ui/EssentialsOffer.tsx')).toContain('Pick your essential apps');
     expect(at('src/app/(tabs)/settings.tsx')).not.toContain("'always free'");
-    expect(story).toContain('Use your phone. Don\u2019t abuse it.');
+    expect(story).toContain('Use your phone.\\nDon\u2019t abuse it.');
     // The goal screen: a title that says what the number is, and what happens at it, as three small pictures.
     expect(setup).toContain('<Heading>Daily screen time</Heading>');
     expect(setup).not.toContain('<Heading>How much a day?</Heading>');
@@ -342,9 +345,9 @@ describe('the home screen widget agrees with the app', () => {
     expect(setup.indexOf('{figuresName}')).toBeLessThan(setup.indexOf('<SetupFigures '));
     expect(setup).not.toContain("'Every app counts.'");
     // The last screen: each figure named for who counts it (the owner on build 168: what the iPhone tracks against
-    // what we count), how much of the goal is used, and the essentials in the iPhone's box but outside ours.
-    for (const words of ['>iPhone tracks<', '>Plainlimit counts<', "'Used today'", '<FreeRow kept={essentials.ready ? essentials.kept : 0} picks={essentials.picks} />', 'You can pick your essential apps next.']) expect(setup).toContain(words);
-    expect(setup.indexOf('<FreeRow ')).toBeGreaterThan(setup.indexOf('>Plainlimit counts<'));
+    // what we count), how much of the goal is used, and the essentials under both, in a dock of their own.
+    for (const words of ['iPhone tracks\n', 'Plainlimit counts\n', '`used today of ${durationLabel(settings.goalMinutes)}`', '<EssentialsDock kept={essentials.ready ? essentials.kept : 0} picks={essentials.picks} />', 'You can pick your essential apps next.']) expect(setup).toContain(words);
+    expect(setup.indexOf('<EssentialsDock ')).toBeGreaterThan(setup.indexOf('<WholeTotal '));
     // What the owner's recording of build 170 showed. The figure is the phone's exact one, drawn over Plainlimit's
     // own in the same type as on Today (0:15 stood here between 0:25 on the goal screen and 0:25 on Today), and
     // nothing is written that would need the exact figure, which the app cannot read.
@@ -353,7 +356,7 @@ describe('the home screen widget agrees with the app', () => {
     const type = (file: string, name: string) => /fontSize: (\d+), lineHeight: (\d+), letterSpacing: (-?[\d.]+)/.exec(file.slice(file.indexOf(`  ${name}: {`)))?.slice(1, 4).join(' ');
     expect(type(setup, 'partValue')).toBe(type(at('src/app/(tabs)/index.tsx'), 'used'));
     // The row of essentials draws the person's own icons once some are chosen (it drew three made-up ones).
-    for (const words of ['<AppIcons selection={picks} count={kept} columns={6} limit={6} label="Your essential apps" />', 'if (kept > 0) {']) expect(story).toContain(words);
+    for (const words of ['<AppIcons selection={picks} count={kept} columns={6} limit={6} label="Your essential apps" />', '{kept > 0 ? (']) expect(story).toContain(words);
     // And after Apple's list closes, the essentials screen says it is saving instead of offering the same buttons again.
     for (const words of ['if (essentials.saving) {', "label: 'Saving\\u2026'"]) expect(setup).toContain(words);
     expect(at('src/ui/EssentialsSteps.tsx')).toContain('onClosing={() => setSaving(true)}');

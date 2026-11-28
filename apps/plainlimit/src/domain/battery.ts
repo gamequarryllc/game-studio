@@ -33,6 +33,16 @@ export function cellMinutes(goalMinutes: number): number {
   return goalMinutes / CELLS;
 }
 
+/** One cell's length, short enough to stand inside the cell: "45m", "17½m", "1h", "1h15". */
+export function cellShort(goalMinutes: number): string {
+  const each = goalMinutes / 6;
+  const minutes = (m: number) => (m === Math.floor(m) ? String(m) : `${Math.floor(m)}½`);
+  if (each < 60) return `${minutes(each)}m`;
+  const hours = Math.floor(each / 60);
+  const rest = each - hours * 60;
+  return rest === 0 ? `${hours}h` : `${hours}h${minutes(rest)}`;
+}
+
 /** "30 minutes", "17 and a half minutes", "1 hour". */
 export function cellWords(goalMinutes: number): string {
   const each = goalMinutes / 6;

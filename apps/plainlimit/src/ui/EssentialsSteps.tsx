@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Text, View } from 'react-native';
 
 import { ESSENTIALS_LIMIT, ESSENTIALS_PICK_ID, essentialsBefore, essentialsChosen, essentialsCount, essentialsJoining, essentialsPicks } from '@/platform/screenTime';
@@ -7,6 +6,7 @@ import { store } from '@/state/store';
 
 import { AppIcons } from './AppIcons';
 import { AppPicker } from './AppPicker';
+import { HomeApp, type BrandName } from './BrandApp';
 import { GlowBattery } from './GlowBattery';
 import { CHOOSE_HOW, ESSENTIALS_LOCKED, OTHERS_LABEL, essentialsLabel, joinsLabel, joinsLine, joinsTitle, tooManyKept } from './countWords';
 import { Icon } from './icons';
@@ -118,11 +118,20 @@ export type JoinsWhen = { day: string; recharge: string };
  */
 export function EssentialsSteps({ e, locked = false, mainInFoot = false, when = null }: { e: Essentials; locked?: boolean; mainInFoot?: boolean; when?: JoinsWhen | null }) {
   if (e.ready) return <Chosen e={e} locked={locked} quiet={mainInFoot} when={when} />;
+  // Setup's screens have no boxes (build 173): there the picture stands on the page itself.
+  if (mainInFoot) {
+    return (
+      <View style={{ gap: 10, marginTop: 6 }}>
+        <Pictures />
+        <Warnings e={e} />
+      </View>
+    );
+  }
   return (
     <Card style={{ paddingVertical: 18, gap: 10 }}>
       <Pictures />
       <Warnings e={e} />
-      {mainInFoot ? null : <BigButton label="Choose essentials" onPress={e.start} />}
+      <BigButton label="Choose essentials" onPress={e.start} />
     </Card>
   );
 }
@@ -242,25 +251,30 @@ const glow = {
 
 /**
  * Apple's list in a few words and a small picture: few people read a
- * paragraph in setup (the owner, build 107). A handful of example essentials,
- * then Apple's round ✓ at the top right of its list ("Done" before iOS 26).
- * Read out as one sentence.
+ * paragraph in setup (the owner, build 107). Eight apps as on a home screen,
+ * the ones to keep open ticked green and the ones that eat the day left
+ * with an empty ring; then Apple's round ✓ at the top right of its list
+ * ("Done" before iOS 26). Read out as one sentence.
+ *
+ * Up to build 172 the examples were six small labelled chips with plain
+ * symbols (Messages, Phone, Maps, Bank, Codes, Music). The owner found
+ * made-up icons "look bad" (2026-11-27), so these look like the apps
+ * themselves (BrandApp.tsx); a bank and a codes app have no one icon, and
+ * gave way to WhatsApp.
  */
 function Pictures() {
   return (
-    <View accessible accessibilityLabel={CHOOSE_HOW} style={{ gap: 14 }}>
+    <View accessible accessibilityLabel={CHOOSE_HOW} style={{ gap: 16 }}>
       <Text style={pic.title}>Tick what stays open</Text>
-      <View style={pic.chips}>
-        {EXAMPLES.map((x) => (
-          <View key={x.name} style={pic.chip}>
-            <View style={[pic.icon, { backgroundColor: x.bg }]}>
-              <SymbolView name={x.symbol} size={15} tintColor={x.fg} type="monochrome" fallback={<View style={[pic.dot, { backgroundColor: x.fg }]} />} />
-            </View>
-            <Text style={pic.chipText}>{x.name}</Text>
+      <View style={{ gap: 14 }}>
+        {EXAMPLES.map((row) => (
+          <View key={row[0].name} style={pic.row}>
+            {row.map((x) => (
+              <HomeApp key={x.name} name={x.name} size={58} ticked={x.ticked} />
+            ))}
           </View>
         ))}
       </View>
-      <View style={pic.rule} />
       <View style={pic.allRow}>
         <Text style={pic.thenText}>Then tap</Text>
         {/* Apple's round blue ✓ at the top right of its list (iOS 26; "Done" before). */}
@@ -269,37 +283,44 @@ function Pictures() {
         </View>
         <Text style={[pic.thenText, { flex: 1 }]}>at the top</Text>
       </View>
-      <Text style={pic.restText}>Everything else uses your battery</Text>
+      <View style={pic.restRow}>
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" aria-hidden style={{ width: 84 }}>
+          <GlowBattery cells={3} color={DRAINING} height={32} />
+        </View>
+        <Text style={pic.restText}>Everything else uses your battery</Text>
+      </View>
     </View>
   );
 }
 
-/** Apps people often keep open, as examples: plain symbols, not the apps' own icons. */
-const EXAMPLES: { name: string; symbol: SymbolViewProps['name']; bg: string; fg: string }[] = [
-  { name: 'Messages', symbol: 'message.fill', bg: '#34C759', fg: '#FFFFFF' },
-  { name: 'Phone', symbol: 'phone.fill', bg: '#34C759', fg: '#FFFFFF' },
-  { name: 'Maps', symbol: 'mappin', bg: '#E4F2DE', fg: '#F0483E' },
-  { name: 'Bank', symbol: 'building.columns.fill', bg: '#2F74EB', fg: '#FFFFFF' },
-  { name: 'Codes', symbol: 'key.fill', bg: '#3F4246', fg: '#FFFFFF' },
-  { name: 'Music', symbol: 'music.note', bg: '#F5405E', fg: '#FFFFFF' },
+/** Two rows of a home screen: apps people often keep open, ticked, and three that are left to the battery. */
+const EXAMPLES: { name: BrandName; ticked: boolean }[][] = [
+  [
+    { name: 'messages', ticked: true },
+    { name: 'phone', ticked: true },
+    { name: 'maps', ticked: true },
+    { name: 'whatsapp', ticked: true },
+  ],
+  [
+    { name: 'music', ticked: true },
+    { name: 'instagram', ticked: false },
+    { name: 'youtube', ticked: false },
+    { name: 'tiktok', ticked: false },
+  ],
 ];
 
 /** The blue of the ✓ in Apple's list. */
 const APPLE_BLUE = '#0A84FF';
 
 const pic = {
-  title: { fontFamily: display.bold, fontSize: 22, lineHeight: 27, letterSpacing: -0.3, color: c.ink },
-  allRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  thenText: { fontSize: 16, lineHeight: 21, fontWeight: '600', color: c.ink },
-  restText: { fontSize: 15, lineHeight: 20, color: c.ink3 },
-  rule: { height: 1, backgroundColor: c.rule },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, borderRadius: 18, backgroundColor: c.raised, paddingLeft: 5, paddingRight: 12 },
-  chipText: { fontSize: 15, fontWeight: '500', color: c.ink },
-  icon: { width: 26, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 9, height: 9, borderRadius: 5 },
-  doneMark: { width: 32, height: 32, borderRadius: 16, backgroundColor: APPLE_BLUE, alignItems: 'center', justifyContent: 'center' },
-  doneTick: { fontSize: 16, lineHeight: 20, fontWeight: '800', color: '#FFFFFF' },
+  title: { fontFamily: display.bold, fontSize: 19, lineHeight: 24, letterSpacing: -0.2, color: FREE },
+  row: { flexDirection: 'row', justifyContent: 'space-between' },
+  allRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  thenText: { fontFamily: display.bold, fontSize: 21, lineHeight: 28, letterSpacing: -0.2, color: c.ink },
+  restRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  restText: { flex: 1, fontSize: 15, lineHeight: 20, color: c.ink3 },
+  doneMark: { width: 30, height: 30, borderRadius: 15, backgroundColor: APPLE_BLUE, alignItems: 'center', justifyContent: 'center' },
+  doneTick: { fontSize: 15, lineHeight: 19, fontWeight: '800', color: '#FFFFFF' },
 } as const;
 
 const warn = { fontSize: 15, lineHeight: 21, color: '#F79200' } as const;

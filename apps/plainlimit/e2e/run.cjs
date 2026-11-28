@@ -71,8 +71,10 @@ async function main() {
     for (const moment of ['Full', 'Running low', 'Apps lock']) await see(moment);
     await shot('00-setup-welcome');
     await press('Next');
-    await see('Your essential apps don\'t count');
-    for (const words of ['Apps you pick', 'NOT COUNTED', 'Phone', 'Messages', 'Maps', 'Everything else', 'COUNTED', 'Use your phone. Don’t abuse it.', 'You pick them in a moment.']) await see(words);
+    await see('Your essential apps don’t count');
+    // No boxes and no small capitals since build 173: the two kinds of app are pictures, each beside its word.
+    for (const words of ['Apps you pick', 'Not counted', 'Everything else', 'Counted', 'Use your phone. Don’t abuse it.', 'You pick them in a moment.']) await see(words);
+    if ((await page.getByText(/^(NOT COUNTED|COUNTED)$/).count()) > 0) throw new Error('the second screen still has its capital labels');
     if ((await page.getByText(/\bfree\b/i).count()) > 0) throw new Error('the second screen still says "free"');
     await shot('00-setup-free');
     await press('Next');

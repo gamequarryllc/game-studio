@@ -1,4 +1,4 @@
-import { CELLS, cellWords, cellsLeft, fractionUsed, wordFor } from '../battery';
+import { CELLS, cellShort, cellWords, cellsLeft, fractionUsed, wordFor } from '../battery';
 import { checkpointsFor, picksSettled, roundName, splitName, finalWarningMinutes, isPlausible, minuteTicksFor, mostByNow, tickStepMinutes, usedFloor } from '../checkpoints';
 import { GROUND, accentOnDark, contrast, glowAt, glowForCells, oklchToHex, toneAt, toneForCells } from '../tone';
 
@@ -191,5 +191,13 @@ describe('cell sizes in words', () => {
     expect(cellWords(405)).toBe('1 h 7½ min');
     expect(cellWords(720)).toBe('2 hours');
     for (let goal = 30; goal <= 720; goal += 15) expect(cellWords(goal)).not.toMatch(/:|NaN|undefined/);
+  });
+
+  it('says a cell briefly enough to stand inside it', () => {
+    expect(cellShort(30)).toBe('5m');
+    expect(cellShort(195)).toBe('32½m');
+    expect(cellShort(270)).toBe('45m');
+    expect(cellShort(360)).toBe('1h');
+    expect(cellShort(450)).toBe('1h15');
   });
 });

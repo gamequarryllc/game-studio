@@ -65,7 +65,7 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 }
 
 /** The main action on a screen: light on the dark ground. */
-export function BigButton({ label, onPress, quiet = false, disabled = false }: { label: string; onPress: () => void; quiet?: boolean; disabled?: boolean }) {
+export function BigButton({ label, onPress, quiet = false, disabled = false, tone }: { label: string; onPress: () => void; quiet?: boolean; disabled?: boolean; /** Filled with this colour instead (setup's green), under dark words in the display type. */ tone?: string }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -75,14 +75,14 @@ export function BigButton({ label, onPress, quiet = false, disabled = false }: {
         tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.big, quiet ? styles.bigQuiet : null, pressed ? { opacity: 0.75 } : null, disabled ? { opacity: 0.4 } : null]}>
-      <Text style={[styles.bigText, quiet ? { color: c.ink } : null]}>{label}</Text>
+      style={({ pressed }) => [styles.big, quiet ? styles.bigQuiet : null, tone && !quiet ? { backgroundColor: tone } : null, pressed ? { opacity: 0.75 } : null, disabled ? { opacity: 0.4 } : null]}>
+      <Text style={[styles.bigText, quiet ? { color: c.ink } : null, tone && !quiet ? styles.bigToneText : null]}>{label}</Text>
     </Pressable>
   );
 }
 
 /** A round minus or plus. */
-export function StepButton({ sign, label, onPress, size = 48, disabled = false }: { sign: '−' | '+'; label: string; onPress: () => void; size?: number; disabled?: boolean }) {
+export function StepButton({ sign, label, onPress, size = 48, disabled = false, filled = false }: { sign: '−' | '+'; label: string; onPress: () => void; size?: number; disabled?: boolean; /** A soft filled round, with no outline (setup). */ filled?: boolean }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -94,7 +94,10 @@ export function StepButton({ sign, label, onPress, size = 48, disabled = false }
         tap();
         onPress();
       }}
-      style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, borderWidth: 1.5, borderColor: c.outline, backgroundColor: pressed ? c.raised : 'transparent', alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.35 : 1 }]}>
+      style={({ pressed }) => [
+        { width: size, height: size, borderRadius: size / 2, borderWidth: 1.5, borderColor: c.outline, backgroundColor: pressed ? c.raised : 'transparent', alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.35 : 1 },
+        filled ? { borderWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(255,255,255,0.18)', backgroundColor: pressed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.12)' } : null,
+      ]}>
       <Text style={{ color: c.ink, fontSize: size * 0.5, lineHeight: size * 0.6, fontWeight: '400' }}>{sign}</Text>
     </Pressable>
   );
@@ -274,6 +277,7 @@ const styles = StyleSheet.create({
   big: { minHeight: 58, borderRadius: 29, backgroundColor: c.paper, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
   bigQuiet: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: c.outline },
   bigText: { fontSize: 17, fontWeight: '600', color: c.onPaper },
+  bigToneText: { fontFamily: display.bold, fontSize: 18, fontWeight: undefined, color: c.onTone },
   row: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   rowSub: { fontSize: 13.5, lineHeight: 18, color: c.ink3 },
   pro: { borderRadius: 6, paddingVertical: 1, paddingHorizontal: 6, backgroundColor: '#F2C656' },
