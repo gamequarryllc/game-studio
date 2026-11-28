@@ -1,11 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import { CELLS } from '@/domain/battery';
 import { glowForCells } from '@/domain/tone';
 
 import { AppIcons } from './AppIcons';
-import { BrandApp, FREE, LOCKED, TickedApp, type BrandName } from './BrandApp';
+import { BrandApp, FREE, TickedApp, type BrandName } from './BrandApp';
 import { GlowBattery, GlowHalo } from './GlowBattery';
 import { Icon } from './icons';
 import { useReducedMotion } from './motion';
@@ -26,8 +26,9 @@ import { c, display } from './theme';
 // past. Nothing else is told here: what an empty battery does, sums, passes
 // and Pro are met when they matter.
 //
-// The goal screen's own three small pictures (GoalStory) say the same thing
-// once more, with the person's own number in it.
+// The goal screen says the same thing once more in one line, with the
+// person's own number in it (app/setup.tsx). Up to build 173 it was three
+// small pictures there (GoalStory); the owner found that screen "a lot".
 
 //
 // The look (build 173): the owner found build 172's setup "very ai slopped
@@ -58,11 +59,6 @@ function usePage(): { span: number; inner: number } {
 /** Today's battery height for a battery `width` wide: 342 across is 128 tall. */
 function heightFor(width: number): number {
   return Math.round(Math.min(128, width * 0.375));
-}
-
-/** How tall HeroBattery stands at full size on a screen `windowWidth` wide. */
-export function heroHeight(windowWidth: number): number {
-  return heightFor(Math.min(windowWidth, 480) - 48);
 }
 
 /**
@@ -253,9 +249,12 @@ export function StoryEssentials({ chosenLater }: { chosenLater: boolean }) {
  * 169; see StoryEssentials.)
  *
  * `kept` and `picks`: the essentials chosen two screens back, drawn as their
- * own icons, six at most, the last one "+N" (AppIcons). Build 170 drew the
+ * own icons, every one of them, six to a row (AppIcons). Build 170 drew the
  * story's three example apps here whatever had been chosen, and the owner,
- * who had just ticked four others, was shown Phone, Messages and Maps. The
+ * who had just ticked four others, was shown Phone, Messages and Maps. Up to
+ * build 173 it was one row of six, the last one "+N"; the owner, with
+ * fifteen picked, saw five and "+10": "the ready screen would be cool if it
+ * showed all of them. Like, even if it goes down, we have to scroll." The
  * three examples are for someone who skipped the essentials: a promise.
  */
 export function EssentialsDock({ kept = 0, picks = null }: { kept?: number; picks?: string | null }) {
@@ -271,7 +270,7 @@ export function EssentialsDock({ kept = 0, picks = null }: { kept?: number; pick
       </View>
       <View style={styles.dock}>
         {kept > 0 ? (
-          <AppIcons selection={picks} count={kept} columns={6} limit={6} label="Your essential apps" />
+          <AppIcons selection={picks} count={kept} columns={6} label="Your essential apps" />
         ) : (
           <View style={styles.dockExamples}>
             {ESSENTIAL.map((name) => (
@@ -308,67 +307,6 @@ export function StoryMorning({ recharge, morning }: { recharge: string; morning:
   );
 }
 
-/** The three example apps in a small overlapping bunch; `locked`: dark, under one lock. */
-function Bunch({ locked = false }: { locked?: boolean }) {
-  return (
-    <View style={styles.bunch}>
-      {COUNTED.map((name, i) => (
-        <View key={name} style={[styles.bunchApp, i > 0 ? { marginLeft: -9 } : null]}>
-          <BrandApp name={name} size={30} state={locked ? 'dark' : undefined} />
-        </View>
-      ))}
-      {locked ? (
-        <View pointerEvents="none" style={styles.over}>
-          <Icon name="lock" size={20} color={LOCKED} />
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-/**
- * The goal screen's three small pictures, under the number: that much use,
- * then the apps lock, then they are back at the recharge time. The owner's
- * friend asked of "How much a day?": how much what, and what is it for
- * (build 167); the owner picked this from three drafts. The first two are
- * the story's three apps, bright and then dark under a lock (plain symbols
- * up to build 172).
- */
-export function GoalStory({ goal, recharge }: { goal: string; recharge: string }) {
-  return (
-    <View accessible accessibilityLabel={`${goal} of use a day. Then your apps lock, and they are back at ${recharge}.`} style={styles.goal}>
-      <GoalStep words={`${goal} of use`}>
-        <Bunch />
-      </GoalStep>
-      <View style={styles.goalArrow}>
-        <Icon name="arrow" size={17} color={c.outline} />
-      </View>
-      <GoalStep words="Apps lock">
-        <Bunch locked />
-      </GoalStep>
-      <View style={styles.goalArrow}>
-        <Icon name="arrow" size={17} color={c.outline} />
-      </View>
-      <GoalStep words={`Back at ${recharge}`}>
-        <View style={styles.bunch}>
-          <Icon name="recharge" size={32} color={SUN} />
-        </View>
-      </GoalStep>
-    </View>
-  );
-}
-
-function GoalStep({ words, children }: { words: string; children: ReactNode }) {
-  return (
-    <View style={styles.goalStep}>
-      {children}
-      <Text numberOfLines={1} style={styles.goalWords}>
-        {words}
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   // Over a battery, in its middle (short of the cap on its right end).
   over: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' },
@@ -391,12 +329,4 @@ const styles = StyleSheet.create({
   dockExamples: { flexDirection: 'row', justifyContent: 'center', gap: 30 },
   sunrise: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   time: { flexShrink: 1, fontFamily: display.bold, fontSize: 56, lineHeight: 62, letterSpacing: -1.8 },
-  bunch: { height: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  // Each app on a rim of the ground's colour, so they read as three where they overlap.
-  bunchApp: { padding: 2, borderRadius: 9, backgroundColor: c.ground },
-  // Each step as wide as its words, so the longest ("Back at 12:00 PM") stays on one line.
-  goal: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 2 },
-  goalStep: { alignItems: 'center', gap: 6 },
-  goalArrow: { paddingTop: 9 },
-  goalWords: { fontSize: 13, lineHeight: 17, fontWeight: '600', color: c.ink2, textAlign: 'center' },
 });

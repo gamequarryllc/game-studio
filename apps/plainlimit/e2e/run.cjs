@@ -98,10 +98,21 @@ async function main() {
     await page.getByLabel('Step 5 of 7', { exact: true }).waitFor();
     await shot('00-setup-notify');
     await press('Not now');
-    // The goal: what the number is, and what happens at it, as three small pictures.
+    // The goal: what the number is and what happens at it in one line, and the minus and plus at the foot, over "Next".
     await see('Daily screen time');
+    await see('3:00 of use, then apps lock until 6:00 AM.');
     await see('Six cells of 30 minutes each');
-    for (const words of ['3:00 of use', 'Apps lock', 'Back at 6:00 AM']) await see(words);
+    {
+      const box = async (name) => page.getByRole('button', { name, exact: true }).first().boundingBox();
+      const [less, more, on] = [await box('Less time'), await box('More time'), await box('Next')];
+      if (!less || !more || !on) throw new Error('the goal screen is missing its minus, its plus or "Next"');
+      if (less.y + less.height > on.y || more.y + more.height > on.y) throw new Error('the goal\'s minus and plus are not over "Next"');
+      if (on.y - (less.y + less.height) > 40) throw new Error('the goal\'s minus and plus are not at the foot of the screen, by "Next"');
+    }
+    await press('More time');
+    await see('3:15 of use, then apps lock until 6:00 AM.');
+    await press('Less time');
+    await see('3:00 of use, then apps lock until 6:00 AM.');
     await shot('00-setup-goal');
     await press('Back');
     await see('Notifications need to be on');

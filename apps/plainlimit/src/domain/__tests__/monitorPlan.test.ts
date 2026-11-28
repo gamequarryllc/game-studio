@@ -334,11 +334,17 @@ describe('the home screen widget agrees with the app', () => {
     expect(at('src/ui/EssentialsOffer.tsx')).toContain('Pick your essential apps');
     expect(at('src/app/(tabs)/settings.tsx')).not.toContain("'always free'");
     expect(story).toContain('Use your phone.\\nDon\u2019t abuse it.');
-    // The goal screen: a title that says what the number is, and what happens at it, as three small pictures.
+    // The goal screen: a title that says what the number is, and what happens at it in one line with the person's
+    // own number in it. (Three small pictures said it up to build 173, under a large battery; the owner found the
+    // screen "a lot", and wanted the minus and plus at the foot, in the thumb's reach.)
     expect(setup).toContain('<Heading>Daily screen time</Heading>');
     expect(setup).not.toContain('<Heading>How much a day?</Heading>');
     expect(setup).not.toContain("'Moves the line'");
-    for (const words of ['`${goal} of use`', '"Apps lock"', '`Back at ${recharge}`']) expect(story).toContain(words);
+    expect(setup).toContain("<Lead>{`${goal} of use, then apps lock until ${recharge.replace(' ', '\\u00A0')}.`}</Lead>");
+    expect(story).not.toContain('GoalStory(');
+    // The stepper is the foot's, over the button, and not the page's.
+    expect(setup.indexOf('{stepper}')).toBeGreaterThan(setup.indexOf('<View style={[styles.foot, '));
+    expect(setup.indexOf('{stepper}')).toBeLessThan(setup.indexOf('<BigButton tone={full} '));
     // The phone's figures under it are named for what they are (the owner on build 169, of a 5:24 average: "is this
     // my Plainlimit daily average?"): all of the phone's time, of which the essentials will not count.
     for (const words of ["'All your phone time'", "'Every app. Your essential apps won\\u2019t count.'", "'Without your essential apps'"]) expect(setup).toContain(words);
@@ -348,6 +354,8 @@ describe('the home screen widget agrees with the app', () => {
     // what we count), how much of the goal is used, and the essentials under both, in a dock of their own.
     for (const words of ['iPhone tracks\n', 'Plainlimit counts\n', '`used today of ${durationLabel(settings.goalMinutes)}`', '<EssentialsDock kept={essentials.ready ? essentials.kept : 0} picks={essentials.picks} />', 'You can pick your essential apps next.']) expect(setup).toContain(words);
     expect(setup.indexOf('<EssentialsDock ')).toBeGreaterThan(setup.indexOf('<WholeTotal '));
+    // Every essential is shown there, however many rows that takes (the owner, build 173, of five and "+10").
+    expect(story).toContain('<AppIcons selection={picks} count={kept} columns={6} label="Your essential apps" />');
     // What the owner's recording of build 170 showed. The figure is the phone's exact one, drawn over Plainlimit's
     // own in the same type as on Today (0:15 stood here between 0:25 on the goal screen and 0:25 on Today), and
     // nothing is written that would need the exact figure, which the app cannot read.
@@ -356,7 +364,7 @@ describe('the home screen widget agrees with the app', () => {
     const type = (file: string, name: string) => /fontSize: (\d+), lineHeight: (\d+), letterSpacing: (-?[\d.]+)/.exec(file.slice(file.indexOf(`  ${name}: {`)))?.slice(1, 4).join(' ');
     expect(type(setup, 'partValue')).toBe(type(at('src/app/(tabs)/index.tsx'), 'used'));
     // The row of essentials draws the person's own icons once some are chosen (it drew three made-up ones).
-    for (const words of ['<AppIcons selection={picks} count={kept} columns={6} limit={6} label="Your essential apps" />', '{kept > 0 ? (']) expect(story).toContain(words);
+    for (const words of ['<AppIcons selection={picks} count={kept} columns={6} label="Your essential apps" />', '{kept > 0 ? (']) expect(story).toContain(words);
     // And after Apple's list closes, the essentials screen says it is saving instead of offering the same buttons again.
     for (const words of ['if (essentials.saving) {', "label: 'Saving\\u2026'"]) expect(setup).toContain(words);
     expect(at('src/ui/EssentialsSteps.tsx')).toContain('onClosing={() => setSaving(true)}');
